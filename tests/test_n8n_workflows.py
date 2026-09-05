@@ -2630,6 +2630,11 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             for node in workflow["nodes"]:
                 if node["type"] != "n8n-nodes-base.code":
                     continue
+                if node["parameters"].get("language") == "pythonNative":
+                    code = node["parameters"]["pythonCode"]
+                    compile("def task(_items):\n" + "\n".join("    " + line for line in code.splitlines()), filename, "exec")
+                    self.assertIn("from finance_tracker.n8n_notifications import normalize_archived_mailbox", code)
+                    continue
                 code = node["parameters"]["jsCode"]
                 self.assertEqual(code.count("// Purpose:"), 1, f"{filename}::{node['name']}")
                 self.assertGreaterEqual(len(code.splitlines()), 2, f"{filename}::{node['name']}")

@@ -7,6 +7,10 @@ on:
       - "tests/test_n8n_custom_image.py"
       - "services/pdf-utility/**"
       - "services/n8n-task-runners/**"
+      - "finance_tracker/**"
+      - "config/**"
+      - "docs/**"
+      - "tests/fixtures/**"
       - "tests/test_n8n_task_runners_image.py"
       - "config/ai-policies.json"
       - "integrations/n8n/contracts/ai-proposal-v1.schema.json"
@@ -20,6 +24,10 @@ on:
       - "tests/test_n8n_custom_image.py"
       - "services/pdf-utility/**"
       - "services/n8n-task-runners/**"
+      - "finance_tracker/**"
+      - "config/**"
+      - "docs/**"
+      - "tests/fixtures/**"
       - "tests/test_n8n_task_runners_image.py"
       - "config/ai-policies.json"
       - "integrations/n8n/contracts/ai-proposal-v1.schema.json"
@@ -417,6 +425,7 @@ jobs:
         run: |
           test "$(docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} --version)" = "v26.5.1"
           docker run --rm --entrypoint /opt/runners/task-runner-python/.venv/bin/python finance-n8n-task-runners:${{ github.sha }} -I -B -X disable_remote_debug -c "import src.main, urllib3, websockets"
+          docker run --rm --volume "$PWD:/source:ro" --entrypoint /opt/runners/task-runner-python/.venv/bin/python finance-n8n-task-runners:${{ github.sha }} -I -B /source/services/n8n-task-runners/verify_finance_native.py /source
           docker run --rm --entrypoint python finance-n8n-task-runners:${{ github.sha }} -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not names.intersection({'pip','setuptools','msgpack'}), names"
           docker run --rm --entrypoint node finance-n8n-task-runners:${{ github.sha }} /opt/runners/task-runner-javascript/finance-verify-workspace-packages.mjs /opt/runners/task-runner-javascript
           source_closure_sha="$(jq -r .closure_sha256 .upstream/n8n/dist/task-runner-javascript/finance-closure-manifest.json)"

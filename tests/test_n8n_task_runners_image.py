@@ -2,6 +2,9 @@ import json
 import pathlib
 import re
 import unittest
+import subprocess
+import sys
+import tempfile
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -82,6 +85,23 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         moment = extras_lock["packages"]["node_modules/moment"]
         self.assertEqual(moment["version"], "2.30.1")
         self.assertRegex(moment["integrity"], r"^sha512-")
+
+    def test_packaged_finance_inputs_trigger_runner_rebuilds(self):
+        workflow = (ROOT / ".github/workflows/phase1-finance-artifacts.yml").read_text()
+        for pattern in ("finance_tracker/**", "config/**", "docs/**", "tests/fixtures/**"):
+            self.assertEqual(workflow.count('      - "' + pattern + '"'), 2, pattern)
+
+    def test_finance_python_allowlist_preserves_runner_security_settings(self):
+        config = {"task-runners": [{"runner-type": "javascript", "env-overrides": {"NODE_FUNCTION_ALLOW_EXTERNAL": ""}},
+                    {"runner-type": "python", "env-overrides": {"N8N_BLOCK_RUNNER_ENV_ACCESS": "true", "N8N_RUNNERS_EXTERNAL_ALLOW": ""}}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "runners.json"
+            path.write_text(json.dumps(config))
+            subprocess.run([sys.executable, str(SERVICE / "configure_finance_python.py"), str(path)], check=True)
+            observed = json.loads(path.read_text())
+        self.assertEqual(observed["task-runners"][0], config["task-runners"][0])
+        self.assertEqual(observed["task-runners"][1]["env-overrides"], {
+            "N8N_BLOCK_RUNNER_ENV_ACCESS": "true", "N8N_RUNNERS_EXTERNAL_ALLOW": "finance_tracker,jsonschema_specifications"})
 
     def test_protocol_smoke_exercises_both_runners(self):
         workflow = json.loads((SERVICE / "protocol-smoke.json").read_text(encoding="utf-8"))

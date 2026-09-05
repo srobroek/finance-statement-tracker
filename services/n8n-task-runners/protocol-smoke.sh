@@ -102,6 +102,8 @@ while :; do
 done
 grep -F 'js_runner' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
 grep -F 'python_runner' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
+grep -F 'finance_parser' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
+grep -F 'quiet_scan_count' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
 grep -E '"value"[[:space:]]*:[[:space:]]*42' /tmp/finance-task-runners-protocol-smoke.log >/dev/null
 
 echo "Verified n8n 2.37.10 external broker protocol with JavaScript and native Python runners"

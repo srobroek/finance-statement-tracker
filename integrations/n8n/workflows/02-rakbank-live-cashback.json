@@ -151,21 +151,21 @@
     },
     {
       "id": "2007",
-      "name": "Parse and Upsert Cashback Events",
+      "name": "Upsert One Cashback Transaction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        980,
-        0
+        -820,
+        380
       ],
       "parameters": {
-        "url": "http://cashback:5010/api/outlook/messages",
+        "url": "http://cashback:5010/api/ingest/transaction",
         "method": "POST",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $json }}",
+        "jsonBody": "={{ {source:$json.source,completed_at:$json.completed_at,cursor:$json.cursor,event:$json.event} }}",
         "options": {
           "timeout": 30000
         }
@@ -183,11 +183,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -520,
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Service Receipt Before Cursor. Keep this deterministic and fail closed.\nconst e = $('Build Frozen Mailbox Envelope').first().json;\nconst r = $json;\nif (r.cursor_committed !== false)\n    throw new Error('Companion must not commit the mailbox cursor');\nif (String(r.cursor_candidate || '') !== e.cursor)\n    throw new Error('Cursor candidate differs from frozen upper bound');\nconst scanned = Number(r.parse?.scanned_count);\nconst accepted = Number(r.parse?.accepted_count);\nif (scanned !== e.messages.length || !Number.isInteger(accepted) || accepted < 0 || accepted > scanned)\n    throw new Error('Companion parse counts do not reconcile');\nconst receipt = r.service_receipt;\nconst receipt_id = String(receipt?.receipt_id || '').trim();\nconst receipt_sha256 = String(receipt?.receipt_sha256 || '').trim();\nif (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || !receipt_id || !receipt_sha256)\n    throw new Error('Companion service receipt identity is required');\nreturn [{ json: { source: e.source, completed_at: e.completed_at, scanned_count: scanned, accepted_count: accepted, cursor: e.cursor, service_receipt: { receipt_id, receipt_sha256 } } }];\n"
+        "jsCode": "// Purpose: Verify Service Receipt Before Cursor. Keep this deterministic and fail closed.\nconst expected = $('Assemble Complete Scan Receipt').first().json, response = $json, receipt = response.service_receipt;\nif (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt\n    || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))\n    throw new Error('COMPLETE_SCAN_RECEIPT_REQUIRED');\nfor (const field of ['source', 'completed_at', 'cursor', 'scanned_count', 'accepted_count'])\n    if (field === 'completed_at'\n        ? !Number.isFinite(Date.parse(receipt[field])) || Date.parse(receipt[field]) !== Date.parse(expected[field])\n        : receipt[field] !== expected[field])\n        throw new Error('COMPLETE_SCAN_RECEIPT_MISMATCH:' + field);\nconst proof = receipt.scan_dispositions;\nconst dispositions = rows => Array.isArray(rows) ? rows.map(row => [row.message_id, row.status, row.source_event_id ?? null, row.reason ?? null]) : null;\nif (!proof || proof.ignored_count !== expected.ignored_count || proof.review_count !== expected.review_count\n    || JSON.stringify(dispositions(proof.message_dispositions)) !== JSON.stringify(dispositions(expected.message_dispositions)))\n    throw new Error('COMPLETE_SCAN_DISPOSITION_PROOF_MISMATCH');\nreturn [{ json: { source: expected.source, completed_at: expected.completed_at, cursor: expected.cursor,\n            scanned_count: expected.scanned_count, accepted_count: expected.accepted_count,\n            service_receipt: { receipt_id: receipt.receipt_id, receipt_sha256: receipt.receipt_sha256 } } }];\n"
       }
     },
     {
@@ -196,7 +196,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -820,
+        -220,
         380
       ],
       "parameters": {
@@ -224,7 +224,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -520,
+        80,
         380
       ],
       "parameters": {
@@ -252,11 +252,137 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        380,
         380
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Exact Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Verify Service Receipt Before Cursor').first().json;\nconst observed = String($json.ingest_state?.cursor || '');\nif (observed !== expected.cursor)\n    throw new Error('Durable cursor readback mismatch');\nreturn [{ json: { status: 'SUCCESS_VERIFIED', cursor: observed, scanned_count: expected.scanned_count, accepted_count: expected.accepted_count } }];\n"
+      }
+    },
+    {
+      "id": "w02-normalize-notifications",
+      "name": "Normalize Archived Notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        0
+      ],
+      "parameters": {
+        "language": "pythonNative",
+        "mode": "runOnceForAllItems",
+        "pythonCode": "from finance_tracker.n8n_notifications import normalize_archived_mailbox\nreturn [{'json': normalize_archived_mailbox(_items[0]['json'])}]"
+      }
+    },
+    {
+      "id": "w02-split-transactions",
+      "name": "Split Compact Cashback Transactions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Split Compact Cashback Transactions. Keep this deterministic and fail closed.\nconst batch = $json;\nif (!Array.isArray(batch.events) || batch.events.length !== batch.accepted_count)\n    throw new Error('NORMALIZED_TRANSACTION_COUNT_MISMATCH');\nconst context = { source: batch.source, completed_at: batch.completed_at, cursor: batch.cursor };\nreturn batch.events.length ? batch.events.map(event => ({ json: { ...context, event }, pairedItem: { item: 0 } }))\n    : [{ json: { ...context, empty_scan: true }, pairedItem: { item: 0 } }];\n"
+      }
+    },
+    {
+      "id": "w02-loop-transactions",
+      "name": "Ingest One Transaction at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        680,
+        380
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "w02-transaction-present",
+      "name": "Compact Transaction Present",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        980,
+        380
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.empty_scan !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "w02-verify-transaction",
+      "name": "Verify Individual Transaction Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Individual Transaction Receipt. Keep this deterministic and fail closed.\nconst expected = $('Ingest One Transaction at a Time').item.json, response = $json, receipt = response.service_receipt;\nif (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt\n    || receipt.receipt_kind !== 'TRANSACTION' || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))\n    throw new Error('TRANSACTION_RECEIPT_REQUIRED');\nfor (const field of ['source', 'completed_at', 'cursor'])\n    if (field === 'completed_at'\n        ? !Number.isFinite(Date.parse(receipt[field])) || Date.parse(receipt[field]) !== Date.parse(expected[field])\n        : receipt[field] !== expected[field])\n        throw new Error('TRANSACTION_RECEIPT_CONTEXT_MISMATCH:' + field);\nif (receipt.scanned_count !== 1 || receipt.accepted_count !== 1 || !Array.isArray(receipt.event_ids)\n    || receipt.event_ids.length !== 1 || receipt.event_ids[0] !== expected.event.source_event_id)\n    throw new Error('TRANSACTION_RECEIPT_EVENT_MISMATCH');\nreturn [{ json: { source_event_id: expected.event.source_event_id, receipt_id: receipt.receipt_id, receipt_sha256: receipt.receipt_sha256 } }];\n"
+      }
+    },
+    {
+      "id": "w02-aggregate-transactions",
+      "name": "Assemble Complete Scan Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -820,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Assemble Complete Scan Receipt. Keep this deterministic and fail closed.\nconst batch = $('Normalize Archived Notifications').first().json, rows = $input.all().map(item => item.json);\nconst expectedIds = batch.events.map(event => event.source_event_id).sort();\nconst receipts = rows.filter(row => row.empty_scan !== true);\nconst observedIds = receipts.map(row => row.source_event_id).sort();\nif (JSON.stringify(observedIds) !== JSON.stringify(expectedIds) || new Set(observedIds).size !== observedIds.length)\n    throw new Error('SCAN_TRANSACTION_RECEIPT_COVERAGE_MISMATCH');\nif (!expectedIds.length && (rows.length !== 1 || rows[0].empty_scan !== true))\n    throw new Error('EMPTY_SCAN_MARKER_REQUIRED');\nif (batch.scanned_count !== batch.accepted_count + batch.ignored_count + batch.review_count\n    || batch.message_dispositions.length !== batch.scanned_count)\n    throw new Error('SCAN_DISPOSITION_COUNTS_MISMATCH');\nconst { events, ...manifest } = batch;\nreturn [{ json: { ...manifest, receipts: receipts.map(({ receipt_id, receipt_sha256 }) => ({ receipt_id, receipt_sha256 })) } }];\n"
+      }
+    },
+    {
+      "id": "w02-persist-scan-receipt",
+      "name": "Persist Aggregate Scan Receipt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -520,
+        760
+      ],
+      "parameters": {
+        "url": "http://cashback:5010/api/ingest/receipt",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BIND_CASHBACK_INGEST",
+          "name": "Cashback Ingest Bearer"
+        }
       }
     }
   ],
@@ -331,18 +457,7 @@
       "main": [
         [
           {
-            "node": "Parse and Upsert Cashback Events",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse and Upsert Cashback Events": {
-      "main": [
-        [
-          {
-            "node": "Verify Service Receipt Before Cursor",
+            "node": "Normalize Archived Notifications",
             "type": "main",
             "index": 0
           }
@@ -376,6 +491,108 @@
         [
           {
             "node": "Verify Exact Cursor Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert One Cashback Transaction": {
+      "main": [
+        [
+          {
+            "node": "Verify Individual Transaction Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Archived Notifications": {
+      "main": [
+        [
+          {
+            "node": "Split Compact Cashback Transactions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Compact Cashback Transactions": {
+      "main": [
+        [
+          {
+            "node": "Ingest One Transaction at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Individual Transaction Receipt": {
+      "main": [
+        [
+          {
+            "node": "Ingest One Transaction at a Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Complete Scan Receipt": {
+      "main": [
+        [
+          {
+            "node": "Persist Aggregate Scan Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Aggregate Scan Receipt": {
+      "main": [
+        [
+          {
+            "node": "Verify Service Receipt Before Cursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest One Transaction at a Time": {
+      "main": [
+        [
+          {
+            "node": "Assemble Complete Scan Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compact Transaction Present",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compact Transaction Present": {
+      "main": [
+        [
+          {
+            "node": "Upsert One Cashback Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ingest One Transaction at a Time",
             "type": "main",
             "index": 0
           }
@@ -417,7 +634,7 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Read Last Durable Cursor to Parse and Upsert Cashback Events",
+      "name": "Stage 1: Read Last Durable Cursor to Normalize Archived Notifications",
       "nodeIds": [
         "2003",
         "2004",
@@ -425,9 +642,19 @@
         "2012",
         "2005",
         "2006",
-        "2007"
+        "w02-normalize-notifications"
       ],
-      "description": "Finance stage 1. Input starts at Read Last Durable Cursor; verified output leaves through Parse and Upsert Cashback Events."
+      "description": "Finance stage 1. Input starts at Read Last Durable Cursor; verified output leaves through Normalize Archived Notifications."
+    },
+    {
+      "name": "Stage 2: Split Compact Cashback Transactions to Compact Transaction Present",
+      "nodeIds": [
+        "w02-split-transactions",
+        "2007",
+        "w02-loop-transactions",
+        "w02-transaction-present"
+      ],
+      "description": "Finance stage 2. Input starts at Split Compact Cashback Transactions; verified output leaves through Compact Transaction Present."
     },
     {
       "name": "Stage 2: Verify Service Receipt Before Cursor to Verify Exact Cursor Readback",
@@ -438,6 +665,14 @@
         "2013"
       ],
       "description": "Finance stage 2. Input starts at Verify Service Receipt Before Cursor; verified output leaves through Verify Exact Cursor Readback."
+    },
+    {
+      "name": "Stage 3: Assemble Complete Scan Receipt to Persist Aggregate Scan Receipt",
+      "nodeIds": [
+        "w02-aggregate-transactions",
+        "w02-persist-scan-receipt"
+      ],
+      "description": "Finance stage 3. Input starts at Assemble Complete Scan Receipt; verified output leaves through Persist Aggregate Scan Receipt."
     }
   ],
   "tags": [

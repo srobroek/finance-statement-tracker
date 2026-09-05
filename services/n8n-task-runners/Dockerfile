@@ -29,6 +29,12 @@ RUN uv sync --frozen --no-editable --no-dev --all-extras \
     && rm -rf src \
     && .venv/bin/python -I -B -X disable_remote_debug -c "import src.main, urllib3, websockets"
 
+# Finance notification parsing reuses the canonical Python implementation.
+# Runtime dependency versions mirror the repository uv.lock.
+RUN uv pip install --no-deps attrs==26.1.0 jsonschema==4.26.0 \
+        jsonschema-specifications==2025.9.1 referencing==0.37.0 rpds-py==2026.6.3 \
+    && .venv/bin/python -c "import site; from pathlib import Path; Path(site.getsitepackages()[0], 'finance-runtime.pth').write_text('/opt/finance\\n')"
+
 FROM ${GO_IMAGE} AS launcher
 WORKDIR /src
 COPY .upstream/task-runner-launcher/ ./
@@ -72,6 +78,14 @@ COPY --from=python-runner --chown=root:root /opt/runners/task-runner-python /opt
 COPY --from=launcher /out/task-runner-launcher /usr/local/bin/task-runner-launcher
 COPY --chown=root:root .upstream/n8n/docker/images/runners/n8n-task-runners.json /etc/n8n-task-runners.json
 COPY --chown=root:root services/n8n-task-runners/upstream.lock.json /opt/runners/upstream.lock.json
+
+COPY --chown=root:root finance_tracker /opt/finance/finance_tracker
+COPY --chown=root:root config /opt/finance/config
+COPY --chown=root:root docs /opt/finance/docs
+COPY --chown=root:root tests/fixtures /opt/finance/tests/fixtures
+COPY --chown=root:root services/n8n-task-runners/configure_finance_python.py /opt/runners/configure_finance_python.py
+RUN python /opt/runners/configure_finance_python.py /etc/n8n-task-runners.json \
+    && /opt/runners/task-runner-python/.venv/bin/python -I -B -c "from finance_tracker.n8n_notifications import normalize_archived_mailbox; assert callable(normalize_archived_mailbox)"
 
 RUN node --version | grep -Fx 'v26.5.1' \
     && /opt/runners/task-runner-python/.venv/bin/python --version | grep -E '^Python 3\.13\.' \

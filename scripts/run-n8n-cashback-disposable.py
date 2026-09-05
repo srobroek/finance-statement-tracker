@@ -3,7 +3,9 @@
 
 No host ports, shared production networks, provider credentials or production
 volumes are used. Mail enumeration alone is replaced by the checked RAK fixture.
-The real service classifies, stores, commits its cursor and calculates buckets.
+The canonical parser classifies the fixture; real n8n submits compact events to
+the service, commits its cursor and verifies stored buckets. Runner packaging
+is explicitly outside this network-isolated fixture proof.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import uuid
 
@@ -33,6 +36,15 @@ def derive_workflow(root: Path, day: datetime) -> dict:
     message["id"] = "disposable-w02-rak-amazon-1"
     message["receivedDateTime"] = day.isoformat().replace("+00:00", "Z")
     message["bodyPreview"] = message["bodyPreview"].replace("on 17/08.", f"on {day:%d/%m}.")
+    sys.path.insert(0, str(root))
+    from finance_tracker.n8n_notifications import normalize_archived_mailbox
+    envelope = {"source": "outlook:rakbank", "source_code": "RAKBANK_CARD_TRANSACTION",
+                "completed_at": day.isoformat(), "cursor": day.isoformat(),
+                "window_start": day.isoformat(), "matched_count": 1, "messages": [message]}
+    normalized = normalize_archived_mailbox(envelope)
+    empty = normalize_archived_mailbox({**envelope, "matched_count": 0, "messages": []})
+    trigger = next(node["name"] for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.scheduleTrigger")
+    empty_expression = f"$({json.dumps(trigger)}).first().json.body?.empty === true"
     original_types = {}
     for node in workflow["nodes"]:
         name = node["name"]
@@ -49,24 +61,31 @@ def derive_workflow(root: Path, day: datetime) -> dict:
             node.update(type="n8n-nodes-base.code", typeVersion=2, parameters={"jsCode":
                 "const window = $('Freeze Cursor Minus Overlap Window').first().json;\n"
                 f"const message = {json.dumps(message)};\n"
-                "const messages = [{message_id:message.id,message,attachment_inventory:[],attachment_ids:[],attachment_identity_keys:[]}];\n"
-                "return [{json:{...window,messages,immutable_inventory:true,archive_ready:true,receipt_readback_verified:true,pagination_exhausted:true,scanned_count:1,matched_count:1}}];"})
+                f"const messages = {empty_expression} ? [] : [{{message_id:message.id,message,attachment_inventory:[],attachment_ids:[],attachment_identity_keys:[]}}];\n"
+                "return [{json:{...window,messages,immutable_inventory:true,archive_ready:true,receipt_readback_verified:true,pagination_exhausted:true,scanned_count:messages.length,matched_count:messages.length}}];"})
             node.pop("credentials", None)
+        elif name == "Normalize Archived Notifications":
+            if node["parameters"].get("language") != "pythonNative" or "normalize_archived_mailbox" not in node["parameters"].get("pythonCode", ""):
+                raise ValueError("Canonical Python notification boundary changed")
+            node.update(type="n8n-nodes-base.code", typeVersion=2, parameters={"jsCode":
+                f"const parsed = {empty_expression} ? {json.dumps(empty)} : {json.dumps(normalized)};\n"
+                "const scan = $input.first().json;\n"
+                "return [{json:{...parsed,source:scan.source,completed_at:scan.completed_at,cursor:scan.cursor}}];"})
         elif node["type"] == "n8n-nodes-base.httpRequest":
             url = node["parameters"]["url"]
             if not url.startswith("http://cashback:5010/api/"):
                 raise ValueError("Unexpected W02 remote boundary")
             node["parameters"]["url"] = url.replace("http://cashback:5010", "http://127.0.0.1:5010")
             node["credentials"] = {"httpHeaderAuth": {"id": "DISPOSABLE_CASHBACK_ONLY", "name": "DISPOSABLE Cashback"}}
-    required = {"Load Trusted Mail Contract", "Assemble Trusted Sweep Contract", "Sweep Exact Outlook Messages"}
+    required = {"Load Trusted Mail Contract", "Assemble Trusted Sweep Contract", "Sweep Exact Outlook Messages", "Normalize Archived Notifications"}
     if not required <= original_types.keys():
         raise ValueError("W02 mailbox boundary changed")
     workflow.update(id=WORKFLOW_ID, name="DISPOSABLE ONLY · Real W02 Cashback Replay", active=False)
     workflow.setdefault("settings", {}).pop("errorWorkflow", None)
     workflow["meta"] = {"disposableOnly": True, "productionImportForbidden": True,
                         "derivedFrom": source.name, "sourceContentSha256": hashlib.sha256(raw).hexdigest(),
-                        "unprovenBoundaries": ["Real Outlook acquisition", "OneDrive archive barrier", "Monthly statement ingestion"],
-                        "replacedBoundaries": ["Schedule to isolated webhook", "Mailbox contract and enumeration to checked fixture"]}
+                        "unprovenBoundaries": ["Real Outlook acquisition", "OneDrive archive barrier", "Monthly statement ingestion", "Native Python task-runner protocol and image packaging"],
+                        "replacedBoundaries": ["Schedule to isolated webhook", "Mailbox contract and enumeration to checked fixture", "Native Python runner to exact canonical helper output"]}
     return workflow
 
 
@@ -175,13 +194,14 @@ for(let i=0;i<120;i++) {
 if(!ready) throw Error('Cashback readiness timeout');
 let response;
 for(let i=0;i<120;i++) {
- response=await fetch('http://127.0.0.1:5678/webhook/disposable-w02-live-cashback',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+ response=await fetch('http://127.0.0.1:5678/webhook/disposable-w02-live-cashback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({empty:process.env.DISPOSABLE_EMPTY==='1'})});
  if(response.status!==404) break;
  await pause(500);
 }
 if(!response.ok) throw Error('W02 failed HTTP '+response.status+' '+await response.text());
 let r=await response.json(); if(Array.isArray(r)) r=r[0];
-if(r.status!=='SUCCESS_VERIFIED'||r.scanned_count!==1||r.accepted_count!==1) throw Error('W02 terminal receipt failed');
+const expected = process.env.DISPOSABLE_EMPTY==='1' ? 0 : 1;
+if(r.status!=='SUCCESS_VERIFIED'||r.scanned_count!==expected||r.accepted_count!==expected) throw Error('W02 terminal receipt failed');
 console.log(JSON.stringify(r));
 '''
         for attempt in range(2):
@@ -198,14 +218,23 @@ console.log(JSON.stringify(r));
         if observed != receipts[0]["readback"]:
             raise RuntimeError("Restart changed stored classification or bucket state")
         receipts.append({"terminal": terminal, "readback": observed})
+        heartbeat = json.loads(engine("exec", "-e", "DISPOSABLE_EMPTY=1", "-i", runner, "node", "--input-type=module", stdin=execute))
+        after_empty = json.loads(engine("exec", "-i", companion, "python", "-", stdin=READBACK))
+        if after_empty != receipts[0]["readback"]:
+            raise RuntimeError("Empty successful scan changed stored transactions or buckets")
+        heartbeat_state = json.loads(engine("exec", "-i", companion, "python", "-", stdin=
+            "import json, os\nfrom pathlib import Path\nfrom finance_tracker.cashback_events import CashbackEventStore\n"
+            "s=CashbackEventStore(Path(os.environ['CASHBACK_DB_PATH'])).ingest_state('outlook:rakbank')\n"
+            "assert s['accepted_count']==0 and s['scanned_count']==0\n"
+            "assert s['last_success_at'] and s['cursor_version']>=4\nprint(json.dumps(s))\n"))
         result = {"schema_version": "n8n-cashback-runtime-proof-v1", "status": "PASS",
                   "source_sha256": workflow["meta"]["sourceContentSha256"],
                   "n8n_image": args.n8n_image, "cashback_image": args.cashback_image,
-                  "replays": receipts, "production_data_touched": False,
+                  "replays": receipts, "empty_heartbeat": {"terminal": heartbeat, "state": heartbeat_state, "buckets_unchanged": True}, "production_data_touched": False,
                   "unproven": workflow["meta"]["unprovenBoundaries"]}
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
         args.receipt.write_text(json.dumps(result, indent=2) + "\n")
-        print("PASS: real W02 HTTP ingestion, classification, stored buckets, cursor, double replay and restart")
+        print("PASS: real W02 HTTP ingestion, classification, stored buckets, cursor, double replay, restart and empty heartbeat")
         return 0
     finally:
         for container in (runner, companion):
