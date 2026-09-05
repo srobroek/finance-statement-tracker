@@ -641,7 +641,9 @@ class DeploymentScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (bin_dir / "curl").write_text(
-                "#!/usr/bin/env bash\nexit 0\n", encoding="utf-8"
+                "#!/usr/bin/env bash\n"
+                "printf '%s\\n' \"${@: -1}\" >> \"${STUB_CURL_LOG}\"\n"
+                "[[ \"${@: -1}\" == \"${FINANCE_ACTUAL_HEALTH_URL}\" ]]\n", encoding="utf-8"
             )
             for executable in ("readlink", "docker", "curl"):
                 (bin_dir / executable).chmod(0o755)
@@ -653,6 +655,8 @@ class DeploymentScriptTests(unittest.TestCase):
                     "FINANCE_CASHBACK_STACK_DIR": str(cashback_stack),
                     "FINANCE_BACKUP_ROOT": str(backup_root),
                     "STUB_FD_LOG": str(fd_log),
+                    "STUB_CURL_LOG": str(root / "curl.log"),
+                    "FINANCE_ACTUAL_HEALTH_URL": "http://192.0.2.10:5006/",
                 }
             )
             result = self._run_root_fixture(script, root, environment)
@@ -660,6 +664,7 @@ class DeploymentScriptTests(unittest.TestCase):
             fd_observations = fd_log.read_text(encoding="utf-8")
             self.assertIn("closed\n", fd_observations)
             self.assertNotIn("inherited\n", fd_observations)
+            self.assertEqual((root / "curl.log").read_text().splitlines(), [environment["FINANCE_ACTUAL_HEALTH_URL"]])
 
     def test_cashback_deploy_fetches_exact_sha_without_checkout_action(self) -> None:
         workflow = Path(".github/workflows/cashback-image.yml").read_text(
@@ -738,12 +743,12 @@ class DeploymentScriptTests(unittest.TestCase):
         self.assertNotIn('"127.0.0.1:5010:5010"', compose)
         self.assertIn(
             "    networks:\n"
-            "      finance-runtime:\n"
+            "      application-runtime:\n"
             "        aliases:\n"
             "          - cashback\n",
             compose,
         )
-        self.assertIn("networks:\n  finance-runtime:\n    external: true\n", compose)
+        self.assertIn("networks:\n  application-runtime:\n    external: true\n", compose)
         environment = Path("deploy/finance-runtime/finance.env.tpl").read_text(encoding="utf-8")
         for name in (
             "CASHBACK_ACCESS_ISSUER",

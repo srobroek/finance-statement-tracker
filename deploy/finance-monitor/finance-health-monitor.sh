@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual}"
+ACTUAL_HEALTH_URL="${FINANCE_ACTUAL_HEALTH_URL:-http://172.20.10.20:5006/}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
 BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual}"
 MAX_BACKUP_AGE_HOURS="${FINANCE_MAX_BACKUP_AGE_HOURS:-48}"
@@ -110,12 +111,12 @@ if ! container_running finance-actual; then
   recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual actual || failed=1
 fi
 if ! ensure_service finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual actual-proxy \
-  http://127.0.0.1:5006/; then
+  "${ACTUAL_HEALTH_URL}"; then
   # A running but unhealthy upstream can leave the proxy alive and returning
   # errors. Restart only these two containers, in dependency order.
   recover_container finance-actual "${ACTUAL_STACK_DIR}" finance-actual actual || true
   recover_container finance-actual-proxy "${ACTUAL_STACK_DIR}" finance-actual actual-proxy || true
-  probe_twice http://127.0.0.1:5006/ || failed=1
+  probe_twice "${ACTUAL_HEALTH_URL}" || failed=1
 fi
 
 ensure_service finance-cashback-control "${CASHBACK_STACK_DIR}" finance-cashback cashback-control \
