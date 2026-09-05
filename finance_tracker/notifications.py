@@ -36,6 +36,18 @@ _RAKBANK_CARD_TRANSACTION = re.compile(
 )
 
 
+# Second issuer template observed in a real AED notification on 2026-08-27.
+# Only "charged" denotes a purchase here; reversals must not become spend.
+_RAKBANK_CARD_CHARGED = re.compile(
+    r"(?P<currency>[A-Z]{3})\s+(?P<amount>[0-9,]+(?:\.[0-9]{1,2})?)\s+"
+    r"is\s+charged\s+on\s+your\s+Credit\s+Card\s+"
+    r"[0-9*\s]*?(?P<last4>[0-9]{4})\s+from\s+"
+    r"(?P<merchant>.+?)\s+on\s+"
+    r"(?P<day>[0-9]{1,2})/(?P<month>[0-9]{1,2})(?:\.|\s|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 @dataclass(frozen=True, slots=True)
 class NotificationFact:
     adapter: str
@@ -167,7 +179,8 @@ class RakbankCardTransactionNotificationAdapter:
         )
 
     def parse(self, message: dict[str, Any]) -> NotificationFact:
-        match = _RAKBANK_CARD_TRANSACTION.search(_message_text(message))
+        text = _message_text(message)
+        match = _RAKBANK_CARD_TRANSACTION.search(text) or _RAKBANK_CARD_CHARGED.search(text)
         if not match:
             raise ValueError(
                 "RAKBANK transaction email does not expose merchant, amount, currency, card suffix, and date"
