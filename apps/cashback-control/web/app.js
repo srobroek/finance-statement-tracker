@@ -62,11 +62,15 @@ function exactMoney(value) {
 }
 
 function typeLabel(item) {
-  if (item.label) return item.label;
+  if (item.label) return tidySpendLabel(item.label);
   return (item.purchase_type || item.channel || "Spend")
     .replaceAll("_", " ")
     .toLowerCase()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function tidySpendLabel(label) {
+  return label.replace(/\bewallet\b/gi, "E-wallet").replace(/\bfiller\b/gi, "Other spend");
 }
 
 function routeHeading(item, candidate, compact = false) {
@@ -118,7 +122,7 @@ function candidateRewardRateLabel(candidate) {
 }
 
 function bucketLabel(code) {
-  return code.replace(/^(RAK|SC|EI)_/, "").replaceAll("_", " ").toLowerCase();
+  return tidySpendLabel(code.replace(/^(RAK|SC|EI)_/, "").replaceAll("_", " ").toLowerCase());
 }
 
 function tierName(code) {
@@ -250,9 +254,8 @@ function renderCards(cards) {
     header.append(createNode("strong", "", card.short_name || card.name), spend);
     details.append(header);
     const facts = createNode("div", "card-facts");
-    if (card.safety_target_aed) facts.append(createNode("span", "", `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed)))} to target`));
+    if (card.safety_target_aed) facts.append(createNode("span", "", `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed)))} to ${exactMoney(card.safety_target_aed)} target`));
     if (card.tier) facts.append(createNode("span", "", tierName(card.tier)));
-    if (card.pace?.status) facts.append(createNode("span", "", String(card.pace.status).replaceAll("_", " ").toLowerCase()));
     if (Number(card.refund_effect_aed)) facts.append(createNode("span", "", `${exactMoney(card.refund_effect_aed)} refunded`));
     details.append(facts); node.append(details);
     if (card.reward_eligibility_verified === false || (card.position_headline && /unverified|unknown/i.test(card.position_headline))) node.append(createNode("span", "eligibility", "Reward eligibility unknown"));
