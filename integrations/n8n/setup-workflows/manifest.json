@@ -3,7 +3,6 @@
   "n8n_version": "2.37.10",
   "contract_status": "SETUP_ONLY",
   "import_policy": "EXPLICIT_SINGLE_FILE_ONLY",
-  "activation_forbidden": true,
   "workflows": [
     {
       "code": "ONEDRIVE_FINANCE_EVIDENCE_ROOT_SETUP",
@@ -14,7 +13,8 @@
       "project_name": "Global",
       "credential_placeholder": "BIND_ONEDRIVE",
       "allowed_provider_mutation": "CREATE_SINGLE_ONEDRIVE_ROOT_FOLDER_IF_ABSENT",
-      "receipt": "REDACTED"
+      "receipt": "REDACTED",
+      "activation_forbidden": true
     },
     {
       "code": "MICROSOFT_OAUTH_REFRESH_PROOF",
@@ -23,10 +23,35 @@
       "folder_id": "f1000000-0000-4000-8000-000000000191",
       "folder_name": "Shared",
       "project_name": "Global",
-      "credential_placeholders": ["BIND_OUTLOOK", "BIND_ONEDRIVE"],
+      "credential_placeholders": [
+        "BIND_OUTLOOK",
+        "BIND_ONEDRIVE"
+      ],
       "allowed_provider_mutation": "NONE",
       "receipt": "REDACTED",
-      "restart_proof_required": true
+      "restart_proof_required": true,
+      "activation_forbidden": true
+    },
+    {
+      "code": "ADCB_REVIEWED_MAINTENANCE",
+      "file": "25-reviewed-adcb-maintenance.json",
+      "manual_only": false,
+      "reviewed_integrated_invocation_required": true,
+      "folder_id": "f1000000-0000-4000-8000-000000000191",
+      "folder_name": "Shared",
+      "project_name": "Global",
+      "credential_placeholders": [
+        "BIND_ONEDRIVE",
+        "BIND_ACTUAL",
+        "BIND_FINANCE_OPS_DB"
+      ],
+      "allowed_provider_mutation": "APPEND_REDACTED_MAINTENANCE_RECEIPT",
+      "allowed_actual_mutation": "APPROVED_HASH_BOUND_ADCB_RECONSTRUCTION_MAX_100_ACTIONS",
+      "receipt": "REDACTED_HASH_READBACK_REQUIRED",
+      "restart_proof_required": true,
+      "publication_requires_review": true,
+      "schedule_forbidden": true
     }
-  ]
+  ],
+  "publication_policy": "PER_WORKFLOW_REVIEWED_DEPENDENCY_ONLY"
 }
