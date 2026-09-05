@@ -213,7 +213,10 @@ class CashbackWebSecurityTests(unittest.TestCase):
         rendered = _RenderedDom()
         rendered.feed(dom)
         self.assertFalse(
-            [tag for tag, _ in rendered.elements if tag.casefold() in {"img", "svg"}],
+            [tag for tag, attrs in rendered.elements if tag.casefold() == "img"
+             or (tag.casefold() == "svg" and dict(attrs) != {
+                 "class": "category-icon", "viewbox": "0 0 24 24", "aria-hidden": "true",
+             })],
             "hostile image/vector nodes were created",
         )
         self.assertFalse(

@@ -132,10 +132,27 @@ function tierName(code) {
 function renderRecommendations(items) {
   const root = document.querySelector("#recommendations");
   root.replaceChildren(...(items || []).map(item => {
-    const routes = item.active === false ? [] : item.ranked_cards || [];
+    const routes = item.active === false ? [] : (item.ranked_cards || []).filter(candidate => candidate.card !== "EI_AMAZON");
     const node = createNode("details", "route-row");
     const summary = createNode("summary", "route-main");
-    summary.append(createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", routes.length ? routeHeading(item, routes[0], true) : "No route"));
+    const heading = createNode("span", "route-heading");
+    heading.append(categoryIcon(item), createNode("strong", "", typeLabel(item)), createNode("span", "route-choice", routes.length ? routeHeading(item, routes[0], true) : "No route"));
+    summary.append(heading);
+    const preferred = routes[0];
+    if (preferred && preferred.bucket_spend_aed != null) {
+      const usage = createNode("span", "route-usage");
+      const spent = Number(preferred.bucket_spend_aed);
+      const cap = preferred.bucket_cap_aed == null ? null : Number(preferred.bucket_cap_aed);
+      usage.append(createNode("small", "bucket-caption", `${bucketLabel(preferred.bucket || "Shared")} bucket`));
+      usage.append(createNode("span", "", `${exactMoney(spent)} / ${cap == null ? "No cap" : exactMoney(cap)}`));
+      if (cap != null && cap > 0) {
+        const track = createNode("span", "track");
+        const fill = createNode("i");
+        setWidth(fill, Math.min(100, Math.max(0, spent / cap * 100)));
+        track.append(fill); usage.append(track);
+      }
+      summary.append(usage);
+    }
     node.append(summary);
     const list = createNode("ol", "route-options");
     routes.forEach(candidate => {
@@ -150,6 +167,27 @@ function renderRecommendations(items) {
   }));
 }
 
+function categoryIcon(item) {
+  const category = String(item.purchase_type || item.code || item.label || "").toUpperCase();
+  const paths = [
+    [/GROCER|SUPERMARKET/, "M3 4h2l2 11h11l3-8H6 M9 20h.01 M18 20h.01"],
+    [/DINING|RESTAURANT/, "M5 3v7m3-7v7M5 7h3m-1.5 3v11M17 3v18m0-18c-5 3-5 9 0 9"],
+    [/TRAVEL|FLIGHT/, "M3 11l7 2 5 8 2-1-2-8 6-6c2-2 0-4-2-2l-6 6-8-2z"],
+    [/FUEL|PETROL/, "M4 21V5h10v16M4 10h10M2 21h14m-2-14 4 3v7c0 3 3 3 3 0V8l-3-3"],
+    [/WALLET/, "M3 6h17v14H3zM3 6V4h14m3 7h-6v5h6m-3-2h.01"],
+    [/FOREIGN|INTERNATIONAL/, "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18"],
+    [/ONLINE|AMAZON/, "M3 4h18v13H3zM8 21h8m-4-4v4"],
+  ];
+  const pathData = paths.find(([match]) => match.test(category))?.[1] || "M3 5h18v14H3zM3 9h18M7 15h4";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "category-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", pathData); svg.append(path);
+  return svg;
+}
+
 function setupScreenViews() {
   const buttons = [...document.querySelectorAll("[data-screen-view]")];
   const select = value => {
@@ -157,7 +195,7 @@ function setupScreenViews() {
     buttons.forEach(button => button.setAttribute("aria-selected", String(button.dataset.screenView === value)));
   };
   buttons.forEach(button => button.addEventListener("click", () => select(button.dataset.screenView)));
-  select("cards");
+  select("routing");
 }
 
 function applicationServerKey(value) {
@@ -241,7 +279,7 @@ async function setupPushNotifications() {
 
 function renderCards(cards) {
   const root = document.querySelector("#cards");
-  root.replaceChildren(...(cards || []).map(card => {
+  root.replaceChildren(...(cards || []).filter(card => card.card !== "EI_AMAZON").map(card => {
     const node = createNode("article", "position-card");
     const details = createNode("details", "card-details");
     const header = createNode("summary", "card-header");
@@ -279,6 +317,7 @@ function renderCards(cards) {
 }
 
 function renderPeriodHistory(periods) {
+  periods = periods.filter(period => period.card !== "EI_AMAZON");
   const section = document.querySelector("#history-section");
   const selector = document.querySelector("#period-selector");
   const root = document.querySelector("#period-history");
@@ -345,7 +384,17 @@ function renderAttention(payload) {
   const section = document.querySelector("#attention-section");
   const root = document.querySelector("#attention");
   const alerts = [];
-  (payload.alerts || []).forEach((alert) => alerts.push(alert));
+  (payload.alerts || []).forEach((alert) => {
+    const [kind, code] = String(alert.key || "").split(":");
+    if (code === "EI_AMAZON") return;
+    const card = (payload.cards || []).find(candidate => candidate.card === code);
+    if (["minimum", "close"].includes(kind) && card?.safety_target_aed) {
+      alerts.push({...alert,
+        title: `${card.short_name || card.name} · ${kind === "close" ? "Target not reached" : "Below target pace"}`,
+        detail: `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed || 0)))} to ${exactMoney(card.safety_target_aed)} target${card.period_end ? ` · closes ${card.period_end}` : ""}`,
+      });
+    } else alerts.push(alert);
+  });
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
     alerts.push({ key: "reconciliation:variance", title: `${count} statement variance${count === 1 ? "" : "s"}`, detail: "Notification events did not match the authoritative statement and were excluded from cashback totals." });
