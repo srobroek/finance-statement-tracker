@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { downloadAndSyncBudget } from "./initial-sync.mjs";
 import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
@@ -327,13 +328,9 @@ export async function openBudget() {
   });
   const syncId = requireEnv("ACTUAL_SYNC_ID");
   const encryptionPassword = process.env.ACTUAL_ENCRYPTION_PASSWORD;
-  await actual.downloadBudget(
-    syncId,
-    encryptionPassword ? { password: encryptionPassword } : undefined,
-  );
-  // A cached budget may be older than the server. Always pull remote changes
-  // before a read, preflight, or bootstrap decision.
-  await actual.sync();
+  await downloadAndSyncBudget(actual, syncId,
+    encryptionPassword ? { password: encryptionPassword } : undefined);
+
 }
 
 export async function doctor(api = actual) {
