@@ -21,6 +21,51 @@ def _iso(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _period_word_date(
+    day: str,
+    month: str,
+    period_start: date | None,
+    period_end: date | None,
+) -> date:
+    """Resolve a yearless statement-row date from the stated period."""
+    if period_start is None or period_end is None:
+        raise ValueError("Statement period is required to resolve yearless transaction dates")
+    if period_start > period_end:
+        raise ValueError("Statement period start must not follow period end")
+    candidates: list[date] = []
+    for year in range(period_start.year, period_end.year + 1):
+        try:
+            candidate = datetime.strptime(f"{day} {month} {year}", "%d %b %Y").date()
+        except ValueError:
+            continue
+        if period_start <= candidate <= period_end:
+            candidates.append(candidate)
+    if len(candidates) != 1:
+        raise ValueError(
+            f"Statement row date {day} {month} does not resolve uniquely within "
+            f"{period_start.isoformat()}..{period_end.isoformat()}"
+        )
+    return candidates[0]
+
+
+def _transaction_word_date(day: str, month: str, post_date: date) -> date:
+    """Resolve a transaction date as the latest valid occurrence by posting."""
+    candidates: list[date] = []
+    for year in (post_date.year, post_date.year - 1):
+        try:
+            candidate = datetime.strptime(f"{day} {month} {year}", "%d %b %Y").date()
+        except ValueError:
+            continue
+        if candidate <= post_date:
+            candidates.append(candidate)
+    if not candidates:
+        raise ValueError(
+            f"Statement transaction date {day} {month} cannot be resolved from "
+            f"posting date {post_date.isoformat()}"
+        )
+    return max(candidates)
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedStatementTransaction:
     """Bank-neutral transaction emitted by every statement adapter."""
@@ -313,7 +358,6 @@ class EmiratesIslamicStatementAdapter:
 
         period_start = word_date(start_match)
         period_end = word_date(end_match)
-        year = period_end.year if period_end else datetime.now().year
         opening_match = re.search(rf"OPENING BALANCE\s+({_MONEY})", text, re.I)
         card_match = re.search(r"PRIMARY CARD NO:\s*\d{4}X+(\d{4})", text, re.I)
         card_last4 = card_match.group(1) if card_match else None
@@ -341,10 +385,13 @@ class EmiratesIslamicStatementAdapter:
             if not match:
                 continue
             post_day, post_month, day, month, description, amount, credit = match.groups()
+            post_date = _period_word_date(
+                post_day, post_month, period_start, period_end
+            )
             items.append(
                 {
-                    "transaction_date": datetime.strptime(f"{day} {month} {year}", "%d %b %Y").date(),
-                    "post_date": datetime.strptime(f"{post_day} {post_month} {year}", "%d %b %Y").date(),
+                    "transaction_date": _transaction_word_date(day, month, post_date),
+                    "post_date": post_date,
                     "card_last4": card_last4,
                     "description": description.strip(),
                     "amount_aed": _decimal(amount),

@@ -607,16 +607,21 @@ def _normalize_event(source: dict[str, Any]) -> dict[str, Any]:
         "decision_trace_json": _trace_json(source.get("decision_trace"), "decision_trace"),
         "ai_trace_json": _trace_json(source.get("ai_trace"), "ai_trace"),
     }
-    identity = "|".join(
-        (
-            normalized["occurred_at"],
-            normalized["card_code"],
-            str(normalized["amount_aed_minor"]),
-            normalized["currency"],
-            normalized["event_type"],
-            _merchant_key(normalized["merchant"]),
-        )
-    )
+    identity_parts = [
+        normalized["occurred_at"],
+        normalized["card_code"],
+        str(normalized["amount_aed_minor"]),
+        normalized["currency"],
+        normalized["event_type"],
+        _merchant_key(normalized["merchant"]),
+    ]
+    # ``reversal_of`` is the transaction identity for a reversal.  Keep
+    # separate reversals when an issuer reports two same-day, same-amount,
+    # same-merchant events, while still deduplicating a replay of the same
+    # reversal target.
+    if normalized["event_type"] == "REVERSAL" and normalized["reversal_of"]:
+        identity_parts.append(str(normalized["reversal_of"] or ""))
+    identity = "|".join(identity_parts)
     normalized["identity_key"] = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return normalized
 
@@ -822,7 +827,7 @@ class CashbackEventStore:
                 )
         seen: set[str] = set()
         for row in connection.execute(
-            "SELECT source_event_id, occurred_at, card_code, amount_aed_minor, currency, event_type, merchant FROM cashback_events WHERE identity_key IS NULL ORDER BY created_at, source_event_id"
+            "SELECT source_event_id, occurred_at, card_code, amount_aed_minor, currency, event_type, merchant, reversal_of FROM cashback_events WHERE identity_key IS NULL ORDER BY created_at, source_event_id"
         ).fetchall():
             canonical = "|".join(
                 (
@@ -834,6 +839,11 @@ class CashbackEventStore:
                     _merchant_key(row["merchant"]),
                 )
             )
+            if (
+                str(row["event_type"]).upper() == "REVERSAL"
+                and row["reversal_of"]
+            ):
+                canonical += f"|{str(row['reversal_of'] or '')}"
             identity = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
             if identity in seen:
                 identity = hashlib.sha256(
@@ -843,6 +853,72 @@ class CashbackEventStore:
             connection.execute(
                 "UPDATE cashback_events SET identity_key = ? WHERE source_event_id = ?",
                 (identity, row["source_event_id"]),
+            )
+
+        # Releases before reversal targets participated in identity generated
+        # reversal keys without ``reversal_of``.  Rebuild those keys so a
+        # replay with a different source id cannot insert a duplicate after an
+        # upgrade.  Statement collision identities intentionally add a second
+        # discriminator; carry that discriminator forward instead of
+        # flattening a statement-only row onto the canonical identity.
+        targeted_reversals = connection.execute(
+            """
+            SELECT source_event_id, occurred_at, card_code, amount_aed_minor,
+                   currency, event_type, merchant, reversal_of, source,
+                   identity_key
+            FROM cashback_events
+            WHERE identity_key IS NOT NULL
+              AND event_type = 'REVERSAL'
+              AND reversal_of IS NOT NULL
+            ORDER BY created_at, source_event_id
+            """
+        ).fetchall()
+        for row in targeted_reversals:
+            canonical = "|".join(
+                (
+                    str(row["occurred_at"]),
+                    str(row["card_code"]),
+                    str(row["amount_aed_minor"]),
+                    str(row["currency"]),
+                    str(row["event_type"]),
+                    _merchant_key(row["merchant"]),
+                )
+            )
+            old_identity = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+            new_identity = hashlib.sha256(
+                f"{canonical}|{str(row['reversal_of'])}".encode("utf-8")
+            ).hexdigest()
+            current_identity = str(row["identity_key"])
+            replacement: str | None = None
+            if current_identity == old_identity:
+                replacement = new_identity
+            elif str(row["source"]) == "statement":
+                old_collision = hashlib.sha256(
+                    f"{old_identity}|statement:{row['source_event_id']}".encode("utf-8")
+                ).hexdigest()
+                if current_identity == old_collision:
+                    replacement = hashlib.sha256(
+                        f"{new_identity}|statement:{row['source_event_id']}".encode("utf-8")
+                    ).hexdigest()
+            if replacement is None or replacement == current_identity:
+                continue
+
+            # A partially upgraded database may already contain the new key.
+            # Keep both rows addressable and deterministic if that happens;
+            # future replays still resolve to the canonical new key.
+            candidate = replacement
+            suffix = 0
+            while connection.execute(
+                "SELECT 1 FROM cashback_events WHERE identity_key = ? AND source_event_id != ?",
+                (candidate, row["source_event_id"]),
+            ).fetchone():
+                suffix += 1
+                candidate = hashlib.sha256(
+                    f"{replacement}|legacy:{row['source_event_id']}:{suffix}".encode("utf-8")
+                ).hexdigest()
+            connection.execute(
+                "UPDATE cashback_events SET identity_key = ? WHERE source_event_id = ?",
+                (candidate, row["source_event_id"]),
             )
 
     @staticmethod

@@ -62,6 +62,42 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
   assert.equal(statement.balance_tied, true);
 });
 
+test('EI cross-year rows resolve transaction and posting years from the statement period', () => {
+  const statement = parseStatement(`Statement of Card Account
+From: 1st Jan 2026
+31st Jan 2026
+To:
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 31 DEC YEAR END PURCHASE 10.00
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,990.00 10.00 25/02/26 10.00 0.00 10.00`, 'emirates_islamic_v1');
+  assert.equal(statement.transactions[0].transaction_date, '2025-12-31');
+  assert.equal(statement.transactions[0].post_date, '2026-01-02');
+  assert.equal(statement.balance_tied, true);
+});
+
+test('EI transaction dates skip an invalid nonleap posting year', () => {
+  const statement = parseStatement(`Statement of Card Account
+From: 1st Jan 2025
+31st Jan 2025
+To:
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 29 FEB LEAP DAY PURCHASE 10.00
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,990.00 10.00 25/02/25 10.00 0.00 10.00`, 'emirates_islamic_v1');
+  assert.equal(statement.transactions[0].transaction_date, '2024-02-29');
+  assert.equal(statement.transactions[0].post_date, '2025-01-02');
+});
+
+test('EI yearless rows fail closed without a statement period', () => {
+  assert.throws(() => parseStatement(`Statement of Card Account
+OPENING BALANCE 0.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JAN 31 DEC YEAR END PURCHASE 10.00`, 'emirates_islamic_v1'), /Statement period is required/);
+});
+
 test('ADCB preserves foreign facts and reward credit semantics', () => {
   const statement = parseStatement(`15/07/26
 09/08/26

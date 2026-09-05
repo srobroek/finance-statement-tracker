@@ -574,11 +574,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         origin = self.headers.get("Origin") or ""
         if (
             self.headers.get_content_type() != "application/json"
-            or not hmac.compare_digest(origin, PUBLIC_URL)
-            or not hmac.compare_digest(
-                (self.headers.get("Host") or "").casefold(),
-                PUBLIC_ORIGIN.netloc.casefold(),
-            )
+            or origin != PUBLIC_URL
+            or (self.headers.get("Host") or "").casefold() != PUBLIC_ORIGIN.netloc.casefold()
             or self.headers.get("Authorization")
         ):
             return False
@@ -589,16 +586,10 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         if (
             allow_ingest_token
             and INGEST_TOKEN
-            and hmac.compare_digest(
-                self.headers.get("Authorization") or "",
-                f"Bearer {INGEST_TOKEN}",
-            )
+            and self._authorize_ingest()
         ):
             return True
-        if not hmac.compare_digest(
-            (self.headers.get("Host") or "").casefold(),
-            PUBLIC_ORIGIN.netloc.casefold(),
-        ):
+        if (self.headers.get("Host") or "").casefold() != PUBLIC_ORIGIN.netloc.casefold():
             return False
         return self._verify_access_session()
 

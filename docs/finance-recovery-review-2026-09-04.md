@@ -84,3 +84,50 @@ Microsoft credentials refresh correctly. Production completion requires
 replay, restart, exact Actual readback, and Cashback cursor/receipt checks.
 
 No historical transactions were imported during the read-only inventory.
+
+## Follow-up correctness review — 2026-09-05
+
+The follow-up starts from the verified `9b965b3` main snapshot. Production-host
+access was initially deferred; the user subsequently provided an SSH access
+route for use when needed. This code review does not establish deployment proof.
+
+- Resolve Emirates Islamic yearless dates using the statement period and the
+  posting date. A December purchase posted in January must retain its December
+  year. Missing or ambiguous date evidence must not fall back to the current
+  year, which would change transaction identities between replays.
+- Historical statements predating the configured cashback programmes must
+  remain eligible for ledger processing without applying later reward rules.
+- Keep reversals of distinct purchases separate even when their timestamp,
+  amount, and merchant match. Preserve deduplication of the same reversal target
+  when upgrading an existing event store.
+- Reject malformed non-ASCII HTTP authorization, Host, and Origin values with
+  an authorization response instead of disconnecting the request. Public host
+  and origin comparisons do not need secret-token comparison semantics; bearer
+  tokens continue to use the shared constant-time authorization check.
+
+These changes require newly built application images; the earlier immutable
+production lock does not acquire parser changes just because main advances.
+Record the new image receipts and update the reviewed lock before deployment.
+If an affected EI statement was previously imported with an incorrect year,
+reconcile the old ledger rows and import identities before replaying corrected
+rows. Do not automatically delete or reimport existing transactions.
+
+The authenticated live Cashback UI was observed on 2026-09-05 still showing only
+Amazon routing and a last successful ingest of 2026-08-20. Cloudflare access
+succeeded; separate Actual application authentication did not. No production
+deployment or ledger import was performed. Outlook materialized the requested
+ADCB email attachments, but downloading their bytes was denied by the attachment
+delivery service (HTTP 403).
+
+An existing OneDrive `Statement-5.pdf` was accessible as connector-extracted
+text. It is a multi-month card activity export covering January–May 2026,
+including billed and unbilled transactions, rather than the monthly email
+statement layout. The text contains 599 dated rows; seven are joined to repeated
+page headers. The 592 intact lines confirm three identical-row groups containing
+six rows. Preserve these occurrences: identical displayed values alone do not
+prove duplicate purchases. The monthly statement adapter does not recognize
+this export, so it was not imported or forced through that adapter. The user
+confirmed that only monthly statements belong in the n8n flow; activity exports
+are excluded from ingestion and are not a prerequisite for monthly backfill.
+This is source-text evidence only, not validation of local PDF extraction or
+monthly-statement balance reconciliation. No private statement data is committed.

@@ -161,3 +161,7 @@ class CashbackTests(TestCase):
         self.assertEqual(new.programme_version, "v2")
         with self.assertRaisesRegex(ValueError, "no active programs"):
             programs_from_config(source, date(2025, 12, 31))
+
+    def test_historical_lookup_skips_future_provenance_versions(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no active programs"):
+            configured_programs(date(2026, 7, 1))

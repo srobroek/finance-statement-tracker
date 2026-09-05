@@ -838,6 +838,14 @@ def validate_program_provenance(
         if not isinstance(item, dict):
             continue
         card = str(item.get("card") or "")
+        # A historical lookup only needs evidence for the programme version
+        # that was active on that date.  Validating a future version against
+        # an earlier ``as_of`` would manufacture an inverted effective
+        # interval (the open-ended programme ends at ``as_of``), preventing
+        # callers from correctly reporting that no programme was active yet.
+        program_start = _iso_date(item.get("effective_start") or source.get("effective_from"))
+        if as_of is not None and program_start is not None and validation_date < program_start:
+            continue
         provenance = item.get("provenance")
         if not isinstance(provenance, dict):
             raise ValueError(f"Cashback program {card} requires provenance in schema version 2")
