@@ -870,12 +870,15 @@ try {
                 )
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
-                self.assertTrue(replay_request["replay_noop"])
-                self.assertEqual(replay_request["messages"], [])
+                self.assertFalse(replay_request["replay_noop"])
+                self.assertTrue(replay_request["resume_enumeration"])
+                self.assertNotIn("messages", replay_request)
+                # The receipt has no bodies: W12 re-enumerates the same frozen
+                # window before W01 can reuse hash-verified archive receipts.
                 replay_validated = self.execute_code_node(
                     w01,
                     "Validate Bounded Source Request",
-                    json_value=replay_request,
+                    json_value={**replay_request, **replay_inventory},
                 )
                 self.assertTrue(replay_validated["ok"], replay_validated)
 
@@ -1374,11 +1377,14 @@ try {
                 )
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
-                # Replay reads canonical identity/barrier fields from the
-                # ingestion-state row; it does not reconstruct message bodies
-                # for a second W01 archive pass.
+                # Re-enumeration and W01 receipt reuse must restore the full
+                # verified archive proof before a resumed run can commit.
+                self.assertTrue(replay_request["resume_enumeration"])
+                self.assertNotIn("messages", replay_request)
                 replay_downstream = {
                     **replay_request,
+                    "matched_count": len(email_rows),
+                    "attachment_ids_verified": True,
                     "attachment_verification_barrier": "VERIFIED",
                     "attachments_verified": len(archive_rows),
                     "attachment_identity_keys": persisted["attachment_identity_keys"],
