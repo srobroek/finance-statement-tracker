@@ -216,17 +216,25 @@ details[open]>.card-header>strong:after {
 }
 .routing-step {
   position:relative;
-  padding:8px 12px!important;
+  padding:0!important;
   margin-bottom:8px;
+}
+.routing-condition {
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:8px
+}
+.route-result {
+  margin:8px 0 8px 18px;
+  padding:8px 12px;
   border-left:2px solid var(--line)
 }
-.routing-step:not(:last-child):after {
-  content:'↓';
-  display:block;
+.route-next {
   color:var(--muted);
-  margin-top:8px
+  font-size:12px;
+  padding:6px 0 12px
 }
-.routing-step.preferred {
+.route-result.preferred {
   border-color:var(--green);
   background:#203428;
   border-radius:6px

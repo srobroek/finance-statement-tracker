@@ -113,6 +113,8 @@ try {
     assert.ok(await evaluate('document.querySelectorAll("#recommendations .routing-tree .routing-step").length >= 2'), 'ordered alternatives must be rendered');
     const routeText = await evaluate('document.querySelector("#recommendations .routing-tree").innerText');
     assert.match(routeText, /RAK/); assert.match(routeText, /SimplyCash/); assert.match(routeText, /Apple Pay/);
+    assert.match(routeText, /accepted & bucket has room\?/); assert.match(routeText, /Yes · Preferred/); assert.match(routeText, /No · Full or payment ineligible/);
+    assert.equal(await evaluate('document.querySelector(".routing-step .route-result.preferred").checkVisibility()'), true);
     assert.ok(routeText.indexOf('RAK') < routeText.indexOf('SimplyCash'), 'preferred route precedes fallback');
     await layout('expanded route ' + width); await screenshot(`fictional-${width}-route`, '.routing-tree');
     await tap('#recommendations .route-row [data-detail-view="bucket"]');

@@ -196,10 +196,16 @@ function renderRoutingTree(item, routes) {
   tree.append(createNode("h3", "", "Routing"));
   const list = createNode("ol", "route-options");
   routes.forEach((candidate, index) => {
-    const row = createNode("li", `routing-step${index === 0 ? " preferred" : ""}`);
-    row.append(createNode("span", "route-order", index === 0 ? "Use first" : "Then"), createNode("strong", "", routeHeading(item, candidate, true)), createNode("span", "", candidateValueLabel(candidate)));
-    if (candidate.bucket_remaining_aed != null) row.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} available · ${bucketLabel(candidate.bucket || "Shared")} bucket`));
-    if (Number(candidate.tier_remaining_aed) > 0) row.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
+    const row = createNode("li", "routing-step");
+    const method = shortPaymentMethod(candidate.payment_channel);
+    const condition = createNode("div", "routing-condition");
+    condition.append(createNode("strong", "", `${method && candidate.payment_channel !== "UNKNOWN" ? method : "Eligible payment"} accepted & bucket has room?`));
+    if (candidate.bucket_remaining_aed != null) condition.append(createNode("small", "", `${exactMoney(candidate.bucket_remaining_aed)} available · ${bucketLabel(candidate.bucket || "Shared")} bucket`));
+    row.append(condition);
+    const result = createNode("div", `route-result${index === 0 ? " preferred" : ""}`);
+    result.append(createNode("span", "route-order", index === 0 ? "Yes · Preferred" : "Yes"), createNode("strong", "", `Use ${compactCardLabel(candidate.card)}`), createNode("span", "", candidateValueLabel(candidate)));
+    if (Number(candidate.tier_remaining_aed) > 0) result.append(createNode("small", "", `${exactMoney(candidate.tier_remaining_aed)} to target tier`));
+    row.append(result, createNode("div", "route-next", index < routes.length - 1 ? "No · Full or payment ineligible ↓" : "No · No eligible alternative"));
     list.append(row);
   });
   tree.append(list);
