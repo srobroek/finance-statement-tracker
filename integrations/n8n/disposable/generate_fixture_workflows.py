@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from itertools import pairwise
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[3]
 N8N = ROOT / "integrations" / "n8n"
@@ -42,10 +42,12 @@ ALLOWED_INLINE_EDGES = {
     "90000000-0000-4000-8000-000000000918": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000919": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000920": frozenset({RECOVERY_FIXTURE_ID}),
-    SWEEP_FIXTURE_ID: frozenset({
-        "10000000-0000-4000-8000-000000000001",
-        "10000000-0000-4000-8000-000000000021",
-    }),
+    SWEEP_FIXTURE_ID: frozenset(
+        {
+            "10000000-0000-4000-8000-000000000001",
+            "10000000-0000-4000-8000-000000000021",
+        }
+    ),
     AI_ID: frozenset({"10000000-0000-4000-8000-000000000021"}),
     RECOVERY_FIXTURE_ID: frozenset({"10000000-0000-4000-8000-000000000020"}),
     "10000000-0000-4000-8000-000000000020": frozenset({LEASE_ID}),
@@ -87,7 +89,9 @@ def code_node(node_id: str, name: str, js_code: str, position: list[int]) -> dic
     }
 
 
-def execute_node(node_id: str, name: str, workflow_id: str, position: list[int]) -> dict:
+def execute_node(
+    node_id: str, name: str, workflow_id: str, position: list[int]
+) -> dict:
     return {
         "id": node_id,
         "name": name,
@@ -120,8 +124,12 @@ def wrapper(workflow_id: str, name: str, input_js: str, target_id: str) -> dict:
         "active": False,
         "nodes": [trigger, emit, call],
         "connections": {
-            trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]},
-            emit["name"]: {"main": [[{"node": call["name"], "type": "main", "index": 0}]]},
+            trigger["name"]: {
+                "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
+            },
+            emit["name"]: {
+                "main": [[{"node": call["name"], "type": "main", "index": 0}]]
+            },
         },
         "settings": fixture_settings(),
         "pinData": {},
@@ -142,7 +150,23 @@ def build_archive_fixture() -> dict:
     emit = code_node(
         "fixture-w01-archive",
         "Emit Synthetic Archive Barrier",
-        "const input=$json||{}; return [{json:{...input, status:'ARCHIVED', archive_ready:true, attachment_verification_barrier:'VERIFIED', attachment_ids_verified:true, attachments_verified:Number(input.attachments_verified||0), email_evidence_receipt_barrier:'VERIFIED', email_evidence_receipts_verified:Number(input.email_evidence_receipts_verified||input.matched_count||0), email_evidence_identity_keys:Array.isArray(input.email_evidence_identity_keys)?input.email_evidence_identity_keys:[], archive_identity_keys:Array.isArray(input.attachment_identity_keys)?input.attachment_identity_keys:[], archive_readback_verified:true}}];",
+        (
+            "const input=$json; "
+            "if(input.immutable_inventory!==true||!Array.isArray(input.messages)) throw new Error('FIXTURE_IMMUTABLE_INVENTORY_REQUIRED'); "
+            "const ids=input.messages.map(row=>String(row?.message_id||row?.message?.id||row?.id||'').trim()); "
+            "if(ids.some(id=>!id)||new Set(ids).size!==ids.length||Number(input.matched_count)!==ids.length) throw new Error('FIXTURE_MESSAGE_INVENTORY_MISMATCH'); "
+            "const attachments=input.messages.flatMap((row,index)=>(Array.isArray(row.attachment_inventory)?row.attachment_inventory:[]).map(attachment=>{ "
+            "if(!attachment.id) throw new Error('FIXTURE_ATTACHMENT_ID_REQUIRED'); return ids[index]+':'+attachment.id; })); "
+            "const expected=input.attachment_identity_keys; "
+            "if(!Array.isArray(expected)||new Set(attachments).size!==attachments.length||expected.length!==attachments.length||attachments.some(id=>!expected.includes(id))) throw new Error('FIXTURE_ATTACHMENT_INVENTORY_MISMATCH'); "
+            "const emails=ids.map(id=>id+':INLINE_BODY'); "
+            "return [{json:{...input,status:'ARCHIVED',archive_ready:true,"
+            "attachment_verification_barrier:'VERIFIED',attachment_ids_verified:true,"
+            "attachment_identity_keys:attachments,attachments_verified:attachments.length,"
+            "email_evidence_receipt_barrier:'VERIFIED',email_evidence_receipts_verified:emails.length,"
+            "email_evidence_identity_keys:emails,archive_identity_keys:[...attachments,...emails].sort(),"
+            "archive_readback_verified:false,cursor_commit_eligible:false}}];"
+        ),
         [0, 0],
     )
     return {
@@ -150,10 +174,18 @@ def build_archive_fixture() -> dict:
         "name": "DISPOSABLE ONLY · Synthetic Outlook archive boundary",
         "active": False,
         "nodes": [trigger, emit],
-        "connections": {trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}},
+        "connections": {
+            trigger["name"]: {
+                "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
+            }
+        },
         "settings": fixture_settings(),
         "pinData": {},
-        "meta": {"disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacement": "Synthetic archive barrier"},
+        "meta": {
+            "disposableOnly": True,
+            "productionImportForbidden": True,
+            "externalNodeReplacement": "Synthetic archive barrier",
+        },
     }
 
 
@@ -164,18 +196,27 @@ def build_ai_fixture_source() -> dict:
             node.pop("alwaysOutputData", None)
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
-            node["parameters"] = {"jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"}
+            node["parameters"] = {
+                "jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"
+            }
         elif node["name"] == "Archive Proposal Artifact in OneDrive":
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
-            node["parameters"] = {"jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"}
+            node["parameters"] = {
+                "jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"
+            }
             node.pop("credentials", None)
         elif node["name"] == "Read Back Proposal Artifact":
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
             node["parameters"] = {"jsCode": "return [{json:{},binary:$binary}];"}
             node.pop("credentials", None)
-    workflow["meta"] = {**workflow.get("meta", {}), "disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacements": ["OneDrive archive", "source contract resolver"]}
+    workflow["meta"] = {
+        **workflow.get("meta", {}),
+        "disposableOnly": True,
+        "productionImportForbidden": True,
+        "externalNodeReplacements": ["OneDrive archive", "source contract resolver"],
+    }
     return workflow
 
 
@@ -199,9 +240,9 @@ def build_sweep_core() -> dict:
                 node["typeVersion"] = 2
                 node["parameters"] = {
                     "jsCode": (
-                        "return $input.all().flatMap(item => { "
+                        "return $input.all().flatMap((item,index) => { "
                         "const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; "
-                        "return attachments.length ? attachments.map(attachment => ({json: attachment})) : [{json:{}}]; "
+                        "return attachments.length ? attachments.map(attachment => ({json: attachment,pairedItem:index})) : [{json:{},pairedItem:index}]; "
                         "});"
                     )
                 }
@@ -243,11 +284,13 @@ def sweep_input(case: str) -> str:
 def build_ai_wrapper(workflow_id: str, case: str) -> dict:
     base = {
         "policy_id": "classify-unresolved",
-        "unresolved": [{
-            "transaction_id": f"fixture:{case}",
-            "allowed_fields": ["category"],
-            "redacted_context": {"vendor": "Fixture Vendor"},
-        }],
+        "unresolved": [
+            {
+                "transaction_id": f"fixture:{case}",
+                "allowed_fields": ["category"],
+                "redacted_context": {"vendor": "Fixture Vendor"},
+            }
+        ],
     }
     if case == "caller-model-rejected":
         base["model"] = "caller-selected-model"
@@ -269,31 +312,35 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
     if profile == "luna":
         request = {
             "policy_id": "classify-unresolved",
-            "unresolved": [{
-                "transaction_id": "fixture:positive:luna:carrefour",
-                "allowed_fields": ["category", "tags"],
-                "redacted_context": {
-                    "merchant_description": "CARREFOUR MARKET UAE",
-                    "normalized_vendor": "Carrefour",
-                    "transaction_type": "PURCHASE",
-                    "deterministic_result": "category unresolved",
-                },
-            }],
+            "unresolved": [
+                {
+                    "transaction_id": "fixture:positive:luna:carrefour",
+                    "allowed_fields": ["category", "tags"],
+                    "redacted_context": {
+                        "merchant_description": "CARREFOUR MARKET UAE",
+                        "normalized_vendor": "Carrefour",
+                        "transaction_type": "PURCHASE",
+                        "deterministic_result": "category unresolved",
+                    },
+                }
+            ],
         }
         name = "DISPOSABLE ONLY · Positive Luna proposal"
     elif profile == "sol":
         request = {
             "policy_id": "recommend-category",
-            "unresolved": [{
-                "transaction_id": "fixture:positive:sol:category-recommendation",
-                "allowed_fields": ["category_recommendation"],
-                "redacted_context": {
-                    "merchant_description": "SPECIALIST FIXTURE MERCHANT",
-                    "normalized_vendor": "Specialist Fixture Merchant",
-                    "transaction_type": "PURCHASE",
-                    "deterministic_result": "no configured category fits",
-                },
-            }],
+            "unresolved": [
+                {
+                    "transaction_id": "fixture:positive:sol:category-recommendation",
+                    "allowed_fields": ["category_recommendation"],
+                    "redacted_context": {
+                        "merchant_description": "SPECIALIST FIXTURE MERCHANT",
+                        "normalized_vendor": "Specialist Fixture Merchant",
+                        "transaction_type": "PURCHASE",
+                        "deterministic_result": "no configured category fits",
+                    },
+                }
+            ],
         }
         name = "DISPOSABLE ONLY · GATED Positive Sol proposal"
     else:
@@ -337,18 +384,24 @@ def build_stale_lease_wrapper() -> dict:
         "return [{json:{operation:'ACQUIRE',resource_key:'actual:fixture_stale',lease_owner:'n8n:fixture:stale',ttl_seconds:120}}];",
         [-250, 0],
     )
-    acquire = execute_node("lease-stale-acquire", "Acquire Fixture Lease", LEASE_ID, [0, 0])
+    acquire = execute_node(
+        "lease-stale-acquire", "Acquire Fixture Lease", LEASE_ID, [0, 0]
+    )
     corrupt = code_node(
         "lease-stale-corrupt",
         "Build Stale Fence Assertion",
         "return [{json:{operation:'ASSERT',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];",
         [250, 0],
     )
-    assertion = execute_node("lease-stale-assert", "Assert Stale Fixture Fence", LEASE_ID, [500, 0])
+    assertion = execute_node(
+        "lease-stale-assert", "Assert Stale Fixture Fence", LEASE_ID, [500, 0]
+    )
     nodes = [trigger, acquire_input, acquire, corrupt, assertion]
     connections = {}
-    for left, right in zip(nodes, nodes[1:]):
-        connections[left["name"]] = {"main": [[{"node": right["name"], "type": "main", "index": 0}]]}
+    for left, right in pairwise(nodes):
+        connections[left["name"]] = {
+            "main": [[{"node": right["name"], "type": "main", "index": 0}]]
+        }
     return {
         "id": "90000000-0000-4000-8000-000000000907",
         "name": "DISPOSABLE ONLY · Stale writer fence rejected",
@@ -392,6 +445,31 @@ def build_error_redaction_fixture() -> dict:
     return workflow
 
 
+def recovery_delta(state: str) -> dict:
+    if state not in {"PREPARED", "ACTUAL_OBSERVED", "VERIFIED"}:
+        raise ValueError(f"unsupported recovery fixture state: {state}")
+    suffix = state.lower().replace("_", "-")
+    return {
+        "schema_version": "statement-delta-v1",
+        "actual_file_id": "fixture_actual",
+        "config_version": "fixture-v1",
+        "account_id": "fixture-account",
+        "card_code": "FIXTURE",
+        "period_start": "2026-08-01",
+        "period_end": "2026-08-31",
+        "transactions": [
+            {
+                "imported_id": f"fixture:recovery:{suffix}",
+                "date": "2026-08-15",
+                "amount": -100,
+                "imported_payee": "Fixture",
+                "cleared": True,
+            }
+        ],
+        "expected_statement_balance_minor": -100,
+    }
+
+
 def build_recovery_core() -> dict:
     workflow = copy.deepcopy(read_json(PRODUCTION / "17-actual-outbox-recovery.json"))
     workflow["id"] = RECOVERY_FIXTURE_ID
@@ -401,45 +479,144 @@ def build_recovery_core() -> dict:
         "disposableOnly": True,
         "productionImportForbidden": True,
         "derivedFrom": "17-actual-outbox-recovery.json",
-        "externalNodeReplacements": [
-            "Schedule Trigger", "OneDrive artifact download", "Actual preflight/import/verify"
-        ],
+        "externalNodeReplacements": ["Schedule Trigger"],
         "financeWritesImpossible": True,
     }
+    triggers = [
+        node for node in workflow["nodes"] if node["name"] == "Every 10 Minutes"
+    ]
+    if len(triggers) != 1:
+        raise ValueError("recovery fixture requires exactly one schedule trigger")
+    trigger = triggers[0]
+    trigger["type"] = "n8n-nodes-base.executeWorkflowTrigger"
+    trigger["typeVersion"] = 1.1
+    trigger["parameters"] = {"inputSource": "passthrough"}
+    return workflow
+
+
+def build_recovery_apply_source() -> dict:
+    workflow = copy.deepcopy(read_json(PRODUCTION / "20-actual-outbox-apply.json"))
+    workflow["name"] = "DISPOSABLE ONLY · Derived Outbox Apply Boundary"
+    workflow["settings"] = fixture_settings()
+    artifacts = {}
+    verification_fixtures = {}
+    for state in ("PREPARED", "ACTUAL_OBSERVED", "VERIFIED"):
+        suffix = state.lower().replace("_", "-")
+        delta = recovery_delta(state)
+        artifacts[f"fixture-artifact-{suffix}"] = canonical(delta)
+        transaction = delta["transactions"][0]
+        economic_row = {
+            "account_id": delta["account_id"],
+            "imported_id": transaction["imported_id"],
+            "date": transaction["date"],
+            "amount": transaction["amount"],
+            "imported_payee": transaction["imported_payee"],
+            "category": None,
+            "notes": None,
+            "cleared": transaction["cleared"],
+        }
+        payload_sha256 = hashlib.sha256(
+            json.dumps(
+                [economic_row], ensure_ascii=False, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        verification_fixtures[transaction["imported_id"]] = {
+            "request": {
+                "account_id": delta["account_id"],
+                "card_code": delta["card_code"],
+                "start_date": delta["period_start"],
+                "end_date": delta["period_end"],
+                "expected_transactions": delta["transactions"],
+                "expected_account_balance": delta["expected_statement_balance_minor"],
+            },
+            "result": {
+                "status": "VERIFIED",
+                "rows": [
+                    {
+                        "id": f"fixture-actual-{suffix}",
+                        "account": delta["account_id"],
+                        **transaction,
+                    }
+                ],
+                "found_ids": [transaction["imported_id"]],
+                "missing_ids": [],
+                "duplicate_ids": [],
+                "mismatches": [],
+                "account_balance": delta["expected_statement_balance_minor"],
+                "expected_sha256": payload_sha256,
+                "observed_sha256": payload_sha256,
+                "transaction_count": 1,
+                "amount_sum": transaction["amount"],
+            },
+        }
+    outbox_guard = (
+        "const outbox=item.json.outbox; "
+        "if(outbox?.state!=='PREPARED'||outbox.card_code!=='FIXTURE'||outbox.execution_context?.trigger!=='RECOVERY'||!outbox.writer_lease?.lease_id||!Array.isArray(outbox.transactions)||outbox.transactions.length!==1) throw new Error('FIXTURE_RECOVERY_ENVELOPE_MISMATCH'); "
+    )
     replacements = {
-        "Every 10 Minutes": (
-            "n8n-nodes-base.executeWorkflowTrigger", 1.1, {"inputSource": "passthrough"}
-        ),
         "Download Immutable Delta Artifact": (
-            "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
-        ),
-        "SHA-256 Recovered Delta": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.delta_sha256}}));"},
-        ),
-        "Extract Recovered Delta JSON": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
+            f"const artifacts={canonical(artifacts)}; "
+            "return $input.all().map((item,index)=>{ "
+            "const artifact=artifacts[item.json.delta_artifact_item_id]; "
+            "if(!artifact) throw new Error('FIXTURE_RECOVERY_ARTIFACT_UNKNOWN'); "
+            "return {json:item.json,binary:{data:{data:Buffer.from(artifact,'utf8').toString('base64'),mimeType:'application/json',fileName:'fixture-delta.json'}},pairedItem:index}; });"
         ),
         "Recovery Actual Preflight": (
-            "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
+            "return $input.all().map((item,index)=>{ "
+            + outbox_guard
+            + "return {json:{...item.json,actual:{status:'PREFLIGHT_OK',outbox_id:outbox.outbox_id,account_id:outbox.account_id,transaction_count:outbox.transactions.length,already_observed:[]}},pairedItem:index}; });"
         ),
         "Recovery Import PREPARED": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return [{json:{actual_transaction_ids:['fixture-actual-transaction']}}];"},
+            "return $input.all().map((item,index)=>{ "
+            + outbox_guard
+            + "const suffix=outbox.transactions[0].imported_id.split(':').at(-1); "
+            "return {json:{...item.json,actual:{status:'ACTUAL_OBSERVED',outbox_id:outbox.outbox_id,writer_lease:outbox.writer_lease,imported_ids:outbox.transactions.map(row=>row.imported_id),balance_before:0,balance_after:-100,actual_result:{added:['fixture-actual-'+suffix],updated:[],errors:[]}}},pairedItem:index}; });"
         ),
         "Recovery Verify Actual": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return [{json:{invariants_passed:true,expected_payload_sha256:'fixture',observed_payload_sha256:'fixture'}}];"},
+            f"const fixtures={canonical(verification_fixtures)}; "
+            "return $input.all().map((item,index)=>{ "
+            "const verification=item.json.verification,fixture=fixtures[verification?.expected_transactions?.[0]?.imported_id]; "
+            "if(!fixture||['account_id','card_code','start_date','end_date','expected_account_balance'].some(key=>verification[key]!==fixture.request[key])||JSON.stringify(verification.expected_transactions)!==JSON.stringify(fixture.request.expected_transactions)) throw new Error('FIXTURE_RECOVERY_VERIFICATION_MISMATCH'); "
+            "return {json:{...item.json,actual:fixture.result},pairedItem:index}; });"
         ),
     }
+    remaining = set(replacements)
     for node in workflow["nodes"]:
         replacement = replacements.get(node["name"])
         if replacement is None:
             continue
+        if node["name"] not in remaining:
+            raise ValueError(f"duplicate recovery fixture boundary: {node['name']}")
+        expected_type = (
+            "n8n-nodes-base.microsoftOneDrive"
+            if node["name"] == "Download Immutable Delta Artifact"
+            else "n8n-nodes-finance.actualBudget"
+        )
+        if node["type"] != expected_type:
+            raise ValueError(f"recovery fixture boundary type changed: {node['name']}")
+        remaining.remove(node["name"])
         node.pop("credentials", None)
         node.pop("alwaysOutputData", None)
-        node["type"], node["typeVersion"], node["parameters"] = replacement
+        node["type"] = "n8n-nodes-base.code"
+        node["typeVersion"] = 2
+        node["parameters"] = {"jsCode": replacement}
+    if remaining:
+        raise ValueError(
+            "missing recovery fixture boundaries: " + ", ".join(sorted(remaining))
+        )
+    for node in workflow["nodes"]:
+        if node["type"] in {
+            "n8n-nodes-base.microsoftOneDrive",
+            "n8n-nodes-finance.actualBudget",
+        }:
+            raise ValueError(f"unreplaced recovery provider boundary: {node['name']}")
+    workflow["meta"] = {
+        "disposableOnly": True,
+        "productionImportForbidden": True,
+        "derivedFrom": "20-actual-outbox-apply.json",
+        "externalNodeReplacements": list(replacements),
+        "financeWritesImpossible": True,
+    }
     return workflow
 
 
@@ -450,7 +627,9 @@ def outbox_upsert_node(state: str) -> dict:
         "run_id": f"fixture-recovery-{suffix}",
         "idempotency_key": f"fixture:recovery:{suffix}",
         "actual_file_id": "fixture_actual",
-        "delta_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
+        "delta_sha256": hashlib.sha256(
+            canonical(recovery_delta(state)).encode()
+        ).hexdigest(),
         "delta_artifact_item_id": f"fixture-artifact-{suffix}",
         "delta_artifact_etag": "fixture-etag",
         "delta_schema_version": "statement-delta-v1",
@@ -469,11 +648,21 @@ def outbox_upsert_node(state: str) -> dict:
         "parameters": {
             "resource": "row",
             "operation": "upsert",
-            "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
+            "dataTableId": {
+                "__rl": True,
+                "value": "finance_actual_batches",
+                "mode": "name",
+            },
             "matchType": "allConditions",
-            "filters": {"conditions": [{
-                "keyName": "batch_id", "condition": "eq", "keyValue": value["batch_id"]
-            }]},
+            "filters": {
+                "conditions": [
+                    {
+                        "keyName": "batch_id",
+                        "condition": "eq",
+                        "keyValue": value["batch_id"],
+                    }
+                ]
+            },
             "columns": {
                 "mappingMode": "defineBelow",
                 "value": value,
@@ -490,15 +679,21 @@ def outbox_upsert_node(state: str) -> dict:
 def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
     trigger = manual_node()
     seed = outbox_upsert_node(state)
-    call = execute_node("run-recovery", "Run Derived Recovery Core", RECOVERY_FIXTURE_ID, [100, 0])
+    call = execute_node(
+        "run-recovery", "Run Derived Recovery Core", RECOVERY_FIXTURE_ID, [100, 0]
+    )
     return {
         "id": workflow_id,
         "name": f"DISPOSABLE ONLY · Recover from {state}",
         "active": False,
         "nodes": [trigger, seed, call],
         "connections": {
-            trigger["name"]: {"main": [[{"node": seed["name"], "type": "main", "index": 0}]]},
-            seed["name"]: {"main": [[{"node": call["name"], "type": "main", "index": 0}]]},
+            trigger["name"]: {
+                "main": [[{"node": seed["name"], "type": "main", "index": 0}]]
+            },
+            seed["name"]: {
+                "main": [[{"node": call["name"], "type": "main", "index": 0}]]
+            },
         },
         "settings": fixture_settings(),
         "pinData": {},
@@ -509,32 +704,73 @@ def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
 def build_all() -> dict[str, dict]:
     workflows = {
         "90-derived-outlook-sweep-core.json": build_sweep_core(),
-        "91-sweep-zero.json": wrapper("90000000-0000-4000-8000-000000000901", "DISPOSABLE ONLY · Sweep zero messages", sweep_input("zero"), SWEEP_FIXTURE_ID),
-        "92-sweep-101.json": wrapper("90000000-0000-4000-8000-000000000902", "DISPOSABLE ONLY · Sweep 101 messages", sweep_input("one-hundred-one"), SWEEP_FIXTURE_ID),
-        "93-sweep-late-order.json": wrapper("90000000-0000-4000-8000-000000000903", "DISPOSABLE ONLY · Sweep late out of order", sweep_input("late-out-of-order"), SWEEP_FIXTURE_ID),
-        "94-sweep-pagination-failure.json": wrapper("90000000-0000-4000-8000-000000000904", "DISPOSABLE ONLY · Sweep pagination failure", sweep_input("pagination-failure"), SWEEP_FIXTURE_ID),
-        "95-lease-acquire-a.json": build_lease_wrapper("90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"),
-        "96-lease-acquire-b.json": build_lease_wrapper("90000000-0000-4000-8000-000000000906", "n8n:fixture:concurrent:b"),
+        "91-sweep-zero.json": wrapper(
+            "90000000-0000-4000-8000-000000000901",
+            "DISPOSABLE ONLY · Sweep zero messages",
+            sweep_input("zero"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "92-sweep-101.json": wrapper(
+            "90000000-0000-4000-8000-000000000902",
+            "DISPOSABLE ONLY · Sweep 101 messages",
+            sweep_input("one-hundred-one"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "93-sweep-late-order.json": wrapper(
+            "90000000-0000-4000-8000-000000000903",
+            "DISPOSABLE ONLY · Sweep late out of order",
+            sweep_input("late-out-of-order"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "94-sweep-pagination-failure.json": wrapper(
+            "90000000-0000-4000-8000-000000000904",
+            "DISPOSABLE ONLY · Sweep pagination failure",
+            sweep_input("pagination-failure"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "95-lease-acquire-a.json": build_lease_wrapper(
+            "90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"
+        ),
+        "96-lease-acquire-b.json": build_lease_wrapper(
+            "90000000-0000-4000-8000-000000000906", "n8n:fixture:concurrent:b"
+        ),
         "97-lease-stale-assert.json": build_stale_lease_wrapper(),
-        "98-ai-caller-model-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000908", "caller-model-rejected"),
-        "99-ai-locked-field-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000909", "locked-field-rejected"),
-        "100-ai-missing-policy-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000910", "missing-active-policy"),
-        "106-ai-positive-luna.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000911", "luna"),
-        "107-ai-positive-sol-gated.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000912", "sol"),
+        "98-ai-caller-model-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000908", "caller-model-rejected"
+        ),
+        "99-ai-locked-field-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000909", "locked-field-rejected"
+        ),
+        "100-ai-missing-policy-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000910", "missing-active-policy"
+        ),
+        "106-ai-positive-luna.json": build_positive_ai_wrapper(
+            "90000000-0000-4000-8000-000000000911", "luna"
+        ),
+        "107-ai-positive-sol-gated.json": build_positive_ai_wrapper(
+            "90000000-0000-4000-8000-000000000912", "sol"
+        ),
         "101-error-redaction.json": build_error_redaction_fixture(),
         "102-derived-recovery-core.json": build_recovery_core(),
-        "103-recover-prepared.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000918", "PREPARED"),
-        "104-recover-actual-observed.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"),
-        "105-recover-verified.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000920", "VERIFIED"),
+        "103-recover-prepared.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000918", "PREPARED"
+        ),
+        "104-recover-actual-observed.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"
+        ),
+        "105-recover-verified.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000920", "VERIFIED"
+        ),
     }
     catalog = {workflow["id"]: workflow for workflow in workflows.values()}
     catalog["10000000-0000-4000-8000-000000000001"] = build_archive_fixture()
     catalog[AI_ID] = build_ai_fixture_source()
+    catalog["10000000-0000-4000-8000-000000000020"] = build_recovery_apply_source()
     for workflow_id, filename in INLINE_SOURCE_FILES.items():
         workflow = read_json(PRODUCTION / filename)
         if workflow.get("id") != workflow_id:
             raise ValueError(f"inline workflow ID mismatch for {filename}")
-        if workflow_id not in {"10000000-0000-4000-8000-000000000001", AI_ID}:
+        if workflow_id not in catalog:
             catalog[workflow_id] = workflow
     inlined = {
         name: inline_execute_workflows(workflow, catalog)
@@ -547,14 +783,23 @@ def build_all() -> dict[str, dict]:
 
 def database_target_id(node: dict) -> str:
     parameters = node.get("parameters")
-    if not isinstance(parameters, dict) or parameters.get("source", "database") != "database":
-        raise ValueError(f"ExecuteWorkflow node {node.get('name')} is not a database-ID call")
+    if (
+        not isinstance(parameters, dict)
+        or parameters.get("source", "database") != "database"
+    ):
+        raise ValueError(
+            f"ExecuteWorkflow node {node.get('name')} is not a database-ID call"
+        )
     selector = parameters.get("workflowId")
     if not isinstance(selector, dict) or not isinstance(selector.get("value"), str):
-        raise TypeError(f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID")
+        raise TypeError(
+            f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID"
+        )
     target_id = selector["value"]
     if not target_id:
-        raise ValueError(f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID")
+        raise ValueError(
+            f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID"
+        )
     return target_id
 
 
@@ -568,7 +813,9 @@ def inline_execute_workflows(
         raise TypeError("inline workflow must be an object with a string ID")
     workflow_id = workflow["id"]
     if workflow_id in ancestors:
-        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+        raise ValueError(
+            "inline workflow cycle: " + " -> ".join((*ancestors, workflow_id))
+        )
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
         raise TypeError(f"inline workflow {workflow_id} is malformed")
@@ -585,7 +832,9 @@ def inline_execute_workflows(
             continue
         target_id = database_target_id(node)
         if target_id not in allowed_edges.get(workflow_id, frozenset()):
-            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+            raise ValueError(
+                f"inline edge {workflow_id} -> {target_id} is not allowlisted"
+            )
         target = catalog.get(target_id)
         if target is None:
             raise ValueError(f"inline target {target_id} is unknown")
@@ -608,7 +857,9 @@ def validate_inline_workflow(
         raise TypeError("inline workflow must be an object with a string ID")
     workflow_id = workflow["id"]
     if workflow_id in ancestors:
-        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+        raise ValueError(
+            "inline workflow cycle: " + " -> ".join((*ancestors, workflow_id))
+        )
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
         raise TypeError(f"inline workflow {workflow_id} is malformed")
@@ -633,12 +884,16 @@ def validate_inline_workflow(
         try:
             child = json.loads(workflow_json)
         except json.JSONDecodeError as error:
-            raise ValueError(f"inline workflow JSON in {workflow_id} is malformed") from error
+            raise ValueError(
+                f"inline workflow JSON in {workflow_id} is malformed"
+            ) from error
         if not isinstance(child, dict) or not isinstance(child.get("id"), str):
             raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
         target_id = child["id"]
         if target_id not in allowed_edges.get(workflow_id, frozenset()):
-            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+            raise ValueError(
+                f"inline edge {workflow_id} -> {target_id} is not allowlisted"
+            )
         if workflow_json != canonical(child):
             raise ValueError(f"inline workflow JSON in {workflow_id} is not canonical")
         validate_inline_workflow(child, allowed_edges, path)
@@ -648,27 +903,112 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
     source_hashes = {
         name: hashlib.sha256(normalized_text_bytes(PRODUCTION / name)).hexdigest()
         for name in (
+            "01-outlook-finance-acquisition.json",
             "09-ai-proposal.json",
             "12-outlook-message-sweep.json",
             "16-operations-error-handler.json",
             "17-actual-outbox-recovery.json",
             "18-finance-writer-lease.json",
+            "20-actual-outbox-apply.json",
+            "21-subscription-agent-adapter.json",
         )
     }
     scenario_contract = {
-            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
-            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000012", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
-            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
-            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
-            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
-            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
-            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
-            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
-            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
-            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "n8n_execution_history", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
-            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
-        }
+        "sweep_zero": {
+            "workflow_id": "90000000-0000-4000-8000-000000000901",
+            "expected_exit": 0,
+            "expected": {"scanned_count": 0, "heartbeat": True},
+        },
+        "sweep_one_no_attachments": {
+            "workflow_id": "90000000-0000-4000-8000-000000000012",
+            "expected_exit": 0,
+            "expected": {
+                "scanned_count": 1,
+                "matched_count": 1,
+                "attachment_identity_keys": [],
+            },
+        },
+        "sweep_101": {
+            "workflow_id": "90000000-0000-4000-8000-000000000902",
+            "expected_exit": 0,
+            "expected": {
+                "scanned_count": 101,
+                "matched_count": 101,
+                "attachment_identity_keys": [],
+            },
+        },
+        "sweep_late_order": {
+            "workflow_id": "90000000-0000-4000-8000-000000000903",
+            "expected_exit": 0,
+            "expected_ids": ["m1", "m2", "m3"],
+        },
+        "sweep_pagination_failure": {
+            "workflow_id": "90000000-0000-4000-8000-000000000904",
+            "expected_exit": "nonzero",
+        },
+        "lease_concurrency": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000905",
+                "90000000-0000-4000-8000-000000000906",
+            ],
+            "run_concurrently": True,
+            "expected_successes": 1,
+        },
+        "lease_stale": {
+            "workflow_id": "90000000-0000-4000-8000-000000000907",
+            "expected_exit": "nonzero",
+            "expected_error": "WRITER_LEASE_STALE",
+        },
+        "ai_negative": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000908",
+                "90000000-0000-4000-8000-000000000909",
+                "90000000-0000-4000-8000-000000000910",
+            ],
+            "expected_exit": "nonzero",
+            "runner_calls": 0,
+        },
+        "ai_positive_luna": {
+            "workflow_id": "90000000-0000-4000-8000-000000000911",
+            "expected_exit": 0,
+            "policy_id": "classify-unresolved",
+            "expected_model": "gpt-5.6-luna",
+            "expected_reasoning_effort": "max",
+            "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+            "finance_writes": 0,
+        },
+        "ai_positive_sol_gated": {
+            "workflow_id": "90000000-0000-4000-8000-000000000912",
+            "expected_exit": 0,
+            "policy_id": "recommend-category",
+            "expected_model": "gpt-5.6-sol",
+            "expected_reasoning_effort": "medium",
+            "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+            "finance_writes": 0,
+            "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM",
+            "default_execution_forbidden": True,
+        },
+        "error_redaction": {
+            "workflow_id": "90000000-0000-4000-8000-000000000916",
+            "expected_exit": 0,
+            "receipt_sink": "n8n_execution_history",
+            "forbidden_readback": [
+                "DontLeak",
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+                "4111111111111111",
+            ],
+        },
+        "outbox_recovery": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000918",
+                "90000000-0000-4000-8000-000000000919",
+                "90000000-0000-4000-8000-000000000920",
+            ],
+            "expected_exit": 0,
+            "expected_state": "COMMITTED",
+            "finance_writes": 0,
+        },
+    }
     fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}
     scenario_workflow_ids: set[str] = set()
     for scenario in scenario_contract.values():
@@ -678,7 +1018,9 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
         workflow_ids = scenario.get("workflow_ids")
         if isinstance(workflow_ids, list):
             scenario_workflow_ids.update(
-                workflow_id for workflow_id in workflow_ids if isinstance(workflow_id, str)
+                workflow_id
+                for workflow_id in workflow_ids
+                if isinstance(workflow_id, str)
             )
     missing_workflow_ids = sorted(scenario_workflow_ids - fixture_workflow_ids)
     if missing_workflow_ids:
@@ -703,9 +1045,9 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
         "scenario_contract": scenario_contract,
         "blocked_runtime_scenarios": {
             "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
-            "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements.",
+            "real_actual_recovery_write": "Forbidden in disposable fixtures; derived recovery substitutes fixed provider responses while preserving artifact hashes, fenced leases, and durable receipt readbacks.",
         },
-        "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called.",
+        "warning": "Generated fixtures are deterministic test inputs, not execution receipts or evidence that external providers or Actual were called. Executed fixture receipts prove only disposable orchestration branches.",
     }
 
 
