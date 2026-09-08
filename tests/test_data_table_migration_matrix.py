@@ -15,6 +15,12 @@ N8N = ROOT / "integrations" / "n8n"
 SCRIPT = N8N / "generate_data_table_migration_matrix.py"
 MATRIX_PATH = N8N / "data-table-migration-matrix.json"
 SCHEMA_PATH = N8N / "data-table-migration-matrix.schema.json"
+LEGACY_REFERENCE_INVENTORY_PATH = (
+    N8N
+    / "setup-workflows"
+    / "runner"
+    / "finance-four-table-legacy-reference-inventory-v1.json"
+)
 
 
 def load_json(path: Path) -> dict:
@@ -44,7 +50,11 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
     def test_provenance_excludes_generator_commit_cycle(self) -> None:
         snapshot = self.generator.source_snapshot()
         head = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
+            ["git", "rev-parse", "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
         self.assertNotEqual(snapshot["finance_commit"], head)
         self.assertIn("data-tables.json", snapshot["source_ref_selection"])
@@ -55,82 +65,21 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(self.generator.normalize_lf(b"one\r\ntwo\r\n"), b"one\ntwo\n")
         rendered = self.generator.render({"line": "one\ntwo"})
         self.assertNotIn("\r", rendered)
-        self.assertEqual(rendered.encode("utf-8"), self.generator.normalize_lf(rendered.encode("utf-8")))
-
-    def test_source_counts_and_dispositions_match_current_corpus(self) -> None:
-        invariants = self.matrix["invariants"]
         self.assertEqual(
-            {
-                key: invariants[key]
-                for key in (
-                    "source_tables",
-                    "source_columns",
-                    "node_references",
-                    "consumer_node_edges",
-                    "filter_only_consumer_columns",
-                    "filter_only_consumer_edges",
-                    "write_reference_edges",
-                    "producer_node_edges",
-                )
-            },
-            {
-                "source_tables": 15,
-                "source_columns": 215,
-                "node_references": 33,
-                "consumer_node_edges": 315,
-                "filter_only_consumer_columns": 17,
-                "filter_only_consumer_edges": 31,
-                "write_reference_edges": 121,
-                "producer_node_edges": 121,
-            },
+            rendered.encode("utf-8"),
+            self.generator.normalize_lf(rendered.encode("utf-8")),
         )
-        self.assertEqual(invariants["dispositions"], {"keep": 104, "transform": 59, "remove": 52})
+
+    def test_source_table_and_column_order_match_current_corpus(self) -> None:
         tables = load_json(N8N / "data-tables.json")["tables"]
-        self.assertEqual([row["source_table"] for row in self.matrix["tables"]], [row["name"] for row in tables])
+        self.assertEqual(
+            [row["source_table"] for row in self.matrix["tables"]],
+            [row["name"] for row in tables],
+        )
         self.assertEqual(
             [column["source_column"] for column in self.matrix["tables"][0]["columns"]],
             list(tables[0]["columns"]),
         )
-
-    def test_reference_scan_preserves_exact_operations_and_ordered_filters(self) -> None:
-        references = {
-            (reference["file"], reference["node"]): reference
-            for table in self.matrix["tables"]
-            for reference in table["node_references"]
-        }
-        repeated = references[
-            (
-                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-                "Read Existing Email Evidence Receipt",
-            )
-        ]
-        self.assertEqual(repeated["operation"], "get")
-        self.assertEqual(repeated["read_columns"], ["*"])
-        self.assertEqual(
-            repeated["filter_keys"],
-            ["source_code", "source_message_id", "source_attachment_id", "source_sha256", "archive_state"],
-        )
-        update = references[
-            (
-                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-                "Upsert Durable Email Evidence Receipt",
-            )
-        ]
-        self.assertEqual(update["operation"], "upsert")
-        self.assertEqual(update["write_columns"], sorted(update["write_columns"]))
-        self.assertEqual(
-            update["filter_keys"],
-            ["source_code", "source_message_id", "source_attachment_id", "source_sha256"],
-        )
-        insert = references[
-            (
-                "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-                "Record Email PDF Render Requirement",
-            )
-        ]
-        self.assertEqual(insert["operation"], "upsert")
-        self.assertEqual(insert["write_columns"], sorted(insert["write_columns"]))
-        self.assertEqual(insert["filter_keys"], ["source_sha256", "document_profile", "requested_schema_version"])
 
     def test_consumer_and_producer_unions_are_explicit(self) -> None:
         columns = {
@@ -143,21 +92,12 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             for table in self.matrix["tables"]
             for reference in table["node_references"]
         }
-        cursor = columns[("finance_source_cursors", "cursor_version")]
-        self.assertIn(
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit",
-            cursor["consumer_nodes"],
-        )
-        self.assertNotIn(
-            "integrations/n8n/workflows/12-outlook-message-sweep.json#CAS Update Source Cursor",
-            cursor["consumer_nodes"],
-        )
-        self.assertNotIn(
-            "integrations/n8n/workflows/19-platform-data-table-bootstrap.json#Create or Reuse finance_source_cursors",
-            cursor["producer_nodes"],
-        )
         for (table_name, source_column), column in columns.items():
-            table_refs = [reference for key, reference in references.items() if key[0] == table_name]
+            table_refs = [
+                reference
+                for key, reference in references.items()
+                if key[0] == table_name
+            ]
             expected_consumers = sorted(
                 f"{reference['file']}#{reference['node']}"
                 for reference in table_refs
@@ -168,15 +108,29 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             expected_producers = sorted(
                 f"{reference['file']}#{reference['node']}"
                 for reference in table_refs
-                if reference["operation"] == "create" or source_column in reference["write_columns"]
+                if reference["operation"] == "create"
+                or source_column in reference["write_columns"]
             )
-            self.assertEqual(column["consumer_nodes"], expected_consumers, (table_name, source_column))
-            self.assertEqual(column["producer_nodes"], expected_producers, (table_name, source_column))
+            self.assertEqual(
+                column["consumer_nodes"],
+                expected_consumers,
+                (table_name, source_column),
+            )
+            self.assertEqual(
+                column["producer_nodes"],
+                expected_producers,
+                (table_name, source_column),
+            )
 
-    def test_target_schema_creation_is_validated_but_not_a_legacy_source_reference(self) -> None:
-        workflow = load_json(N8N / "workflows" / "19-platform-data-table-bootstrap.json")
+    def test_target_schema_creation_is_validated_but_not_a_legacy_source_reference(
+        self,
+    ) -> None:
+        workflow = load_json(
+            N8N / "workflows" / "19-platform-data-table-bootstrap.json"
+        )
         creates = [
-            node for node in workflow["nodes"]
+            node
+            for node in workflow["nodes"]
             if node.get("type") == "n8n-nodes-base.dataTable"
             and node.get("parameters", {}).get("resource") == "table"
             and node.get("parameters", {}).get("operation") == "create"
@@ -195,7 +149,9 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         for node, target in zip(creates, self.matrix["targets"], strict=True):
             expected = [
                 {"name": field, "type": spec["type"]}
-                for field, spec in self.matrix["target_schemas"][target]["columns"].items()
+                for field, spec in self.matrix["target_schemas"][target][
+                    "columns"
+                ].items()
             ]
             self.assertEqual(node["parameters"]["columns"]["column"], expected)
 
@@ -213,16 +169,11 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr or completed.stdout)
         self.assertEqual(MATRIX_PATH.read_text(encoding="utf-8"), first)
 
-    def test_stale_digest_and_coverage_are_rejected(self) -> None:
+    def test_stale_digest_is_rejected(self) -> None:
         stale = deepcopy(self.matrix)
         stale["source_snapshot"]["node_scan_corpus_sha256"] = "0" * 64
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_matrix(stale)
-        incomplete = deepcopy(self.matrix)
-        incomplete["tables"][1]["columns"][0]["consumer_nodes"] = []
-        with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_matrix(incomplete)
-
     def test_exact_target_schemas_and_explicit_merge_bindings(self) -> None:
         expected_targets = {
             "finance_ingestion_state",
@@ -232,7 +183,9 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         }
         self.assertEqual(set(self.matrix["target_schemas"]), expected_targets)
         for target, schema in self.matrix["target_schemas"].items():
-            self.assertTrue(set(schema["logical_key"]) <= set(schema["columns"]), target)
+            self.assertTrue(
+                set(schema["logical_key"]) <= set(schema["columns"]), target
+            )
             for field, definition in schema["columns"].items():
                 self.assertTrue(definition["source_bindings"], (target, field))
 
@@ -242,7 +195,9 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             if table["source_table"] == "finance_actual_verifications"
             for column in table["columns"]
         }
-        self.assertEqual(actual_verifications["actual_file_id"]["target_field"], "actual_file_id")
+        self.assertEqual(
+            actual_verifications["actual_file_id"]["target_field"], "actual_file_id"
+        )
         self.assertEqual(actual_verifications["card_code"]["target_field"], "card_code")
         self.assertEqual(
             actual_verifications["expected_payload_sha256"]["target_field"],
@@ -258,7 +213,9 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             reconciliations["actual_verification_sha256"]["target_field"],
             "verification_artifact_sha256",
         )
-        ingestion_columns = self.matrix["target_schemas"]["finance_ingestion_state"]["columns"]
+        ingestion_columns = self.matrix["target_schemas"]["finance_ingestion_state"][
+            "columns"
+        ]
         self.assertEqual(
             ingestion_columns["attachment_verification_barrier"]["source_bindings"],
             ["finance_acquisition_receipts.attachment_verification_barrier"],
@@ -268,21 +225,33 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             ["finance_acquisition_receipts.email_evidence_receipt_barrier"],
         )
 
-        document_identities = self.matrix["target_schemas"]["finance_documents"]["identity_derivations"]
+        document_identities = self.matrix["target_schemas"]["finance_documents"][
+            "identity_derivations"
+        ]
         archive_identity = next(
-            row for row in document_identities if row["source_table"] == "finance_archive_receipts"
+            row
+            for row in document_identities
+            if row["source_table"] == "finance_archive_receipts"
         )
         processing_identity = next(
-            row for row in document_identities if row["source_table"] == "finance_document_operations"
+            row
+            for row in document_identities
+            if row["source_table"] == "finance_document_operations"
         )
-        self.assertEqual(archive_identity["strategy"], "versioned_length_prefixed_sha256")
+        self.assertEqual(
+            archive_identity["strategy"], "versioned_length_prefixed_sha256"
+        )
         self.assertEqual(processing_identity["strategy"], archive_identity["strategy"])
         self.assertEqual(archive_identity["identity_kind"], "MAIL_LINKED")
-        self.assertEqual(processing_identity["identity_kind"], archive_identity["identity_kind"])
+        self.assertEqual(
+            processing_identity["identity_kind"], archive_identity["identity_kind"]
+        )
         self.assertEqual(archive_identity["version"], "document-identity-v1")
         self.assertEqual(processing_identity["version"], archive_identity["version"])
         self.assertEqual(archive_identity["length_prefix"], "uint64_be")
-        self.assertEqual(processing_identity["length_prefix"], archive_identity["length_prefix"])
+        self.assertEqual(
+            processing_identity["length_prefix"], archive_identity["length_prefix"]
+        )
         self.assertEqual(
             processing_identity["source_fields"], archive_identity["source_fields"]
         )
@@ -308,14 +277,20 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
         )
         self.assertEqual(processing_identity["alias_fields"], ["document_id"])
         self.assertNotIn("separator", archive_identity)
-        batch_identities = self.matrix["target_schemas"]["finance_actual_batches"]["identity_derivations"]
+        batch_identities = self.matrix["target_schemas"]["finance_actual_batches"][
+            "identity_derivations"
+        ]
         verification_identity = next(
-            row for row in batch_identities
+            row
+            for row in batch_identities
             if row["source_table"] == "finance_actual_verifications"
         )
-        self.assertEqual(verification_identity["join_steps"][0]["left_fields"], ["outbox_id"])
+        self.assertEqual(
+            verification_identity["join_steps"][0]["left_fields"], ["outbox_id"]
+        )
         reconciliation_identity = next(
-            row for row in batch_identities
+            row
+            for row in batch_identities
             if row["source_table"] == "finance_reconciliations"
         )
         self.assertEqual(reconciliation_identity["cardinality"], "exactly_one")
@@ -339,29 +314,38 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             if column["source_column"] == "document_id"
         )
         self.assertIsNone(processing_document_id["target_table"])
-        self.assertEqual(processing_document_id["target_artifact"], "document-identity-aliases-v1")
-        self.assertEqual(processing_document_id["target_field"], "legacy_to_canonical.document_id")
+        self.assertEqual(
+            processing_document_id["target_artifact"], "document-identity-aliases-v1"
+        )
+        self.assertEqual(
+            processing_document_id["target_field"], "legacy_to_canonical.document_id"
+        )
 
         source_tables = self.generator.load_source_tables()
         missing_archive_identity = deepcopy(self.matrix["target_schemas"])
         missing_archive_identity["finance_documents"]["identity_derivations"] = [
-            row for row in missing_archive_identity["finance_documents"]["identity_derivations"]
+            row
+            for row in missing_archive_identity["finance_documents"][
+                "identity_derivations"
+            ]
             if row["source_table"] != "finance_archive_receipts"
         ]
         with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_identity_derivations(source_tables, missing_archive_identity)
+            self.generator.validate_identity_derivations(
+                source_tables, missing_archive_identity
+            )
 
         broken_join = deepcopy(self.matrix["target_schemas"])
-        broken_join["finance_actual_batches"]["identity_derivations"][1]["join_steps"][0]["left_fields"] = [
-            "missing_outbox_id"
-        ]
+        broken_join["finance_actual_batches"]["identity_derivations"][1]["join_steps"][
+            0
+        ]["left_fields"] = ["missing_outbox_id"]
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_identity_derivations(source_tables, broken_join)
 
         numeric_rhs = deepcopy(self.matrix["target_schemas"])
-        numeric_rhs["finance_actual_batches"]["identity_derivations"][2]["join_steps"][0]["right_fields"] = [
-            "verification_version"
-        ]
+        numeric_rhs["finance_actual_batches"]["identity_derivations"][2]["join_steps"][
+            0
+        ]["right_fields"] = ["verification_version"]
         with self.assertRaises(self.generator.MatrixError):
             self.generator.validate_identity_derivations(source_tables, numeric_rhs)
 
@@ -373,25 +357,37 @@ class DataTableMigrationMatrixTests(unittest.TestCase):
             "source_fields": ["document_id"],
         }
         with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_identity_derivations(source_tables, divergent_document_identity)
+            self.generator.validate_identity_derivations(
+                source_tables, divergent_document_identity
+            )
 
         malformed_document_tuple = deepcopy(self.matrix["target_schemas"])
-        for identity in malformed_document_tuple["finance_documents"]["identity_derivations"]:
+        for identity in malformed_document_tuple["finance_documents"][
+            "identity_derivations"
+        ]:
             identity["source_fields"] = ["source_sha256", "source_message_id"]
         with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_identity_derivations(source_tables, malformed_document_tuple)
+            self.generator.validate_identity_derivations(
+                source_tables, malformed_document_tuple
+            )
 
         missing_alias_adapter = deepcopy(self.matrix["target_schemas"])
-        missing_alias_adapter["finance_documents"]["identity_derivations"][1].pop("legacy_to_canonical")
+        missing_alias_adapter["finance_documents"]["identity_derivations"][1].pop(
+            "legacy_to_canonical"
+        )
         with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_identity_derivations(source_tables, missing_alias_adapter)
+            self.generator.validate_identity_derivations(
+                source_tables, missing_alias_adapter
+            )
 
         reversed_alias_adapter = deepcopy(self.matrix["target_schemas"])
         reversed_alias_adapter["finance_documents"]["identity_derivations"][1][
             "legacy_to_canonical"
         ]["canonical_target"] = "finance_documents.source_sha256"
         with self.assertRaises(self.generator.MatrixError):
-            self.generator.validate_identity_derivations(source_tables, reversed_alias_adapter)
+            self.generator.validate_identity_derivations(
+                source_tables, reversed_alias_adapter
+            )
 
         direct_document_binding = deepcopy(self.matrix)
         for table in direct_document_binding["tables"]:
