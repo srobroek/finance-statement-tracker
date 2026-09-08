@@ -1589,6 +1589,7 @@ class MigrationRunner:
             ],
         }
         logical_keys = {
+            "finance_documents": ("document_id",),
             "finance_ingestion_state": ("record_type", "record_key"),
             "finance_actual_batches": ("idempotency_key",),
             "finance_ai_reviews": ("idempotency_key",),
