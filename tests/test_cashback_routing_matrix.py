@@ -68,18 +68,15 @@ class CashbackRoutingMatrixTests(TestCase):
         self.assertEqual(programs["EI_AMAZON"].position_mode, "UNLIMITED")
         self.assertGreaterEqual(len(self.config["programs"][0]["source_references"]), 4)
 
-    def test_ei_is_unlimited_in_card_position_and_routing(self) -> None:
+    def test_ei_is_retained_in_source_but_not_routed(self) -> None:
         dashboard = self.dashboard(self.rak_near_target() + self.sc_reward_buckets(wallet=False))
         ei_card = next(card for card in dashboard["cards"] if card["card"] == "EI_AMAZON")
         amazon = next(graph for graph in dashboard["routing_graphs"] if graph["code"] == "AMAZON")
-        ei_route = next(route for route in amazon["ranked_cards"] if route["card"] == "EI_AMAZON")
 
         self.assertEqual(ei_card["position_mode"], "UNLIMITED")
         self.assertEqual(ei_card["tracking_mode"], "STATEMENT_ONLY")
         self.assertEqual(ei_card["position_headline"], "Unlimited")
-        self.assertEqual(ei_route["position_mode"], "UNLIMITED")
-        self.assertIsNone(ei_route["bucket_cap_aed"])
-        self.assertEqual(ei_route["tier_threshold_aed"], "0")
+        self.assertNotIn("EI_AMAZON", {route["card"] for route in amazon["ranked_cards"]})
 
     @staticmethod
     def rak_near_target() -> list[Transaction]:

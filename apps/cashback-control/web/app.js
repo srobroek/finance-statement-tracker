@@ -627,8 +627,8 @@ function renderStatus(status, payload = {}) {
   const due = status?.expected_due_at ? new Date(status.expected_due_at).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
   const next = status?.next_scheduled_check_at ? new Date(status.next_scheduled_check_at).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
   const freshness = stale
-    ? `Scheduled feed check ${checkStatus || "not confirmed"} · last checked ${lastStamp}${due ? ` · due ${due}` : ""}`
-    : `Scheduled feed checked ${lastStamp}${next ? ` · next check ${next}` : ""}`;
+    ? `Overdue · Scheduled feed check ${checkStatus || "not confirmed"} · last checked ${lastStamp}${due ? ` · due ${due}` : ""}`
+    : `Scheduled feed · Checked ${lastStamp}${next ? ` · next check ${next}` : ""}`;
   const historical = Boolean(payload.is_historical);
   node.className = stale ? "as-of stale" : "as-of live";
   node.textContent = historical ? `Historical · ${formatAsOf(payload.selected_as_of)} · ${freshness}` : freshness;
@@ -678,10 +678,10 @@ async function loadDashboard(asOf = selectedAsOf) {
   ]);
   const payload = await response.json();
   const periodsPayload = await periodsResponse.json();
-  const previousPayload = await previousResponse.json();
+  const previousPayload = previousResponse.ok ? await previousResponse.json() : {};
   if (!response.ok) throw new Error(payload.error || "Dashboard is unavailable.");
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
-  if (!previousResponse.ok) throw new Error(previousPayload.error || "Previous statement cycles are unavailable.");
+  if (!previousResponse.ok && previousResponse.status !== 404) throw new Error(previousPayload.error || "Previous statement cycles are unavailable.");
   if (sequence !== dashboardLoadSequence) return;
   currentDashboardPayload = payload;
   previousStatementCycles = previousPayload.previous_statement_cycles || [];

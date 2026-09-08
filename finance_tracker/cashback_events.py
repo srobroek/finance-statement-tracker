@@ -2786,6 +2786,7 @@ class CashbackEventStore:
         result["live_event_count"] = result["live_event_count"] or 0
         result["variance_count"] = result["variance_count"] or 0
         result["last_successful_ingest_at"] = ingest["last_success_at"] if ingest else None
+        result["last_accepted_count"] = ingest["accepted_count"] if ingest else 0
         result["last_ingest_source"] = ingest["source"] if ingest else None
         result["last_scan_count"] = ingest["scanned_count"] if ingest else 0
         result["acknowledged_alerts"] = [

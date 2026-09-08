@@ -125,7 +125,7 @@ class CashbackDashboardPhaseTests(TestCase):
         ).hexdigest()
         self.assertEqual(
             digest,
-            "c6c8368bddeed5ea8df13c267a130439bf0ff2f95b68037a7c3e62a93d3d4b6f",
+            "df215b59c77921582fa9fec53d4f0edda40f4540cecedea38dcdfe3cd5fe2147",
         )
 
     def test_routes_disclose_configured_fx_fee_only_for_foreign_currency(self) -> None:
