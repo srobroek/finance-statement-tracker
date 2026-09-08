@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyNonRepresentableRules, assertProtectedFieldsUnchanged, normalizeTransaction, validateNonRepresentableRule } from './rules';
+import { parseStatement } from './statements';
 
 const rule = {
   schema_version: 1,
@@ -17,9 +18,16 @@ const rule = {
 test('normalization is deterministic and preserves source semantics', () => {
   const before = { merchant_raw: '  AMZN   UAE ', amount_aed: '100.00', source_direction: 'DEBIT', tags: ['#b', '#a', '#a'] };
   const after = normalizeTransaction(before);
-  assert.equal(after.merchant_raw, 'AMZN UAE');
+  assert.equal(after.merchant_raw, before.merchant_raw);
   assert.deepEqual(after.tags, ['#a', '#b']);
   assertProtectedFieldsUnchanged(before, after);
+});
+
+test('merchant matching normalizes whitespace without changing raw evidence', () => {
+  const merchantRaw = '  AmZn   UAE ';
+  const after = applyNonRepresentableRules({ merchant_raw: merchantRaw, amount_aed: '10.00' }, [{ ...rule, match: { any: [{ all: [{ field: 'merchant_raw', operator: 'contains', value: 'amzn uae' }] }] } }]);
+  assert.equal(after.merchant_raw, merchantRaw);
+  assert.equal(after.vendor, 'Amazon');
 });
 
 test('N8N_ONLY rules match any group and all conditions', () => {
@@ -61,6 +69,28 @@ test('transaction topic is set only during normalization then locked', () => {
   assert.equal(applyNonRepresentableRules({ merchant_raw: 'BANK TRANSFER', source_direction: 'DEBIT' }, []).transaction_type, 'TRANSFER');
   assert.equal(applyNonRepresentableRules({ merchant_raw: 'MONTHLY CASHBACK', source_direction: 'CREDIT' }, []).transaction_type, 'REWARD_CREDIT');
   assert.equal(applyNonRepresentableRules({ merchant_raw: 'MERCHANT CREDIT', source_direction: 'CREDIT' }, []).transaction_type, 'REFUND');
+});
+
+test('parser CREDIT reaches conditioned rules before deterministic finalization', () => {
+  const statement = parseStatement(`Statement of Card Account
+From: 1st Jul 2026
+31st Jul 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+13 JUL 12 JUL MERCHANT CREDIT 3.55CR
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,966.84 100.00 25/08/26 3.55 0.00 3.55`, 'emirates_islamic_v1');
+  const creditRule = {
+    ...rule,
+    stage: 'TRANSACTION_NORMALIZATION',
+    match: { any: [{ all: [{ field: 'transaction_type', operator: 'equals', value: 'CREDIT' }] }] },
+    actions: [{ action: 'set', field: 'vendor', value: 'Credit rule matched' }],
+  };
+  const after = applyNonRepresentableRules({ ...statement.transactions[0], merchant_raw: statement.transactions[0].description }, [creditRule]);
+  assert.equal(after.vendor, 'Credit rule matched');
+  assert.equal(after.transaction_type, 'REFUND');
+  assert.equal(after.transaction_type_locked, true);
 });
 
 test('compatibility matrix rejects unsupported and Actual-owned constructs loudly', () => {
