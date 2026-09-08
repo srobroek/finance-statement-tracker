@@ -21,7 +21,37 @@ class N8nTaskRunnersImageContractTests(unittest.TestCase):
         for image in lock["base_images"].values():
             self.assertRegex(image, r"@sha256:[0-9a-f]{64}$")
         self.assertRegex(lock["compatible_n8n_image"], r"@sha256:[0-9a-f]{64}$")
-
+        self.assertEqual(
+            lock["security_packages"],
+            {
+                "alpine_branch": "v3.23",
+                "libcrypto3": "3.5.8-r0",
+                "libssl3": "3.5.8-r0",
+                "sqlite-libs": "3.53.4-r0",
+                "util-linux": "2.41.6-r1",
+                "libuuid": "2.41.6-r1",
+                "fixed_cves": [
+                    "CVE-2026-14456",
+                    "CVE-2026-11822",
+                    "CVE-2026-11824",
+                    "CVE-2026-53612",
+                    "CVE-2026-53613",
+                    "CVE-2026-53614",
+                    "CVE-2026-76642",
+                    "CVE-2026-78408",
+                    "CVE-2026-78410",
+                ],
+            },
+        )
+        dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
+        for package in (
+            "libcrypto3=3.5.8-r0",
+            "libssl3=3.5.8-r0",
+            "sqlite-libs=3.53.4-r0",
+            "util-linux=2.41.6-r1",
+            "libuuid=2.41.6-r1",
+        ):
+            self.assertIn(package, dockerfile)
     def test_launcher_is_source_built_with_a_narrow_auditable_patch(self):
         dockerfile = (SERVICE / "Dockerfile").read_text(encoding="utf-8")
         dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
