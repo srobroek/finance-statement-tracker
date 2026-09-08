@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "b63e6a7fd5a7a58bd14c17f959053f4b08c2fe07",
+    "finance_commit": "a77ac7e0e4cf07d8f9d54a356b12ee48a4268a24",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "464624de0be3e45be50e18f0e2508a71070603a5107248e53a684745a5685960",
+    "node_scan_corpus_sha256": "6935e4bb48cfe6d80052a47a0289daff01b1f3453a83a31e4bbe167225d295c8",
     "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -1060,8 +1060,8 @@
   "invariants": {
     "source_tables": 15,
     "source_columns": 215,
-    "node_references": 1,
-    "consumer_node_edges": 11,
+    "node_references": 0,
+    "consumer_node_edges": 0,
     "filter_only_consumer_columns": 0,
     "filter_only_consumer_edges": 0,
     "write_reference_edges": 0,
@@ -2632,19 +2632,7 @@
       "retention": "400 days",
       "privacy": "internal telemetry",
       "rationale": "Preserve every pipeline receipt as a typed ingestion-state record.",
-      "node_references": [
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
-          "node": "Read Verified Downstream Terminal Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": []
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "run_id",
@@ -2661,9 +2649,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2681,9 +2667,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2700,9 +2684,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2719,9 +2701,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2738,9 +2718,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2757,9 +2735,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2776,9 +2752,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2795,9 +2769,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2814,9 +2786,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2833,9 +2803,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
@@ -2852,9 +2820,7 @@
           "retention": "400 days",
           "privacy": "internal telemetry",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         }
       ]

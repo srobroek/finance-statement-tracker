@@ -135,7 +135,7 @@
         },
         "node_references": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         },
         "consumer_node_edges": {
           "type": "integer",
