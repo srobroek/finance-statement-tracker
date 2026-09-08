@@ -346,68 +346,169 @@ async function setupPushNotifications() {
   }
 }
 
-function renderCards(cards) {
-  const root = document.querySelector("#cards");
-  root.replaceChildren(...(cards || []).map(card => {
+function buildCardNode(card, cycle = null) {
+  if (!card) {
     const node = createNode("article", "position-card");
-    node.dataset.card = card.card;
-    const details = createNode("details", "card-details");
-    const header = createNode("summary", "card-header");
-    const nextTier = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
-    const position = nextTier
-      ? `${exactMoney(card.total_spend_aed || 0)} / ${exactMoney(nextTier.minimum_spend_aed)}`
-      : exactMoney(card.total_spend_aed || 0);
-    const spend = createNode("span", "", position);
-    spend.title = nextTier ? `Spend / ${tierName(nextTier.code)}` : "Cycle spend";
-    header.append(createNode("strong", "", card.short_name || card.name), spend);
-    details.append(header);
-    const facts = createNode("div", "card-facts");
-    if (card.safety_target_aed) facts.append(createNode("span", "", `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed)))} to ${exactMoney(card.safety_target_aed)} target`));
-    if (card.tier) facts.append(createNode("span", "", tierName(card.tier)));
-    if (Number(card.refund_effect_aed)) facts.append(createNode("span", "", `${exactMoney(card.refund_effect_aed)} refunded`));
-    details.append(facts); node.append(details);
-    if (card.reward_eligibility_verified === false || (card.position_headline && /unverified|unknown/i.test(card.position_headline))) node.append(createNode("span", "eligibility", "Reward eligibility unknown"));
-    const buckets = createNode("div", "bucket-list");
-    (card.buckets || []).forEach(bucket => {
-      const spent = Number(bucket.spend_aed || 0);
-      const cap = bucket.spend_cap_aed == null ? null : Number(bucket.spend_cap_aed);
-      const row = createNode("div", "bucket-row");
-      const label = createNode("div", "bucket-label");
-      label.append(createNode("span", "", bucketLabel(bucket.code)), createNode("strong", "", cap == null ? exactMoney(spent) : `${exactMoney(Math.max(0, cap - spent))} left`));
-      row.append(label);
-      if (cap != null && cap > 0) {
-        const track = createNode("div", `track${spent >= cap ? " full" : ""}`);
-        const fill = createNode("i"); setWidth(fill, Math.max(0, Math.min(100, spent / cap * 100))); track.append(fill); row.append(track);
-        row.append(createNode("small", "", `${exactMoney(spent)} / ${exactMoney(cap)}`));
-      } else row.append(createNode("small", "", card.reward_eligibility_verified === false ? "Limit unknown" : "No cap"));
-      buckets.append(row);
-    });
-    node.append(buckets); return node;
-  }));
+    node.append(
+      createNode("h3", "cycle-empty-title", `${cardLabel(cycle?.card)} · Previous cycle`),
+      createNode("span", "cycle-empty-copy", "No calculated card position is available for this cycle."),
+    );
+    if (cycle) node.append(createNode("p", "cycle-state", previousCycleStatus(cycle)));
+    return node;
+  }
+  const node = createNode("article", "position-card");
+  node.dataset.card = card.card;
+  const details = createNode("details", "card-details");
+  const header = createNode("summary", "card-header");
+  const nextTier = (card.tiers || []).find(tier => !tier.met && Number(tier.minimum_spend_aed) > 0);
+  const position = nextTier
+    ? `${exactMoney(card.total_spend_aed || 0)} / ${exactMoney(nextTier.minimum_spend_aed)}`
+    : exactMoney(card.total_spend_aed || 0);
+  const spend = createNode("span", "", position);
+  spend.title = nextTier ? `Spend / ${tierName(nextTier.code)}` : "Cycle spend";
+  header.append(createNode("strong", "", card.short_name || card.name), spend);
+  details.append(header);
+  const facts = createNode("div", "card-facts");
+  if (card.safety_target_aed) facts.append(createNode("span", "", `${exactMoney(Math.max(0, Number(card.safety_target_aed) - Number(card.total_spend_aed)))} to ${exactMoney(card.safety_target_aed)} target`));
+  if (card.tier) facts.append(createNode("span", "", tierName(card.tier)));
+  if (Number(card.refund_effect_aed)) facts.append(createNode("span", "", `${exactMoney(card.refund_effect_aed)} refunded`));
+  details.append(facts); node.append(details);
+  if (cycle) node.append(createNode("p", "cycle-state", previousCycleStatus(cycle)));
+  if (card.reward_eligibility_verified === false || (card.position_headline && /unverified|unknown/i.test(card.position_headline))) node.append(createNode("span", "eligibility", "Reward eligibility unknown"));
+  const buckets = createNode("div", "bucket-list");
+  (card.buckets || []).forEach(bucket => {
+    const spent = Number(bucket.spend_aed || 0);
+    const cap = bucket.spend_cap_aed == null ? null : Number(bucket.spend_cap_aed);
+    const row = createNode("div", "bucket-row");
+    const label = createNode("div", "bucket-label");
+    label.append(createNode("span", "", bucketLabel(bucket.code)), createNode("strong", "", cap == null ? exactMoney(spent) : `${exactMoney(Math.max(0, cap - spent))} left`));
+    row.append(label);
+    if (cap != null && cap > 0) {
+      const track = createNode("div", `track${spent >= cap ? " full" : ""}`);
+      const fill = createNode("i"); setWidth(fill, Math.max(0, Math.min(100, spent / cap * 100))); track.append(fill); row.append(track);
+      row.append(createNode("small", "", `${exactMoney(spent)} / ${exactMoney(cap)}`));
+    } else row.append(createNode("small", "", card.reward_eligibility_verified === false ? "Limit unknown" : "No cap"));
+    buckets.append(row);
+  });
+  node.append(buckets);
+  return node;
 }
 
-function renderPeriodHistory(periods) {
+function renderCards(cards) {
+  const root = document.querySelector("#cards");
+  root.replaceChildren(...(cards || []).map(card => buildCardNode(card)));
+}
+
+function previousCycleStatus(cycle) {
+  const expectedStart = cycle.expected_period_start;
+  const expectedEnd = cycle.expected_period_end;
+  const expectedRange = expectedStart && expectedEnd
+    ? `${formatAsOf(expectedStart)} – ${formatAsOf(expectedEnd)}`
+    : "the expected statement cycle";
+  if (cycle.status === "NO_RECEIPT") {
+    return cycle.summary
+      ? `No statement received for ${expectedRange}; existing cashback calculation shown.`
+      : `No statement received for ${expectedRange}.`;
+  }
+  const processing = cycle.processing_state ? cycle.processing_state.replaceAll("_", " ").toLowerCase() : "processing status unavailable";
+  if (cycle.bounds_state !== "KNOWN") return `Statement received; cycle dates not provided. Expected ${expectedRange} · ${processing}.`;
+  if (["FAILED", "DECRYPT_FAILED", "PARSE_FAILED", "QUARANTINED"].includes(cycle.processing_state)) {
+    const snapshot = cycle.summary
+      ? "Existing cashback snapshot shown."
+      : "Cashback snapshot is unavailable.";
+    return `Statement received; processing failed (${processing}). ${snapshot}`;
+  }
+  if (!cycle.summary) return `Statement received · ${processing}; cashback snapshot is not available yet.`;
+  if (cycle.settlement_state === "FINALIZED") return `Finalized settlement · ${formatAsOf(cycle.period_start)} – ${formatAsOf(cycle.period_end)}.`;
+  return `Statement received · ${processing} · ${formatAsOf(cycle.period_start)} – ${formatAsOf(cycle.period_end)}.`;
+}
+
+function renderPreviousCycles(cycles) {
+  const root = document.querySelector("#cards");
+  const status = document.querySelector("#previous-cycle-status");
+  const entries = cycles || [];
+  status.hidden = false;
+  status.textContent = entries.length
+    ? "Each card uses its own previous statement cycle; statement arrival is shown separately from processing."
+    : "No active card statement cycles are available.";
+  root.replaceChildren(...entries.map(cycle => buildCardNode(cycle.summary, cycle)));
+}
+
+let selectedAsOf = "";
+let selectedPeriodView = "current";
+let previousStatementCycles = [];
+let currentDashboardPayload = null;
+
+function selectPeriodView(value) {
+  selectedPeriodView = value === "previous" ? "previous" : "current";
+  document.querySelectorAll("[data-period-view]").forEach(button => {
+    button.setAttribute("aria-selected", String(button.dataset.periodView === selectedPeriodView));
+  });
+  const status = document.querySelector("#previous-cycle-status");
+  status.hidden = selectedPeriodView !== "previous";
+  if (selectedPeriodView === "previous") {
+    selectScreen("cards");
+    if (selectedAsOf) {
+      selectedAsOf = "";
+      refreshDashboard("").catch(() => {});
+    } else {
+      renderPreviousCycles(previousStatementCycles);
+    }
+  } else {
+    renderCards(currentDashboardPayload?.cards || []);
+  }
+}
+
+function setupPeriodViews() {
+  document.querySelectorAll("[data-period-view]").forEach(button => {
+    button.addEventListener("click", () => selectPeriodView(button.dataset.periodView));
+  });
+}
+
+function formatAsOf(value) {
+  if (!value) return "Current";
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString([], {year:"numeric", month:"short", day:"numeric", timeZone:"UTC"});
+}
+
+function renderPeriodHistory(periods, availableAsOfDates = []) {
   const section = document.querySelector("#history-section");
   const selector = document.querySelector("#period-selector");
   const root = document.querySelector("#period-history");
+  const dates = [...new Set([...(availableAsOfDates || []), selectedAsOf].filter(Boolean).map(String))];
+  const label = document.querySelector(".period-label");
+  section.hidden = !periods.length && !dates.length;
+  selector.hidden = !dates.length;
+  if (label) label.hidden = !dates.length;
+  const options = [
+    {value: "", label: "Current statement period"},
+    ...dates.map(date => ({value: date, label: `As of ${formatAsOf(date)}`})),
+  ];
+  selector.replaceChildren(...options.map(({value, label}) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    return option;
+  }));
+  selector.value = selectedAsOf;
+  if (selector.value !== selectedAsOf) {
+    selectedAsOf = "";
+    selector.value = "";
+  }
+  if (!selector.dataset.bound) {
+    selector.addEventListener("change", () => {
+      selectPeriodView("current");
+      selectedAsOf = selector.value;
+      refreshDashboard(selectedAsOf).catch(() => {});
+    });
+    selector.dataset.bound = "true";
+  }
   if (!periods.length) {
-    section.hidden = true;
-    root.replaceChildren();
+    root.replaceChildren(emptyState("No finalized cashback periods", "Historical calculations are available only when the backend provides an earlier statement snapshot."));
     return;
   }
-  section.hidden = false;
-  selector.hidden = false;
-  selector.replaceChildren(
-    ...periods.map((period, index) => {
-      const option = document.createElement("option");
-      option.value = String(index);
-      option.textContent = `${cardLabel(period.card)} · ${period.period_start} – ${period.period_end}`;
-      return option;
-    }),
-  );
-
   const show = () => {
-    const period = periods[Number(selector.value) || 0];
+    const histories = periods.map((period) => {
     const card = period.summary;
     const bucketRows = (card.buckets || [])
       .filter((bucket) => Number(bucket.spend_aed) || bucket.spend_cap_aed)
@@ -437,15 +538,17 @@ function renderPeriodHistory(periods) {
       metric.append(createNode("span", "", label), createNode("strong", "", value));
       metrics.append(metric);
     });
-    history.append(title, metrics, createNode("p", "history-status", period.reconciliation_status.replaceAll("_", " ")));
+    const settlementCopy = period.settlement_state === "FINALIZED" ? "Finalized settlement" : "Unfinalized calculation";
+    history.append(title, metrics, createNode("p", "history-status", `${period.reconciliation_status.replaceAll("_", " ")} · ${settlementCopy}`));
     if (bucketRows.length) {
       const bucketList = createNode("ul", "history-buckets");
       bucketList.append(...bucketRows);
       history.append(bucketList);
     }
-    root.replaceChildren(history);
+    return history;
+    });
+    root.replaceChildren(...histories);
   };
-  selector.addEventListener("change", show);
   show();
 }
 
@@ -515,6 +618,27 @@ function renderAttention(payload) {
     root.append(disclosure);
   }
 }
+function renderStatus(status, payload = {}) {
+  const node = document.querySelector("#as-of");
+  const last = status?.last_successful_check_at || status?.last_successful_ingest_at;
+  const stale = status?.is_stale || !last;
+  const checkStatus = String(status?.check_status || "").replaceAll("_", " ").toLowerCase();
+  const lastStamp = last ? new Date(last).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "never";
+  const due = status?.expected_due_at ? new Date(status.expected_due_at).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+  const next = status?.next_scheduled_check_at ? new Date(status.next_scheduled_check_at).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "";
+  const freshness = stale
+    ? `Scheduled feed check ${checkStatus || "not confirmed"} · last checked ${lastStamp}${due ? ` · due ${due}` : ""}`
+    : `Scheduled feed checked ${lastStamp}${next ? ` · next check ${next}` : ""}`;
+  const historical = Boolean(payload.is_historical);
+  node.className = stale ? "as-of stale" : "as-of live";
+  node.textContent = historical ? `Historical · ${formatAsOf(payload.selected_as_of)} · ${freshness}` : freshness;
+  node.title = [
+    historical ? `Computed statement snapshot as of ${formatAsOf(payload.selected_as_of)}; not a finalized settlement.` : "Current cashback view.",
+    `Last successful scheduled feed check: ${last ? new Date(last).toLocaleString() : "never"}.`,
+    status?.expected_due_at ? `Expected due: ${new Date(status.expected_due_at).toLocaleString()}.` : "",
+    status?.next_scheduled_check_at ? `Next scheduled check: ${new Date(status.next_scheduled_check_at).toLocaleString()}.` : "",
+  ].filter(Boolean).join(" ");
+}
 
 async function setAlertAcknowledgement(alertKey, acknowledged) {
   const response = await fetch("/api/alerts/ack", {
@@ -526,14 +650,6 @@ async function setAlertAcknowledgement(alertKey, acknowledged) {
   if (!response.ok) throw new Error(payload.error || "Could not update alert.");
 }
 
-function renderStatus(status) {
-  const node = document.querySelector("#as-of");
-  const last = status?.last_successful_check_at || status?.last_successful_ingest_at;
-  node.className = status?.is_stale || !last ? "stale" : "live";
-  const stamp = last ? new Date(last).toLocaleString([], {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "Not synced";
-  node.textContent = `${last ? (status?.is_stale ? "Overdue · " : "Checked · ") : ""}${stamp}`;
-  node.title = last ? new Date(last).toLocaleString() : "Not synced";
-}
 
 let dashboardLoadSequence = 0;
 
@@ -541,43 +657,47 @@ function renderDashboardError(error) {
   const detail = error instanceof Error ? error.message : String(error);
   const status = document.querySelector("#as-of");
   status.className = "as-of stale";
-  status.textContent = "Unavailable";
+  status.textContent = "Dashboard unavailable";
   status.title = detail;
   document.querySelector("#card-summary").replaceChildren();
-
   document.querySelector("#recommendations").replaceChildren(emptyState("Dashboard unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
-
   document.querySelector("#cards").replaceChildren(emptyState("Card positions unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
   document.querySelector("#attention-section").hidden = true;
   document.querySelector("#history-section").hidden = false;
   document.querySelector("#period-selector").hidden = true;
-  document.querySelector("#period-history").replaceChildren(emptyState("History unavailable", "Refresh failed. The next automatic refresh will retry.", "error"));
+  document.querySelector("#period-history").replaceChildren(emptyState("History unavailable", `Refresh failed for ${selectedAsOf ? `the ${formatAsOf(selectedAsOf)} snapshot` : "the current view"}. The next automatic refresh will retry.`, "error"));
 }
-
-async function loadDashboard() {
+async function loadDashboard(asOf = selectedAsOf) {
   const sequence = ++dashboardLoadSequence;
-  const [response, periodsResponse] = await Promise.all([
-    fetch("/api/dashboard", { cache: "no-store" }),
+  selectedAsOf = asOf || "";
+  const dashboardUrl = selectedAsOf ? `/api/dashboard?as_of=${encodeURIComponent(selectedAsOf)}` : "/api/dashboard";
+  const [response, periodsResponse, previousResponse] = await Promise.all([
+    fetch(dashboardUrl, { cache: "no-store" }),
     fetch("/api/periods", { cache: "no-store" }),
+    fetch("/api/periods/previous", { cache: "no-store" }),
   ]);
   const payload = await response.json();
   const periodsPayload = await periodsResponse.json();
+  const previousPayload = await previousResponse.json();
   if (!response.ok) throw new Error(payload.error || "Dashboard is unavailable.");
   if (!periodsResponse.ok) throw new Error(periodsPayload.error || "Period history is unavailable.");
+  if (!previousResponse.ok) throw new Error(previousPayload.error || "Previous statement cycles are unavailable.");
   if (sequence !== dashboardLoadSequence) return;
+  currentDashboardPayload = payload;
+  previousStatementCycles = previousPayload.previous_statement_cycles || [];
   configureDisplay(payload);
-  renderStatus(payload.data_status);
-  const routing = payload.routing_graphs || [];
-  renderRecommendations(routing);
-
+  selectedAsOf = payload.selected_as_of || (payload.is_historical ? selectedAsOf : "");
+  renderStatus(payload.data_status, payload);
+  renderRecommendations(payload.routing_graphs || []);
   renderAttention(payload);
-  renderCards(payload.cards);
-  renderCardSummary(payload.cards);
-  renderPeriodHistory(periodsPayload.periods || []);
+  renderCardSummary(payload.cards || []);
+  if (selectedPeriodView === "previous") renderPreviousCycles(previousStatementCycles);
+  else renderCards(payload.cards || []);
+  renderPeriodHistory(periodsPayload.periods || [], periodsPayload.available_as_of_dates || []);
 }
 
-async function refreshDashboard() {
-  const load = loadDashboard();
+async function refreshDashboard(asOf = selectedAsOf) {
+  const load = loadDashboard(asOf);
   const sequence = dashboardLoadSequence;
   try {
     return await load;
@@ -587,8 +707,9 @@ async function refreshDashboard() {
   }
 }
 
+
 setupScreenViews();
-setupPushNotifications();
+setupPeriodViews();
 refreshDashboard().catch(() => {});
 
 setInterval(() => refreshDashboard().catch(() => {}), 60_000);

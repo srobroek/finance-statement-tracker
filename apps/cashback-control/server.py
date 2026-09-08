@@ -9,11 +9,11 @@ import signal
 import sys
 import threading
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from access_auth import (
@@ -33,7 +33,7 @@ from finance_tracker.actual_pipeline import (
     load_actual_config,
     load_compiled_rules,
 )
-from finance_tracker.cashback import load_program_configuration
+from finance_tracker.cashback import load_program_configuration, programs_from_config, statement_period
 from finance_tracker.cashback_events import prepare_statement_reconciliation
 from finance_tracker.cashback_events import (
     CashbackEventStore,
@@ -43,6 +43,7 @@ from finance_tracker.cashback_events import (
     build_live_dashboard,
     write_dashboard,
 )
+from finance_tracker.statement_cycles import STATEMENT_RECEIPT_CONTRACT
 from finance_tracker.notification_sources import (
     load_notification_sources,
     validate_notification_adapter_coverage,
@@ -268,13 +269,17 @@ def parse_outlook_batch(source: dict[str, object]) -> dict[str, object]:
 
 def rebuild_dashboard() -> dict[str, object]:
     with WRITE_LOCK:
+        selected_as_of = datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date()
         payload = build_live_dashboard(
             STORE,
-            datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date(),
+            selected_as_of,
             stale_after_minutes=STALE_AFTER_MINUTES,
             program_config_path=PROGRAM_CONFIG_PATH,
             ingest_source=INGEST_SOURCE,
+            excluded_cards={"EI_AMAZON"},
         )
+        payload["selected_as_of"] = selected_as_of.isoformat()
+        payload["is_historical"] = False
         write_dashboard(DASHBOARD_PATH, payload)
     with PUSH_LOCK:
         PUSH_DISPATCHER.evaluate(payload)
@@ -294,35 +299,294 @@ def refresh_dashboard_periodically(stop_event: threading.Event) -> None:
             }), flush=True)
 
 
-def historical_periods(limit: int = 24) -> list[dict[str, object]]:
-    periods = [row for row in STORE.period_rows() if row["status"] == "FINALIZED"][:limit]
-    result = []
-    for period in periods:
-        period_end = date.fromisoformat(str(period["period_end"]))
-        snapshot = build_live_dashboard(
-            STORE,
-            period_end,
-            stale_after_minutes=STALE_AFTER_MINUTES,
-            program_config_path=PROGRAM_CONFIG_PATH,
+def _available_as_of_dates() -> list[str]:
+    """Return dates for which a historical projection has usable evidence."""
+    dates = {
+        str(row["period_end"])
+        for row in STORE.period_rows()
+        if row["status"] == "FINALIZED"
+        and str(row["card_code"]).upper() != "EI_AMAZON"
+    }
+    for receipt in STORE.statement_receipts(
+        excluded_cards={"EI_AMAZON"},
+        limit=200,
+    ):
+        if receipt["period_end"]:
+            dates.add(str(receipt["period_end"]))
+    today = datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date()
+    configuration = load_program_configuration(PROGRAM_CONFIG_PATH)
+    programs_by_card = {
+        program.card.upper(): program
+        for program in programs_from_config(configuration, period_date=today)
+        if program.card.upper() != "EI_AMAZON"
+    }
+    for row in STORE.rows(date(1970, 1, 1), today):
+        card = programs_by_card.get(str(row["card_code"]).upper())
+        if card is None:
+            continue
+        try:
+            occurred = date.fromisoformat(str(row["occurred_at"])[:10])
+        except ValueError:
+            continue
+        _, period_end = statement_period(occurred, card.statement_close_day)
+        if period_end <= today:
+            dates.add(period_end.isoformat())
+    return sorted(
+        (value for value in dates if date.fromisoformat(value) <= today),
+        reverse=True,
+    )
+
+
+def _historical_dashboard(
+    as_of: date,
+    *,
+    periods_by_card: dict[str, tuple[date, date]] | None = None,
+) -> dict[str, object]:
+    """Build a read-only projection without touching the live snapshot."""
+    payload = build_live_dashboard(
+        STORE,
+        as_of,
+        stale_after_minutes=STALE_AFTER_MINUTES,
+        program_config_path=PROGRAM_CONFIG_PATH,
+        ingest_source=INGEST_SOURCE,
+        excluded_cards={"EI_AMAZON"},
+        periods_by_card=periods_by_card,
+    )
+    payload["selected_as_of"] = as_of.isoformat()
+    payload["is_historical"] = True
+    cycles = [
+        receipt
+        for receipt in STORE.statement_receipts(
+            excluded_cards={"EI_AMAZON"},
+            limit=200,
         )
+        if receipt["period_end"] == as_of.isoformat()
+    ]
+    finalized = any(
+        row["status"] == "FINALIZED"
+        and str(row["period_end"]) == as_of.isoformat()
+        and str(row["card_code"]).upper() != "EI_AMAZON"
+        for row in STORE.period_rows()
+    )
+    payload["statement_cycles"] = cycles
+    payload["settlement_state"] = (
+        "UNFINALIZED"
+        if any(cycle["settlement_state"] != "FINALIZED" for cycle in cycles) or not finalized
+        else "FINALIZED"
+    )
+    return payload
+
+
+def historical_periods(limit: int = 24) -> list[dict[str, object]]:
+    """Return finalized and evidence-backed unfinalized cycles for browsing."""
+    if limit < 1 or limit > 200:
+        raise ValueError("period limit must be between 1 and 200")
+    finalized = {
+        (
+            str(row["card_code"]),
+            str(row["period_start"]),
+            str(row["period_end"]),
+        ): row
+        for row in STORE.period_rows()
+        if row["status"] == "FINALIZED"
+        and str(row["card_code"]).upper() != "EI_AMAZON"
+    }
+    receipts = STORE.statement_receipts(
+        excluded_cards={"EI_AMAZON"},
+        limit=200,
+    )
+    candidates: dict[tuple[str, str, str], dict[str, object]] = {}
+    for receipt in receipts:
+        if not receipt["period_start"] or not receipt["period_end"]:
+            continue
+        key = (
+            str(receipt["card_code"]),
+            str(receipt["period_start"]),
+            str(receipt["period_end"]),
+        )
+        candidates.setdefault(key, receipt)
+
+    result: list[dict[str, object]] = []
+    for key, period in finalized.items():
+        receipt = next(
+            (
+                item
+                for item in receipts
+                if (
+                    str(item["card_code"]),
+                    str(item["period_start"]),
+                    str(item["period_end"]),
+                )
+                == key
+            ),
+            None,
+        )
+        period_end = date.fromisoformat(key[2])
+        snapshot = _historical_dashboard(period_end)
         card = next(
-            (item for item in snapshot["cards"] if item["card"] == period["card_code"]),
+            (item for item in snapshot["cards"] if item["card"] == key[0]),
+            None,
+        )
+        if card is None:
+            continue
+        item: dict[str, object] = {
+            "card": key[0],
+            "period_start": key[1],
+            "period_end": key[2],
+            "status": period["status"],
+            "reconciliation_status": period["reconciliation_status"],
+            "statement_reference": period["statement_reference"],
+            "finalized_at": period["finalized_at"],
+            "settlement_state": "FINALIZED",
+            "summary": card,
+        }
+        if receipt is not None:
+            item["statement_receipt"] = receipt
+            item["bank_state"] = receipt["bank_state"]
+            item["processing_state"] = receipt["processing_state"]
+            item["reconciliation_state"] = receipt["reconciliation_state"]
+        result.append(item)
+
+    for key, receipt in candidates.items():
+        if key in finalized:
+            continue
+        period_end = date.fromisoformat(key[2])
+        snapshot = _historical_dashboard(period_end)
+        card = next(
+            (item for item in snapshot["cards"] if item["card"] == key[0]),
             None,
         )
         if card is None:
             continue
         result.append({
-            "card": period["card_code"],
-            "period_start": period["period_start"],
-            "period_end": period["period_end"],
-            "status": period["status"],
-            "reconciliation_status": period["reconciliation_status"],
-            "statement_reference": period["statement_reference"],
-            "finalized_at": period["finalized_at"],
+            "card": key[0],
+            "period_start": key[1],
+            "period_end": key[2],
+            "status": "BANK_CLOSED",
+            "bank_state": receipt["bank_state"],
+            "processing_state": receipt["processing_state"],
+            "reconciliation_state": receipt["reconciliation_state"],
+            "bounds_state": receipt["bounds_state"],
+            "reconciliation_status": receipt["reconciliation_state"],
+            "statement_reference": receipt["statement_reference"],
+            "finalized_at": None,
+            "settlement_state": "UNFINALIZED",
+            "statement_receipt": receipt,
             "summary": card,
         })
-    return result
+    result.sort(
+        key=lambda item: (
+            str(item["period_end"]),
+            str(item["card"]),
+        ),
+        reverse=True,
+    )
+    return result[:limit]
 
+
+def _previous_statement_cycles(as_of: date | None = None) -> list[dict[str, object]]:
+    """Return each active card's prior cycle using actual bounds when available."""
+    selected_as_of = as_of or datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date()
+    configuration = load_program_configuration(PROGRAM_CONFIG_PATH)
+    programs = programs_from_config(configuration, period_date=selected_as_of)
+    result: list[dict[str, object]] = []
+
+    for program in programs:
+        if program.card.upper() == "EI_AMAZON":
+            continue
+        current_start, _ = statement_period(selected_as_of, program.statement_close_day)
+        expected_start, expected_end = statement_period(
+            current_start - timedelta(days=1),
+            program.statement_close_day,
+        )
+        receipts = STORE.statement_receipts(
+            card_code=program.card,
+            excluded_cards={"EI_AMAZON"},
+            limit=200,
+        )
+        dated_receipts = []
+        for candidate in receipts:
+            if not candidate["period_start"] or not candidate["period_end"]:
+                continue
+            candidate_start = date.fromisoformat(str(candidate["period_start"]))
+            candidate_end = date.fromisoformat(str(candidate["period_end"]))
+            if candidate_start < current_start and candidate_end <= selected_as_of:
+                dated_receipts.append((candidate_start, candidate_end, candidate))
+        receipt = (
+            max(
+                dated_receipts,
+                key=lambda item: (
+                    item[1],
+                    item[0],
+                    str(item[2].get("received_at") or ""),
+                ),
+            )[2]
+            if dated_receipts
+            else next(
+                (
+                    candidate
+                    for candidate in receipts
+                    if not candidate["period_start"] and not candidate["period_end"]
+                ),
+                None,
+            )
+        )
+
+        known_bounds = bool(receipt and receipt["period_start"] and receipt["period_end"])
+        calculation_start = (
+            date.fromisoformat(str(receipt["period_start"]))
+            if known_bounds
+            else expected_start
+        )
+        calculation_end = (
+            date.fromisoformat(str(receipt["period_end"]))
+            if known_bounds
+            else expected_end
+        )
+        snapshot = _historical_dashboard(
+            calculation_end,
+            periods_by_card=(
+                {program.card: (calculation_start, calculation_end)}
+                if known_bounds
+                else None
+            ),
+        )
+        candidate = next(
+            (card for card in snapshot["cards"] if card["card"] == program.card),
+            None,
+        )
+        finalized = any(
+            row["status"] == "FINALIZED"
+            and str(row["card_code"]).upper() == program.card.upper()
+            and str(row["period_start"]) == calculation_start.isoformat()
+            and str(row["period_end"]) == calculation_end.isoformat()
+            for row in STORE.period_rows()
+        )
+        has_snapshot_evidence = (
+            finalized
+            or (candidate is not None and int(candidate.get("transaction_count") or 0) > 0)
+            or bool(receipt and receipt["processing_state"] == "PARSED")
+        )
+        result.append({
+            "card": program.card,
+            "period_start": receipt["period_start"] if known_bounds else None,
+            "period_end": receipt["period_end"] if known_bounds else None,
+            "expected_period_start": expected_start.isoformat(),
+            "expected_period_end": expected_end.isoformat(),
+            "status": receipt["status"] if receipt else "NO_RECEIPT",
+            "bank_state": receipt["bank_state"] if receipt else "NOT_RECEIVED",
+            "processing_state": receipt["processing_state"] if receipt else None,
+            "reconciliation_state": receipt["reconciliation_state"] if receipt else None,
+            "reconciliation_status": receipt["reconciliation_state"] if receipt else None,
+            "bounds_state": receipt["bounds_state"] if receipt else "UNKNOWN",
+            "statement_reference": receipt["statement_reference"] if receipt else None,
+            "finalized_at": None,
+            "settlement_state": receipt["settlement_state"] if receipt else None,
+            "statement_receipt": receipt,
+            "snapshot_as_of": calculation_end.isoformat() if has_snapshot_evidence else None,
+            "summary": candidate if has_snapshot_evidence else None,
+        })
+    return result
 
 class CashbackHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -343,8 +607,10 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         if path in {
             "/api/dashboard",
             "/api/periods",
+            "/api/periods/previous",
             "/api/health",
             "/api/push/config",
+            "/api/statement-receipts",
         } and not self._authorize_operational_read(allow_ingest_token=path == "/api/health"):
             self._json(HTTPStatus.FORBIDDEN, {"error": "Operational read authorization required"})
             return
@@ -354,14 +620,49 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                 {
                     "status": "ok",
                     "dashboard_available": DASHBOARD_PATH.is_file(),
-                    "event_store": STORE.stats(INGEST_SOURCE),
+                    "event_store": STORE.stats(INGEST_SOURCE, excluded_cards={"EI_AMAZON"}),
                 },
             )
             return
 
+        if path == "/api/statement-receipts":
+            receipts = STORE.statement_receipts(
+                excluded_cards={"EI_AMAZON"},
+                limit=200,
+            )
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "statement_receipts": receipts,
+                    "receipt_count": len(receipts),
+                    "previous_statement_cycles": _previous_statement_cycles(),
+                    "producer_contract": STATEMENT_RECEIPT_CONTRACT,
+                },
+            )
+            return
+        if path == "/api/periods/previous":
+            self._json(
+                HTTPStatus.OK,
+                {"previous_statement_cycles": _previous_statement_cycles()},
+            )
+            return
         if path == "/api/periods":
             periods = historical_periods()
-            self._json(HTTPStatus.OK, {"periods": periods, "period_count": len(periods)})
+            receipts = STORE.statement_receipts(
+                excluded_cards={"EI_AMAZON"},
+                limit=200,
+            )
+            self._json(
+                HTTPStatus.OK,
+                {
+                    "periods": periods,
+                    "period_count": len(periods),
+                    "available_as_of_dates": _available_as_of_dates(),
+                    "statement_receipts": receipts,
+                    "statement_receipt_count": len(receipts),
+                    "previous_statement_cycles": _previous_statement_cycles(),
+                },
+            )
             return
 
         if path == "/api/push/config":
@@ -369,6 +670,32 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             return
 
         if path == "/api/dashboard":
+            query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+            raw_as_of = query.get("as_of", [None])
+            if len(raw_as_of) != 1:
+                self._json(HTTPStatus.BAD_REQUEST, {"error": "as_of must be a single ISO date"})
+                return
+            if raw_as_of[0] is not None:
+                raw_date = str(raw_as_of[0])
+                try:
+                    as_of = date.fromisoformat(raw_date)
+                except ValueError:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": "as_of must be a valid ISO date"})
+                    return
+                if as_of.isoformat() != raw_date:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": "as_of must be a valid ISO date"})
+                    return
+                today = datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date()
+                if as_of > today:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": "as_of cannot be in the future"})
+                    return
+                try:
+                    payload = _historical_dashboard(as_of)
+                except ValueError as error:
+                    self._json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
             if not DASHBOARD_PATH.is_file():
                 self._json(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -383,6 +710,11 @@ class CashbackHandler(SimpleHTTPRequestHandler):
                     {"error": f"Dashboard snapshot is unreadable: {error}"},
                 )
                 return
+            payload["selected_as_of"] = payload.get(
+                "selected_as_of",
+                datetime.now(UTC).astimezone(OPERATIONAL_TIMEZONE).date().isoformat(),
+            )
+            payload["is_historical"] = False
             self._json(HTTPStatus.OK, payload)
             return
 
@@ -400,6 +732,8 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             "/api/reconcile": self._post_reconcile,
             "/api/corrections": self._post_corrections,
             "/api/periods/finalize": self._post_period_finalize,
+            "/api/statement-receipts": self._post_statement_receipt,
+            "/api/statement-receipts/state": self._post_statement_receipt_state,
             "/api/alerts/ack": self._post_alert_ack,
             "/api/outlook/messages": self._post_outlook_messages,
             "/api/push/subscriptions": self._post_push_subscription,
@@ -432,6 +766,54 @@ class CashbackHandler(SimpleHTTPRequestHandler):
             self._json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "Internal server error"})
             return
         self._json(HTTPStatus.OK, result)
+
+    def _post_statement_receipt(self, source: object) -> dict[str, object]:
+        """Accept the n8n arrival receipt before decrypt, parse, or reconcile."""
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a statement receipt object")
+        receipt = source.get("receipt", source)
+        if not isinstance(receipt, dict):
+            raise ValueError("receipt must be a statement receipt object")
+        with WRITE_LOCK:
+            result = STORE.record_statement_receipt(receipt)
+        stored = result["statement_receipt"]
+        return {
+            "statement_receipt": stored,
+            "receipt": stored,
+            "idempotent_replay": result["idempotent_replay"],
+            "bank_state": stored["bank_state"],
+            "processing_state": stored["processing_state"],
+            "reconciliation_state": stored["reconciliation_state"],
+            "producer_contract": STATEMENT_RECEIPT_CONTRACT,
+        }
+
+    def _post_statement_receipt_state(self, source: object) -> dict[str, object]:
+        if not isinstance(source, dict):
+            raise ValueError("Payload must be a statement receipt state object")
+        receipt_id = str(
+            source.get("receipt_id")
+            or source.get("statement_receipt_id")
+            or ""
+        ).strip()
+        if not receipt_id:
+            raise ValueError("receipt_id is required")
+        with WRITE_LOCK:
+            stored = STORE.update_statement_receipt(
+                receipt_id,
+                processing_state=source.get("processing_state"),
+                reconciliation_state=source.get("reconciliation_state"),
+                period_start=source.get("period_start"),
+                period_end=source.get("period_end"),
+                statement_reference=source.get("statement_reference"),
+            )
+        return {
+            "statement_receipt": stored,
+            "receipt": stored,
+            "bank_state": stored["bank_state"],
+            "processing_state": stored["processing_state"],
+            "reconciliation_state": stored["reconciliation_state"],
+        }
+
 
     def _read_json_body(self) -> object:
         length = int(self.headers.get("Content-Length") or "0")
@@ -505,9 +887,30 @@ class CashbackHandler(SimpleHTTPRequestHandler):
     def _post_outlook_messages(self, source: object) -> dict[str, object]:
         if not isinstance(source, dict):
             raise ValueError("Payload must be an Outlook message batch object")
+        raw_receipts = source.get("statement_receipts")
+        if raw_receipts is None and source.get("statement_receipt") is not None:
+            raw_receipts = [source["statement_receipt"]]
+        if raw_receipts is None:
+            receipt_results: list[dict[str, object]] = []
+        else:
+            if isinstance(raw_receipts, dict):
+                raw_receipts = [raw_receipts]
+            if (
+                not isinstance(raw_receipts, list)
+                or any(not isinstance(item, dict) for item in raw_receipts)
+            ):
+                raise ValueError("statement_receipts must be a list of receipt objects")
+            with WRITE_LOCK:
+                receipt_results = [
+                    STORE.record_statement_receipt(item)["statement_receipt"]
+                    for item in raw_receipts
+                ]
         result = parse_outlook_batch(source)
         dashboard = rebuild_dashboard()
-        return {**result, "event_store": dashboard["data_status"]}
+        response = {**result, "event_store": dashboard["data_status"]}
+        if receipt_results:
+            response["statement_receipts"] = receipt_results
+        return response
 
     def _post_reconcile(self, source: object) -> dict[str, object]:
         if not isinstance(source, dict):
@@ -515,6 +918,23 @@ class CashbackHandler(SimpleHTTPRequestHandler):
         result = STORE.reconcile_statement(prepare_statement_reconciliation(
             source, load_program_configuration(PROGRAM_CONFIG_PATH, as_of=date.fromisoformat(str(source.get("period_end"))))
         ))
+        receipt_id = str(
+            source.get("statement_receipt_id")
+            or source.get("receipt_id")
+            or ""
+        ).strip()
+        if receipt_id:
+            reconciliation_state = (
+                "RECONCILED" if result["notification_only"] == 0 else "VARIANCE"
+            )
+            result["statement_receipt"] = STORE.update_statement_receipt(
+                receipt_id,
+                processing_state="PARSED",
+                reconciliation_state=reconciliation_state,
+                period_start=str(source.get("period_start") or ""),
+                period_end=str(source.get("period_end") or ""),
+                statement_reference=str(source.get("statement_reference") or ""),
+            )
         dashboard = rebuild_dashboard()
         return {"reconciliation": result, "event_store": dashboard["data_status"]}
 

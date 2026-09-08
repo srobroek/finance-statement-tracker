@@ -912,7 +912,6 @@
       "routes": [
         {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "THRESHOLD_FILLER", "policy": "AMAZON_THRESHOLD_FILLER", "priority": 5},
         {"card": "SC_PLATINUM_X", "channel": "ONLINE", "bucket": "SC_ONLINE", "purpose": "REWARD_BUCKET", "priority": 10},
-        {"card": "EI_AMAZON", "channel": "ONLINE", "bucket": "EI_AMAZON", "purpose": "SPECIALIST", "priority": 20},
         {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "THRESHOLD_FILLER", "policy": "AMAZON_THRESHOLD_FILLER", "priority": 30},
         {"card": "RAK_WORLD", "channel": "ONLINE", "bucket": "RAK_STANDARD", "purpose": "FALLBACK", "priority": 40}
       ]
