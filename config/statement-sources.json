@@ -19,6 +19,12 @@
       "adapter": "emirates_islamic_v1",
       "password_env": "EI_STATEMENT_PASSWORD",
       "email_status": "ACTIVE",
+      "folder_id": "inbox",
+      "cycle_day": 1,
+      "overlap_seconds": 7200,
+      "deadline_days": 5,
+      "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
       "email_senders": ["estatement@emiratesislamic.ae"],
       "email_subjects": ["Statement of your Emirates Islamic Credit Card"],
       "notes": "PDF parser and recurring production mailbox contract are verified."
@@ -30,6 +36,12 @@
       "adapter": "wio_credit_v1",
       "password_env": null,
       "email_status": "ACTIVE",
+      "folder_id": "inbox",
+      "cycle_day": 3,
+      "overlap_seconds": 7200,
+      "deadline_days": 5,
+      "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
       "email_senders": [
         "communications@email.wio.io",
         "communications@mail.wio.io"

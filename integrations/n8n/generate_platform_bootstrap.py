@@ -166,6 +166,22 @@ def build_source_contracts(
                 "content_sha256": by_path[path],
                 "contract": row,
             })
+    ai_path = "config/ai-policies.json"
+    proposal_archive = documents[ai_path].get("proposal_archive")
+    if not isinstance(proposal_archive, dict):
+        raise ValueError("ai-policies.json has no proposal_archive source contract")
+    source_code = proposal_archive.get("source_code")
+    if not isinstance(source_code, str) or not source_code:
+        raise ValueError("AI proposal archive has no source_code")
+    result.append(
+        {
+            "source_code": source_code,
+            "config_version": _config_version(documents[ai_path], ai_path),
+            "source_path": ai_path,
+            "content_sha256": by_path[ai_path],
+            "contract": proposal_archive,
+        }
+    )
     if len({row["source_code"] for row in result}) != len(result):
         raise ValueError("application configs have duplicate semantic source_code identities")
     return result

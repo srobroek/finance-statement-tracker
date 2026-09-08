@@ -1,5 +1,11 @@
 {
   "schema_version": 1,
+  "proposal_archive": {
+    "source_code": "AI_PROPOSAL_ARCHIVE",
+    "status": "ACTIVE",
+    "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+    "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H"
+  },
   "policies": [
     {
       "policy_id": "classify-unresolved",
