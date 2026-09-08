@@ -118,7 +118,7 @@
     "name": "n8n-nodes-finance",
     "version": "0.1.0",
     "lockfile": "packages/n8n-nodes-finance/package-lock.json",
-    "lockfile_sha256": "b2b2c9b6947bc15b8c8c4afc04d6aaeb9ab806e3d833004f3d3194321cae20bc"
+    "lockfile_sha256": "1d79c3bb77ef17a37c721082eeb48f9f909c3639b60b7b10ee55ec236f04ae52"
   },
   "community_node_lock": {
     "path": "integrations/n8n/community-node-lock.json",
