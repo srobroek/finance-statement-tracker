@@ -23,6 +23,7 @@ from .cashback import (
 )
 from .models import Transaction
 from .actual_pipeline import account_maps, account_owner_map
+from .fx import FxConversionError, FxConversionRequest, convert
 from .transaction_semantics import REFUND_TOPICS, TOPIC_BY_TAG
 
 
@@ -54,6 +55,64 @@ def _canonical_topic(tags: set[str]) -> str | None:
 def _plain(value: Decimal) -> str:
     return format(value, "f")
 
+def _snapshot_value(row: dict[str, Any], *names: str) -> object:
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return value
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        for name in names:
+            value = metadata.get(name)
+            if value not in (None, ""):
+                return value
+    return None
+
+
+def _snapshot_original_amount(row: dict[str, Any], notes: str) -> object:
+    value = _snapshot_value(row, "amount_original", "original_amount")
+    if value is not None:
+        return value
+    match = re.search(r"(?:^|\|)\s*original:\s*([+-]?(?:\d+(?:\.\d+)?))", notes, re.I)
+    return None if match is None else match.group(1)
+
+
+def _snapshot_fx_trace(result: Any) -> dict[str, Any]:
+    return {"stage": "FX_CONVERSION", **result.to_dict()}
+
+
+def _snapshot_fx_failure(
+    error: Exception,
+    *,
+    source: str,
+    original_amount: object,
+    original_currency: str,
+    amount_aed: Decimal,
+) -> dict[str, Any]:
+    failure = error.to_dict() if isinstance(error, FxConversionError) else {
+        "status": "FAILED",
+        "error": type(error).__name__,
+        "message": str(error),
+        "retryable": True,
+        "review_required": True,
+    }
+    return {
+        "stage": "FX_CONVERSION",
+        "status": "REVIEW_REQUIRED",
+        "error_type": failure["error"],
+        "error": failure["message"],
+        "source": source,
+        "original_amount": None if original_amount is None else str(original_amount),
+        "original_currency": original_currency,
+        "amount_aed": str(amount_aed),
+        "retryable": bool(failure.get("retryable", True)),
+        "provenance": failure.get("provenance", {
+            "original_amount": None if original_amount is None else str(original_amount),
+            "original_currency": original_currency,
+            "source": source,
+        }),
+    }
+
 
 def _reward_bucket(
     programs: Iterable[Any],
@@ -81,6 +140,8 @@ def transactions_from_actual_snapshot(
     snapshot: dict[str, Any],
     config: dict[str, Any],
     cashback_config: dict[str, Any] | None = None,
+    *,
+    fx_provider: Any | None = None,
 ) -> list[Transaction]:
     cashback_source = cashback_config or load_program_configuration()
     base_currency = str(cashback_source.get("currency") or config.get("currency") or "XXX").upper()
@@ -154,10 +215,48 @@ def transactions_from_actual_snapshot(
         tags = _tags(notes)
         merchant = str(row.get("imported_payee") or row.get("payee_name") or "Unknown")
         currency_match = _CURRENCY.search(notes)
-        currency = currency_match.group(1).upper() if currency_match else base_currency
+        explicit_currency = _snapshot_value(row, "currency_original", "original_currency")
+        currency = str(
+            explicit_currency
+            or (currency_match.group(1) if currency_match else row.get("currency") or base_currency)
+        ).strip().upper()
+        original_amount = _snapshot_original_amount(row, notes)
         category = purchase_type_from_config(cashback_source, row.get("category_name"), merchant)
         channel = channel_from_config(cashback_source, tags, merchant, card)
         amount_minor = int(row["amount"])
+        amount_aed = Decimal(abs(amount_minor)) / Decimal("100")
+        source_id = str(row.get("imported_id") or row.get("id") or "").strip()
+        fx_trace: dict[str, Any] | None = None
+        fx_review_required = False
+        if currency != "AED":
+            quote = _snapshot_value(row, "quote", "fx_quote")
+            try:
+                conversion = convert(
+                    FxConversionRequest(
+                        original_amount=original_amount,
+                        original_currency=currency,
+                        transaction_date=str(row["date"]),
+                        source=f"actual:{source_id}",
+                        bank_posted_aed=amount_aed,
+                        bank_posted_source=f"actual:{source_id}",
+                        quote=quote,
+                    ),
+                    provider=fx_provider,
+                )
+            except FxConversionError as error:
+                fx_trace = _snapshot_fx_failure(
+                    error,
+                    source=f"actual:{source_id}",
+                    original_amount=original_amount,
+                    original_currency=currency,
+                    amount_aed=amount_aed,
+                )
+                fx_review_required = True
+            else:
+                amount_aed = conversion.amount_aed
+                original_amount = conversion.original_amount
+                currency = conversion.original_currency
+                fx_trace = _snapshot_fx_trace(conversion)
         canonical_topic = _canonical_topic(tags)
         transfer = bool(row.get("transfer_id"))
         card_payment = row.get("category_name") == "Card Payments" or any(
@@ -173,6 +272,13 @@ def transactions_from_actual_snapshot(
             "REFUND" if amount_minor > 0 else
             "PURCHASE"
         )
+        metadata: dict[str, Any] = {
+            "actual_id": row["id"],
+            "cleared": bool(row.get("cleared")),
+            "reconciled": bool(row.get("reconciled")),
+        }
+        if fx_trace is not None:
+            metadata["fx_provenance"] = fx_trace
         result.append(
             Transaction(
                 transaction_id=str(row.get("imported_id") or f"actual:{row['id']}"),
@@ -182,7 +288,8 @@ def transactions_from_actual_snapshot(
                 owner=owner_by_card.get(card),
                 merchant_raw=merchant,
                 vendor=row.get("payee_name"),
-                amount_aed=Decimal(abs(amount_minor)) / Decimal("100"),
+                amount_aed=amount_aed,
+                amount_original=original_amount if currency != "AED" else None,
                 source_direction="CREDIT" if amount_minor > 0 else "DEBIT",
                 currency=currency,
                 channel=channel,
@@ -196,13 +303,13 @@ def transactions_from_actual_snapshot(
                     for tag in tags
                     if not tag.casefold().startswith(("channel-", "cashback-", "owner-"))
                 },
-                review_required=row.get("category_name") is None or bool({"review", "needs-review"} & tags),
+                review_required=(
+                    row.get("category_name") is None
+                    or bool({"review", "needs-review"} & tags)
+                    or fx_review_required
+                ),
                 is_refund=transaction_type in REFUND_TOPICS,
-                metadata={
-                    "actual_id": row["id"],
-                    "cleared": bool(row.get("cleared")),
-                    "reconciled": bool(row.get("reconciled")),
-                },
+                metadata=metadata,
             )
         )
     return result

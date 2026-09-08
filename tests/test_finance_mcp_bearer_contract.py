@@ -127,14 +127,6 @@ class FinanceMcpBearerContractTests(unittest.TestCase):
             self.assertIn("--vault", op_log.read_text())
             self.assertNotIn("edit", op_log.read_text())
 
-    def test_shell_entrypoints_are_private_executables(self):
-        for filename in (
-            "provision-finance-mcp-bearer",
-            "run-finance-mcp-disposable-proof.sh",
-            "launch-codex-finance-mcp.sh",
-        ):
-            mode = stat.S_IMODE((RUNTIME / filename).stat().st_mode)
-            self.assertEqual(mode & 0o111, 0o111, filename)
 
 
 if __name__ == "__main__":

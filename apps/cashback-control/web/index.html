@@ -1,29 +1,54 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#101713" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Cashback Control</title>
-    <link rel="manifest" href="/manifest.webmanifest?v=20260817-1" />
-    <link rel="apple-touch-icon" href="/app-icon.svg?v=20260817-1" />
-    <link rel="stylesheet" href="/styles.css?v=20260905-5" />
-  </head>
-  <body data-screen-active="routing">
-    <main class="shell">
-      <header class="topbar"><h1>Cashback</h1><div class="top-actions"><button id="push-toggle" hidden>Alerts</button><span id="as-of">Syncing…</span></div></header>
-      <nav class="screen-tabs" aria-label="View"><button data-screen-view="routing" aria-selected="true">Spend</button><button data-screen-view="cards" aria-selected="false">Cards</button></nav>
-      <section id="attention-section" aria-label="Alerts"><div id="attention"></div></section>
-      <section data-app-screen="routing"><div id="card-summary" aria-label="Card totals"></div></section>
-      <section data-app-screen="cards"><div id="cards"></div>
-        <details id="history-section"><summary>History</summary><select id="period-selector" aria-label="Previous cycle"></select><div id="period-history"></div></details>
-      </section>
-      <section data-app-screen="routing"><div id="recommendations"></div></section>
-    </main><script src="/app.js?v=20260905-6" defer></script>
-  </body>
-</html>
 
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#101713" />
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Cashback Control</title>
+  <link rel="manifest" href="/manifest.webmanifest?v=20260817-1" />
+  <link rel="apple-touch-icon" href="/app-icon.svg?v=20260817-1" />
+  <link rel="stylesheet" href="/styles.css?v=20260907-1" />
+</head>
+
+<body data-screen-active="routing">
+  <main class="shell">
+    <header class="topbar">
+      <h1>Cashback</h1>
+      <div class="top-actions"><button id="push-toggle" hidden>Alerts</button><span id="as-of" role="status"
+          aria-live="polite">Loading feed status…</span></div>
+    </header>
+    <nav class="screen-tabs" aria-label="View"><button data-screen-view="routing"
+        aria-selected="true">Spend</button><button data-screen-view="cards" aria-selected="false">Cards</button></nav>
+    <section id="attention-section" aria-label="Alerts">
+      <div id="attention"></div>
+    </section>
+    <section data-app-screen="routing">
+      <div id="card-summary" aria-label="Card totals"></div>
+    </section>
+    <section data-app-screen="cards">
+      <nav id="period-tabs" class="period-tabs" aria-label="Statement period">
+        <button data-period-view="current" aria-selected="true">Current</button>
+        <button data-period-view="previous" aria-selected="false">Last month</button>
+      </nav>
+      <div id="previous-cycle-status" class="period-status" role="status" aria-live="polite" hidden></div>
+      <div id="cards"></div>
+      <details id="history-section">
+        <summary>History</summary><label class="period-label" for="period-selector">View a prior statement
+          snapshot</label><select id="period-selector" aria-label="Statement snapshot"></select>
+        <div id="period-history" aria-live="polite"></div>
+      </details>
+    </section>
+    <section data-app-screen="routing">
+      <div id="recommendations"></div>
+    </section>
+  </main>
+  <script src="/app.js?v=20260907-1" defer></script>
+</body>
+
+</html>

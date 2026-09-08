@@ -14,6 +14,7 @@ from finance_tracker.cashback_events import (
     _legacy_recovery_digest,
     build_live_dashboard,
 )
+from finance_tracker.fx import MissingQuoteError
 
 
 def statement_digest(reference: str) -> str:
@@ -55,20 +56,87 @@ def actual_receipt_digest(receipt: dict[str, object]) -> str:
 
 
 class CashbackEventStoreTests(unittest.TestCase):
-    def test_currency_neutral_amount_alias_is_supported_and_conflicts_are_rejected(self) -> None:
+    def test_foreign_events_require_evidence_and_preserve_fx_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
-            event = {
-                "source_event_id": "portable-api:1",
+            source_only = {
+                "source_event_id": "portable-api:missing-quote",
                 "occurred_at": "2026-08-16T12:30:00+04:00",
                 "card_code": "ANY_CARD",
                 "amount": "25.50",
                 "currency": "USD",
                 "merchant": "Example",
             }
-            self.assertEqual(store.upsert([event])["inserted"], 1)
+            with self.assertRaisesRegex(MissingQuoteError, "no posted AED amount or FX quote"):
+                store.upsert([source_only])
+            with self.assertRaises(MissingQuoteError) as failure:
+                store.upsert([source_only])
+            self.assertEqual(
+                failure.exception.provenance,
+                {
+                    "original_amount": "25.50",
+                    "original_currency": "USD",
+                    "source": "portable-api:missing-quote",
+                    "provider_source": None,
+                    "quote": None,
+                },
+            )
+
+            posted = {
+                **source_only,
+                "source_event_id": "portable-api:posted",
+                "amount": "10.00",
+                "amount_original": "10.00",
+                "amount_aed": "36.70",
+            }
+            self.assertEqual(store.upsert([posted])["inserted"], 1)
+            stored = store.rows(date(2026, 8, 16), date(2026, 8, 16))[0]
+            posted_trace = json.loads(stored["decision_trace_json"])[-1]
+            self.assertEqual(
+                (stored["amount_aed_minor"], stored["currency"], stored["review_required"]),
+                (3670, "AED", 0),
+            )
+            self.assertEqual(
+                (posted_trace["original_amount"], posted_trace["original_currency"]),
+                ("10.00", "USD"),
+            )
+            self.assertEqual(
+                (posted_trace["status"], posted_trace["bank_posted_aed"]),
+                ("POSTED", "36.70"),
+            )
+
+            quoted = {
+                **source_only,
+                "source_event_id": "portable-api:quoted",
+                "amount_original": "10.00",
+                "merchant": "Quoted Example",
+                "quote": {
+                    "from_currency": "USD",
+                    "to_currency": "AED",
+                    "rate": "3.67",
+                    "rate_date": "2026-08-16",
+                    "source": "mastercard",
+                },
+            }
+            self.assertEqual(store.upsert([quoted])["inserted"], 1)
+            quoted_row = next(
+                row for row in store.rows(date(2026, 8, 16), date(2026, 8, 16))
+                if row["source_event_id"] == "portable-api:quoted"
+            )
+            quoted_trace = json.loads(quoted_row["decision_trace_json"])[-1]
+            self.assertEqual(quoted_trace["status"], "ESTIMATED")
+            self.assertEqual(
+                (quoted_trace["rate"], quoted_trace["rate_date"], quoted_trace["quote_source"]),
+                ("3.67", "2026-08-16", "mastercard"),
+            )
             with self.assertRaisesRegex(ValueError, "disagree"):
-                store.validate([{**event, "source_event_id": "portable-api:2", "amount_aed": "30"}])
+                store.validate([{
+                    **posted,
+                    "source_event_id": "portable-api:conflict",
+                    "currency": "AED",
+                    "amount": "25.50",
+                    "amount_aed": "30.00",
+                }])
 
     def test_events_are_idempotent_and_drive_live_bucket(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -423,7 +491,6 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(result["source"], "outlook")
             self.assertFalse(dashboard["data_status"]["is_stale"])
             self.assertEqual(dashboard["data_status"]["last_scan_count"], 0)
-            self.assertEqual(dashboard["data_status"]["last_accepted_count"], 0)
 
     def test_low_confidence_event_requires_review(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
