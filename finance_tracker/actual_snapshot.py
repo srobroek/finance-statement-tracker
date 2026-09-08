@@ -155,7 +155,15 @@ def transactions_from_actual_snapshot(
         merchant = str(row.get("imported_payee") or row.get("payee_name") or "Unknown")
         currency_match = _CURRENCY.search(notes)
         currency = currency_match.group(1).upper() if currency_match else base_currency
-        category = purchase_type_from_config(cashback_source, row.get("category_name"), merchant)
+        native_category = str(row.get("category_name") or "").strip() or None
+        category = purchase_type_from_config(cashback_source, native_category, merchant)
+        unresolved_category = native_category is None or native_category.casefold() in {
+            "holding",
+            "needs review",
+            "uncategorized",
+            "uncategorised",
+            "unmapped",
+        }
         channel = channel_from_config(cashback_source, tags, merchant, card)
         amount_minor = int(row["amount"])
         canonical_topic = _canonical_topic(tags)
@@ -179,8 +187,8 @@ def transactions_from_actual_snapshot(
                 transaction_at=datetime.combine(date.fromisoformat(str(row["date"])), time.min),
                 card=card,
                 account=account_name,
-                owner=owner_by_card.get(card),
-                merchant_raw=merchant,
+                category=category,
+                subcategory=native_category,
                 vendor=row.get("payee_name"),
                 amount_aed=Decimal(abs(amount_minor)) / Decimal("100"),
                 source_direction="CREDIT" if amount_minor > 0 else "DEBIT",
@@ -196,10 +204,12 @@ def transactions_from_actual_snapshot(
                     for tag in tags
                     if not tag.casefold().startswith(("channel-", "cashback-", "owner-"))
                 },
-                review_required=row.get("category_name") is None or bool({"review", "needs-review"} & tags),
+                review_required=unresolved_category or bool({"review", "needs-review"} & tags),
                 is_refund=transaction_type in REFUND_TOPICS,
                 metadata={
                     "actual_id": row["id"],
+                    "actual_category_name": native_category,
+                    "category_resolution": "UNRESOLVED" if unresolved_category else "RESOLVED",
                     "cleared": bool(row.get("cleared")),
                     "reconciled": bool(row.get("reconciled")),
                 },

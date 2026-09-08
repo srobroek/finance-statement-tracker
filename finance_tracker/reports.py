@@ -54,7 +54,12 @@ def month_category_totals(transactions: Iterable[Transaction], month: str) -> di
     totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for transaction in transactions:
         when = transaction.transaction_at
-        if when.year != year or when.month != month_number or transaction.spend_aed <= 0:
+        if (
+            when.year != year
+            or when.month != month_number
+            or transaction.spend_aed <= 0
+            or transaction.review_required
+        ):
             continue
         category = transaction.category or "Uncategorised"
         totals[category] += transaction.spend_aed

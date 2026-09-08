@@ -34,12 +34,25 @@ def _round_up_minor(value: int, increment_minor: int) -> int:
 
 
 def _eligible_expense(row: dict[str, Any]) -> bool:
+    category = str(row.get("category_name") or "").strip()
+    unresolved = category.casefold() in {
+        "holding",
+        "needs review",
+        "uncategorized",
+        "uncategorised",
+        "unmapped",
+    }
+    review_required = bool(row.get("review_required")) or bool(
+        {"review", "needs-review"} & {str(tag).casefold() for tag in row.get("tags") or ()}
+    )
     return (
         not row.get("tombstone")
         and not row.get("is_parent")
         and not row.get("transfer_id")
         and int(row.get("amount") or 0) < 0
-        and str(row.get("category_name") or "") not in EXCLUDED_BUDGET_CATEGORIES
+        and category not in EXCLUDED_BUDGET_CATEGORIES
+        and not unresolved
+        and not review_required
     )
 
 

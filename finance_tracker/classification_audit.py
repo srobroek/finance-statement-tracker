@@ -17,8 +17,8 @@ def _review_reasons(transaction: Transaction) -> set[str]:
         reasons.add("UNCATEGORIZED")
     elif category.casefold() == "needs review":
         reasons.add("CATEGORY_NEEDS_REVIEW")
-    if transaction.metadata.get("category_recommendation") and not category:
-        reasons.add("CATEGORY_RECOMMENDATION_PENDING")
+    if transaction.metadata.get("category_resolution") == "UNRESOLVED":
+        reasons.add("CATEGORY_UNRESOLVED")
     return reasons
 
 
