@@ -38,10 +38,18 @@
     "libcrypto3": "3.5.8-r0",
     "libssl3": "3.5.8-r0",
     "sqlite-libs": "3.53.4-r0",
+    "util-linux": "2.41.6-r1",
+    "libuuid": "2.41.6-r1",
     "fixed_cves": [
       "CVE-2026-14456",
       "CVE-2026-11822",
-      "CVE-2026-11824"
+      "CVE-2026-11824",
+      "CVE-2026-53612",
+      "CVE-2026-53613",
+      "CVE-2026-53614",
+      "CVE-2026-76642",
+      "CVE-2026-78408",
+      "CVE-2026-78410"
     ]
   },
   "compatible_n8n_image": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",

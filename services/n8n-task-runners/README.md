@@ -12,11 +12,12 @@ and executes a JavaScript-to-Python workflow through a real n8n `2.37.10`
 external task broker. The image is scanned with no HIGH/CRITICAL waiver before
 an SBOM and immutable digest receipt are published.
 
-The runtime also installs the fixed Alpine `v3.23` revisions for `libcrypto3`
-and `libssl3` (`3.5.8-r0`) and `sqlite-libs` (`3.53.4-r0`). These pins address
-the current OpenSSL and SQLite findings recorded in `upstream.lock.json` and
-are kept alongside the digest-pinned base images so a rebuild cannot retain an
-older vulnerable base-layer package.
+The runtime also installs the fixed Alpine `v3.23` revisions for `libcrypto3`,
+`libssl3`, and `sqlite-libs` (`3.5.8-r0`/`3.53.4-r0`), plus `util-linux` and
+`libuuid` (`2.41.6-r1`). These pins address the current OpenSSL, SQLite, and
+util-linux findings recorded in `upstream.lock.json` and are kept alongside the
+digest-pinned base images so a rebuild cannot retain an older vulnerable
+base-layer package.
 
 The image contains no finance credentials or writable finance data. Production
 deployment is outside this repository-only phase.

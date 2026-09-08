@@ -60,6 +60,8 @@ RUN apk add --no-cache \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0 \
         sqlite-libs=3.53.4-r0 \
+        util-linux=2.41.6-r1 \
+        libuuid=2.41.6-r1 \
     && python -m pip uninstall --yes pip setuptools \
     && apk del apk-tools \
     && addgroup -g 1000 -S runner \
