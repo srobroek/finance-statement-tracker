@@ -44,6 +44,8 @@ jobs:
   custom-nodes:
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    env:
+      IMAGE_SEMVER: "2.37.10"
     steps:
       - uses: actions/checkout@v5
       - name: Reclaim unused hosted toolchains for image export
@@ -217,7 +219,16 @@ jobs:
             '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one immutable repository digest") end')"
           image_id="$(docker image inspect "$image" --format '{{.Id}}')"
           test "$immutable_ref" = "ghcr.io/srobroek/finance-n8n@${immutable_ref##*@}"
+          channel_image="ghcr.io/${{ github.repository_owner }}/finance-n8n:${IMAGE_SEMVER}"
+          docker tag "finance-n8n:${{ github.sha }}" "$channel_image"
+          docker push "$channel_image"
+          channel_ref="$(docker image inspect "$channel_image" | jq -er \
+            --arg prefix "ghcr.io/srobroek/finance-n8n@" \
+            '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one channel repository digest") end')"
+          test "${channel_ref##*@}" = "${immutable_ref##*@}"
           echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "channel_ref=$channel_image" >> "$GITHUB_OUTPUT"
+          echo "channel_immutable_ref=$channel_ref" >> "$GITHUB_OUTPUT"
           echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
       - name: Scan immutable custom n8n candidate for receipt
         if: github.event_name == 'push'
@@ -237,7 +248,7 @@ jobs:
           --role n8n
           --reference '${{ steps.publish_n8n.outputs.immutable_ref }}'
           --image-id '${{ steps.publish_n8n.outputs.image_id }}'
-          --semver 2.37.10
+          --semver "$IMAGE_SEMVER"
           --source-commit '${{ github.sha }}'
           --sbom n8n.sbom.spdx.json
           --scan n8n.trivy.json
@@ -256,6 +267,8 @@ jobs:
 
   pdf-utility:
     runs-on: ubuntu-latest
+    env:
+      IMAGE_SEMVER: "0.1.0"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -308,7 +321,16 @@ jobs:
             '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one immutable repository digest") end')"
           image_id="$(docker image inspect "$image" --format '{{.Id}}')"
           test "$immutable_ref" = "ghcr.io/srobroek/finance-pdf-utility@${immutable_ref##*@}"
+          channel_image="ghcr.io/${{ github.repository_owner }}/finance-pdf-utility:${IMAGE_SEMVER}"
+          docker tag "finance-pdf-utility:${{ github.sha }}" "$channel_image"
+          docker push "$channel_image"
+          channel_ref="$(docker image inspect "$channel_image" | jq -er \
+            --arg prefix "ghcr.io/srobroek/finance-pdf-utility@" \
+            '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one channel repository digest") end')"
+          test "${channel_ref##*@}" = "${immutable_ref##*@}"
           echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "channel_ref=$channel_image" >> "$GITHUB_OUTPUT"
+          echo "channel_immutable_ref=$channel_ref" >> "$GITHUB_OUTPUT"
           echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
       - name: Scan immutable PDF utility candidate for receipt
         if: github.event_name == 'push'
@@ -328,7 +350,7 @@ jobs:
           --role pdf_utility
           --reference '${{ steps.publish_pdf_utility.outputs.immutable_ref }}'
           --image-id '${{ steps.publish_pdf_utility.outputs.image_id }}'
-          --semver 0.1.0
+          --semver "$IMAGE_SEMVER"
           --source-commit '${{ github.sha }}'
           --sbom pdf_utility.sbom.spdx.json
           --scan pdf_utility.trivy.json
@@ -347,6 +369,8 @@ jobs:
   n8n-task-runners:
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    env:
+      IMAGE_SEMVER: "2.37.10"
     steps:
       - name: Checkout finance repository
         uses: actions/checkout@v5
@@ -500,7 +524,16 @@ jobs:
             '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one immutable repository digest") end')"
           image_id="$(docker image inspect "$image" --format '{{.Id}}')"
           test "$immutable_ref" = "ghcr.io/srobroek/finance-n8n-task-runners@${immutable_ref##*@}"
+          channel_image="ghcr.io/${{ github.repository_owner }}/finance-n8n-task-runners:${IMAGE_SEMVER}"
+          docker tag "finance-n8n-task-runners:${{ github.sha }}" "$channel_image"
+          docker push "$channel_image"
+          channel_ref="$(docker image inspect "$channel_image" | jq -er \
+            --arg prefix "ghcr.io/srobroek/finance-n8n-task-runners@" \
+            '.[0].RepoDigests | map(select(startswith($prefix))) | unique | if length == 1 then .[0] else error("expected one channel repository digest") end')"
+          test "${channel_ref##*@}" = "${immutable_ref##*@}"
           echo "immutable_ref=$immutable_ref" >> "$GITHUB_OUTPUT"
+          echo "channel_ref=$channel_image" >> "$GITHUB_OUTPUT"
+          echo "channel_immutable_ref=$channel_ref" >> "$GITHUB_OUTPUT"
           echo "image_id=$image_id" >> "$GITHUB_OUTPUT"
       - name: Scan immutable task runners candidate for receipt
         if: github.event_name == 'push'
@@ -524,7 +557,7 @@ jobs:
             --role task_runners \
             --reference '${{ steps.publish_task_runners.outputs.immutable_ref }}' \
             --image-id '${{ steps.publish_task_runners.outputs.image_id }}' \
-            --semver 2.37.10 \
+            --semver "$IMAGE_SEMVER" \
             --source-commit '${{ github.sha }}' \
             --sbom task_runners.sbom.spdx.json \
             --scan task_runners.trivy.json \
