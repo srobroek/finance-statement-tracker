@@ -19,8 +19,10 @@ const n8nPackageJson = require.resolve('n8n/package.json', { paths: [n8nPackageR
 const pg = createRequire(n8nPackageJson)('pg');
 
 const EXPORT_SCHEMA = 'finance-four-table-live-export-v1';
-const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
+const LEGACY_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
+const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
 const JOURNAL_TABLE = 'finance_four_table_cutover_journal';
+const APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = '73421a90985dd682e706cfa539553229719fe4fc9fe04e9bf69633f1eb279d88';
 const TARGET_NAMES = new Set([
   'finance_ingestion_state',
   'finance_documents',
@@ -72,6 +74,15 @@ const REFERENCE_SEMANTIC_FIELDS = [
 ];
 const WORKFLOW_BODY_FIELDS = ['name', 'nodes', 'connections', 'settings', 'meta', 'pinData'];
 const CREDENTIAL_BINDINGS_SCHEMA = 1;
+const SOURCE_BINDINGS_SCHEMA = 1;
+const SOURCE_BINDING_FIELDS = [
+  'source_code', 'config_version', 'folder_id', 'senders_json', 'subjects_json',
+  'onedrive_parent_id', 'manifest_onedrive_parent_id', 'overlap_seconds',
+  'cycle_day', 'deadline_days', 'actual_file_id', 'account_id', 'card_code',
+  'cashback_close_required', 'enabled', 'content_sha256', 'updated_at',
+];
+const SOURCE_BINDING_SLOT_KEY = 'financeSourceBindingSlots';
+const SOURCE_BINDING_SLOT_PARAMETER = 'parameters.jsonOutput';
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -124,17 +135,17 @@ function credentialBindingsFromEnvironment() {
   }
   const leaves = new Map();
   const placeholders = new Set();
-  const types = new Set();
   for (const binding of contract.bindings) {
     if (!binding || typeof binding !== 'object' || Array.isArray(binding) ||
-        Object.keys(binding).sort().join(',') !== 'credential_type,node_type,nodes,placeholder') {
+        !['credential_type,node_type,nodes,placeholder', 'credential_name,credential_type,node_type,nodes,placeholder'].includes(Object.keys(binding).sort().join(','))) {
       throw new Error('CREDENTIAL_BINDING_KEYS_INVALID');
     }
     if (!/^BIND_[A-Z0-9_]+$/.test(text(binding.placeholder, 'CREDENTIAL_PLACEHOLDER_INVALID')) ||
         !text(binding.credential_type, 'CREDENTIAL_TYPE_INVALID') || !text(binding.node_type, 'CREDENTIAL_NODE_TYPE_INVALID') ||
+        (binding.credential_name !== undefined && !text(binding.credential_name, 'CREDENTIAL_NAME_INVALID')) ||
         !Array.isArray(binding.nodes) || binding.nodes.length === 0) throw new Error('CREDENTIAL_BINDING_INVALID');
-    if (placeholders.has(binding.placeholder) || types.has(binding.credential_type)) throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
-    placeholders.add(binding.placeholder); types.add(binding.credential_type);
+    if (placeholders.has(binding.placeholder)) throw new Error('CREDENTIAL_BINDING_AMBIGUOUS');
+    placeholders.add(binding.placeholder);
     for (const item of binding.nodes) {
       const workflow = item?.workflow; const node = item?.node;
       const key = `${workflow?.id}:${node?.id}`;
@@ -149,7 +160,7 @@ function credentialBindingsFromEnvironment() {
       leaves.set(key, { ...binding, workflow, node });
     }
   }
-  if (contract.bindings.length !== 8 || leaves.size !== 36) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
+  if (contract.bindings.length !== 9 || leaves.size !== 37) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
   return contract.bindings;
 }
 
@@ -283,11 +294,7 @@ function workflowBodyDigest(workflow) {
 function setSelector(node, tableId) {
   const parameters = node.parameters && typeof node.parameters === 'object' ? node.parameters : {};
   const selector = parameters.dataTableId;
-  if (tableId === null) {
-    delete parameters.dataTableId;
-    node.parameters = parameters;
-    return;
-  }
+  if (typeof tableId !== 'string' || !tableId) throw new Error('NULL_TABLE_SELECTOR_GRAPH_REFUSED');
   if (selector && typeof selector === 'object' && selector.__rl === true) {
     parameters.dataTableId = { ...selector, mode: 'id', value: tableId };
   } else {
@@ -296,12 +303,6 @@ function setSelector(node, tableId) {
   node.parameters = parameters;
 }
 
-function restoreSelector(node, selector) {
-  const parameters = node.parameters && typeof node.parameters === 'object' ? node.parameters : {};
-  if (selector === undefined || selector === null) delete parameters.dataTableId;
-  else parameters.dataTableId = clone(selector);
-  node.parameters = parameters;
-}
 
 function databaseOptions(env) {
   return {
@@ -436,6 +437,189 @@ async function loadWorkflows(client, graph, strict = true) {
   return loaded;
 }
 
+function canonicalSourceFromInput(graph) {
+  const fs = require('node:fs');
+  const chunks = [];
+  let length = 0;
+  for (;;) {
+    const chunk = Buffer.allocUnsafe(64 * 1024);
+    const count = fs.readSync(0, chunk, 0, chunk.length, null);
+    if (count === 0) break;
+    length += count;
+    if (length > 32 * 1024 * 1024) throw new Error('CANONICAL_SOURCE_SIZE_EXCEEDED');
+    chunks.push(chunk.subarray(0, count));
+  }
+  const raw = Buffer.concat(chunks, length).toString('utf8');
+  let source;
+  try { source = JSON.parse(raw); } catch { throw new Error('CANONICAL_SOURCE_JSON_INVALID'); }
+  const provenance = provenanceFromEnvironment();
+  const contract = decode('FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64');
+  if (!source || source.schema_version !== 'finance-four-table-canonical-source-v1' ||
+      source.source_head !== provenance.source_head || source.generator_head !== provenance.generator_head ||
+      source.accepted_identity_sha256 !== provenance.accepted_identity_sha256 ||
+      source.source_corpus_sha256 !== contract.source?.sha256 ||
+      source.legacy_reference_inventory_sha256 !== APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 ||
+      !Array.isArray(source.files) || source.files.length !== graph.workflows.size) {
+    throw new Error('CANONICAL_SOURCE_BINDING_MISMATCH');
+  }
+  const corpus = crypto.createHash('sha256');
+  const workflows = new Map();
+  let previousPath = '';
+  for (const file of source.files) {
+    if (!file || typeof file.path !== 'string' || !/^integrations\/n8n\/workflows\/[A-Za-z0-9_-]+\.json$/.test(file.path) ||
+        file.path <= previousPath || typeof file.content !== 'string') throw new Error('CANONICAL_SOURCE_PATH_INVALID');
+    previousPath = file.path;
+    if ([...LEGACY_TABLE_IDS.keys()].some((name) => file.content.includes(name))) throw new Error('LEGACY_TABLE_REFERENCES_REMAIN');
+    corpus.update(file.path).update('\0').update(file.content).update('\0');
+    let workflow;
+    try { workflow = JSON.parse(file.content); } catch { throw new Error('CANONICAL_SOURCE_WORKFLOW_INVALID'); }
+    if (!workflow || !graph.workflows.has(workflow.id) || workflows.has(workflow.id) || workflow.active !== false || workflow.activeVersionId) {
+      throw new Error('CANONICAL_SOURCE_WORKFLOW_IDENTITY_MISMATCH');
+    }
+    validateCanonicalGraph(workflow, graph.targetIds);
+    workflows.set(workflow.id, workflow);
+  }
+  if (corpus.digest('hex') !== source.source_corpus_sha256) throw new Error('CANONICAL_SOURCE_CORPUS_DIGEST_MISMATCH');
+  return { workflows, sha256: source.source_corpus_sha256 };
+}
+function sourceContractBindingsFromEnvironment(graph, canonicalSource) {
+  const encoded = process.env.FINANCE_FOUR_TABLE_SOURCE_CONTRACT_BINDINGS_B64;
+  if (typeof encoded !== 'string' || encoded.length === 0) throw new Error('SOURCE_CONTRACT_BINDINGS_REQUIRED');
+  let manifest;
+  try { manifest = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')); } catch { throw new Error('SOURCE_CONTRACT_BINDINGS_INVALID'); }
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest) ||
+      Object.keys(manifest).sort().join(',') !== 'activation_prerequisites,bindings,contract_status,manifest_sha256,schema_version,source,workflows' ||
+      manifest.schema_version !== SOURCE_BINDINGS_SCHEMA || manifest.contract_status !== 'READY' ||
+      !/^[0-9a-f]{64}$/.test(manifest.manifest_sha256) ||
+      digest(Object.fromEntries(Object.entries(manifest).filter(([key]) => key !== 'manifest_sha256'))) !== manifest.manifest_sha256 ||
+      !Array.isArray(manifest.activation_prerequisites) || manifest.activation_prerequisites.length !== 0) {
+    throw new Error('SOURCE_CONTRACT_BINDINGS_SCHEMA_INVALID');
+  }
+  if (!manifest.source || typeof manifest.source !== 'object' ||
+      Object.keys(manifest.source).sort().join(',') !== 'allowed_fields,path,sha256,table' ||
+      manifest.source.path !== 'integrations/n8n/generated/application-contract-bundle.json' ||
+      manifest.source.table !== 'finance_source_contracts' ||
+      !/^[0-9a-f]{64}$/.test(manifest.source.sha256) ||
+      JSON.stringify(manifest.source.allowed_fields) !== JSON.stringify(SOURCE_BINDING_FIELDS)) {
+    throw new Error('SOURCE_CONTRACT_BINDINGS_SOURCE_INVALID');
+  }
+  const fs = require('node:fs');
+  const root = text(process.env.FINANCE_FOUR_TABLE_REPOSITORY_ROOT, 'REPOSITORY_ROOT_REQUIRED');
+  let applicationManifest;
+  try { applicationManifest = JSON.parse(fs.readFileSync(`${root}/integrations/n8n/source-contract-bindings.json`, 'utf8')); } catch { throw new Error('SOURCE_CONTRACT_APPLICATION_MANIFEST_UNAVAILABLE'); }
+  if (!applicationManifest || applicationManifest.manifest_sha256 !== manifest.manifest_sha256) {
+    throw new Error('SOURCE_CONTRACT_BINDINGS_NOT_APPLICATION_OWNED');
+  }
+  let sourceRaw;
+  try { sourceRaw = fs.readFileSync(`${root}/${manifest.source.path}`).toString('utf8').replace(/\r\n/g, '\n'); } catch { throw new Error('SOURCE_CONTRACT_SOURCE_UNAVAILABLE'); }
+  if (crypto.createHash('sha256').update(sourceRaw).digest('hex') !== manifest.source.sha256) {
+    throw new Error('SOURCE_CONTRACT_SOURCE_SHA256_MISMATCH');
+  }
+  if (!Array.isArray(manifest.workflows) || manifest.workflows.length === 0) throw new Error('SOURCE_CONTRACT_WORKFLOW_COVERAGE_INVALID');
+  const declaredSources = new Set();
+  const requiredFieldsBySource = new Map();
+  for (const workflow of manifest.workflows) {
+    if (!workflow || typeof workflow.path !== 'string' ||
+        Object.keys(workflow).sort().join(',') !== 'path,slot_metadata_key,source_sha256,workflow_code,workflow_id' ||
+        workflow.slot_metadata_key !== SOURCE_BINDING_SLOT_KEY || !/^[0-9a-f]{64}$/.test(workflow.source_sha256) ||
+        workflow.path !== `integrations/n8n/workflows/${workflow.path.split('/').pop()}`) {
+      throw new Error('SOURCE_CONTRACT_WORKFLOW_INVALID');
+    }
+    const canonicalWorkflow = canonicalSource.workflows.get(workflow.workflow_id);
+    if (!canonicalWorkflow || canonicalWorkflow.meta?.financeWorkflowCode !== workflow.workflow_code) {
+      throw new Error('SOURCE_CONTRACT_WORKFLOW_IDENTITY_INVALID');
+    }
+    let workflowRaw;
+    try { workflowRaw = fs.readFileSync(`${root}/${workflow.path}`).toString('utf8').replace(/\r\n/g, '\n'); } catch { throw new Error('SOURCE_CONTRACT_WORKFLOW_UNAVAILABLE'); }
+    const slots = canonicalWorkflow.meta?.[SOURCE_BINDING_SLOT_KEY];
+    if (!slots || typeof slots !== 'object' || Array.isArray(slots) || Object.keys(slots).length === 0) throw new Error('SOURCE_CONTRACT_SLOT_METADATA_REQUIRED');
+    for (const [sourceCode, slot] of Object.entries(slots)) {
+      if (declaredSources.has(sourceCode) || !slot || typeof slot !== 'object' ||
+          Object.keys(slot).sort().join(',') !== 'allowedFields,node,parameter,requiredFields' ||
+          typeof slot.node !== 'string' || slot.node.length === 0 || slot.parameter !== SOURCE_BINDING_SLOT_PARAMETER ||
+          !Array.isArray(slot.allowedFields) || slot.allowedFields.length === 0 ||
+          slot.allowedFields.some((field) => !SOURCE_BINDING_FIELDS.includes(field)) ||
+          !Array.isArray(slot.requiredFields) || slot.requiredFields.length === 0 ||
+          slot.requiredFields.some((field) => !slot.allowedFields.includes(field)) ||
+          !slot.requiredFields.includes('source_code')) {
+        throw new Error(`SOURCE_CONTRACT_SLOT_INVALID:${sourceCode}`);
+      }
+      declaredSources.add(sourceCode);
+      const slotNode = canonicalWorkflow.nodes?.find((node) => node.name === slot.node);
+      if (!slotNode || !slotNode.parameters || typeof slotNode.parameters !== 'object' || !Object.hasOwn(slotNode.parameters, 'jsonOutput')) {
+        throw new Error('SOURCE_CONTRACT_SLOT_NODE_INVALID');
+      }
+      requiredFieldsBySource.set(sourceCode, new Set(slot.requiredFields));
+    }
+  }
+  if (!manifest.bindings || typeof manifest.bindings !== 'object' || Array.isArray(manifest.bindings) ||
+      Object.keys(manifest.bindings).sort().join(',') !== [...declaredSources].sort().join(',')) {
+    throw new Error('SOURCE_CONTRACT_BINDING_SOURCE_SET_INVALID');
+  }
+  for (const sourceCode of declaredSources) {
+    const binding = manifest.bindings[sourceCode];
+    const requiredFields = requiredFieldsBySource.get(sourceCode);
+    if (!binding || typeof binding !== 'object' || Array.isArray(binding) ||
+        Object.keys(binding).sort().join(',') !== SOURCE_BINDING_FIELDS.slice().sort().join(',') ||
+        binding.source_code !== sourceCode ||
+        [...requiredFields].some((field) => binding[field] === null || binding[field] === undefined || binding[field] === '' || binding[field] === '[]') ||
+        (requiredFields.has('enabled') && binding.enabled !== true)) {
+      throw new Error(`SOURCE_CONTRACT_BINDING_INVALID:${sourceCode}`);
+    }
+    for (const field of ['senders_json', 'subjects_json']) {
+      if (binding[field] === null || binding[field] === undefined) {
+        if (requiredFields.has(field)) throw new Error(`SOURCE_CONTRACT_FILTERS_INVALID:${sourceCode}`);
+        continue;
+      }
+      let parsed;
+      try { parsed = JSON.parse(binding[field]); } catch { throw new Error(`SOURCE_CONTRACT_FILTERS_INVALID:${sourceCode}`); }
+      if (!Array.isArray(parsed) || (requiredFields.has(field) && parsed.length === 0)) throw new Error(`SOURCE_CONTRACT_FILTERS_INVALID:${sourceCode}`);
+    }
+  }
+  return manifest;
+}
+
+function validateCanonicalGraph(workflow, targetIds) {
+  if (!Array.isArray(workflow.nodes) || !workflow.connections || typeof workflow.connections !== 'object' || Array.isArray(workflow.connections)) {
+    throw new Error('CANONICAL_SOURCE_GRAPH_INVALID');
+  }
+  const names = new Set();
+  const ids = new Set();
+  for (const node of workflow.nodes) {
+    if (!node || typeof node.id !== 'string' || !node.id || typeof node.name !== 'string' || !node.name ||
+        typeof node.type !== 'string' || !node.type || ids.has(node.id) || names.has(node.name)) throw new Error('CANONICAL_SOURCE_NODE_IDENTITY_INVALID');
+    ids.add(node.id);
+    names.add(node.name);
+    if (node.type !== 'n8n-nodes-base.dataTable') continue;
+    const parameters = node.parameters || {};
+    if (parameters.resource === 'table') {
+      if (parameters.operation !== 'create' || !targetIds.has(parameters.tableName)) throw new Error('CANONICAL_SOURCE_TABLE_OPERATION_INVALID');
+      continue;
+    }
+    const selected = selectorId(parameters.dataTableId);
+    if (!selected) throw new Error('NULL_TABLE_SELECTOR_GRAPH_REFUSED');
+    const tableId = targetIds.get(selected) || ([...targetIds.values()].includes(selected) ? selected : null);
+    if (!tableId) throw new Error(`CANONICAL_SOURCE_TABLE_SELECTOR_INVALID:${node.id}`);
+    setSelector(node, tableId);
+  }
+  for (const [name, outputs] of Object.entries(workflow.connections)) {
+    if (!names.has(name) || !outputs || typeof outputs !== 'object' || Array.isArray(outputs)) throw new Error('CANONICAL_SOURCE_CONNECTION_INVALID');
+    for (const ports of Object.values(outputs)) {
+      if (!Array.isArray(ports)) throw new Error('CANONICAL_SOURCE_CONNECTION_INVALID');
+      for (const edges of ports) {
+        if (!Array.isArray(edges) || edges.some((edge) => !edge || !names.has(edge.node))) throw new Error('CANONICAL_SOURCE_CONNECTION_INVALID');
+      }
+    }
+  }
+}
+
+function workflowReadback(workflows) {
+  return [...workflows.values()].map((workflow) => ({
+    workflow_id: workflow.id,
+    workflow_body_sha256: workflowBodyDigest(workflow),
+  })).sort((left, right) => left.workflow_id.localeCompare(right.workflow_id));
+}
+
 function credentialBindingForNode(workflow, node) {
   return credentialLeavesFromEnvironment().find((leaf) => leaf.key === `${workflow.id}:${node.id}`);
 }
@@ -457,7 +641,7 @@ function validateCredentialBindings(workflows, credentials) {
         throw new Error(`CREDENTIAL_BINDING_TUPLE_MISMATCH:${key}`);
       }
       const ref = node.credentials[binding.credential_type];
-      const associated = credentials.get(binding.credential_type);
+      const associated = credentials.get(binding.placeholder);
       if (!ref || typeof ref !== 'object' || Array.isArray(ref) || Object.keys(ref).sort().join(',') !== 'id,name' ||
           typeof ref.id !== 'string' || !ref.id || typeof ref.name !== 'string' || !ref.name) {
         throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISMATCH:${key}`);
@@ -497,13 +681,16 @@ function credentialOriginBitset(origins) {
     throw new Error(`CREDENTIAL_BINDING_ORIGIN_MISSING:${leaf.key}`);
   }).join('');
 }
+function credentialLeafCount() {
+  return credentialLeavesFromEnvironment().length;
+}
 
 function credentialOriginDigest(bitset) {
-  return digest({ credential_contract_digest: digest(credentialBindingsFromEnvironment()), credential_leaf_count: 36, credential_origin_bitset: bitset });
+  return digest({ credential_contract_digest: digest(credentialBindingsFromEnvironment()), credential_leaf_count: credentialLeafCount(), credential_origin_bitset: bitset });
 }
 
 function credentialOriginsFromBitset(bitset) {
-  if (typeof bitset !== 'string' || !/^[01]{36}$/.test(bitset)) throw new Error('CREDENTIAL_ORIGIN_BITSET_INVALID');
+  if (typeof bitset !== 'string' || !new RegExp(`^[01]{${credentialLeafCount()}}$`).test(bitset)) throw new Error('CREDENTIAL_ORIGIN_BITSET_INVALID');
   return new Map(credentialLeavesFromEnvironment().map((leaf, index) => [leaf.key, bitset[index] === '1' ? 'placeholder' : 'opaque']));
 }
 
@@ -542,20 +729,35 @@ async function credentialState(client) {
     ownerShares.set(normalized.id, shares);
   }
   const byType = new Map();
+  const byTypeName = new Map();
   for (const row of rows.filter((candidate) => String(candidate.project_id) === projectId)) {
     const type = String(row.type);
-    const value = { id: String(row.id), name: String(row.name), type, project_id: String(row.project_id), role: row.role };
+    const name = String(row.name);
+    const value = { id: String(row.id), name, type, project_id: String(row.project_id), role: row.role };
     const shares = ownerShares.get(value.id) || [];
     if (shares.some((share) => share.project_id !== projectId)) throw new Error('CREDENTIAL_OWNER_SHARE_FOREIGN');
     if (shares.length !== 1) throw new Error('CREDENTIAL_OWNER_SHARE_AMBIGUOUS');
     if (shares[0].name !== value.name || shares[0].type !== value.type) throw new Error('CREDENTIAL_OWNER_SHARE_AMBIGUOUS');
-    if (byType.has(type)) throw new Error(`CREDENTIAL_TYPE_AMBIGUOUS:${type}`);
-    byType.set(type, value);
+    const typeRows = byType.get(type) || [];
+    typeRows.push(value);
+    byType.set(type, typeRows);
+    const nameKey = `${type}\0${name}`;
+    const namedRows = byTypeName.get(nameKey) || [];
+    namedRows.push(value);
+    byTypeName.set(nameKey, namedRows);
   }
   const bindings = credentialBindingsFromEnvironment();
-  const types = new Set(bindings.map((binding) => binding.credential_type));
-  if (byType.size !== types.size || [...types].some((type) => !byType.has(type))) throw new Error('CREDENTIAL_ASSOCIATION_COVERAGE_INVALID');
-  const values = [...byType.values()].sort((a, b) => a.type.localeCompare(b.type));
+  const values = [];
+  for (const binding of bindings) {
+    const matches = binding.credential_name
+      ? byTypeName.get(`${binding.credential_type}\0${binding.credential_name}`) || []
+      : byType.get(binding.credential_type) || [];
+    if (matches.length !== 1) throw new Error(`CREDENTIAL_ASSOCIATION_COVERAGE_INVALID:${binding.placeholder}`);
+    values.push({ ...matches[0], placeholder: binding.placeholder });
+  }
+  const ids = new Set(values.map((value) => value.id));
+  if (ids.size !== values.length) throw new Error('CREDENTIAL_ASSOCIATION_AMBIGUOUS');
+  values.sort((a, b) => a.placeholder.localeCompare(b.placeholder));
   return { values, digest: digest(values) };
 }
 
@@ -569,11 +771,12 @@ function credentialContractSummary() {
 }
 
 async function updateWorkflows(client, changes) {
-  for (const [workflowId, nodes] of changes) {
+  for (const [workflowId, body] of changes) {
     const revisionId = crypto.randomUUID();
     const result = await client.query(
       `UPDATE workflow_entity w
-          SET nodes = $1::json, "versionId" = $3
+          SET nodes = $1::json, "versionId" = $3, name = $5, connections = $6::json,
+              settings = $7::json, meta = $8::json, "pinData" = $9::json
         WHERE w.id = $2
           AND EXISTS (
             SELECT 1 FROM shared_workflow s
@@ -582,7 +785,9 @@ async function updateWorkflows(client, changes) {
                AND s.role = 'workflow:owner'
           )
       RETURNING w.id, w."versionId"`,
-      [JSON.stringify(nodes), workflowId, revisionId, projectId],
+      [JSON.stringify(body.nodes), workflowId, revisionId, projectId, body.name,
+        JSON.stringify(body.connections), JSON.stringify(body.settings ?? null),
+        JSON.stringify(body.meta ?? null), JSON.stringify(body.pinData ?? null)],
     );
     if (result.rowCount !== 1 || result.rows[0].versionId !== revisionId) {
       throw new Error(`LIVE_WORKFLOW_UPDATE_FAILED:${workflowId}`);
@@ -621,8 +826,8 @@ function findReferences(graph, workflows) {
   return prestate;
 }
 
-function selectorReadback(prestate) {
-  return prestate.map((item) => ({
+function selectorReadback(references) {
+  return references.map((item) => ({
     reference_id: item.reference.reference_id,
     workflow_id: item.reference.workflow_id,
     node_id: item.reference.node_id,
@@ -631,56 +836,93 @@ function selectorReadback(prestate) {
   })).sort((left, right) => left.reference_id.localeCompare(right.reference_id));
 }
 
-function applyForward(prestate, credentials, workflows = new Map(prestate.map((item) => [item.workflow.id, item.workflow]))) {
-  const changed = new Map();
-  let alreadyApplied = true;
-  const nodesFor = (workflowId) => {
-    const workflow = workflows.get(workflowId);
-    if (!workflow) throw new Error(`CREDENTIAL_BINDING_WORKFLOW_MISSING:${workflowId}`);
-    return changed.get(workflowId) || clone(workflow.nodes);
-  };
-  for (const item of prestate) {
-    if (!item.targetMatches) alreadyApplied = false;
-    if (!item.oldMatches && !item.targetMatches) {
-      throw new Error(`LIVE_REFERENCE_SELECTOR_DRIFT:${item.reference.reference_id}`);
-    }
-    if (!item.targetMatches) {
-      const nodes = nodesFor(item.reference.workflow_id);
-      const node = nodes.find((candidate) => candidate.id === item.reference.node_id);
-      setSelector(node, item.reference.canonical_table_id);
-      changed.set(item.reference.workflow_id, nodes);
-    }
+async function verifyLegacyForwardJournal(client, receipt) {
+  const result = await client.query(
+    `SELECT receipt FROM ${JOURNAL_TABLE}
+      WHERE receipt_sha256 = $1 AND project_id = $2 AND operation = 'FORWARD' AND lock_resource = $3`,
+    [receipt.runtime_plan_receipt_sha256, projectId, receipt.lock_resource],
+  );
+  const stored = result.rows?.[0]?.receipt;
+  if (result.rows?.length !== 1 || !sameJson(typeof stored === 'string' ? JSON.parse(stored) : stored, receipt)) {
+    throw new Error('LEGACY_FORWARD_JOURNAL_RECEIPT_MISMATCH');
   }
-  for (const leaf of credentialLeavesFromEnvironment()) {
-    const workflow = workflows.get(leaf.workflow.id);
-    if (!workflow) throw new Error(`CREDENTIAL_BINDING_WORKFLOW_MISSING:${leaf.workflow.id}`);
-    const originalNode = workflow.nodes.find((candidate) => candidate.id === leaf.node.id);
-    if (!originalNode) throw new Error(`CREDENTIAL_BINDING_NODE_MISSING:${leaf.key}`);
-    const ref = originalNode.credentials?.[leaf.credential_type];
-    if (ref.id !== leaf.placeholder) continue;
-    const associated = credentials?.get(leaf.credential_type);
-    if (!associated) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISSING:${leaf.key}`);
-    const nodes = nodesFor(leaf.workflow.id);
-    const node = nodes.find((candidate) => candidate.id === leaf.node.id);
-    node.credentials = { [leaf.credential_type]: { id: associated.id, name: associated.name } };
-    changed.set(leaf.workflow.id, nodes);
-    alreadyApplied = false;
-  }
-  return { changed, alreadyApplied };
 }
 
-function restoreCredentialOrigins(changed, workflows, origins) {
+function rollbackSelectorReceipt(graph, workflows, receipt, origins) {
+  const prestate = findReferences(graph, workflows);
+  if (digest(selectorReadback(prestate)) !== receipt.readback_digest_sha256) {
+    throw new Error('ROLLBACK_REFERENCE_READBACK_DRIFT');
+  }
+  const actions = new Map(receipt.actions.map((action) => [action.reference_id, action]));
+  const restored = new Map([...workflows].map(([id, workflow]) => [
+    id, { id, ...clone(Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field] ?? null]))) },
+  ]));
+  for (const item of prestate) {
+    const action = actions.get(item.reference.reference_id);
+    if (!item.targetMatches || String(item.workflow.versionId || item.workflow.revisionId || '') !== action.post_revision_id) {
+      throw new Error(`ROLLBACK_REFERENCE_STATE_MISMATCH:${item.reference.reference_id}`);
+    }
+    const node = restored.get(item.reference.workflow_id).nodes.find((candidate) => candidate.id === item.reference.node_id);
+    if (action.selector === undefined || action.selector === null) delete node.parameters.dataTableId;
+    else node.parameters.dataTableId = clone(action.selector);
+  }
   for (const leaf of credentialLeavesFromEnvironment()) {
     if (origins.get(leaf.key) !== 'placeholder') continue;
-    const workflow = workflows.get(leaf.workflow.id);
-    if (!workflow) throw new Error(`ROLLBACK_CREDENTIAL_WORKFLOW_MISSING:${leaf.workflow.id}`);
-    const nodes = changed.get(leaf.workflow.id) || clone(workflow.nodes);
-    const node = nodes.find((candidate) => candidate.id === leaf.node.id);
+    const node = restored.get(leaf.workflow.id)?.nodes.find((candidate) => candidate.id === leaf.node.id);
     if (!node) throw new Error(`ROLLBACK_CREDENTIAL_NODE_MISSING:${leaf.key}`);
     node.credentials = { [leaf.credential_type]: { id: leaf.placeholder, name: leaf.placeholder } };
-    changed.set(leaf.workflow.id, nodes);
   }
+  for (const [id, workflow] of restored) {
+    if (workflowBodyDigest(workflow) !== graph.workflowBodyDigests.get(id)) {
+      throw new Error(`ROLLBACK_ORIGINAL_WORKFLOW_BODY_MISMATCH:${id}`);
+    }
+  }
+  return restored;
 }
+
+
+function applyForward(workflows, credentials, canonicalWorkflows, sourceBindings = null) {
+  const changed = new Map();
+  const expected = new Map();
+  for (const [workflowId, source] of canonicalWorkflows) {
+    const workflow = workflows.get(workflowId);
+    if (!workflow) throw new Error(`CANONICAL_WORKFLOW_MISSING:${workflowId}`);
+    const body = clone(Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, source[field] ?? null])));
+    if (sourceBindings && sourceBindings.workflows.some((item) => item.workflow_id === workflowId)) {
+      const slotNames = Object.values(body.meta?.[SOURCE_BINDING_SLOT_KEY] || {})
+        .map((slot) => slot?.node).filter((name) => typeof name === 'string' && name.length > 0);
+      const bindingNode = body.nodes.find((node) => slotNames.includes(node.name));
+      if (!bindingNode || !bindingNode.parameters || typeof bindingNode.parameters !== 'object' ||
+          !Object.hasOwn(bindingNode.parameters, 'jsonOutput')) {
+        throw new Error('SOURCE_CONTRACT_SLOT_NODE_INVALID');
+      }
+      bindingNode.parameters.jsonOutput = JSON.stringify(sourceBindings.bindings);
+    }
+    for (const leaf of credentialLeavesFromEnvironment()) {
+      if (leaf.workflow.id !== workflowId) continue;
+      const originalNode = workflow.nodes.find((node) => node.id === leaf.node.id);
+      const node = body.nodes.find((candidate) => candidate.id === leaf.node.id);
+      const ref = originalNode?.credentials?.[leaf.credential_type];
+      const sourceRef = node?.credentials?.[leaf.credential_type];
+      if (!node || node.type !== leaf.node_type || sourceRef?.id !== leaf.placeholder || sourceRef?.name !== leaf.placeholder) {
+        throw new Error(`CANONICAL_CREDENTIAL_BINDING_INVALID:${leaf.key}`);
+      }
+      if (ref?.id === leaf.placeholder) {
+        const associated = credentials.get(leaf.placeholder);
+        if (!associated) throw new Error(`CREDENTIAL_BINDING_ASSOCIATION_MISSING:${leaf.key}`);
+        node.credentials = { [leaf.credential_type]: { id: associated.id, name: associated.name } };
+      } else {
+        node.credentials = clone(originalNode.credentials);
+      }
+    }
+    const expectedWorkflow = { id: workflowId, ...body };
+    expected.set(workflowId, expectedWorkflow);
+    const currentBody = Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field] ?? null]));
+    if (!sameJson(currentBody, body)) changed.set(workflowId, body);
+  }
+  return { changed, expected, alreadyApplied: changed.size === 0 };
+}
+
 
 async function verifyTargets(client, targetIds) {
   const result = await client.query(
@@ -713,7 +955,7 @@ async function verifyInFlight(client) {
   if (result.rows[0]?.count !== 0) throw new Error('LIVE_IN_FLIGHT_EXECUTIONS_PRESENT');
 }
 
-async function persistRecoveryJournal(client, receipt) {
+async function persistRecoveryJournal(client, receipt, rollbackWorkflows = null) {
   await client.query(
     `CREATE TABLE IF NOT EXISTS ${JOURNAL_TABLE} (
        receipt_sha256 varchar(64) PRIMARY KEY,
@@ -724,10 +966,11 @@ async function persistRecoveryJournal(client, receipt) {
        created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
      )`,
   );
+  await client.query(`ALTER TABLE ${JOURNAL_TABLE} ADD COLUMN IF NOT EXISTS rollback_workflows jsonb`);
   await client.query(
     `INSERT INTO ${JOURNAL_TABLE}
-       (receipt_sha256, project_id, operation, lock_resource, receipt)
-     VALUES ($1, $2, $3, $4, $5::jsonb)
+       (receipt_sha256, project_id, operation, lock_resource, receipt, rollback_workflows)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
      ON CONFLICT (receipt_sha256) DO NOTHING`,
     [
       receipt.runtime_plan_receipt_sha256,
@@ -735,8 +978,29 @@ async function persistRecoveryJournal(client, receipt) {
       receipt.operation,
       receipt.lock_resource,
       JSON.stringify(receipt),
+      JSON.stringify(rollbackWorkflows),
     ],
   );
+}
+
+async function loadRollbackWorkflows(client, receipt, graph) {
+  const result = await client.query(
+    `SELECT rollback_workflows FROM ${JOURNAL_TABLE}
+      WHERE receipt_sha256 = $1 AND project_id = $2 AND operation = 'FORWARD' AND lock_resource = $3`,
+    [receipt.runtime_plan_receipt_sha256, projectId, receipt.lock_resource],
+  );
+  const bodies = result.rows?.[0]?.rollback_workflows;
+  if (result.rows?.length !== 1 || !Array.isArray(bodies) || bodies.length !== graph.workflows.size ||
+      digest(bodies) !== receipt.rollback_workflows_sha256) throw new Error('ROLLBACK_WORKFLOW_SNAPSHOT_MISMATCH');
+  const restored = new Map();
+  for (const workflow of bodies) {
+    if (!workflow || !graph.workflows.has(workflow.id) || restored.has(workflow.id) ||
+        workflowBodyDigest(workflow) !== graph.workflowBodyDigests.get(workflow.id)) {
+      throw new Error('ROLLBACK_WORKFLOW_BODY_MISMATCH');
+    }
+    restored.set(workflow.id, workflow);
+  }
+  return restored;
 }
 
 function validateLockReceipt(lockReceipt, exported, binding, resource) {
@@ -760,7 +1024,7 @@ function validateLockReceipt(lockReceipt, exported, binding, resource) {
 }
 
 function validateForwardReceipt(receipt, exported, resource, binding) {
-  if (!receipt || receipt.schema_version !== RUNTIME_SCHEMA || receipt.operation !== 'FORWARD' ||
+  if (!receipt || ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) || receipt.operation !== 'FORWARD' ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
       receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 33 ||
       receipt.durable_journal !== true || receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
@@ -774,19 +1038,27 @@ function validateForwardReceipt(receipt, exported, resource, binding) {
       !/^[0-9a-f]{64}$/.test(receipt.workflow_revision_digest_after) ||
       !/^[0-9a-f]{64}$/.test(receipt.credential_contract_digest) ||
       !Number.isInteger(receipt.credential_binding_count) || !Number.isInteger(receipt.credential_leaf_count) ||
-      receipt.credential_binding_count !== 8 || receipt.credential_leaf_count !== 36 ||
-      !/^[01]{36}$/.test(receipt.credential_origin_bitset) ||
-      !/^[01]{36}$/.test(receipt.credential_origin_post_bitset) ||
+      receipt.credential_binding_count !== credentialBindingsFromEnvironment().length || receipt.credential_leaf_count !== credentialLeafCount() ||
+      !new RegExp(`^[01]{${credentialLeafCount()}}$`).test(receipt.credential_origin_bitset) ||
+      !new RegExp(`^[01]{${credentialLeafCount()}}$`).test(receipt.credential_origin_post_bitset) ||
       !/^[0-9a-f]{64}$/.test(receipt.credential_origin_digest) ||
       !/^[0-9a-f]{64}$/.test(receipt.credential_origin_post_digest) ||
       receipt.credential_ids_recorded !== false || receipt.secret_values_recorded !== false || !Array.isArray(receipt.actions)) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
   }
+  if (receipt.schema_version === RUNTIME_SCHEMA) {
+    if (!/^[0-9a-f]{64}$/.test(receipt.rollback_workflows_sha256) ||
+        receipt.canonical_source_sha256 !== decode('FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64').source.sha256) {
+      throw new Error('FORWARD_RUNTIME_GRAPH_RECEIPT_INTEGRITY_INVALID');
+    }
+  } else if (Object.hasOwn(receipt, 'rollback_workflows_sha256') || Object.hasOwn(receipt, 'canonical_source_sha256')) {
+    throw new Error('FORWARD_RUNTIME_RECEIPT_VERSION_MISMATCH');
+  }
   validateBinding(receipt, binding, 'FORWARD_RUNTIME_RECEIPT');
   if (receipt.credential_contract_digest !== digest(credentialBindingsFromEnvironment()) ||
       receipt.credential_origin_digest !== credentialOriginDigest(receipt.credential_origin_bitset) ||
       receipt.credential_origin_post_digest !== credentialOriginDigest(receipt.credential_origin_post_bitset) ||
-      receipt.credential_origin_post_bitset !== '0'.repeat(36)) {
+      receipt.credential_origin_post_bitset !== '0'.repeat(credentialLeafCount())) {
     throw new Error('FORWARD_RUNTIME_CREDENTIAL_ORIGIN_INTEGRITY_INVALID');
   }
   const unsigned = { ...receipt };
@@ -801,6 +1073,12 @@ function validateForwardReceipt(receipt, exported, resource, binding) {
         typeof action.workflow_id !== 'string' || typeof action.node_id !== 'string' ||
         typeof action.credential_origin !== 'string' || typeof action.credential_tuple_digest !== 'string') {
       throw new Error('FORWARD_RUNTIME_CREDENTIAL_ORIGIN_INTEGRITY_INVALID');
+    }
+    const reference = exported.references.find((item) => item.reference_id === action.reference_id);
+    if (!reference || action.workflow_id !== reference.workflow_id || action.node_id !== reference.node_id ||
+        action.revision_id !== reference.revision_id || action.canonical_table_id !== reference.canonical_table_id ||
+        typeof action.post_revision_id !== 'string' || !action.post_revision_id) {
+      throw new Error('FORWARD_RUNTIME_ACTION_MISMATCH');
     }
     const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`);
     const expectedOrigin = leaf
@@ -881,8 +1159,15 @@ async function execute() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const graph = validateExport(exported);
   const forwardReceipt = operation === 'ROLLBACK' ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') : null;
+  if (operation === 'ROLLBACK' && (!forwardReceipt || forwardReceipt.operation !== 'FORWARD' ||
+      ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(forwardReceipt.schema_version))) {
+    throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
+  }
+  const canonicalSource = operation === 'FORWARD' || forwardReceipt.schema_version === RUNTIME_SCHEMA
+    ? canonicalSourceFromInput(graph) : null;
+  const sourceBindings = canonicalSource ? sourceContractBindingsFromEnvironment(graph, canonicalSource) : null;
   const lock = await acquireProjectLock();
-  const commitAndJournal = async (unsignedReceipt) => {
+  const commitAndJournal = async (unsignedReceipt, rollbackWorkflows = null) => {
     const journal = {
       ...unsignedReceipt,
       ...lock.binding,
@@ -890,7 +1175,7 @@ async function execute() {
       commit_protocol: 'postgresql_synchronous_wal',
     };
     validateBinding(journal, lock.binding, 'RUNTIME_JOURNAL');
-    await persistRecoveryJournal(lock.client, journal);
+    await persistRecoveryJournal(lock.client, journal, rollbackWorkflows);
     await lock.client.query('COMMIT');
     // COMMIT releases the transaction-scoped advisory lock before this output.
     // The committed journal is the recovery boundary for this read-only step.
@@ -901,40 +1186,40 @@ async function execute() {
     await verifyInFlight(lock.client);
     await verifyTargets(lock.client, graph.targetIds);
     const credentialsBefore = await credentialState(lock.client);
-    const credentialsByType = new Map(credentialsBefore.values.map((value) => [value.type, value]));
+    const credentialsByBinding = new Map(credentialsBefore.values.map((value) => [value.placeholder, value]));
     const workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
-    const credentialOriginsBefore = validateCredentialBindings(workflows, credentialsByType);
+    const credentialOriginsBefore = validateCredentialBindings(workflows, credentialsByBinding);
     const credentialOriginBitsetBefore = credentialOriginBitset(credentialOriginsBefore);
     const workflowCredentialsBefore = workflowCredentialObjectsDigest(workflows);
     const workflowRevisionDigestBefore = workflowRevisionDigest(workflows);
     const workflowOpaqueCredentialsBefore = workflowOpaqueCredentialObjectsDigest(workflows, credentialOriginsBefore);
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
-      const plan = applyForward(prestate, credentialsByType, workflows);
+      if (prestate.some((item) => !item.oldMatches && !item.targetMatches)) throw new Error('LIVE_REFERENCE_SELECTOR_DRIFT');
+      const rollbackWorkflows = [...workflows.values()].map((workflow) => ({
+        id: workflow.id, ...Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field] ?? null])),
+      })).sort((left, right) => left.id.localeCompare(right.id));
+      const plan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows, sourceBindings);
       if (!plan.alreadyApplied) {
         await updateWorkflows(lock.client, plan.changed);
       }
       const updated = await loadWorkflows(lock.client, graph, false);
-      const poststate = findReferences(graph, updated);
+      if (!sameJson(workflowReadback(updated), workflowReadback(plan.expected))) throw new Error('CANONICAL_GRAPH_POST_READBACK_MISMATCH');
       const postCredentials = await loadWorkflows(lock.client, graph, false);
-      const credentialOriginsAfter = validateCredentialBindings(postCredentials, credentialsByType);
+      const credentialOriginsAfter = validateCredentialBindings(postCredentials, credentialsByBinding);
       if (!allCredentialOrigins(credentialOriginsAfter, 'opaque')) throw new Error('CREDENTIAL_BINDING_POST_STATE_NOT_OPAQUE');
       const credentialOriginBitsetAfter = credentialOriginBitset(credentialOriginsAfter);
       const workflowRevisionDigestAfter = workflowRevisionDigest(updated);
-      const beforeById = new Map(prestate.map((item) => [item.reference.reference_id, item]));
-      const actions = poststate.map((item) => {
-        const before = beforeById.get(item.reference.reference_id);
-        const expected = item.reference.canonical_table_id;
+      const actions = prestate.map((before) => {
+        const reference = before.reference;
         const credentialBinding = credentialBindingForNode(before.workflow, before.node);
         const credentialOrigin = credentialBinding ? credentialOriginsBefore.get(credentialBinding.key) : 'none';
-        if (selectorId(item.node.parameters?.dataTableId) !== (expected || '')) throw new Error(`LIVE_REFERENCE_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
-        return { reference_id: item.reference.reference_id, workflow_id: item.reference.workflow_id, revision_id: item.reference.revision_id, post_revision_id: String(updated.get(item.reference.workflow_id).versionId || updated.get(item.reference.workflow_id).revisionId || ''), node_id: item.reference.node_id, selector: before.selector, canonical_table_id: expected, credential_origin: credentialOrigin, credential_tuple_digest: digest({ workflow_id: item.reference.workflow_id, node_id: item.reference.node_id, credential_type: credentialBinding?.credential_type || '', placeholder: credentialBinding?.placeholder || '' }) };
+        return { reference_id: reference.reference_id, workflow_id: reference.workflow_id, revision_id: reference.revision_id, post_revision_id: String(updated.get(reference.workflow_id).versionId || ''), node_id: reference.node_id, selector: before.selector, canonical_table_id: reference.canonical_table_id, credential_origin: credentialOrigin, credential_tuple_digest: digest({ workflow_id: reference.workflow_id, node_id: reference.node_id, credential_type: credentialBinding?.credential_type || '', placeholder: credentialBinding?.placeholder || '' }) };
       });
-      const readback = selectorReadback(poststate);
+      const readback = workflowReadback(updated);
       const replayWorkflows = await loadWorkflows(lock.client, graph, false);
-      const replayState = findReferences(graph, replayWorkflows);
-      const replayPlan = applyForward(replayState, credentialsByType, replayWorkflows);
-      if (!replayPlan.alreadyApplied || !sameJson(selectorReadback(replayState), readback)) {
+      const replayPlan = applyForward(replayWorkflows, credentialsByBinding, canonicalSource.workflows, sourceBindings);
+      if (!replayPlan.alreadyApplied || !sameJson(workflowReadback(replayWorkflows), readback)) {
         throw new Error('FORWARD_REPLAY_READBACK_MISMATCH');
       }
       const credentialsAfter = await credentialState(lock.client);
@@ -942,9 +1227,9 @@ async function execute() {
       const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
       if (workflowOpaqueCredentialObjectsDigest(postCredentials, credentialOriginsBefore) !== workflowOpaqueCredentialsBefore) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
       const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions };
-      return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
+      Object.assign(unsigned, { canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows) });
+      return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) }, rollbackWorkflows);
     }
-    if (!forwardReceipt || forwardReceipt.schema_version !== RUNTIME_SCHEMA || forwardReceipt.operation !== 'FORWARD') throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
     }
@@ -957,37 +1242,29 @@ async function execute() {
     const expectedCredentialOrigins = credentialOriginsFromBitset(forwardReceipt.credential_origin_bitset);
     const workflowOpaqueCredentialsBeforeRollback = workflowOpaqueCredentialObjectsDigest(workflows, expectedCredentialOrigins);
     const byId = new Map(forwardReceipt.actions.map((action) => [action.reference_id, action]));
-    const prestate = findReferences(graph, workflows);
-    const changed = new Map();
-    for (const item of prestate) {
-      const action = byId.get(item.reference.reference_id);
-      if (!action || action.workflow_id !== item.reference.workflow_id || action.revision_id !== item.reference.revision_id ||
-          action.node_id !== item.reference.node_id || action.canonical_table_id !== item.reference.canonical_table_id) {
-        throw new Error(`FORWARD_RUNTIME_ACTION_MISMATCH:${item.reference.reference_id}`);
+    let rollbackWorkflows;
+    if (forwardReceipt.schema_version === LEGACY_RUNTIME_SCHEMA) {
+      await verifyLegacyForwardJournal(lock.client, forwardReceipt);
+      rollbackWorkflows = rollbackSelectorReceipt(graph, workflows, forwardReceipt, expectedCredentialOrigins);
+    } else {
+      const canonicalPlan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows, sourceBindings);
+      if (!canonicalPlan.alreadyApplied || digest(workflowReadback(workflows)) !== forwardReceipt.readback_digest_sha256) {
+        throw new Error('ROLLBACK_CANONICAL_GRAPH_DRIFT');
       }
-      const currentRevision = String(item.workflow.versionId || item.workflow.revisionId || '');
-      if (currentRevision !== action.post_revision_id) throw new Error(`ROLLBACK_WORKFLOW_REVISION_MISMATCH:${item.reference.reference_id}`);
-      const nodes = changed.get(item.reference.workflow_id) || clone(item.workflow.nodes);
-      const node = nodes.find((candidate) => candidate.id === item.reference.node_id);
-      if (selectorId(node.parameters?.dataTableId) !== (item.reference.canonical_table_id || '')) throw new Error(`ROLLBACK_REFERENCE_SELECTOR_MISMATCH:${item.reference.reference_id}`);
-      restoreSelector(node, action.selector);
-      changed.set(item.reference.workflow_id, nodes);
+      rollbackWorkflows = await loadRollbackWorkflows(lock.client, forwardReceipt, graph);
     }
-    restoreCredentialOrigins(changed, workflows, expectedCredentialOrigins);
+    const changed = new Map([...rollbackWorkflows].map(([id, workflow]) => [
+      id, Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field]])),
+    ]));
     await updateWorkflows(lock.client, changed);
     const restored = await loadWorkflows(lock.client, graph, false);
-    const restoredCredentialOrigins = validateCredentialBindings(restored, credentialsByType);
+    const restoredCredentialOrigins = validateCredentialBindings(restored, credentialsByBinding);
     if (credentialOriginBitset(restoredCredentialOrigins) !== forwardReceipt.credential_origin_bitset) {
       throw new Error('ROLLBACK_CREDENTIAL_ORIGIN_POST_READBACK_MISMATCH');
     }
-    const restoredState = findReferences(graph, restored);
-    for (const item of restoredState) {
-      const action = byId.get(item.reference.reference_id);
-      if (!sameJson(item.node.parameters?.dataTableId, action.selector)) {
-        throw new Error(`ROLLBACK_POST_READBACK_MISMATCH:${item.reference.reference_id}`);
-      }
-    }
-    const readback = selectorReadback(restoredState);
+    if (!sameJson(workflowReadback(restored), workflowReadback(rollbackWorkflows))) throw new Error('ROLLBACK_POST_READBACK_MISMATCH');
+    const readback = forwardReceipt.schema_version === LEGACY_RUNTIME_SCHEMA
+      ? selectorReadback(findReferences(graph, restored)) : workflowReadback(restored);
     const credentialsAfter = await credentialState(lock.client);
     if (credentialsAfter.digest !== credentialsBefore.digest) throw new Error('CREDENTIAL_STATE_CHANGED');
     const postCredentials = await loadWorkflows(lock.client, graph, false);
@@ -996,6 +1273,7 @@ async function execute() {
     if (workflowOpaqueCredentialObjectsDigest(postCredentials, expectedCredentialOrigins) !== workflowOpaqueCredentialsBeforeRollback) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
     const credentialOriginBitsetAfter = credentialOriginBitset(restoredCredentialOrigins);
     const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: [...byId.values()].map((action) => { const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`); return { reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true, credential_origin: leaf ? expectedCredentialOrigins.get(leaf.key) : 'none', credential_tuple_digest: digest({ workflow_id: action.workflow_id, node_id: action.node_id, credential_type: leaf?.credential_type || '', placeholder: leaf?.placeholder || '' }) }; }) };
+    unsignedRollback.schema_version = forwardReceipt.schema_version;
     return await commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
   } catch (error) {
     // PostgreSQL transaction rollback is the only compensation path. A second

@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "contract_status": "READY",
+  "source": {
+    "path": "integrations/n8n/generated/application-contract-bundle.json",
+    "sha256": "49397a77e1e7840edaa8f857086895d3d518272884b18c45cbd5f1d2e7aeb9a7",
+    "table": "finance_source_contracts",
+    "allowed_fields": [
+      "source_code",
+      "config_version",
+      "folder_id",
+      "senders_json",
+      "subjects_json",
+      "onedrive_parent_id",
+      "manifest_onedrive_parent_id",
+      "overlap_seconds",
+      "cycle_day",
+      "deadline_days",
+      "actual_file_id",
+      "account_id",
+      "card_code",
+      "cashback_close_required",
+      "enabled",
+      "content_sha256",
+      "updated_at"
+    ]
+  },
+  "workflows": [
+    {
+      "path": "integrations/n8n/workflows/02-rakbank-live-cashback.json",
+      "workflow_id": "10000000-0000-4000-8000-000000000002",
+      "workflow_code": "RAKBANK_LIVE_CASHBACK",
+      "source_sha256": "2efb16436e2f22aad53a5b38516408753247f8194a494388c37f0d5d098db56d",
+      "slot_metadata_key": "financeSourceBindingSlots"
+    },
+    {
+      "path": "integrations/n8n/workflows/09-ai-proposal.json",
+      "workflow_id": "10000000-0000-4000-8000-000000000009",
+      "workflow_code": "AI_PROPOSAL",
+      "source_sha256": "2541b0cf5bfd61ffd539a02eb6f15df039d54b06f48a114196c1ae0311f7104e",
+      "slot_metadata_key": "financeSourceBindingSlots"
+    },
+    {
+      "path": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+      "workflow_id": "10000000-0000-4000-8000-000000000024",
+      "workflow_code": "SHARED_MONTHLY_STATEMENT_CYCLE",
+      "source_sha256": "dc1d35abd58a8ce9cda732311e4b366958ffa048b88373432d2c6da6cb83b359",
+      "slot_metadata_key": "financeSourceBindingSlots"
+    }
+  ],
+  "bindings": {
+    "AI_PROPOSAL_ARCHIVE": {
+      "source_code": "AI_PROPOSAL_ARCHIVE",
+      "config_version": "1",
+      "folder_id": null,
+      "senders_json": "[]",
+      "subjects_json": "[]",
+      "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "overlap_seconds": null,
+      "cycle_day": null,
+      "deadline_days": null,
+      "actual_file_id": null,
+      "account_id": null,
+      "card_code": null,
+      "cashback_close_required": null,
+      "enabled": true,
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
+      "updated_at": null
+    },
+    "EI_AMAZON": {
+      "source_code": "EI_AMAZON",
+      "config_version": "1",
+      "folder_id": "inbox",
+      "senders_json": "[\"estatement@emiratesislamic.ae\"]",
+      "subjects_json": "[\"Statement of your Emirates Islamic Credit Card\"]",
+      "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "overlap_seconds": 7200,
+      "cycle_day": 1,
+      "deadline_days": 5,
+      "actual_file_id": null,
+      "account_id": null,
+      "card_code": "EI_AMAZON",
+      "cashback_close_required": null,
+      "enabled": true,
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
+      "updated_at": null
+    },
+    "RAKBANK_CARD_TRANSACTION": {
+      "source_code": "RAKBANK_CARD_TRANSACTION",
+      "config_version": "1",
+      "folder_id": "Inbox/Rakbank",
+      "senders_json": "[\"alerts@rakbank.ae\"]",
+      "subjects_json": "[\"An update on your Card transaction\"]",
+      "onedrive_parent_id": null,
+      "manifest_onedrive_parent_id": null,
+      "overlap_seconds": null,
+      "cycle_day": null,
+      "deadline_days": null,
+      "actual_file_id": null,
+      "account_id": null,
+      "card_code": "RAK_WORLD",
+      "cashback_close_required": null,
+      "enabled": true,
+      "content_sha256": "38daba8fa3eef9e0849d40ad7841aeb73b2a10e7d2693a5c19f287adca8b6a6d",
+      "updated_at": null
+    },
+    "WIO_CREDIT": {
+      "source_code": "WIO_CREDIT",
+      "config_version": "1",
+      "folder_id": "inbox",
+      "senders_json": "[\"communications@email.wio.io\",\"communications@mail.wio.io\"]",
+      "subjects_json": "[\"Your Wio Credit statement for this month\"]",
+      "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+      "overlap_seconds": 7200,
+      "cycle_day": 3,
+      "deadline_days": 5,
+      "actual_file_id": null,
+      "account_id": null,
+      "card_code": "WIO_CREDIT",
+      "cashback_close_required": null,
+      "enabled": true,
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
+      "updated_at": null
+    }
+  },
+  "activation_prerequisites": [],
+  "manifest_sha256": "47a9fbb4040bbd061b917e5e75f09909b8675ba14bac0b0512414d71686dd228"
+}

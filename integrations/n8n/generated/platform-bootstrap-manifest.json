@@ -6,13 +6,13 @@
     "data_tables": "integrations/n8n/data-tables.json",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
-    "ai_policy_seed_sha256": "c74a8eb30ed016fff3c6619cf608fdae6e0c468c2ac3405b9101ac3eccf2922a",
+    "ai_policy_seed_sha256": "f26cfdb791bd141a1fb981ee8ab695e405913fcb2576a7cd0c5db2928ab8d2e1",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "c7ba3a1217252c67be73169ab6ea4a56a21d8e8becd09fe38a39eac70da5c905",
+    "config_version_seed_sha256": "a8496f71b673d7dadfab07f33f248090110ca07f62637df85c0f68b15fbeabb8",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
-    "application_contract_bundle_sha256": "d618bd4eaa285ef244e8bf231ef434a0e3c02feeec731ef3efdd22bdc467c58a",
+    "application_contract_bundle_sha256": "49397a77e1e7840edaa8f857086895d3d518272884b18c45cbd5f1d2e7aeb9a7",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",
-    "application_contract_bundle_schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
+    "application_contract_bundle_schema_sha256": "b471d80ad7d44e2db859a6d3d628acfb18287d8d93770a03a1e2239b786926a8",
     "data_table_migration_matrix": "integrations/n8n/data-table-migration-matrix.json"
   },
   "native_data_table_create_contract": {
@@ -33,6 +33,18 @@
         "tableName": "finance_ingestion_state",
         "columns": {
           "column": [
+            {
+              "name": "record_type",
+              "type": "string"
+            },
+            {
+              "name": "record_key",
+              "type": "string"
+            },
+            {
+              "name": "record_payload_json",
+              "type": "string"
+            },
             {
               "name": "source_code",
               "type": "string"
@@ -104,6 +116,14 @@
             {
               "name": "last_receipt_created_at",
               "type": "date"
+            },
+            {
+              "name": "archive_receipt_sha256",
+              "type": "string"
+            },
+            {
+              "name": "archive_readback_verified",
+              "type": "boolean"
             },
             {
               "name": "downstream_receipt_sha256",
@@ -578,7 +598,7 @@
     "path": "integrations/n8n/generated/application-contract-bundle.json",
     "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
     "schema_version": 1,
-    "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
+    "bundle_content_sha256": "2b3fb93c8ec3bf16b7cee60c77edfefc95f237d5762edb1b7402a36326f07521",
     "resolver_order": [
       "W02",
       "W04",
@@ -605,7 +625,7 @@
   "warning": "Generated provisioning shape only. It is not evidence that the workflow imports or executes in the pinned n8n image.",
   "target_schema_contract": {
     "path": "integrations/n8n/data-table-migration-matrix.json",
-    "digest": "655dfefda484b6450de8cc65d9ac00c17fdc58db94e91fb47c63527cd0f55515",
+    "digest": "57237a34673ec8da1e79c1018dad1de8a4453574ea10401560195a58730f6263",
     "target_tables": [
       "finance_ingestion_state",
       "finance_documents",

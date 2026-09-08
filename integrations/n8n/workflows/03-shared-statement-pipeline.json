@@ -405,7 +405,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Reconciliation Readback. Keep this deterministic and fail closed.\nconst row = $json || {};\nconst source = $('Verify Archive and Execution Context').first().json;\nconst actual = $('Apply Prepared Outbox Safely').first().json;\nconst request = $('Build Cashback Reconciliation Request').first().json.cashback_reconcile;\nconst text = value => String(value ?? '').trim();\nlet closeId = '';\ntry {\n    closeId = text($('Validate Cashback Finalization Response').first().json.close_id);\n}\ncatch (_) {\n    closeId = '';\n}\nif (text(row.source_code) !== text(source.source_code)\n    || text(row.period_key) !== text(source.period_key)\n    || Number(row.reconciliation_version) !== 1\n    || row.state !== 'COMMITTED'\n    || text(row.statement_sha256).toLowerCase() !== text(request.statement_sha256).toLowerCase()\n    || text(row.actual_verification_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('RECONCILIATION_READBACK_BINDING_MISMATCH');\nif (source.cashback_close_required === true && (!closeId || text(row.cashback_close_id) !== closeId))\n    throw new Error('RECONCILIATION_READBACK_CLOSE_MISMATCH');\nif (source.cashback_close_required !== true && text(row.cashback_close_id))\n    throw new Error('RECONCILIATION_READBACK_UNEXPECTED_CLOSE');\nreturn [{ json: { ...row, reconciliation_readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Validate Reconciliation Readback. Keep this deterministic and fail closed.\nconst row = $json || {};\nconst source = $('Verify Archive and Execution Context').first().json;\nconst actual = $('Apply Prepared Outbox Safely').first().json;\nconst request = $('Build Cashback Reconciliation Request').first().json.cashback_reconcile;\nconst text = value => String(value ?? '').trim();\nlet closeId = '';\ntry {\n    closeId = text($('Validate Cashback Finalization Response').first().json.close_id);\n}\ncatch (_) {\n    closeId = '';\n}\nif (text(row.source_code) !== text(source.source_code)\n    || text(row.period_key) !== text(source.period_key)\n    || Number(row.reconciliation_version) !== 1\n    || row.reconciliation_state !== 'COMMITTED'\n    || text(row.statement_sha256).toLowerCase() !== text(request.statement_sha256).toLowerCase()\n    || text(row.verification_artifact_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('RECONCILIATION_READBACK_BINDING_MISMATCH');\nif (source.cashback_close_required === true && !closeId)\n    throw new Error('RECONCILIATION_READBACK_CLOSE_MISMATCH');\nif (false)\n    throw new Error('RECONCILIATION_READBACK_UNEXPECTED_CLOSE');\nreturn [{ json: { ...row, reconciliation_readback_verified: true } }];\n"
       }
     },
     {
@@ -529,37 +529,30 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "SHARED_STATEMENT_PIPELINE"
+              "keyValue": "={{ JSON.stringify([String($('Verify Archive and Execution Context').item.json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "run_id": "={{ $('Verify Archive and Execution Context').item.json.run_id }}",
-            "workflow_code": "SHARED_STATEMENT_PIPELINE",
-            "source_code": "={{ $('Verify Archive and Execution Context').item.json.source_code }}",
-            "trigger_kind": "={{ $('Verify Archive and Execution Context').item.json.trigger_kind }}",
-            "config_version": "={{ $('Verify Archive and Execution Context').item.json.config_version }}",
-            "state": "SUCCEEDED",
-            "receipt_sha256": "={{ $('Validate Statement Reconciliation and IDs').item.json.delta_sha256 || $('Verify Archive and Execution Context').item.json.document_sha256 }}",
-            "terminal_readback_verified": false,
-            "completed_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
+            "record_type": "PIPELINE_RUN",
+            "record_key": "={{ JSON.stringify([String($('Verify Archive and Execution Context').item.json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"run_id\": $('Verify Archive and Execution Context').item.json.run_id, \"workflow_code\": \"SHARED_STATEMENT_PIPELINE\", \"source_code\": $('Verify Archive and Execution Context').item.json.source_code, \"trigger_kind\": $('Verify Archive and Execution Context').item.json.trigger_kind, \"config_version\": $('Verify Archive and Execution Context').item.json.config_version, \"state\": \"SUCCEEDED\", \"receipt_sha256\": $('Validate Statement Reconciliation and IDs').item.json.delta_sha256 || $('Verify Archive and Execution Context').item.json.document_sha256, \"terminal_readback_verified\": false, \"completed_at\": $now.toISO(), \"updated_at\": $now.toISO()}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -585,7 +578,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -594,19 +587,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "SHARED_STATEMENT_PIPELINE"
-            },
-            {
-              "keyName": "state",
-              "condition": "eq",
-              "keyValue": "SUCCEEDED"
+              "keyValue": "={{ JSON.stringify([String($('Verify Archive and Execution Context').item.json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}"
             }
           ]
         },
@@ -640,31 +628,30 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "SHARED_STATEMENT_PIPELINE"
+              "keyValue": "={{ JSON.stringify([String($json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "run_id": "={{ $json.run_id }}",
-            "workflow_code": "SHARED_STATEMENT_PIPELINE",
-            "terminal_readback_verified": true,
-            "updated_at": "={{ $now.toISO() }}"
+            "record_type": "PIPELINE_RUN",
+            "record_key": "={{ JSON.stringify([String($json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"run_id\": $json.run_id, \"workflow_code\": \"SHARED_STATEMENT_PIPELINE\", \"terminal_readback_verified\": true, \"updated_at\": $now.toISO()}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -690,7 +677,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -699,19 +686,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('Verify Archive and Execution Context').item.json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "SHARED_STATEMENT_PIPELINE"
-            },
-            {
-              "keyName": "terminal_readback_verified",
-              "condition": "eq",
-              "keyValue": true
+              "keyValue": "={{ JSON.stringify([String($('Verify Archive and Execution Context').item.json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}"
             }
           ]
         },
@@ -946,12 +928,17 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_reconciliations",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -976,12 +963,12 @@
             "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
             "reconciliation_version": 1,
             "statement_sha256": "={{ $('Build Cashback Reconciliation Request').first().json.cashback_reconcile.statement_sha256 }}",
-            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
-            "cashback_close_id": "={{ $json.close_id || '' }}",
-            "state": "COMMITTED",
-            "difference_minor": 0,
-            "verified_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "idempotency_key": "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}",
+            "reconciliation_state": "COMMITTED",
+            "verification_artifact_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
+            "reconciliation_verified_at": "={{ $now.toISO() }}",
+            "reconciliation_difference_minor": 0
           },
           "matchingColumns": [],
           "schema": [],
@@ -1007,7 +994,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_reconciliations",
+          "value": "finance_actual_batches",
           "mode": "name"
         },
         "returnAll": false,
@@ -1015,6 +1002,11 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1026,7 +1018,7 @@
               "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}"
             },
             {
-              "keyName": "state",
+              "keyName": "reconciliation_state",
               "condition": "eq",
               "keyValue": "COMMITTED"
             },
@@ -1041,7 +1033,7 @@
               "keyValue": "={{ $('Build Cashback Reconciliation Request').first().json.cashback_reconcile.statement_sha256 }}"
             },
             {
-              "keyName": "actual_verification_sha256",
+              "keyName": "verification_artifact_sha256",
               "condition": "eq",
               "keyValue": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}"
             }
@@ -1174,6 +1166,19 @@
         },
         "includeOtherFields": false,
         "options": {}
+      }
+    },
+    {
+      "id": "3029-typed-decode",
+      "name": "Decode Read Back Terminal Pipeline Receipt Typed Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        1520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Decode Read Back Terminal Pipeline Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"PIPELINE_RUN\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
       }
     },
     {
@@ -1568,7 +1573,7 @@
       "main": [
         [
           {
-            "node": "Compare Terminal Receipt Readback",
+            "node": "Decode Read Back Terminal Pipeline Receipt Typed Record",
             "type": "main",
             "index": 0
           }
@@ -1769,6 +1774,17 @@
         ]
       ]
     },
+    "Decode Read Back Terminal Pipeline Receipt Typed Record": {
+      "main": [
+        [
+          {
+            "node": "Compare Terminal Receipt Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Browser Capture?": {
       "main": [
         [
@@ -1841,7 +1857,7 @@
     "migrationStatus": "SPEC_ONLY",
     "requiresFinanceNodes": true,
     "customNodePackage": "n8n-nodes-finance@0.1.0",
-    "terminalReceiptTable": "finance_pipeline_runs",
+    "terminalReceiptTable": "finance_ingestion_state",
     "terminalReceiptReadback": true,
     "actualOutboxStates": [
       "PREPARED",
@@ -1875,7 +1891,8 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "terminalReceiptRecordType": "PIPELINE_RUN"
   },
   "nodeGroups": [
     {

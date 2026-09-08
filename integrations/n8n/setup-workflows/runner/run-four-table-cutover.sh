@@ -9,8 +9,8 @@ usage() {
 
 operation="${1:-}"
 case "$operation" in
-  forward|rollback) ;;
-  *) usage ;;
+forward | rollback) ;;
+*) usage ;;
 esac
 
 runner_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -28,8 +28,11 @@ test "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" = "74b77a7f4c1c87
 test "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" = "9b49963355aa4d025e414eb1fd02abcb2891b340afa96f8d2ed4f00102301154"
 test "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 case "$FINANCE_N8N_RUNTIME_MODE" in
-  DISPOSABLE_ONLY|PRODUCTION_ONLY) ;;
-  *) echo "FINANCE_N8N_RUNTIME_MODE must be DISPOSABLE_ONLY or PRODUCTION_ONLY" >&2; exit 1 ;;
+DISPOSABLE_ONLY | PRODUCTION_ONLY) ;;
+*)
+  echo "FINANCE_N8N_RUNTIME_MODE must be DISPOSABLE_ONLY or PRODUCTION_ONLY" >&2
+  exit 1
+  ;;
 esac
 
 repo_dir="$(realpath -e -- "$FINANCE_REPOSITORY_DIR")"
@@ -59,9 +62,28 @@ runtime_state="$receipt_dir/finance-data-table-disposable-runtime-state.json"
 adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
 runtime_script="$runner_dir/n8n-cli-four-table-cutover.cjs"
 credential_bindings="${FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-$repo_dir/integrations/n8n/credential-bindings.json}"
+source_contract_bindings="$repo_dir/integrations/n8n/source-contract-bindings.json"
 readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
-for path in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_export" "$runtime_script" "$credential_bindings"; do
+canonical_source="$receipt_dir/finance-four-table-canonical-source.json"
+rollback_receipt_args=()
+if [[ "$FINANCE_N8N_RUNTIME_MODE" = PRODUCTION_ONLY && "$operation" = rollback ]]; then
+  rollback_receipt_args+=(--forward-runtime-receipt "$forward_runtime_receipt")
+fi
+resolver_args=()
+if [[ -n "${FINANCE_FOUR_TABLE_ALIAS_BUNDLE:-}${FINANCE_FOUR_TABLE_ALIAS_BUNDLE_SHA256:-}" ]]; then
+  resolver_args+=(
+    --alias-bundle "${FINANCE_FOUR_TABLE_ALIAS_BUNDLE:?ALIAS_BUNDLE_PINNED_INPUT_REQUIRED}"
+    --alias-bundle-sha256 "${FINANCE_FOUR_TABLE_ALIAS_BUNDLE_SHA256:?ALIAS_BUNDLE_PINNED_INPUT_REQUIRED}"
+  )
+fi
+if [[ -n "${FINANCE_FOUR_TABLE_VERIFICATION_ARTIFACTS:-}${FINANCE_FOUR_TABLE_VERIFICATION_ARTIFACTS_SHA256:-}" ]]; then
+  resolver_args+=(
+    --verification-artifacts "${FINANCE_FOUR_TABLE_VERIFICATION_ARTIFACTS:?VERIFICATION_ARTIFACTS_PINNED_INPUT_REQUIRED}"
+    --verification-artifacts-sha256 "${FINANCE_FOUR_TABLE_VERIFICATION_ARTIFACTS_SHA256:?VERIFICATION_ARTIFACTS_PINNED_INPUT_REQUIRED}"
+  )
+fi
+for path in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_export" "$runtime_script" "$credential_bindings" "$source_contract_bindings"; do
   test -f "$path"
 done
 if [[ "$FINANCE_N8N_RUNTIME_MODE" = DISPOSABLE_ONLY ]]; then
@@ -77,15 +99,22 @@ if [[ -L "$live_export" ]]; then
 fi
 if [[ "$FINANCE_N8N_RUNTIME_MODE" = DISPOSABLE_ONLY ]]; then
   if [[ ! -e "$lock_path" ]]; then
-    (umask 077; : > "$lock_path")
+    (
+      umask 077
+      : >"$lock_path"
+    )
   fi
   test ! -L "$lock_path"
   chmod 0600 "$lock_path"
   exec 9<>"$lock_path"
-  flock -n 9 || { echo "Exclusive four-table writer lock is busy" >&2; exit 1; }
+  flock -n 9 || {
+    echo "Exclusive four-table writer lock is busy" >&2
+    exit 1
+  }
 fi
 
-approved_digests="$(python3 - "$accepted_identity" <<'PY'
+approved_digests="$(
+  python3 - "$accepted_identity" <<'PY'
 import json
 import sys
 
@@ -100,7 +129,8 @@ source_backup_sha="${approved_digests#*$'\n'}"
 test -n "$migration_sha"
 test -n "$source_backup_sha"
 test "$(stat -c '%a' "$migration_receipt")" = 600
-identity_sha="$(python3 - "$accepted_identity" <<'PY'
+identity_sha="$(
+  python3 - "$accepted_identity" <<'PY'
 import json
 import sys
 
@@ -116,6 +146,7 @@ test -n "$generator_head"
 
 validate_inputs() {
   python3 "$runner_dir/four_table_cutover.py" validate-inputs \
+    "${resolver_args[@]}" "${rollback_receipt_args[@]}" \
     --source-backup "$source_backup" \
     --migration-receipt "$migration_receipt" \
     --migration-receipt-sha256 "$migration_sha" \
@@ -132,28 +163,28 @@ validate_inputs() {
     --workflow-root "$workflow_root" \
     --live-export "$live_export" \
     --lock-receipt "$lock_receipt" \
-    --operation-kind "${3^^}" > /dev/null
+    --operation-kind "${3^^}" >/dev/null
 }
 
 recover_forward_runtime_receipt() {
   local -a recovery_env=("$@")
-  recovery_env+=( -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1" )
+  recovery_env+=(-e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1")
   local recovery_status
-  if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node - \
-    < "$runtime_script" > "$recovery_stdout" 2> "$recovery_stderr"; then
+  if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
+    <"$canonical_source" >"$recovery_stdout" 2>"$recovery_stderr"; then
     recovery_status=0
   else
     recovery_status=$?
   fi
   chmod 0600 "$recovery_stdout" "$recovery_stderr"
-  if (( recovery_status != 0 )); then
+  if ((recovery_status != 0)); then
     return "$recovery_status"
   fi
   local recovered_json="$receipt_dir/finance-four-table-runtime-forward-recovered.json"
-  grep '^finance four-table runtime verified:' "$recovery_stdout" \
-    | tail -n 1 \
-    | sed 's/^finance four-table runtime verified://' \
-    > "$recovered_json"
+  grep '^finance four-table runtime verified:' "$recovery_stdout" |
+    tail -n 1 |
+    sed 's/^finance four-table runtime verified://' \
+      >"$recovered_json"
   test -s "$recovered_json"
   chmod 0600 "$recovered_json"
   cp -- "$recovered_json" "$forward_runtime_receipt"
@@ -163,11 +194,26 @@ recover_forward_runtime_receipt() {
 run_production_runtime() {
   preflight "$operator_ack" "$runtime_action" "$operation"
   chmod 0600 "$lock_receipt" "$receipt_dir/finance-four-table-precondition.json"
+  validate_inputs "$operator_ack" "$runtime_action" "$operation"
+  local runtime_input="$canonical_source"
+  if [[ "$operation" = rollback ]]; then
+    local receipt_schema
+    receipt_schema="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["forward_runtime_receipt_schema"])' "$receipt_dir/finance-four-table-precondition.json")"
+    case "$receipt_schema" in
+    finance-four-table-runtime-plan-v1) runtime_input="$forward_runtime_receipt" ;;
+    finance-four-table-runtime-plan-v2) ;;
+    *)
+      echo "FORWARD_RUNTIME_RECEIPT_SCHEMA_INVALID" >&2
+      return 1
+      ;;
+    esac
+  fi
 
-  local export_b64 lock_b64 credential_bindings_b64 runtime_json
+  local export_b64 lock_b64 credential_bindings_b64 source_contract_bindings_b64 runtime_json
   export_b64="$(base64 -w0 -- "$live_export")"
   lock_b64="$(base64 -w0 -- "$lock_receipt")"
   credential_bindings_b64="$(base64 -w0 -- "$credential_bindings")"
+  source_contract_bindings_b64="$(base64 -w0 -- "$source_contract_bindings")"
   local -a runtime_env=(
     -e "N8N_FINANCE_PROJECT_ID=$N8N_FINANCE_PROJECT_ID"
     -e "FINANCE_FOUR_TABLE_OPERATION=${operation^^}"
@@ -185,15 +231,16 @@ run_production_runtime() {
     -e "FINANCE_FOUR_TABLE_EXPORT_B64=$export_b64"
     -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
     -e "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=$credential_bindings_b64"
+    -e "FINANCE_FOUR_TABLE_SOURCE_CONTRACT_BINDINGS_B64=$source_contract_bindings_b64"
   )
   if [[ "$operation" = rollback ]]; then
     test -f "$forward_runtime_receipt"
-    runtime_env+=( -e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")" )
+    runtime_env+=(-e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")")
   fi
 
   local runtime_status
-  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node - \
-    < "$runtime_script" > "$runtime_stdout" 2> "$runtime_stderr"; then
+  if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
+    <"$runtime_input" >"$runtime_stdout" 2>"$runtime_stderr"; then
     runtime_status=0
   else
     runtime_status=$?
@@ -207,10 +254,10 @@ run_production_runtime() {
   fi
   chmod 0600 "$runtime_stdout" "$runtime_stderr"
   runtime_json="$receipt_dir/finance-four-table-runtime-${operation}.json"
-  grep '^finance four-table runtime verified:' "$runtime_stdout" \
-    | tail -n 1 \
-    | sed 's/^finance four-table runtime verified://' \
-    > "$runtime_json"
+  grep '^finance four-table runtime verified:' "$runtime_stdout" |
+    tail -n 1 |
+    sed 's/^finance four-table runtime verified://' \
+      >"$runtime_json"
   chmod 0600 "$runtime_json"
 
   if [[ "$operation" = forward ]]; then
@@ -224,7 +271,12 @@ run_production_runtime() {
 }
 
 preflight() {
+  local -a canonical_args=()
+  if [[ "$FINANCE_N8N_RUNTIME_MODE" = PRODUCTION_ONLY ]]; then
+    canonical_args+=(--canonical-source-output "$canonical_source")
+  fi
   python3 "$runner_dir/four_table_cutover.py" preflight \
+    "${resolver_args[@]}" "${canonical_args[@]}" "${rollback_receipt_args[@]}" \
     --source-backup "$source_backup" \
     --migration-receipt "$migration_receipt" \
     --migration-receipt-sha256 "$migration_sha" \
@@ -241,7 +293,7 @@ preflight() {
     --workflow-root "$workflow_root" \
     --live-export "$live_export" \
     --operation-kind "${3^^}" \
-    --output "$lock_receipt" > "$receipt_dir/finance-four-table-precondition.json"
+    --output "$lock_receipt" >"$receipt_dir/finance-four-table-precondition.json"
 }
 
 run_readback() {
@@ -252,69 +304,71 @@ run_readback() {
     -e FINANCE_DATA_TABLE_READBACK_PHASE="$phase" \
     -e N8N_FINANCE_PROJECT_ID="$N8N_FINANCE_PROJECT_ID" \
     -e FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256="$migration_sha" \
-    "$FINANCE_N8N_CONTAINER" node - list:workflow < "$adapter" > "$destination"
-  python3 "$readback_parser" data-table-receipt < "$destination" > /dev/null
+    "$FINANCE_N8N_CONTAINER" node - list:workflow <"$adapter" >"$destination"
+  python3 "$readback_parser" data-table-receipt <"$destination" >/dev/null
 }
 
 if [[ "$FINANCE_N8N_RUNTIME_MODE" = PRODUCTION_ONLY ]]; then
   case "$operation" in
-    forward)
-      test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
-      operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
-      runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
-      ;;
-    rollback)
-      test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
-      operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
-      runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
-      ;;
+  forward)
+    test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+    operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+    runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
+    ;;
+  rollback)
+    test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+    operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+    runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
+    ;;
   esac
   run_production_runtime
   exit 0
 fi
 
 case "$operation" in
-  forward)
-    test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
-    operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
-    runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
-    preflight "$operator_ack" "$runtime_action" forward
-    run_readback "$pre_readback" FORWARD_PRE
-    validate_inputs "$operator_ack" "$runtime_action" forward
-    docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
-    run_readback "$post_readback" FORWARD_POST
-    validate_inputs "$operator_ack" "$runtime_action" forward
-    docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
-    run_readback "$second_post_readback" FORWARD_POST
-    ;;
-  rollback)
-    test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
-    test -f "$forward_receipt"
-    operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
-    runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
-    preflight "$operator_ack" "$runtime_action" rollback
-    run_readback "$pre_readback" ROLLBACK_PRE
-    python3 "$runner_dir/four_table_cutover.py" rollback-runtime \
-      --source-backup "$source_backup" \
-      --migration-receipt "$migration_receipt" \
-      --migration-receipt-sha256 "$migration_sha" \
-      --source-backup-sha256 "$source_backup_sha" \
-      --repository-root "$repo_dir" \
-      --project-id "$N8N_FINANCE_PROJECT_ID" \
-      --accepted-identity "$accepted_identity" \
-      --operator-ack "$operator_ack" \
-      --runtime-action "$runtime_action" \
-      --workflow-root "$workflow_root" \
-      --live-export "$live_export" \
-      --lock-receipt "$lock_receipt" \
-      --runtime-state "$runtime_state" \
-      --output "$runtime_proof"
-    run_readback "$post_readback" ROLLBACK_POST
-    ;;
+forward)
+  test "${FOUR_TABLE_FORWARD_ACK:-}" = "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+  operator_ack="FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+  runtime_action="FOUR_TABLE_FORWARD_RUNTIME_EXECUTED"
+  preflight "$operator_ack" "$runtime_action" forward
+  run_readback "$pre_readback" FORWARD_PRE
+  validate_inputs "$operator_ack" "$runtime_action" forward
+  docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
+  run_readback "$post_readback" FORWARD_POST
+  validate_inputs "$operator_ack" "$runtime_action" forward
+  docker exec "$FINANCE_N8N_CONTAINER" n8n execute --id 10000000-0000-4000-8000-000000000019
+  run_readback "$second_post_readback" FORWARD_POST
+  ;;
+rollback)
+  test "${FOUR_TABLE_ROLLBACK_ACK:-}" = "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+  test -f "$forward_receipt"
+  operator_ack="FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+  runtime_action="FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED"
+  preflight "$operator_ack" "$runtime_action" rollback
+  run_readback "$pre_readback" ROLLBACK_PRE
+  python3 "$runner_dir/four_table_cutover.py" rollback-runtime \
+    "${resolver_args[@]}" \
+    --source-backup "$source_backup" \
+    --migration-receipt "$migration_receipt" \
+    --migration-receipt-sha256 "$migration_sha" \
+    --source-backup-sha256 "$source_backup_sha" \
+    --repository-root "$repo_dir" \
+    --project-id "$N8N_FINANCE_PROJECT_ID" \
+    --accepted-identity "$accepted_identity" \
+    --operator-ack "$operator_ack" \
+    --runtime-action "$runtime_action" \
+    --workflow-root "$workflow_root" \
+    --live-export "$live_export" \
+    --lock-receipt "$lock_receipt" \
+    --runtime-state "$runtime_state" \
+    --output "$runtime_proof"
+  run_readback "$post_readback" ROLLBACK_POST
+  ;;
 esac
 
 args=(
   "$operation"
+  "${resolver_args[@]}"
   --source-backup "$source_backup"
   --migration-receipt "$migration_receipt"
   --migration-receipt-sha256 "$migration_sha"
@@ -327,10 +381,10 @@ args=(
   --project-id "$N8N_FINANCE_PROJECT_ID"
   --accepted-identity "$accepted_identity"
   --operator-ack "$operator_ack"
-    --runtime-action "$runtime_action"
-    --workflow-root "$workflow_root"
-    --live-export "$live_export"
-    --lock-receipt "$lock_receipt"
+  --runtime-action "$runtime_action"
+  --workflow-root "$workflow_root"
+  --live-export "$live_export"
+  --lock-receipt "$lock_receipt"
   --pre-readback-raw "$pre_readback"
   --post-readback-raw "$post_readback"
   --runtime-state "$runtime_state"

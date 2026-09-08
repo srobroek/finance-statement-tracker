@@ -35,7 +35,11 @@ TARGETS = (
 DOCUMENT_IDENTITY_FIELDS = {
     "MAIL_LINKED": ("source_sha256", "source_message_id", "source_attachment_id"),
     "BROWSER_CAPTURE": ("source_sha256", "capture_id", "account_id", "period_key"),
-    "PROCESSING_ONLY": ("source_sha256", "document_profile", "requested_schema_version"),
+    "PROCESSING_ONLY": (
+        "source_sha256",
+        "document_profile",
+        "requested_schema_version",
+    ),
 }
 
 
@@ -54,22 +58,61 @@ def _resolver_column(source_type: str, artifact: str, field: str) -> dict[str, A
 # a migration review from silently collapsing unrelated values into one field.
 TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
     "finance_ingestion_state": {
-        "logical_key": ["source_code"],
+        "logical_key": ["record_type", "record_key"],
         "identity_derivations": [
             {
                 "source_table": "finance_source_cursors",
-                "strategy": "direct",
-                "target_key": ["source_code"],
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
                 "source_fields": ["source_code"],
+                "record_type": "SOURCE_CURSOR",
             },
             {
                 "source_table": "finance_acquisition_receipts",
-                "strategy": "direct",
-                "target_key": ["source_code"],
-                "source_fields": ["source_code"],
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
+                "source_fields": ["run_id", "source_code"],
+                "record_type": "ACQUISITION_RECEIPT",
+            },
+            {
+                "source_table": "finance_pipeline_runs",
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
+                "source_fields": ["run_id", "workflow_code"],
+                "record_type": "PIPELINE_RUN",
+            },
+            {
+                "source_table": "finance_provider_circuits",
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
+                "source_fields": ["provider_code"],
+                "record_type": "PROVIDER_CIRCUIT",
+            },
+            {
+                "source_table": "finance_execution_failures",
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
+                "source_fields": ["execution_id"],
+                "record_type": "EXECUTION_FAILURE",
+            },
+            {
+                "source_table": "finance_mcp_requests",
+                "strategy": "typed_record",
+                "target_key": ["record_type", "record_key"],
+                "source_fields": ["request_id"],
+                "record_type": "MCP_REQUEST",
             },
         ],
         "columns": {
+            "record_type": _target_column(
+                "string", "typed-operational-state.record_type"
+            ),
+            "record_key": _target_column(
+                "string", "typed-operational-state.record_key"
+            ),
+            "record_payload_json": _target_column(
+                "string", "typed-operational-state.record_payload_json"
+            ),
             "source_code": _target_column(
                 "string",
                 "finance_source_cursors.source_code",
@@ -81,14 +124,18 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "receipt_run_upper_bound": _target_column(
                 "date", "finance_acquisition_receipts.run_upper_bound"
             ),
-            "cursor_value": _target_column("date", "finance_source_cursors.cursor_value"),
+            "cursor_value": _target_column(
+                "date", "finance_source_cursors.cursor_value"
+            ),
             "committed_run_id": _target_column(
                 "string", "finance_source_cursors.committed_run_id"
             ),
             "run_upper_bound": _target_column(
                 "date", "finance_source_cursors.run_upper_bound"
             ),
-            "overlap_seconds": _target_column("number", "finance_source_cursors.overlap_seconds"),
+            "overlap_seconds": _target_column(
+                "number", "finance_source_cursors.overlap_seconds"
+            ),
             "scanned_count": _target_column(
                 "number",
                 "finance_source_cursors.scanned_count",
@@ -99,7 +146,9 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_source_cursors.matched_count",
                 "finance_acquisition_receipts.matched_count",
             ),
-            "cursor_version": _target_column("number", "finance_source_cursors.cursor_version"),
+            "cursor_version": _target_column(
+                "number", "finance_source_cursors.cursor_version"
+            ),
             "readback_verified": _target_column(
                 "boolean",
                 "finance_source_cursors.readback_verified",
@@ -110,14 +159,30 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_source_cursors.updated_at",
                 "finance_acquisition_receipts.updated_at",
             ),
-            "last_window_start": _target_column("date", "finance_acquisition_receipts.window_start"),
-            "last_pages_fetched": _target_column("number", "finance_acquisition_receipts.pages_fetched"),
+            "last_window_start": _target_column(
+                "date", "finance_acquisition_receipts.window_start"
+            ),
+            "last_pages_fetched": _target_column(
+                "number", "finance_acquisition_receipts.pages_fetched"
+            ),
             "last_pagination_exhausted": _target_column(
                 "boolean", "finance_acquisition_receipts.pagination_exhausted"
             ),
-            "last_heartbeat": _target_column("boolean", "finance_acquisition_receipts.heartbeat"),
-            "last_terminal_state": _target_column("string", "finance_acquisition_receipts.terminal_state"),
-            "last_receipt_created_at": _target_column("date", "finance_acquisition_receipts.created_at"),
+            "last_heartbeat": _target_column(
+                "boolean", "finance_acquisition_receipts.heartbeat"
+            ),
+            "last_terminal_state": _target_column(
+                "string", "finance_acquisition_receipts.terminal_state"
+            ),
+            "last_receipt_created_at": _target_column(
+                "date", "finance_acquisition_receipts.created_at"
+            ),
+            "archive_receipt_sha256": _resolver_column(
+                "string", "acquisition-archive-proof-v1", "archive_receipt_sha256"
+            ),
+            "archive_readback_verified": _resolver_column(
+                "boolean", "acquisition-archive-proof-v1", "archive_readback_verified"
+            ),
             "downstream_receipt_sha256": _target_column(
                 "string", "finance_acquisition_receipts.downstream_receipt_sha256"
             ),
@@ -137,20 +202,34 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "string", "finance_acquisition_receipts.email_evidence_receipt_barrier"
             ),
             "email_evidence_receipts_verified": _target_column(
-                "number", "finance_acquisition_receipts.email_evidence_receipts_verified"
+                "number",
+                "finance_acquisition_receipts.email_evidence_receipts_verified",
             ),
             "email_evidence_identity_keys_json": _target_column(
-                "string", "finance_acquisition_receipts.email_evidence_identity_keys_json"
+                "string",
+                "finance_acquisition_receipts.email_evidence_identity_keys_json",
             ),
             "archive_ready": _target_column(
                 "boolean", "finance_acquisition_receipts.archive_ready"
             ),
-            "inventory_run_id": _resolver_column("string", "inventory-v1", "inventory_run_id"),
-            "inventory_fence": _resolver_column("number", "inventory-v1", "inventory_fence"),
-            "inventory_sha256": _resolver_column("string", "inventory-v1", "inventory_sha256"),
-            "inventory_item_id": _resolver_column("string", "inventory-v1", "inventory_item_id"),
-            "inventory_path": _resolver_column("string", "inventory-v1", "inventory_path"),
-            "inventory_etag": _resolver_column("string", "inventory-v1", "inventory_etag"),
+            "inventory_run_id": _resolver_column(
+                "string", "inventory-v1", "inventory_run_id"
+            ),
+            "inventory_fence": _resolver_column(
+                "number", "inventory-v1", "inventory_fence"
+            ),
+            "inventory_sha256": _resolver_column(
+                "string", "inventory-v1", "inventory_sha256"
+            ),
+            "inventory_item_id": _resolver_column(
+                "string", "inventory-v1", "inventory_item_id"
+            ),
+            "inventory_path": _resolver_column(
+                "string", "inventory-v1", "inventory_path"
+            ),
+            "inventory_etag": _resolver_column(
+                "string", "inventory-v1", "inventory_etag"
+            ),
             "inventory_schema_version": _resolver_column(
                 "string", "inventory-v1", "inventory_schema_version"
             ),
@@ -220,7 +299,9 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_document_operations.document_profile",
                 "finance_document_operations.requested_schema_version",
             ),
-            "archive_receipt_id": _target_column("string", "finance_archive_receipts.archive_receipt_id"),
+            "archive_receipt_id": _target_column(
+                "string", "finance_archive_receipts.archive_receipt_id"
+            ),
             "run_id": _target_column("string", "finance_archive_receipts.run_id"),
             "source_code": _target_column(
                 "string",
@@ -247,23 +328,49 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_archive_receipts.onedrive_item_id",
                 "finance_document_operations.onedrive_item_id",
             ),
-            "onedrive_etag": _target_column("string", "finance_archive_receipts.onedrive_etag"),
-            "archive_state": _target_column("string", "finance_archive_receipts.archive_state"),
-            "archive_verified_at": _target_column("date", "finance_archive_receipts.verified_at"),
-            "document_profile": _target_column("string", "finance_document_operations.document_profile"),
+            "onedrive_etag": _target_column(
+                "string", "finance_archive_receipts.onedrive_etag"
+            ),
+            "archive_state": _target_column(
+                "string", "finance_archive_receipts.archive_state"
+            ),
+            "archive_verified_at": _target_column(
+                "date", "finance_archive_receipts.verified_at"
+            ),
+            "document_profile": _target_column(
+                "string", "finance_document_operations.document_profile"
+            ),
             "requested_schema_version": _target_column(
                 "string", "finance_document_operations.requested_schema_version"
             ),
-            "config_version": _target_column("string", "finance_document_operations.config_version"),
-            "actual_file_id": _target_column("string", "finance_document_operations.actual_file_id"),
-            "account_id": _target_column("string", "finance_document_operations.account_id"),
-            "period_key": _target_column("string", "finance_document_operations.period_key"),
+            "config_version": _target_column(
+                "string", "finance_document_operations.config_version"
+            ),
+            "actual_file_id": _target_column(
+                "string", "finance_document_operations.actual_file_id"
+            ),
+            "account_id": _target_column(
+                "string", "finance_document_operations.account_id"
+            ),
+            "period_key": _target_column(
+                "string", "finance_document_operations.period_key"
+            ),
             "state": _target_column("string", "finance_document_operations.state"),
-            "attempt_count": _target_column("number", "finance_document_operations.attempt_count"),
-            "last_execution_id": _target_column("string", "finance_document_operations.last_execution_id"),
-            "parser_version": _target_column("string", "finance_document_operations.parser_version"),
-            "output_sha256": _target_column("string", "finance_document_operations.output_sha256"),
-            "error_class": _target_column("string", "finance_document_operations.error_class"),
+            "attempt_count": _target_column(
+                "number", "finance_document_operations.attempt_count"
+            ),
+            "last_execution_id": _target_column(
+                "string", "finance_document_operations.last_execution_id"
+            ),
+            "parser_version": _target_column(
+                "string", "finance_document_operations.parser_version"
+            ),
+            "output_sha256": _target_column(
+                "string", "finance_document_operations.output_sha256"
+            ),
+            "error_class": _target_column(
+                "string", "finance_document_operations.error_class"
+            ),
             "error_detail_redacted": _target_column(
                 "string", "finance_document_operations.error_detail_redacted"
             ),
@@ -336,28 +443,48 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_actual_verifications.outbox_id",
             ),
             "run_id": _target_column("string", "finance_actual_outbox.run_id"),
-            "idempotency_key": _target_column("string", "finance_actual_outbox.imported_id"),
+            "idempotency_key": _target_column(
+                "string", "finance_actual_outbox.imported_id"
+            ),
             "actual_file_id": _target_column(
                 "string",
                 "finance_actual_outbox.actual_file_id",
                 "finance_actual_verifications.actual_file_id",
             ),
-            "delta_sha256": _target_column("string", "finance_actual_outbox.payload_sha256"),
-            "delta_artifact_item_id": _target_column("string", "finance_actual_outbox.artifact_item_id"),
-            "delta_artifact_etag": _target_column("string", "finance_actual_outbox.artifact_etag"),
+            "delta_sha256": _target_column(
+                "string", "finance_actual_outbox.payload_sha256"
+            ),
+            "delta_artifact_item_id": _target_column(
+                "string", "finance_actual_outbox.artifact_item_id"
+            ),
+            "delta_artifact_etag": _target_column(
+                "string", "finance_actual_outbox.artifact_etag"
+            ),
             "delta_schema_version": _target_column(
                 "string", "finance_actual_outbox.artifact_schema_version"
             ),
-            "config_version": _target_column("string", "finance_actual_outbox.config_version"),
-            "parser_version": _target_column("string", "finance_actual_outbox.parser_version"),
+            "config_version": _target_column(
+                "string", "finance_actual_outbox.config_version"
+            ),
+            "parser_version": _target_column(
+                "string", "finance_actual_outbox.parser_version"
+            ),
             "state": _target_column("string", "finance_actual_outbox.state"),
-            "lease_owner": _target_column("string", "finance_actual_outbox.lease_owner"),
-            "lease_fence": _target_column("number", "finance_actual_outbox.lease_fence"),
+            "lease_owner": _target_column(
+                "string", "finance_actual_outbox.lease_owner"
+            ),
+            "lease_fence": _target_column(
+                "number", "finance_actual_outbox.lease_fence"
+            ),
             "actual_transaction_id": _target_column(
                 "string", "finance_actual_outbox.actual_transaction_id"
             ),
-            "attempt_count": _target_column("number", "finance_actual_outbox.attempt_count"),
-            "last_error_class": _target_column("string", "finance_actual_outbox.last_error_class"),
+            "attempt_count": _target_column(
+                "number", "finance_actual_outbox.attempt_count"
+            ),
+            "last_error_class": _target_column(
+                "string", "finance_actual_outbox.last_error_class"
+            ),
             "updated_at": _target_column(
                 "date",
                 "finance_actual_outbox.updated_at",
@@ -376,16 +503,24 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "finance_actual_outbox.card_code",
                 "finance_actual_verifications.card_code",
             ),
-            "period_start": _target_column("date", "finance_actual_verifications.period_start"),
-            "period_end": _target_column("date", "finance_actual_verifications.period_end"),
+            "period_start": _target_column(
+                "date", "finance_actual_verifications.period_start"
+            ),
+            "period_end": _target_column(
+                "date", "finance_actual_verifications.period_end"
+            ),
             "expected_payload_sha256": _target_column(
                 "string", "finance_actual_verifications.expected_payload_sha256"
             ),
             "observed_payload_sha256": _target_column(
                 "string", "finance_actual_verifications.observed_payload_sha256"
             ),
-            "expected_count": _target_column("number", "finance_actual_verifications.expected_count"),
-            "observed_count": _target_column("number", "finance_actual_verifications.observed_count"),
+            "expected_count": _target_column(
+                "number", "finance_actual_verifications.expected_count"
+            ),
+            "observed_count": _target_column(
+                "number", "finance_actual_verifications.observed_count"
+            ),
             "expected_amount_sum_minor": _target_column(
                 "number", "finance_actual_verifications.expected_amount_sum_minor"
             ),
@@ -401,17 +536,27 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             "invariants_passed": _target_column(
                 "boolean", "finance_actual_verifications.invariants_passed"
             ),
-            "verified_at": _target_column("date", "finance_actual_verifications.verified_at"),
-            "source_code": _target_column("string", "finance_reconciliations.source_code"),
-            "period_key": _target_column("string", "finance_reconciliations.period_key"),
+            "verified_at": _target_column(
+                "date", "finance_actual_verifications.verified_at"
+            ),
+            "source_code": _target_column(
+                "string", "finance_reconciliations.source_code"
+            ),
+            "period_key": _target_column(
+                "string", "finance_reconciliations.period_key"
+            ),
             "reconciliation_version": _target_column(
                 "number", "finance_reconciliations.reconciliation_version"
             ),
-            "statement_sha256": _target_column("string", "finance_reconciliations.statement_sha256"),
+            "statement_sha256": _target_column(
+                "string", "finance_reconciliations.statement_sha256"
+            ),
             "verification_artifact_sha256": _target_column(
                 "string", "finance_reconciliations.actual_verification_sha256"
             ),
-            "reconciliation_state": _target_column("string", "finance_reconciliations.state"),
+            "reconciliation_state": _target_column(
+                "string", "finance_reconciliations.state"
+            ),
             "reconciliation_difference_minor": _target_column(
                 "number", "finance_reconciliations.difference_minor"
             ),
@@ -428,7 +573,9 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "string", "actual-verification-v2", "verification_artifact_etag"
             ),
             "verification_artifact_schema_version": _resolver_column(
-                "string", "actual-verification-v2", "verification_artifact_schema_version"
+                "string",
+                "actual-verification-v2",
+                "verification_artifact_schema_version",
             ),
             "verification_artifact_length_bytes": _resolver_column(
                 "number", "actual-verification-v2", "verification_artifact_length_bytes"
@@ -446,16 +593,28 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
             }
         ],
         "columns": {
-            "idempotency_key": _target_column("string", "finance_agent_jobs.idempotency_key"),
+            "idempotency_key": _target_column(
+                "string", "finance_agent_jobs.idempotency_key"
+            ),
             "policy_id": _target_column("string", "finance_agent_jobs.policy_id"),
-            "policy_sha256": _target_column("string", "finance_agent_jobs.policy_sha256"),
-            "config_sha256": _target_column("string", "finance_agent_jobs.config_sha256"),
+            "policy_sha256": _target_column(
+                "string", "finance_agent_jobs.policy_sha256"
+            ),
+            "config_sha256": _target_column(
+                "string", "finance_agent_jobs.config_sha256"
+            ),
             "output_schema_sha256": _target_column(
                 "string", "finance_agent_jobs.output_schema_sha256"
             ),
-            "request_sha256": _target_column("string", "finance_agent_jobs.request_sha256"),
-            "runner_receipt_id": _target_column("string", "finance_agent_jobs.runner_receipt_id"),
-            "proposal_sha256": _target_column("string", "finance_agent_jobs.proposal_sha256"),
+            "request_sha256": _target_column(
+                "string", "finance_agent_jobs.request_sha256"
+            ),
+            "runner_receipt_id": _target_column(
+                "string", "finance_agent_jobs.runner_receipt_id"
+            ),
+            "proposal_sha256": _target_column(
+                "string", "finance_agent_jobs.proposal_sha256"
+            ),
             "proposal_artifact_item_id": _target_column(
                 "string", "finance_agent_jobs.proposal_artifact_item_id"
             ),
@@ -466,8 +625,12 @@ TARGET_SCHEMAS: dict[str, dict[str, Any]] = {
                 "string", "finance_agent_jobs.proposal_artifact_schema"
             ),
             "review_state": _target_column("string", "finance_agent_jobs.review_state"),
-            "review_decision": _target_column("string", "finance_agent_jobs.review_decision"),
-            "reviewed_by_hash": _target_column("string", "finance_agent_jobs.reviewed_by_hash"),
+            "review_decision": _target_column(
+                "string", "finance_agent_jobs.review_decision"
+            ),
+            "reviewed_by_hash": _target_column(
+                "string", "finance_agent_jobs.reviewed_by_hash"
+            ),
             "reviewed_at": _target_column("date", "finance_agent_jobs.reviewed_at"),
             "terminal_readback_verified": _target_column(
                 "boolean", "finance_agent_jobs.terminal_readback_verified"
@@ -510,7 +673,12 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
         "rationale": "Fold only the last verified receipt into ingestion state; older runs use n8n history.",
     },
     "finance_archive_receipts": {
-        "logical_key": ["source_code", "source_message_id", "source_attachment_id", "source_sha256"],
+        "logical_key": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256",
+        ],
         "target_table": "finance_documents",
         "owner": "finance evidence workflow",
         "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
@@ -518,7 +686,11 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
         "rationale": "Merge archive identity with document processing while retaining separate state axes.",
     },
     "finance_document_operations": {
-        "logical_key": ["source_sha256", "document_profile", "requested_schema_version"],
+        "logical_key": [
+            "source_sha256",
+            "document_profile",
+            "requested_schema_version",
+        ],
         "target_table": "finance_documents",
         "owner": "finance evidence workflow",
         "retention": "co-retain with evidence; default 7 years pending owner approval",
@@ -527,10 +699,11 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
     },
     "finance_pipeline_runs": {
         "logical_key": ["run_id", "workflow_code"],
+        "target_table": "finance_ingestion_state",
         "owner": "n8n execution history",
         "retention": "400 days",
         "privacy": "internal telemetry",
-        "rationale": "n8n execution history replaces duplicated run telemetry.",
+        "rationale": "Preserve every pipeline receipt as a typed ingestion-state record.",
     },
     "finance_actual_outbox": {
         "logical_key": ["imported_id"],
@@ -568,24 +741,27 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
     },
     "finance_provider_circuits": {
         "logical_key": ["provider_code"],
+        "target_table": "finance_ingestion_state",
         "owner": "workflow retry policy and external alerting",
         "retention": "current row indefinitely; failure history remains in execution failures",
         "privacy": "internal operational metadata",
-        "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence.",
+        "rationale": "Preserve provider backoff state as a typed ingestion-state record.",
     },
     "finance_execution_failures": {
         "logical_key": ["execution_id"],
+        "target_table": "finance_ingestion_state",
         "owner": "n8n execution history and observability",
         "retention": "400 days",
         "privacy": "internal redacted telemetry",
-        "rationale": "Use execution history and external observability.",
+        "rationale": "Preserve redacted failure receipts as typed ingestion-state records.",
     },
     "finance_mcp_requests": {
         "logical_key": ["request_id"],
+        "target_table": "finance_ingestion_state",
         "owner": "n8n execution evidence and edge logs",
         "retention": "400 days",
         "privacy": "security audit metadata",
-        "rationale": "Use execution evidence and access logs.",
+        "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records.",
     },
     "finance_agent_jobs": {
         "logical_key": ["idempotency_key"],
@@ -605,12 +781,14 @@ TABLE_METADATA: dict[str, dict[str, Any]] = {
     },
 }
 
-REMOVE_TABLES = {
+TYPED_RECORD_TABLES = {
     "finance_pipeline_runs",
     "finance_provider_circuits",
     "finance_execution_failures",
     "finance_mcp_requests",
 }
+
+REMOVE_TABLES = set()
 
 ARTIFACT_PREFIXES = {
     "finance_source_contracts": "source_contracts[]",
@@ -724,7 +902,9 @@ def load_source_tables() -> list[dict[str, Any]]:
     if not isinstance(tables, list) or not tables:
         raise MatrixError("data-tables.json has no tables")
     names = [table.get("name") for table in tables]
-    if len(names) != len(set(names)) or any(name not in TABLE_METADATA for name in names):
+    if len(names) != len(set(names)) or any(
+        name not in TABLE_METADATA for name in names
+    ):
         raise MatrixError("source table names are not covered by migration policy")
     return tables
 
@@ -735,19 +915,22 @@ def _string(value: Any, label: str) -> str:
     return value
 
 
-def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def scan_references(
+    source_tables: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
     columns_by_table = {table["name"]: table["columns"] for table in source_tables}
     # Canonical target tables are executable runtime contracts, not legacy
     # migration inputs. Validate their Data Table parameters here while
     # keeping them out of the source-column coverage counts below.
     target_columns_by_table = {
         target: {
-            field: definition["type"]
-            for field, definition in schema["columns"].items()
+            field: definition["type"] for field, definition in schema["columns"].items()
         }
         for target, schema in TARGET_SCHEMAS.items()
     }
-    references: dict[str, list[dict[str, Any]]] = {name: [] for name in columns_by_table}
+    references: dict[str, list[dict[str, Any]]] = {
+        name: [] for name in columns_by_table
+    }
     for path in json_paths():
         payload = json.loads(normalized_bytes(path))
         nodes = payload.get("nodes", [])
@@ -755,31 +938,46 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
             continue
         relative = path.relative_to(ROOT).as_posix()
         for node in nodes:
-            if not isinstance(node, dict) or node.get("type") != "n8n-nodes-base.dataTable":
+            if (
+                not isinstance(node, dict)
+                or node.get("type") != "n8n-nodes-base.dataTable"
+            ):
                 continue
             name = _string(node.get("name"), f"{relative} Data Table node name")
             parameters = node.get("parameters")
             if not isinstance(parameters, dict):
                 raise MatrixError(f"{relative}#{name} has no parameters object")
-            operation = _string(parameters.get("operation"), f"{relative}#{name} operation")
+            operation = _string(
+                parameters.get("operation"), f"{relative}#{name} operation"
+            )
             if operation not in OPERATIONS:
-                raise MatrixError(f"{relative}#{name} uses unsupported operation {operation!r}")
+                raise MatrixError(
+                    f"{relative}#{name} uses unsupported operation {operation!r}"
+                )
             if operation == "list":
                 if parameters.get("resource") != "table":
-                    raise MatrixError(f"{relative}#{name} list operation must use the table resource")
+                    raise MatrixError(
+                        f"{relative}#{name} list operation must use the table resource"
+                    )
                 # W19's native table-list readback validates target schemas and
                 # IDs after creation. It is a target-side verifier, not a
                 # reference to one of the preserved legacy source tables.
                 continue
             if operation == "create":
-                table_name = _string(parameters.get("tableName"), f"{relative}#{name} tableName")
+                table_name = _string(
+                    parameters.get("tableName"), f"{relative}#{name} tableName"
+                )
                 read_columns: list[str] = []
                 write_columns: list[str] = []
                 filter_keys: list[str] = []
                 schema_columns = parameters.get("columns", {}).get("column", [])
                 if not isinstance(schema_columns, list):
-                    raise MatrixError(f"{relative}#{name} create columns must be a list")
-                actual_schema = [(row.get("name"), row.get("type")) for row in schema_columns]
+                    raise MatrixError(
+                        f"{relative}#{name} create columns must be a list"
+                    )
+                actual_schema = [
+                    (row.get("name"), row.get("type")) for row in schema_columns
+                ]
                 # W19 creates the four migration targets, while this matrix
                 # inventories the fifteen legacy source tables.  Target
                 # schema creation is validated here but is intentionally not
@@ -788,7 +986,9 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 if table_name in TARGET_SCHEMAS:
                     expected_schema = [
                         (column, definition["type"])
-                        for column, definition in TARGET_SCHEMAS[table_name]["columns"].items()
+                        for column, definition in TARGET_SCHEMAS[table_name][
+                            "columns"
+                        ].items()
                     ]
                     if actual_schema != expected_schema:
                         raise MatrixError(
@@ -797,33 +997,54 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                     continue
                 expected_schema = list(columns_by_table.get(table_name, {}).items())
                 if actual_schema != expected_schema:
-                    raise MatrixError(f"{relative}#{name} create schema differs from data-tables.json")
+                    raise MatrixError(
+                        f"{relative}#{name} create schema differs from data-tables.json"
+                    )
             else:
                 table_id = parameters.get("dataTableId")
                 if not isinstance(table_id, dict) or table_id.get("mode") != "name":
-                    raise MatrixError(f"{relative}#{name} must use a named Data Table reference")
-                table_name = _string(table_id.get("value"), f"{relative}#{name} dataTableId")
+                    raise MatrixError(
+                        f"{relative}#{name} must use a named Data Table reference"
+                    )
+                table_name = _string(
+                    table_id.get("value"), f"{relative}#{name} dataTableId"
+                )
                 if table_name in target_columns_by_table:
                     target_columns = target_columns_by_table[table_name]
                     columns_value = parameters.get("columns", {}).get("value", {})
-                    if operation in {"insert", "upsert", "update"} and not isinstance(columns_value, dict):
-                        raise MatrixError(f"{relative}#{name} target write columns must be an object")
+                    if operation in {"insert", "upsert", "update"} and not isinstance(
+                        columns_value, dict
+                    ):
+                        raise MatrixError(
+                            f"{relative}#{name} target write columns must be an object"
+                        )
                     write_columns = (
                         sorted(columns_value)
                         if operation in {"insert", "upsert", "update"}
                         else []
                     )
                     if any(column not in target_columns for column in write_columns):
-                        raise MatrixError(f"{relative}#{name} writes an undeclared canonical target column")
+                        raise MatrixError(
+                            f"{relative}#{name} writes an undeclared canonical target column"
+                        )
                     conditions = parameters.get("filters", {}).get("conditions", [])
                     if not isinstance(conditions, list):
-                        raise MatrixError(f"{relative}#{name} target filter conditions must be a list")
+                        raise MatrixError(
+                            f"{relative}#{name} target filter conditions must be a list"
+                        )
                     for condition in conditions:
                         if not isinstance(condition, dict):
-                            raise MatrixError(f"{relative}#{name} has a malformed target filter condition")
-                        key = _string(condition.get("keyName"), f"{relative}#{name} target filter key")
+                            raise MatrixError(
+                                f"{relative}#{name} has a malformed target filter condition"
+                            )
+                        key = _string(
+                            condition.get("keyName"),
+                            f"{relative}#{name} target filter key",
+                        )
                         if key not in target_columns:
-                            raise MatrixError(f"{relative}#{name} filters on an undeclared canonical target column")
+                            raise MatrixError(
+                                f"{relative}#{name} filters on an undeclared canonical target column"
+                            )
                     # Canonical runtime references are validated but are not
                     # assigned to a preserved legacy source table.
                     continue
@@ -832,24 +1053,46 @@ def scan_references(source_tables: list[dict[str, Any]]) -> dict[str, list[dict[
                 else:
                     read_columns = []
                 columns_value = parameters.get("columns", {}).get("value", {})
-                if operation in {"insert", "upsert", "update"} and not isinstance(columns_value, dict):
-                    raise MatrixError(f"{relative}#{name} write columns must be an object")
-                write_columns = sorted(columns_value) if operation in {"insert", "upsert", "update"} else []
-                if any(column not in columns_by_table.get(table_name, {}) for column in write_columns):
-                    raise MatrixError(f"{relative}#{name} writes an undeclared Data Table column")
+                if operation in {"insert", "upsert", "update"} and not isinstance(
+                    columns_value, dict
+                ):
+                    raise MatrixError(
+                        f"{relative}#{name} write columns must be an object"
+                    )
+                write_columns = (
+                    sorted(columns_value)
+                    if operation in {"insert", "upsert", "update"}
+                    else []
+                )
+                if any(
+                    column not in columns_by_table.get(table_name, {})
+                    for column in write_columns
+                ):
+                    raise MatrixError(
+                        f"{relative}#{name} writes an undeclared Data Table column"
+                    )
                 conditions = parameters.get("filters", {}).get("conditions", [])
                 if not isinstance(conditions, list):
-                    raise MatrixError(f"{relative}#{name} filter conditions must be a list")
+                    raise MatrixError(
+                        f"{relative}#{name} filter conditions must be a list"
+                    )
                 filter_keys = []
                 for condition in conditions:
                     if not isinstance(condition, dict):
-                        raise MatrixError(f"{relative}#{name} has a malformed filter condition")
-                    key = _string(condition.get("keyName"), f"{relative}#{name} filter key")
+                        raise MatrixError(
+                            f"{relative}#{name} has a malformed filter condition"
+                        )
+                    key = _string(
+                        condition.get("keyName"), f"{relative}#{name} filter key"
+                    )
                     if key not in columns_by_table.get(table_name, {}):
-                        raise MatrixError(f"{relative}#{name} filters on an undeclared Data Table column")
-                    filter_keys.append(key)
-            if table_name not in references:
-                raise MatrixError(f"{relative}#{name} references unknown Data Table {table_name!r}")
+                        raise MatrixError(
+                            f"{relative}#{name} filters on an undeclared Data Table column"
+                        )
+                if table_name not in columns_by_table:
+                    raise MatrixError(
+                        f"{relative}#{name} references unknown Data Table {table_name!r}"
+                    )
             references[table_name].append(
                 {
                     "table": table_name,
@@ -872,8 +1115,20 @@ def ref_key(reference: dict[str, Any]) -> str:
 
 def target_for(table_name: str, column: str) -> dict[str, Any]:
     metadata = TABLE_METADATA[table_name]
+    if table_name in TYPED_RECORD_TABLES:
+        return {
+            "disposition": "transform",
+            "target_table": None,
+            "target_artifact": "typed-operational-state-v1",
+            "target_field": f"record_payload_json.{column}",
+        }
     if table_name in REMOVE_TABLES:
-        return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
+        return {
+            "disposition": "remove",
+            "target_table": None,
+            "target_artifact": None,
+            "target_field": None,
+        }
     if table_name in ARTIFACT_PREFIXES:
         return {
             "disposition": "transform",
@@ -882,12 +1137,27 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
             "target_field": f"{ARTIFACT_PREFIXES[table_name]}.{column}",
         }
     if table_name == "finance_source_cursors":
-        return {"disposition": "keep", "target_table": "finance_ingestion_state", "target_artifact": None, "target_field": column}
+        return {
+            "disposition": "keep",
+            "target_table": "finance_ingestion_state",
+            "target_artifact": None,
+            "target_field": column,
+        }
     if table_name == "finance_acquisition_receipts":
         if column in {"cursor_commit_eligible", "immutable_inventory_json"}:
-            return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
+            return {
+                "disposition": "remove",
+                "target_table": None,
+                "target_artifact": None,
+                "target_field": None,
+            }
         target_field = ACQUISITION_TARGET_FIELDS.get(column, column)
-        return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_ingestion_state", "target_artifact": None, "target_field": target_field}
+        return {
+            "disposition": "keep" if target_field == column else "transform",
+            "target_table": "finance_ingestion_state",
+            "target_artifact": None,
+            "target_field": target_field,
+        }
     if table_name == "finance_document_operations" and column == "document_id":
         return {
             "disposition": "transform",
@@ -897,17 +1167,42 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         }
     if table_name in {"finance_archive_receipts", "finance_document_operations"}:
         target_field = "archive_verified_at" if column == "verified_at" else column
-        return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_documents", "target_artifact": None, "target_field": target_field}
+        return {
+            "disposition": "keep" if target_field == column else "transform",
+            "target_table": "finance_documents",
+            "target_artifact": None,
+            "target_field": target_field,
+        }
     if table_name == "finance_actual_outbox":
         if column == "lease_expires_at":
-            return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
+            return {
+                "disposition": "remove",
+                "target_table": None,
+                "target_artifact": None,
+                "target_field": None,
+            }
         target_field = OUTBOX_TARGET_FIELDS.get(column, column)
-        return {"disposition": "keep" if target_field == column else "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": target_field}
+        return {
+            "disposition": "keep" if target_field == column else "transform",
+            "target_table": "finance_actual_batches",
+            "target_artifact": None,
+            "target_field": target_field,
+        }
     if table_name == "finance_actual_verifications":
         if column == "outbox_id":
-            return {"disposition": "transform", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": "batch_id"}
+            return {
+                "disposition": "transform",
+                "target_table": "finance_actual_batches",
+                "target_artifact": None,
+                "target_field": "batch_id",
+            }
         if column == "verification_version":
-            return {"disposition": "keep", "target_table": "finance_actual_batches", "target_artifact": "actual-verification-v2", "target_field": column}
+            return {
+                "disposition": "keep",
+                "target_table": "finance_actual_batches",
+                "target_artifact": "actual-verification-v2",
+                "target_field": column,
+            }
         return {
             "disposition": "keep",
             "target_table": "finance_actual_batches",
@@ -916,9 +1211,19 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         }
     if table_name == "finance_reconciliations":
         if column in {"source_code", "period_key"}:
-            return {"disposition": "keep", "target_table": "finance_actual_batches", "target_artifact": None, "target_field": column}
+            return {
+                "disposition": "keep",
+                "target_table": "finance_actual_batches",
+                "target_artifact": None,
+                "target_field": column,
+            }
         if column == "cashback_close_id":
-            return {"disposition": "transform", "target_table": None, "target_artifact": "cashback-companion", "target_field": column}
+            return {
+                "disposition": "transform",
+                "target_table": None,
+                "target_artifact": "cashback-companion",
+                "target_field": column,
+            }
         reconciliation_fields = {
             "actual_verification_sha256": "verification_artifact_sha256",
             "state": "reconciliation_state",
@@ -934,12 +1239,24 @@ def target_for(table_name: str, column: str) -> dict[str, Any]:
         }
     if table_name == "finance_agent_jobs":
         if column not in AGENT_REVIEW_COLUMNS:
-            return {"disposition": "remove", "target_table": None, "target_artifact": None, "target_field": None}
-        return {"disposition": "keep", "target_table": "finance_ai_reviews", "target_artifact": None, "target_field": column}
+            return {
+                "disposition": "remove",
+                "target_table": None,
+                "target_artifact": None,
+                "target_field": None,
+            }
+        return {
+            "disposition": "keep",
+            "target_table": "finance_ai_reviews",
+            "target_artifact": None,
+            "target_field": column,
+        }
     raise MatrixError(f"no migration policy for {table_name}.{column}")
 
 
-def column_matrix(table: dict[str, Any], references: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def column_matrix(
+    table: dict[str, Any], references: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     metadata = TABLE_METADATA[table["name"]]
     columns = table["columns"]
     result = []
@@ -948,7 +1265,8 @@ def column_matrix(table: dict[str, Any], references: list[dict[str, Any]]) -> li
         producer_nodes = sorted(
             ref_key(reference)
             for reference in references
-            if reference["operation"] == "create" or source_column in reference["write_columns"]
+            if reference["operation"] == "create"
+            or source_column in reference["write_columns"]
         )
         consumer_nodes = sorted(
             ref_key(reference)
@@ -987,21 +1305,20 @@ def validate_identity_derivations(
     """Ensure every retained source has a deterministic target-row identity."""
 
     source_columns: dict[str, dict[str, str]] = {}
+    target_sources: dict[str, set[str]] = {target: set() for target in target_schemas}
     for table in tables:
         source_name = table.get("name", table.get("source_table"))
+        if not isinstance(source_name, str) or not source_name:
+            raise MatrixError("source table must have a non-empty name")
         columns = table["columns"]
         if isinstance(columns, dict):
             source_columns[source_name] = columns
         else:
             source_columns[source_name] = {
-                column["source_column"]: column["source_type"]
-                for column in columns
+                column["source_column"]: column["source_type"] for column in columns
             }
-    target_sources: dict[str, set[str]] = {target: set() for target in target_schemas}
-    for table in tables:
-        source_name = table.get("name", table.get("source_table"))
         target = TABLE_METADATA[source_name].get("target_table")
-        if target in target_sources:
+        if isinstance(target, str) and target in target_sources:
             target_sources[target].add(source_name)
 
     for target, schema in target_schemas.items():
@@ -1012,33 +1329,73 @@ def validate_identity_derivations(
         if not isinstance(derivations, list) or not derivations:
             raise MatrixError(f"{target} must declare identity derivations")
         seen_sources: set[str] = set()
-        document_identity_contract: tuple[str, str, str, str, str, tuple[str, ...]] | None = None
+        document_identity_contract: (
+            tuple[str, str, str, str, str, tuple[str, ...]] | None
+        ) = None
         for derivation in derivations:
             if not isinstance(derivation, dict):
                 raise MatrixError(f"{target} has a malformed identity derivation")
             source_table = derivation.get("source_table")
-            if source_table not in source_columns:
-                raise MatrixError(f"{target} identity source is unknown: {source_table!r}")
+            if not isinstance(source_table, str) or source_table not in source_columns:
+                raise MatrixError(
+                    f"{target} identity source is unknown: {source_table!r}"
+                )
             if source_table in seen_sources:
-                raise MatrixError(f"{target} has duplicate identity derivation for {source_table}")
+                raise MatrixError(
+                    f"{target} has duplicate identity derivation for {source_table}"
+                )
             seen_sources.add(source_table)
             if source_table not in target_sources[target]:
                 raise MatrixError(
                     f"{target} identity source {source_table} does not belong to the target"
                 )
             if derivation.get("target_key") != logical_key:
-                raise MatrixError(f"{target}.{source_table} identity does not produce the target logical key")
+                raise MatrixError(
+                    f"{target}.{source_table} identity does not produce the target logical key"
+                )
             strategy = derivation.get("strategy")
-            if target == "finance_documents" and strategy != "versioned_length_prefixed_sha256":
+            if (
+                target == "finance_documents"
+                and strategy != "versioned_length_prefixed_sha256"
+            ):
                 raise MatrixError(
                     f"{target}.{source_table} must use the approved versioned document identity tuple"
                 )
-            if strategy == "direct":
+            if strategy == "typed_record":
                 source_fields = derivation.get("source_fields")
-                if not isinstance(source_fields, list) or len(source_fields) != len(logical_key):
-                    raise MatrixError(f"{target}.{source_table} direct identity fields are incomplete")
-                if any(field not in source_columns[source_table] for field in source_fields):
-                    raise MatrixError(f"{target}.{source_table} direct identity references an unknown source field")
+                record_type = derivation.get("record_type")
+                if (
+                    logical_key != ["record_type", "record_key"]
+                    or not isinstance(source_fields, list)
+                    or not source_fields
+                    or len(source_fields) != len(set(source_fields))
+                    or any(
+                        not isinstance(field, str)
+                        or field not in source_columns[source_table]
+                        for field in source_fields
+                    )
+                    or not isinstance(record_type, str)
+                    or not record_type
+                ):
+                    raise MatrixError(
+                        f"{target}.{source_table} typed identity is incomplete"
+                    )
+            elif strategy == "direct":
+                source_fields = derivation.get("source_fields")
+                if not isinstance(source_fields, list) or len(source_fields) != len(
+                    logical_key
+                ):
+                    raise MatrixError(
+                        f"{target}.{source_table} direct identity fields are incomplete"
+                    )
+                if any(
+                    not isinstance(field, str)
+                    or field not in source_columns[source_table]
+                    for field in source_fields
+                ):
+                    raise MatrixError(
+                        f"{target}.{source_table} direct identity references an unknown source field"
+                    )
             elif strategy == "versioned_length_prefixed_sha256":
                 source_fields = derivation.get("source_fields")
                 if (
@@ -1053,23 +1410,37 @@ def validate_identity_derivations(
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash may only produce document_id"
                     )
-                if any(source_columns[source_table].get(field) != "string" for field in source_fields):
+                if any(
+                    not isinstance(field, str)
+                    or source_columns[source_table].get(field) != "string"
+                    for field in source_fields
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash requires string source fields"
                     )
-                if not isinstance(derivation.get("version"), str) or not derivation["version"]:
+                version = derivation.get("version")
+                if not isinstance(version, str) or not version:
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash needs a non-empty version"
                     )
-                if derivation.get("length_prefix") != "uint64_be":
+                length_prefix = derivation.get("length_prefix")
+                if not isinstance(length_prefix, str) or length_prefix != "uint64_be":
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash must use uint64_be length prefixes"
                     )
-                if derivation.get("tuple_encoding") != "versioned_length_prefixed_binary":
+                tuple_encoding = derivation.get("tuple_encoding")
+                if (
+                    not isinstance(tuple_encoding, str)
+                    or tuple_encoding != "versioned_length_prefixed_binary"
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash must use binary length-prefixed tuples"
                     )
-                if derivation.get("digest_encoding") != "base64url_unpadded":
+                digest_encoding = derivation.get("digest_encoding")
+                if (
+                    not isinstance(digest_encoding, str)
+                    or digest_encoding != "base64url_unpadded"
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} document identity must use unpadded base64url SHA-256"
                     )
@@ -1078,13 +1449,17 @@ def validate_identity_derivations(
                         f"{target}.{source_table} versioned hash must not use delimiters or raw prefixes"
                     )
                 identity_kind = derivation.get("identity_kind")
-                version = derivation.get("version")
-                length_prefix = derivation.get("length_prefix")
-                if identity_kind not in DOCUMENT_IDENTITY_FIELDS:
+                if (
+                    not isinstance(identity_kind, str)
+                    or identity_kind not in DOCUMENT_IDENTITY_FIELDS
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} versioned hash has an unsupported identity_kind"
                     )
-                if target == "finance_documents" and tuple(source_fields) != DOCUMENT_IDENTITY_FIELDS[identity_kind]:
+                if (
+                    target == "finance_documents"
+                    and tuple(source_fields) != DOCUMENT_IDENTITY_FIELDS[identity_kind]
+                ):
                     raise MatrixError(
                         f"{target}.{source_table} identity fields do not match {identity_kind}"
                     )
@@ -1092,8 +1467,8 @@ def validate_identity_derivations(
                     identity_kind,
                     version,
                     length_prefix,
-                    derivation["tuple_encoding"],
-                    derivation["digest_encoding"],
+                    tuple_encoding,
+                    digest_encoding,
                     tuple(source_fields),
                 )
                 if target == "finance_documents":
@@ -1109,7 +1484,9 @@ def validate_identity_derivations(
                     or any(not isinstance(alias, str) for alias in aliases)
                     or len(set(aliases)) != len(aliases)
                 ):
-                    raise MatrixError(f"{target}.{source_table} alias fields are malformed")
+                    raise MatrixError(
+                        f"{target}.{source_table} alias fields are malformed"
+                    )
                 if any(alias not in source_columns[source_table] for alias in aliases):
                     raise MatrixError(f"{target}.{source_table} alias field is unknown")
                 legacy_adapter = derivation.get("legacy_to_canonical")
@@ -1118,7 +1495,8 @@ def validate_identity_derivations(
                         not isinstance(legacy_adapter, dict)
                         or legacy_adapter.get("adapter") != "document-identity-alias-v1"
                         or legacy_adapter.get("legacy_fields") != aliases
-                        or legacy_adapter.get("canonical_target") != "finance_documents.document_id"
+                        or legacy_adapter.get("canonical_target")
+                        != "finance_documents.document_id"
                     ):
                         raise MatrixError(
                             f"{target}.{source_table} needs the approved legacy-to-canonical adapter"
@@ -1129,15 +1507,23 @@ def validate_identity_derivations(
                     )
                 fallback = derivation.get("fallback_identity")
                 if fallback is not None:
-                    fallback_fields = fallback.get("source_fields") if isinstance(fallback, dict) else None
+                    fallback_fields = (
+                        fallback.get("source_fields")
+                        if isinstance(fallback, dict)
+                        else None
+                    )
                     if (
                         not isinstance(fallback, dict)
                         or fallback.get("identity_kind") != "PROCESSING_ONLY"
                         or not isinstance(fallback_fields, list)
                         or not fallback_fields
                         or len(set(fallback_fields)) != len(fallback_fields)
-                        or tuple(fallback_fields) != DOCUMENT_IDENTITY_FIELDS["PROCESSING_ONLY"]
-                        or any(field not in source_columns[source_table] for field in fallback_fields)
+                        or tuple(fallback_fields)
+                        != DOCUMENT_IDENTITY_FIELDS["PROCESSING_ONLY"]
+                        or any(
+                            field not in source_columns[source_table]
+                            for field in fallback_fields
+                        )
                     ):
                         raise MatrixError(
                             f"{target}.{source_table} fallback identity is invalid"
@@ -1151,11 +1537,15 @@ def validate_identity_derivations(
                     or not isinstance(terminal_fields, list)
                     or derivation.get("cardinality") != "exactly_one"
                 ):
-                    raise MatrixError(f"{target}.{source_table} join identity is incomplete")
+                    raise MatrixError(
+                        f"{target}.{source_table} join identity is incomplete"
+                    )
                 join_key = derivation.get("join_key")
                 if join_key is not None:
                     if not isinstance(join_key, dict):
-                        raise MatrixError(f"{target}.{source_table} join key is malformed")
+                        raise MatrixError(
+                            f"{target}.{source_table} join key is malformed"
+                        )
                     source_fields = join_key.get("source_fields")
                     target_fields = join_key.get("target_fields")
                     target_columns = schema["columns"]
@@ -1166,11 +1556,18 @@ def validate_identity_derivations(
                         or len(source_fields) != len(target_fields)
                         or len(set(source_fields)) != len(source_fields)
                         or len(set(target_fields)) != len(target_fields)
-                        or any(field not in source_columns[source_table] for field in source_fields)
+                        or any(
+                            field not in source_columns[source_table]
+                            for field in source_fields
+                        )
                         or any(field not in target_columns for field in target_fields)
                     ):
-                        raise MatrixError(f"{target}.{source_table} join key fields are invalid")
-                    for source_field, target_field in zip(source_fields, target_fields, strict=True):
+                        raise MatrixError(
+                            f"{target}.{source_table} join key fields are invalid"
+                        )
+                    for source_field, target_field in zip(
+                        source_fields, target_fields, strict=True
+                    ):
                         source_type = source_columns[source_table][source_field]
                         target_type = target_columns[target_field]["type"]
                         if source_type != target_type:
@@ -1180,20 +1577,26 @@ def validate_identity_derivations(
                             )
                 current_table = source_table
                 for step in steps:
-                    if not isinstance(step, dict) or step.get("table") not in source_columns:
-                        raise MatrixError(f"{target}.{source_table} join identity references an unknown table")
+                    if (
+                        not isinstance(step, dict)
+                        or step.get("table") not in source_columns
+                    ):
+                        raise MatrixError(
+                            f"{target}.{source_table} join identity references an unknown table"
+                        )
                     left_fields = step.get("left_fields")
                     right_fields = step.get("right_fields")
                     joined_table = step["table"]
-                    resolver_right_fields = {
-                        "verification_artifact_sha256"
-                    }
+                    resolver_right_fields = {"verification_artifact_sha256"}
                     if (
                         not isinstance(left_fields, list)
                         or not isinstance(right_fields, list)
                         or len(left_fields) != len(right_fields)
                         or not left_fields
-                        or any(field not in source_columns[current_table] for field in left_fields)
+                        or any(
+                            field not in source_columns[current_table]
+                            for field in left_fields
+                        )
                         or any(
                             field not in source_columns[joined_table]
                             and not (
@@ -1203,8 +1606,12 @@ def validate_identity_derivations(
                             for field in right_fields
                         )
                     ):
-                        raise MatrixError(f"{target}.{source_table} join identity has invalid join fields")
-                    for left_field, right_field in zip(left_fields, right_fields, strict=True):
+                        raise MatrixError(
+                            f"{target}.{source_table} join identity has invalid join fields"
+                        )
+                    for left_field, right_field in zip(
+                        left_fields, right_fields, strict=True
+                    ):
                         left_type = source_columns[current_table][left_field]
                         # Verification artifacts are resolver-owned target
                         # fields, not columns in the legacy verification row.
@@ -1221,12 +1628,21 @@ def validate_identity_derivations(
                                 f"{joined_table}.{right_field} ({right_type!r})"
                             )
                     current_table = joined_table
-                if any(field not in source_columns[current_table] for field in terminal_fields):
-                    raise MatrixError(f"{target}.{source_table} join identity terminal field is unknown")
+                if any(
+                    field not in source_columns[current_table]
+                    for field in terminal_fields
+                ):
+                    raise MatrixError(
+                        f"{target}.{source_table} join identity terminal field is unknown"
+                    )
                 if len(terminal_fields) != len(logical_key):
-                    raise MatrixError(f"{target}.{source_table} join identity terminal fields are incomplete")
+                    raise MatrixError(
+                        f"{target}.{source_table} join identity terminal fields are incomplete"
+                    )
             else:
-                raise MatrixError(f"{target}.{source_table} uses unsupported identity strategy {strategy!r}")
+                raise MatrixError(
+                    f"{target}.{source_table} uses unsupported identity strategy {strategy!r}"
+                )
         if seen_sources != target_sources[target]:
             raise MatrixError(
                 f"{target} identity derivations do not cover every source: "
@@ -1239,7 +1655,9 @@ def validate_target_mappings(
 ) -> None:
     """Reject unknown targets, type drift, and undeclared source coalescing."""
     if set(target_schemas) != set(TARGETS):
-        raise MatrixError("target schemas must contain exactly the four approved targets")
+        raise MatrixError(
+            "target schemas must contain exactly the four approved targets"
+        )
     if target_schemas != TARGET_SCHEMAS:
         raise MatrixError("target schema payload differs from the generator contract")
     validate_identity_derivations(tables, target_schemas)
@@ -1250,12 +1668,23 @@ def validate_target_mappings(
         for table in tables
         for column in table["columns"]
     }
-    resolver_binding_prefixes = ("inventory-v1.", "actual-verification-v2.")
+    resolver_binding_prefixes = (
+        "inventory-v1.",
+        "actual-verification-v2.",
+        "typed-operational-state.",
+    )
+    archive_proof_bindings = {
+        "acquisition-archive-proof-v1.archive_receipt_sha256",
+        "acquisition-archive-proof-v1.archive_readback_verified",
+    }
     for target, schema in target_schemas.items():
         for field, spec in schema["columns"].items():
             for binding in spec["source_bindings"]:
                 if binding not in source_binding_names:
-                    if not binding.startswith(resolver_binding_prefixes):
+                    if (
+                        not binding.startswith(resolver_binding_prefixes)
+                        and binding not in archive_proof_bindings
+                    ):
                         raise MatrixError(
                             f"{target}.{field} has an unknown source or resolver binding {binding!r}"
                         )
@@ -1267,7 +1696,9 @@ def validate_target_mappings(
             target_field = column["target_field"]
             if target_table is None:
                 if target_field is not None and column["target_artifact"] is None:
-                    raise MatrixError(f"{source_table}.{column['source_column']} has a field without a target table")
+                    raise MatrixError(
+                        f"{source_table}.{column['source_column']} has a field without a target table"
+                    )
                 continue
             if target_table not in TARGET_SCHEMAS or not isinstance(target_field, str):
                 raise MatrixError(
@@ -1325,7 +1756,9 @@ def validate_target_mappings(
         for field, spec in declared_columns.items():
             actual_sources = observed.get((target, field), [])
             if len(actual_sources) != len(set(actual_sources)):
-                raise MatrixError(f"{target}.{field} receives a source column more than once")
+                raise MatrixError(
+                    f"{target}.{field} receives a source column more than once"
+                )
             if set(actual_sources) != set(spec["source_bindings"]):
                 raise MatrixError(
                     f"{target}.{field} source bindings differ from its explicit merge policy"
@@ -1395,7 +1828,9 @@ def build_matrix() -> dict[str, Any]:
             "filter_only_consumer_edges": filter_only_edges,
             "write_reference_edges": write_edges,
             "producer_node_edges": producer_edges,
-            "every_source_column_has_one_disposition": all(value >= 0 for value in dispositions.values()),
+            "every_source_column_has_one_disposition": all(
+                value >= 0 for value in dispositions.values()
+            ),
             "node_operations": list(OPERATIONS),
             "read_columns_star_means_full_matching_row": True,
             "filter_keys_are_exact_node_parameters": True,
@@ -1413,15 +1848,23 @@ def build_matrix() -> dict[str, Any]:
 def validate_matrix(matrix: dict[str, Any]) -> None:
     schema = json.loads(normalized_bytes(SCHEMA))
     Draft202012Validator.check_schema(schema)
-    errors = sorted(Draft202012Validator(schema).iter_errors(matrix), key=lambda error: list(error.path))
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(matrix),
+        key=lambda error: list(error.path),
+    )
     if errors:
-        raise MatrixError("generated matrix schema error: " + "; ".join(error.message for error in errors[:3]))
+        raise MatrixError(
+            "generated matrix schema error: "
+            + "; ".join(error.message for error in errors[:3])
+        )
     actual_snapshot = source_snapshot()
     if matrix["source_snapshot"] != actual_snapshot:
         raise MatrixError("generated matrix source snapshot is stale")
     expected = build_matrix()
     if matrix != expected:
-        raise MatrixError("generated matrix does not match the checked-in source corpus")
+        raise MatrixError(
+            "generated matrix does not match the checked-in source corpus"
+        )
 
 
 def render(matrix: dict[str, Any]) -> str:
@@ -1433,7 +1876,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--write", action="store_true", help="write the generated matrix")
-    mode.add_argument("--check", action="store_true", help="verify the committed matrix")
+    mode.add_argument(
+        "--check", action="store_true", help="verify the committed matrix"
+    )
     args = parser.parse_args()
     matrix = build_matrix()
     validate_matrix(matrix)
@@ -1442,7 +1887,9 @@ def main() -> int:
         OUTPUT.write_text(rendered, encoding="utf-8", newline="\n")
         return 0
     if not OUTPUT.exists() or OUTPUT.read_text(encoding="utf-8") != rendered:
-        raise SystemExit(f"generated Data Table migration matrix drift: {OUTPUT.relative_to(ROOT)}")
+        raise SystemExit(
+            f"generated Data Table migration matrix drift: {OUTPUT.relative_to(ROOT)}"
+        )
     return 0
 
 

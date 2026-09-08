@@ -15,62 +15,158 @@
     "workflow_manifest",
     "fixture_manifest",
     "inactive_corpus",
+    "source_contract_bindings",
     "credentials",
     "mcp",
-    "validators",
     "blockers"
   ],
   "properties": {
-    "schema_version": {"const": 1},
-    "contract_status": {"enum": ["SPEC_ONLY", "DISPOSABLE_VERIFIED", "PRODUCTION_VERIFIED"]},
+    "schema_version": {
+      "const": 1
+    },
+    "contract_status": {
+      "enum": [
+        "SPEC_ONLY",
+        "DISPOSABLE_VERIFIED",
+        "PRODUCTION_VERIFIED"
+      ]
+    },
     "application": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "repository"],
+      "required": [
+        "name",
+        "repository"
+      ],
       "properties": {
-        "name": {"const": "finance-statement-tracker"},
-        "repository": {"const": "srobroek/finance-statement-tracker"}
+        "name": {
+          "const": "finance-statement-tracker"
+        },
+        "repository": {
+          "const": "srobroek/finance-statement-tracker"
+        }
       }
     },
-    "finance_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "finance_commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$"
+    },
     "image_lock": {
       "allOf": [
-        {"$ref": "#/$defs/artifact"},
-        {"properties": {"path": {"const": "integrations/n8n/application-images.lock.json"}}}
+        {
+          "$ref": "#/$defs/artifact"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "integrations/n8n/application-images.lock.json"
+            }
+          }
+        }
       ]
     },
-    "base_image": {"$ref": "#/$defs/baseImage"},
-    "extension_image": {"$ref": "#/$defs/extensionImage"},
+    "base_image": {
+      "$ref": "#/$defs/baseImage"
+    },
+    "extension_image": {
+      "$ref": "#/$defs/extensionImage"
+    },
     "workflow_manifest": {
       "allOf": [
-        {"$ref": "#/$defs/artifact"},
-        {"properties": {"path": {"const": "integrations/n8n/pipeline-registry.json"}}}
+        {
+          "$ref": "#/$defs/artifact"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "integrations/n8n/pipeline-registry.json"
+            }
+          }
+        }
       ]
     },
     "fixture_manifest": {
       "allOf": [
-        {"$ref": "#/$defs/artifact"},
-        {"properties": {"path": {"const": "integrations/n8n/disposable/fixture-manifest.json"}}}
+        {
+          "$ref": "#/$defs/artifact"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "integrations/n8n/disposable/fixture-manifest.json"
+            }
+          }
+        }
       ]
     },
-    "inactive_corpus": {"$ref": "#/$defs/inactiveCorpus"},
+    "inactive_corpus": {
+      "$ref": "#/$defs/inactiveCorpus"
+    },
+    "source_contract_bindings": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/artifact"
+        },
+        {
+          "properties": {
+            "path": {
+              "const": "integrations/n8n/source-contract-bindings.json"
+            }
+          }
+        }
+      ]
+    },
     "credentials": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["placeholders", "binding_contract", "values_included", "forbidden_fields"],
+      "required": [
+        "placeholders",
+        "binding_contract",
+        "values_included",
+        "forbidden_fields"
+      ],
       "properties": {
-        "placeholders": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/credential"}},
+        "placeholders": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/credential"
+          }
+        },
         "binding_contract": {
           "allOf": [
-            {"$ref": "#/$defs/artifact"},
-            {"properties": {"path": {"const": "integrations/n8n/credential-bindings.json"}}}
+            {
+              "$ref": "#/$defs/artifact"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "integrations/n8n/credential-bindings.json"
+                }
+              }
+            }
           ]
         },
-        "values_included": {"const": false},
+        "values_included": {
+          "const": false
+        },
         "forbidden_fields": {
           "type": "array",
           "uniqueItems": true,
-          "items": {"type": "string", "enum": ["id", "value", "token", "secret", "password", "client_secret"]}
+          "items": {
+            "type": "string",
+            "enum": [
+              "id",
+              "value",
+              "token",
+              "secret",
+              "password",
+              "client_secret"
+            ]
+          }
         }
       }
     },
@@ -90,16 +186,36 @@
       "properties": {
         "contract": {
           "allOf": [
-            {"$ref": "#/$defs/artifact"},
-            {"properties": {"path": {"const": "config/mcp-facade.json"}}}
+            {
+              "$ref": "#/$defs/artifact"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "config/mcp-facade.json"
+                }
+              }
+            }
           ]
         },
-        "path": {"const": "/mcp/finance-operations-v1"},
-        "transport": {"const": "n8n-mcp-server-trigger"},
-        "edge_auth": {"const": "CLOUDFLARE_ACCESS_SERVICE_AUTH"},
-        "origin_auth": {"const": "APPLICATION_SUPPLIED_BEARER"},
-        "enabled": {"const": false},
-        "instance_mcp": {"const": false},
+        "path": {
+          "const": "/mcp/finance-operations-v1"
+        },
+        "transport": {
+          "const": "n8n-mcp-server-trigger"
+        },
+        "edge_auth": {
+          "const": "CLOUDFLARE_ACCESS_SERVICE_AUTH"
+        },
+        "origin_auth": {
+          "const": "APPLICATION_SUPPLIED_BEARER"
+        },
+        "enabled": {
+          "const": false
+        },
+        "instance_mcp": {
+          "const": false
+        },
         "operations": {
           "const": [
             "finance.status.v1",
@@ -113,82 +229,187 @@
       "type": "array",
       "minItems": 3,
       "uniqueItems": true,
-      "items": {"$ref": "#/$defs/validator"},
+      "items": {
+        "$ref": "#/$defs/validator"
+      },
       "allOf": [
-        {"contains": {"properties": {"kind": {"const": "BUILD"}}}},
-        {"contains": {"properties": {"kind": {"const": "RUNTIME_ASSERTION"}}}},
-        {"contains": {"properties": {"kind": {"const": "TEST"}}}}
+        {
+          "contains": {
+            "properties": {
+              "kind": {
+                "const": "BUILD"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "kind": {
+                "const": "RUNTIME_ASSERTION"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "properties": {
+              "kind": {
+                "const": "TEST"
+              }
+            }
+          }
+        }
       ]
     },
-    "blockers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+    "blockers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    }
   },
   "allOf": [
     {
-      "if": {"properties": {"contract_status": {"const": "SPEC_ONLY"}}},
+      "if": {
+        "properties": {
+          "contract_status": {
+            "const": "SPEC_ONLY"
+          }
+        }
+      },
       "then": {
         "properties": {
-          "finance_commit": {"type": "null"},
+          "finance_commit": {
+            "type": "null"
+          },
           "extension_image": {
             "properties": {
-              "digest": {"type": "null"}
+              "digest": {
+                "type": "null"
+              }
             }
           }
         }
       },
       "else": {
         "properties": {
-          "finance_commit": {"$ref": "#/$defs/commit"},
-          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"}
+          "finance_commit": {
+            "$ref": "#/$defs/commit"
+          },
+          "extension_image": {
+            "$ref": "#/$defs/verifiedExtensionImage"
+          }
         }
       }
     }
   ],
   "$defs": {
-    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "sha256"],
+      "required": [
+        "path",
+        "sha256"
+      ],
       "properties": {
-        "path": {"type": "string", "pattern": "^[^/].*"},
-        "sha256": {"$ref": "#/$defs/sha256"}
+        "path": {
+          "type": "string",
+          "pattern": "^[^/].*"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "baseImage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "reference", "digest"],
+      "required": [
+        "path",
+        "reference",
+        "digest"
+      ],
       "properties": {
-        "path": {"const": "packages/n8n-nodes-finance/base-image.txt"},
-        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
-        "digest": {"$ref": "#/$defs/digest"}
+        "path": {
+          "const": "packages/n8n-nodes-finance/base-image.txt"
+        },
+        "reference": {
+          "type": "string",
+          "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        }
       }
     },
     "extensionImage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["reference", "digest", "base_digest", "receipt"],
+      "required": [
+        "reference",
+        "digest",
+        "base_digest",
+        "receipt"
+      ],
       "properties": {
-        "reference": {"type": "string", "pattern": "^[^\\s@]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})$"},
-        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
-        "base_digest": {"$ref": "#/$defs/digest"},
+        "reference": {
+          "type": "string",
+          "pattern": "^[^\\s@]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})$"
+        },
+        "digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "base_digest": {
+          "$ref": "#/$defs/digest"
+        },
         "receipt": {
           "allOf": [
-            {"$ref": "#/$defs/artifact"},
-            {"properties": {"path": {"const": "packages/n8n-nodes-finance/finance-image-build-receipt.json"}}}
+            {
+              "$ref": "#/$defs/artifact"
+            },
+            {
+              "properties": {
+                "path": {
+                  "const": "packages/n8n-nodes-finance/finance-image-build-receipt.json"
+                }
+              }
+            }
           ]
         }
       }
     },
     "verifiedExtensionImage": {
       "allOf": [
-        {"$ref": "#/$defs/extensionImage"},
+        {
+          "$ref": "#/$defs/extensionImage"
+        },
         {
           "properties": {
-            "reference": {"pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
-            "digest": {"$ref": "#/$defs/digest"}
+            "reference": {
+              "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"
+            },
+            "digest": {
+              "$ref": "#/$defs/digest"
+            }
           }
         }
       ]
@@ -196,42 +417,95 @@
     "inactiveCorpus": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "file_count", "sha256", "required_state", "setup_corpus_excluded"],
+      "required": [
+        "path",
+        "file_count",
+        "sha256",
+        "required_state",
+        "setup_corpus_excluded"
+      ],
       "properties": {
-        "path": {"const": "integrations/n8n/workflows"},
-        "file_count": {"const": 19},
-        "sha256": {"$ref": "#/$defs/sha256"},
+        "path": {
+          "const": "integrations/n8n/workflows"
+        },
+        "file_count": {
+          "const": 19
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
         "required_state": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["active", "published", "status"],
+          "required": [
+            "active",
+            "published",
+            "status"
+          ],
           "properties": {
-            "active": {"const": false},
-            "published": {"const": false},
-            "status": {"const": "SPEC_ONLY"}
+            "active": {
+              "const": false
+            },
+            "published": {
+              "const": false
+            },
+            "status": {
+              "const": "SPEC_ONLY"
+            }
           }
         },
-        "setup_corpus_excluded": {"const": true}
+        "setup_corpus_excluded": {
+          "const": true
+        }
       }
     },
     "credential": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "binding", "type"],
+      "required": [
+        "name",
+        "binding",
+        "type"
+      ],
       "properties": {
-        "name": {"type": "string", "minLength": 1},
-        "binding": {"type": "string", "pattern": "^BIND_[A-Z0-9_]+$"},
-        "type": {"type": "string", "minLength": 1}
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "binding": {
+          "type": "string",
+          "pattern": "^BIND_[A-Z0-9_]+$"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "validator": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "path", "command"],
+      "required": [
+        "kind",
+        "path",
+        "command"
+      ],
       "properties": {
-        "kind": {"enum": ["TEST", "BUILD", "RUNTIME_ASSERTION"]},
-        "path": {"type": "string", "pattern": "^[^/].*"},
-        "command": {"type": "string", "minLength": 1}
+        "kind": {
+          "enum": [
+            "TEST",
+            "BUILD",
+            "RUNTIME_ASSERTION"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^[^/].*"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   }

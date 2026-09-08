@@ -30,6 +30,7 @@ EXPECTED_SOURCE_KEYS = {
     "workflow_manifest",
     "fixture_manifest",
     "inactive_corpus",
+    "source_contract_bindings",
     "credentials",
     "mcp",
     "validators",
@@ -136,6 +137,7 @@ def _validate_source_manifest(source_manifest: Path, root: Path) -> tuple[dict[s
     _relative_artifact(root, manifest.get("image_lock"), "SOURCE_MANIFEST_IMAGE_LOCK_INVALID")
     _relative_artifact(root, manifest.get("workflow_manifest"), "SOURCE_MANIFEST_WORKFLOW_MANIFEST_INVALID")
     _relative_artifact(root, manifest.get("fixture_manifest"), "SOURCE_MANIFEST_FIXTURE_MANIFEST_INVALID")
+    _relative_artifact(root, manifest.get("source_contract_bindings"), "SOURCE_MANIFEST_SOURCE_BINDINGS_INVALID")
     mcp = manifest.get("mcp")
     if not isinstance(mcp, dict):
         raise SystemExit("SOURCE_MANIFEST_MCP_INVALID")

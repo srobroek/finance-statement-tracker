@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
-  "schema_sha256": "01bae112786de2d0f8421501b4ab6f764562c8fc97b1bc9a54be989e7f058e50",
+  "schema_sha256": "b471d80ad7d44e2db859a6d3d628acfb18287d8d93770a03a1e2239b786926a8",
   "content_digest": {
     "algorithm": "SHA-256",
     "canonicalization": "sorted-object-keys;array-order-preserved;compact-utf8-json",
@@ -10,11 +10,11 @@
       "bundle_content_sha256"
     ]
   },
-  "bundle_content_sha256": "af768c93a8ef81f8639f98b37f119541fb44b99d30bd110135374c82187a7f38",
+  "bundle_content_sha256": "2b3fb93c8ec3bf16b7cee60c77edfefc95f237d5762edb1b7402a36326f07521",
   "source_documents": [
     {
       "path": "config/statement-sources.json",
-      "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+      "sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727"
     },
     {
       "path": "config/transaction-email-sources.json",
@@ -22,7 +22,7 @@
     },
     {
       "path": "config/ai-policies.json",
-      "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
+      "sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510"
     }
   ],
   "resolver_order": [
@@ -88,7 +88,7 @@
       "sources": [
         {
           "path": "config/statement-sources.json",
-          "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+          "sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727"
         }
       ],
       "entries": [
@@ -119,6 +119,12 @@
             "adapter": "emirates_islamic_v1",
             "password_env": "EI_STATEMENT_PASSWORD",
             "email_status": "ACTIVE",
+            "folder_id": "inbox",
+            "cycle_day": 1,
+            "overlap_seconds": 7200,
+            "deadline_days": 5,
+            "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+            "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
             "email_senders": [
               "estatement@emiratesislamic.ae"
             ],
@@ -137,6 +143,12 @@
             "adapter": "wio_credit_v1",
             "password_env": null,
             "email_status": "ACTIVE",
+            "folder_id": "inbox",
+            "cycle_day": 3,
+            "overlap_seconds": 7200,
+            "deadline_days": 5,
+            "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+            "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
             "email_senders": [
               "communications@email.wio.io",
               "communications@mail.wio.io"
@@ -152,12 +164,13 @@
           "value": {
             "card_code": "RAK_WORLD",
             "institution": "RAKBANK",
-            "adapter_status": "PLACEHOLDER",
-            "adapter": null,
+            "adapter_status": "ACTIVE",
+            "adapter": "rakbank_v1",
+            "password_env": "RAKBANK_STATEMENT_PASSWORD",
             "email_status": "PLACEHOLDER",
             "email_senders": [],
             "email_subjects": [],
-            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+            "notes": "Protected decrypted statement fixture is verified by the parser contract. Production PDF routing must supply RAKBANK_STATEMENT_PASSWORD through the existing statement-password credential path; mailbox sender and subject allowlisting remain pending before live86.6."
           }
         },
         {
@@ -182,7 +195,7 @@
       "sources": [
         {
           "path": "config/statement-sources.json",
-          "sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62"
+          "sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727"
         }
       ],
       "entries": [
@@ -213,6 +226,12 @@
             "adapter": "emirates_islamic_v1",
             "password_env": "EI_STATEMENT_PASSWORD",
             "email_status": "ACTIVE",
+            "folder_id": "inbox",
+            "cycle_day": 1,
+            "overlap_seconds": 7200,
+            "deadline_days": 5,
+            "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+            "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
             "email_senders": [
               "estatement@emiratesislamic.ae"
             ],
@@ -231,6 +250,12 @@
             "adapter": "wio_credit_v1",
             "password_env": null,
             "email_status": "ACTIVE",
+            "folder_id": "inbox",
+            "cycle_day": 3,
+            "overlap_seconds": 7200,
+            "deadline_days": 5,
+            "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+            "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
             "email_senders": [
               "communications@email.wio.io",
               "communications@mail.wio.io"
@@ -246,12 +271,13 @@
           "value": {
             "card_code": "RAK_WORLD",
             "institution": "RAKBANK",
-            "adapter_status": "PLACEHOLDER",
-            "adapter": null,
+            "adapter_status": "ACTIVE",
+            "adapter": "rakbank_v1",
+            "password_env": "RAKBANK_STATEMENT_PASSWORD",
             "email_status": "PLACEHOLDER",
             "email_senders": [],
             "email_subjects": [],
-            "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+            "notes": "Protected decrypted statement fixture is verified by the parser contract. Production PDF routing must supply RAKBANK_STATEMENT_PASSWORD through the existing statement-password credential path; mailbox sender and subject allowlisting remain pending before live86.6."
           }
         },
         {
@@ -276,7 +302,7 @@
       "sources": [
         {
           "path": "config/ai-policies.json",
-          "sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff"
+          "sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510"
         }
       ],
       "entries": [
@@ -601,7 +627,7 @@
       "source_code": "ADCB_CASHBACK",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "contract": {
         "card_code": "ADCB_CASHBACK",
         "institution": "ADCB",
@@ -622,7 +648,7 @@
       "source_code": "EI_AMAZON",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "contract": {
         "card_code": "EI_AMAZON",
         "institution": "Emirates Islamic",
@@ -630,6 +656,12 @@
         "adapter": "emirates_islamic_v1",
         "password_env": "EI_STATEMENT_PASSWORD",
         "email_status": "ACTIVE",
+        "folder_id": "inbox",
+        "cycle_day": 1,
+        "overlap_seconds": 7200,
+        "deadline_days": 5,
+        "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+        "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
         "email_senders": [
           "estatement@emiratesislamic.ae"
         ],
@@ -643,7 +675,7 @@
       "source_code": "WIO_CREDIT",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "contract": {
         "card_code": "WIO_CREDIT",
         "institution": "Wio",
@@ -651,6 +683,12 @@
         "adapter": "wio_credit_v1",
         "password_env": null,
         "email_status": "ACTIVE",
+        "folder_id": "inbox",
+        "cycle_day": 3,
+        "overlap_seconds": 7200,
+        "deadline_days": 5,
+        "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+        "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
         "email_senders": [
           "communications@email.wio.io",
           "communications@mail.wio.io"
@@ -665,23 +703,24 @@
       "source_code": "RAK_WORLD",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "contract": {
         "card_code": "RAK_WORLD",
         "institution": "RAKBANK",
-        "adapter_status": "PLACEHOLDER",
-        "adapter": null,
+        "adapter_status": "ACTIVE",
+        "adapter": "rakbank_v1",
+        "password_env": "RAKBANK_STATEMENT_PASSWORD",
         "email_status": "PLACEHOLDER",
         "email_senders": [],
         "email_subjects": [],
-        "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+        "notes": "Protected decrypted statement fixture is verified by the parser contract. Production PDF routing must supply RAKBANK_STATEMENT_PASSWORD through the existing statement-password credential path; mailbox sender and subject allowlisting remain pending before live86.6."
       }
     },
     {
       "source_code": "SC_PLATINUM_X",
       "config_version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "contract": {
         "card_code": "SC_PLATINUM_X",
         "institution": "Standard Chartered",
@@ -734,6 +773,18 @@
         "subject_match": "EXACT",
         "notes": "Replace with captured sender, subject, body fixture, card suffix and parser only after a real notification format is verified."
       }
+    },
+    {
+      "source_code": "AI_PROPOSAL_ARCHIVE",
+      "config_version": "1",
+      "source_path": "config/ai-policies.json",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
+      "contract": {
+        "source_code": "AI_PROPOSAL_ARCHIVE",
+        "status": "ACTIVE",
+        "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
+        "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H"
+      }
     }
   ],
   "config_versions": [
@@ -741,7 +792,7 @@
       "config_name": "statement-sources",
       "version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "state": "ACTIVE"
     },
     {
@@ -755,7 +806,7 @@
       "config_name": "ai-policies",
       "version": "1",
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "state": "ACTIVE"
     }
   ],
@@ -764,7 +815,7 @@
       "policy_id": "classify-unresolved",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "classify-unresolved",
         "version": 2,
@@ -812,7 +863,7 @@
       "policy_id": "recommend-category",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "recommend-category",
         "version": 1,
@@ -846,7 +897,7 @@
       "policy_id": "detect-subscription",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "detect-subscription",
         "version": 1,
@@ -896,7 +947,7 @@
       "policy_id": "enrich-property",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "enrich-property",
         "version": 2,
@@ -932,7 +983,7 @@
       "policy_id": "find-purchase-evidence",
       "policy_version": 2,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "find-purchase-evidence",
         "version": 2,
@@ -1022,7 +1073,7 @@
       "policy_id": "enrich-cashback-classification",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "enrich-cashback-classification",
         "version": 1,
@@ -1073,7 +1124,7 @@
       "policy_id": "recommend-static-rule",
       "policy_version": 1,
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "contract": {
         "policy_id": "recommend-static-rule",
         "version": 1,

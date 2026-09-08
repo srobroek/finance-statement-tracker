@@ -149,7 +149,7 @@
         1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Email Evidence Readback. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, archived = $('Archive Email Evidence in OneDrive').item.json, message = $('Build Original Email Evidence').item.json, observed = String($json.email_readback_sha256 || '').toLowerCase();\nif (!expected.email_evidence_sha256 || observed !== String(expected.email_evidence_sha256).toLowerCase())\n    throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...message, ...expected, email_evidence_sha256: observed, source_message_id: message.source_message_id, source_attachment_id: 'INLINE_BODY', onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify Email Evidence Readback. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Email Evidence').item.json, archived = $('Archive Email Evidence in OneDrive').item.json, message = $('Build Original Email Evidence').item.json, observed = String($json.email_readback_sha256 || '').toLowerCase();\nif (!expected.email_evidence_sha256 || observed !== String(expected.email_evidence_sha256).toLowerCase())\n    throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');\nconst crypto = require('crypto');\nconst canonicalDocumentId = (identityKind, components) => {\n    const fields = ['document-identity-v1', identityKind, ...components];\n    const encoded = Buffer.concat(fields.map(value => {\n        const bytes = Buffer.from(String(value ?? ''), 'utf8');\n        const length = Buffer.alloc(8);\n        length.writeBigUInt64BE(BigInt(bytes.length));\n        return Buffer.concat([length, bytes]);\n    }));\n    return `document-identity-v1_${crypto.createHash('sha256').update(encoded).digest('base64url')}`;\n};\nconst sourceMessageId = String(message.source_message_id || expected.source_message_id || '');\nif (!sourceMessageId)\n    throw new Error('EMAIL_EVIDENCE_SOURCE_MESSAGE_ID_MISSING');\nconst canonical_document_id = canonicalDocumentId('MAIL_LINKED', [expected.email_evidence_sha256, sourceMessageId, 'INLINE_BODY']);\nreturn [{ json: { canonical_document_id, ...message, ...expected, email_evidence_sha256: observed, source_message_id: message.source_message_id, source_attachment_id: 'INLINE_BODY', onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_readback_verified: true } }];\n"
       }
     },
     {
@@ -166,7 +166,7 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
+          "value": "finance_documents",
           "mode": "name"
         },
         "matchType": "allConditions",
@@ -192,7 +192,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "document_id": "={{ 'inline-email:' + $json.email_evidence_sha256 }}",
+            "document_id": "={{ $('Verify Email Evidence Readback').item.json.canonical_document_id }}",
             "source_sha256": "={{ $json.email_evidence_sha256 }}",
             "document_profile": "EMAIL_BODY_JSON_TO_PDF_V1",
             "requested_schema_version": "1",
@@ -498,7 +498,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Enumerated Attachment Archive. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Enumerated Attachment').item.json, archived = $('Archive Enumerated Attachment in OneDrive').item.json, observed = String($json.archive_readback_sha256 || '').toLowerCase(), sourceMessageId = expected.source_message_id || expected.message_id, sourceAttachmentId = expected.source_attachment_id || expected.attachment_id || expected.id, identity = sourceMessageId + ':' + sourceAttachmentId;\nif (!expected.document_sha256 || observed !== String(expected.document_sha256).toLowerCase())\n    throw new Error('ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH');\nreturn [{ json: { ...expected, source_attachment_id: sourceAttachmentId, source_message_id: sourceMessageId, attachment_identity: identity, onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_state: 'HASH_VERIFIED', archive_readback_verified: true, attachment_verified: true, archive_readback_sha256: observed } }];\n"
+        "jsCode": "// Purpose: Verify Enumerated Attachment Archive. Keep this deterministic and fail closed.\nconst expected = $('SHA-256 Enumerated Attachment').item.json, archived = $('Archive Enumerated Attachment in OneDrive').item.json, observed = String($json.archive_readback_sha256 || '').toLowerCase(), sourceMessageId = expected.source_message_id || expected.message_id, sourceAttachmentId = expected.source_attachment_id || expected.attachment_id || expected.id, identity = sourceMessageId + ':' + sourceAttachmentId;\nif (!expected.document_sha256 || observed !== String(expected.document_sha256).toLowerCase())\n    throw new Error('ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH');\nconst crypto = require('crypto');\nconst canonicalDocumentId = (identityKind, components) => {\n    const fields = ['document-identity-v1', identityKind, ...components];\n    const encoded = Buffer.concat(fields.map(value => {\n        const bytes = Buffer.from(String(value ?? ''), 'utf8');\n        const length = Buffer.alloc(8);\n        length.writeBigUInt64BE(BigInt(bytes.length));\n        return Buffer.concat([length, bytes]);\n    }));\n    return `document-identity-v1_${crypto.createHash('sha256').update(encoded).digest('base64url')}`;\n};\nif (!sourceMessageId)\n    throw new Error('ARCHIVE_SOURCE_MESSAGE_ID_MISSING');\nif (!sourceAttachmentId)\n    throw new Error('ARCHIVE_SOURCE_ATTACHMENT_ID_MISSING');\nconst canonical_document_id = canonicalDocumentId('MAIL_LINKED', [expected.document_sha256, sourceMessageId, sourceAttachmentId]);\nreturn [{ json: { ...expected, canonical_document_id, source_attachment_id: sourceAttachmentId, source_message_id: sourceMessageId, attachment_identity: identity, onedrive_item_id: archived.id, onedrive_etag: archived.eTag || archived.etag || '', archive_state: 'HASH_VERIFIED', archive_readback_verified: true, attachment_verified: true, archive_readback_sha256: observed } }];\n"
       }
     },
     {
@@ -515,7 +515,7 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
+          "value": "finance_documents",
           "mode": "name"
         },
         "matchType": "allConditions",
@@ -541,7 +541,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "document_id": "={{ 'attachment:' + $json.document_sha256 }}",
+            "document_id": "={{ $('Verify Enumerated Attachment Archive').item.json.canonical_document_id }}",
             "source_sha256": "={{ $json.document_sha256 }}",
             "document_profile": "={{ $json.is_inline ? 'INLINE_ATTACHMENT_ARCHIVED_ONLY' : ($json.is_pdf ? 'STATEMENT_PDF_V1' : 'NON_PDF_ARCHIVED_ONLY') }}",
             "requested_schema_version": "1",
@@ -579,7 +579,7 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "matchType": "allConditions",
@@ -610,7 +610,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "archive_receipt_id": "={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $json.document_sha256 }}",
+            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}",
             "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
             "source_code": "={{ $json.source_code }}",
             "source_message_id": "={{ $json.source_message_id }}",
@@ -619,8 +619,9 @@
             "onedrive_item_id": "={{ $json.onedrive_item_id }}",
             "onedrive_etag": "={{ $json.onedrive_etag }}",
             "archive_state": "HASH_VERIFIED",
-            "verified_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "document_id": "={{ $('Verify Enumerated Attachment Archive').item.json.canonical_document_id }}",
+            "archive_verified_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -647,7 +648,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -659,6 +660,26 @@
               "keyName": "archive_receipt_id",
               "condition": "eq",
               "keyValue": "={{ $json.archive_receipt_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_code }}"
+            },
+            {
+              "keyName": "source_message_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_message_id }}"
+            },
+            {
+              "keyName": "source_attachment_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_attachment_id }}"
+            },
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.document_sha256 }}"
             },
             {
               "keyName": "archive_state",
@@ -781,7 +802,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -898,7 +919,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -1006,7 +1027,7 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "matchType": "allConditions",
@@ -1037,7 +1058,7 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "archive_receipt_id": "={{ $('Validate Bounded Source Request').first().json.run_id + ':' + $json.source_message_id + ':INLINE_BODY:' + $json.email_evidence_sha256 }}",
+            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, 'INLINE_BODY', $json.email_evidence_sha256]) }}",
             "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
             "source_code": "={{ $json.source_code }}",
             "source_message_id": "={{ $json.source_message_id }}",
@@ -1046,8 +1067,9 @@
             "onedrive_item_id": "={{ $json.onedrive_item_id }}",
             "onedrive_etag": "={{ $json.onedrive_etag }}",
             "archive_state": "HASH_VERIFIED",
-            "verified_at": "={{ $now.toISO() }}",
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "document_id": "={{ $('Verify Email Evidence Readback').item.json.canonical_document_id }}",
+            "archive_verified_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -1073,7 +1095,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_archive_receipts",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -1085,6 +1107,26 @@
               "keyName": "archive_receipt_id",
               "condition": "eq",
               "keyValue": "={{ $('Upsert Durable Email Evidence Receipt').item.json.archive_receipt_id }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.source_code }}"
+            },
+            {
+              "keyName": "source_message_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.source_message_id }}"
+            },
+            {
+              "keyName": "source_attachment_id",
+              "condition": "eq",
+              "keyValue": "INLINE_BODY"
+            },
+            {
+              "keyName": "source_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.email_evidence_sha256 }}"
             },
             {
               "keyName": "archive_state",
@@ -1607,7 +1649,7 @@
     "financeWorkflowCode": "OUTLOOK_FINANCE_ACQUISITION",
     "mcpSafe": false,
     "migrationStatus": "SPEC_ONLY",
-    "terminalReceiptTable": "finance_archive_receipts",
+    "terminalReceiptTable": "finance_documents",
     "terminalReceiptReadback": true,
     "immutableEnumerationInputRequired": true,
     "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID_AND_HASH",
@@ -1616,7 +1658,7 @@
       "INLINE",
       "NON_PDF"
     ],
-    "providerCircuitTable": "finance_provider_circuits",
+    "providerCircuitTable": "finance_ingestion_state",
     "manualMutationForbidden": true,
     "credentialBindings": [
       {
@@ -1648,7 +1690,9 @@
       "source_attachment_id"
     ],
     "immutableEnumerationFailClosed": true,
-    "secondGraphEnumeration": false
+    "secondGraphEnumeration": false,
+    "terminalReceiptRecordType": "ARCHIVE_RECEIPT",
+    "providerCircuitRecordType": "PROVIDER_CIRCUIT"
   },
   "nodeGroups": [
     {

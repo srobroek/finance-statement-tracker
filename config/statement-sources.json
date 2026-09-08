@@ -8,8 +8,12 @@
       "adapter": "adcb_v1",
       "password_env": "ADCB_STATEMENT_PASSWORD",
       "email_status": "ACTIVE",
-      "email_senders": ["estatement@adcb.com"],
-      "email_subjects": ["ADCB Credit card e-Statement"],
+      "email_senders": [
+        "estatement@adcb.com"
+      ],
+      "email_subjects": [
+        "ADCB Credit card e-Statement"
+      ],
       "notes": "PDF parser, browser export, and recurring production mailbox contract are verified."
     },
     {
@@ -25,8 +29,12 @@
       "deadline_days": 5,
       "onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
       "manifest_onedrive_parent_id": "01GMG6TAGG3RQVIB4ILNAKISIXBCV7ZW6H",
-      "email_senders": ["estatement@emiratesislamic.ae"],
-      "email_subjects": ["Statement of your Emirates Islamic Credit Card"],
+      "email_senders": [
+        "estatement@emiratesislamic.ae"
+      ],
+      "email_subjects": [
+        "Statement of your Emirates Islamic Credit Card"
+      ],
       "notes": "PDF parser and recurring production mailbox contract are verified."
     },
     {
@@ -46,18 +54,21 @@
         "communications@email.wio.io",
         "communications@mail.wio.io"
       ],
-      "email_subjects": ["Your Wio Credit statement for this month"],
+      "email_subjects": [
+        "Your Wio Credit statement for this month"
+      ],
       "notes": "PDF parser and recurring production mailbox contract are verified. The sender migrated from communications@email.wio.io to communications@mail.wio.io in July 2026; both exact senders remain allowlisted for historical backfills. Statements arrive on day 1 or 2 and the scheduled job runs on day 3. Account mapping remains deployment-specific."
     },
     {
       "card_code": "RAK_WORLD",
       "institution": "RAKBANK",
-      "adapter_status": "PLACEHOLDER",
-      "adapter": null,
+      "adapter_status": "ACTIVE",
+      "adapter": "rakbank_v1",
+      "password_env": "RAKBANK_STATEMENT_PASSWORD",
       "email_status": "PLACEHOLDER",
       "email_senders": [],
       "email_subjects": [],
-      "notes": "No verified statement fixture exists. Do not parse, import, reconcile, or finalize until a real PDF fixture is captured and tested."
+      "notes": "Protected decrypted statement fixture is verified by the parser contract. Production PDF routing must supply RAKBANK_STATEMENT_PASSWORD through the existing statement-password credential path; mailbox sender and subject allowlisting remain pending before live86.6."
     },
     {
       "card_code": "SC_PLATINUM_X",

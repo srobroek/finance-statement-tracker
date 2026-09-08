@@ -4,9 +4,9 @@
   "artifact_role": "GENERATED_SOURCE_MATRIX",
   "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
   "source_snapshot": {
-    "finance_commit": "a89ca26c6809a8f4d2c498b2b8a10907e8f175d3",
+    "finance_commit": "b63e6a7fd5a7a58bd14c17f959053f4b08c2fe07",
     "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
-    "node_scan_corpus_sha256": "2463941fdb7e617d1004dc06f2c350a620b9a5cb94417a6dd6b81654dec8439c",
+    "node_scan_corpus_sha256": "464624de0be3e45be50e18f0e2508a71070603a5107248e53a684745a5685960",
     "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
     "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
   },
@@ -24,31 +24,104 @@
   "target_schemas": {
     "finance_ingestion_state": {
       "logical_key": [
-        "source_code"
+        "record_type",
+        "record_key"
       ],
       "identity_derivations": [
         {
           "source_table": "finance_source_cursors",
-          "strategy": "direct",
+          "strategy": "typed_record",
           "target_key": [
-            "source_code"
+            "record_type",
+            "record_key"
           ],
           "source_fields": [
             "source_code"
-          ]
+          ],
+          "record_type": "SOURCE_CURSOR"
         },
         {
           "source_table": "finance_acquisition_receipts",
-          "strategy": "direct",
+          "strategy": "typed_record",
           "target_key": [
-            "source_code"
+            "record_type",
+            "record_key"
           ],
           "source_fields": [
+            "run_id",
             "source_code"
-          ]
+          ],
+          "record_type": "ACQUISITION_RECEIPT"
+        },
+        {
+          "source_table": "finance_pipeline_runs",
+          "strategy": "typed_record",
+          "target_key": [
+            "record_type",
+            "record_key"
+          ],
+          "source_fields": [
+            "run_id",
+            "workflow_code"
+          ],
+          "record_type": "PIPELINE_RUN"
+        },
+        {
+          "source_table": "finance_provider_circuits",
+          "strategy": "typed_record",
+          "target_key": [
+            "record_type",
+            "record_key"
+          ],
+          "source_fields": [
+            "provider_code"
+          ],
+          "record_type": "PROVIDER_CIRCUIT"
+        },
+        {
+          "source_table": "finance_execution_failures",
+          "strategy": "typed_record",
+          "target_key": [
+            "record_type",
+            "record_key"
+          ],
+          "source_fields": [
+            "execution_id"
+          ],
+          "record_type": "EXECUTION_FAILURE"
+        },
+        {
+          "source_table": "finance_mcp_requests",
+          "strategy": "typed_record",
+          "target_key": [
+            "record_type",
+            "record_key"
+          ],
+          "source_fields": [
+            "request_id"
+          ],
+          "record_type": "MCP_REQUEST"
         }
       ],
       "columns": {
+        "record_type": {
+          "type": "string",
+          "source_bindings": [
+            "typed-operational-state.record_type"
+          ]
+        },
+        "record_key": {
+          "type": "string",
+          "source_bindings": [
+            "typed-operational-state.record_key"
+          ]
+        },
+        "record_payload_json": {
+          "type": "string",
+          "source_bindings": [
+            "typed-operational-state.record_payload_json"
+          ]
+        },
         "source_code": {
           "type": "string",
           "source_bindings": [
@@ -160,6 +233,18 @@
           "type": "date",
           "source_bindings": [
             "finance_acquisition_receipts.created_at"
+          ]
+        },
+        "archive_receipt_sha256": {
+          "type": "string",
+          "source_bindings": [
+            "acquisition-archive-proof-v1.archive_receipt_sha256"
+          ]
+        },
+        "archive_readback_verified": {
+          "type": "boolean",
+          "source_bindings": [
+            "acquisition-archive-proof-v1.archive_readback_verified"
           ]
         },
         "downstream_receipt_sha256": {
@@ -975,12 +1060,12 @@
   "invariants": {
     "source_tables": 15,
     "source_columns": 215,
-    "node_references": 33,
-    "consumer_node_edges": 315,
-    "filter_only_consumer_columns": 17,
-    "filter_only_consumer_edges": 31,
-    "write_reference_edges": 121,
-    "producer_node_edges": 121,
+    "node_references": 1,
+    "consumer_node_edges": 11,
+    "filter_only_consumer_columns": 0,
+    "filter_only_consumer_edges": 0,
+    "write_reference_edges": 0,
+    "producer_node_edges": 0,
     "every_source_column_has_one_disposition": true,
     "node_operations": [
       "create",
@@ -997,8 +1082,8 @@
     "deletion_requires_second_run_noop_and_reverse_rehearsal": true,
     "dispositions": {
       "keep": 104,
-      "transform": 59,
-      "remove": 52
+      "transform": 102,
+      "remove": 9
     }
   },
   "tables": [
@@ -1017,50 +1102,7 @@
       "retention": "ACTIVE rows indefinitely; retired versions 400 days",
       "privacy": "restricted configuration",
       "rationale": "Repository-owned resolver replaces runtime configuration rows.",
-      "node_references": [
-        {
-          "table": "finance_source_contracts",
-          "file": "integrations/n8n/workflows/02-rakbank-live-cashback.json",
-          "node": "Load Trusted Mail Contract",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "enabled"
-          ]
-        },
-        {
-          "table": "finance_source_contracts",
-          "file": "integrations/n8n/workflows/09-ai-proposal.json",
-          "node": "Load Trusted Proposal Archive Contract",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "enabled"
-          ]
-        },
-        {
-          "table": "finance_source_contracts",
-          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
-          "node": "Load Trusted Source Contract",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "enabled"
-          ]
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "source_code",
@@ -1077,11 +1119,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1099,11 +1137,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1120,11 +1154,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1141,11 +1171,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1162,11 +1188,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1183,11 +1205,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1204,11 +1222,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1225,11 +1239,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1246,11 +1256,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1267,11 +1273,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1288,11 +1290,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1309,11 +1307,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1330,11 +1324,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1351,11 +1341,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1372,11 +1358,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1393,11 +1375,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         },
         {
@@ -1414,11 +1392,7 @@
           "retention": "ACTIVE rows indefinitely; retired versions 400 days",
           "privacy": "restricted configuration",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/02-rakbank-live-cashback.json#Load Trusted Mail Contract",
-            "integrations/n8n/workflows/09-ai-proposal.json#Load Trusted Proposal Archive Contract",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Load Trusted Source Contract"
-          ],
+          "consumer_nodes": [],
           "rationale": "Repository-owned resolver replaces runtime configuration rows."
         }
       ]
@@ -1437,21 +1411,7 @@
       "retention": "current row indefinitely; superseded receipts 400 days",
       "privacy": "internal operational metadata",
       "rationale": "Keep the latest verified non-Cashback cursor boundary.",
-      "node_references": [
-        {
-          "table": "finance_source_cursors",
-          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
-          "node": "Read Source Cursor Before Commit",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code"
-          ]
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "source_code",
@@ -1468,9 +1428,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1487,9 +1445,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1506,9 +1462,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1525,9 +1479,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1544,9 +1496,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1563,9 +1513,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1582,9 +1530,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1601,9 +1547,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1620,9 +1564,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         },
         {
@@ -1639,9 +1581,7 @@
           "retention": "current row indefinitely; superseded receipts 400 days",
           "privacy": "internal operational metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Source Cursor Before Commit"
-          ],
+          "consumer_nodes": [],
           "rationale": "Keep the latest verified non-Cashback cursor boundary."
         }
       ]
@@ -2102,121 +2042,7 @@
       "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
       "privacy": "restricted evidence identifiers",
       "rationale": "Merge archive identity with document processing while retaining separate state axes.",
-      "node_references": [
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Back Durable Email Evidence Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "archive_receipt_id",
-            "archive_state"
-          ]
-        },
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Back Enumerated Archive Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "archive_receipt_id",
-            "archive_state"
-          ]
-        },
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Existing Email Evidence Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "source_message_id",
-            "source_attachment_id",
-            "source_sha256",
-            "archive_state"
-          ]
-        },
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Read Existing Enumerated Archive Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "source_message_id",
-            "source_attachment_id",
-            "archive_state"
-          ]
-        },
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Upsert Durable Email Evidence Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "archive_receipt_id",
-            "archive_state",
-            "onedrive_etag",
-            "onedrive_item_id",
-            "run_id",
-            "source_attachment_id",
-            "source_code",
-            "source_message_id",
-            "source_sha256",
-            "updated_at",
-            "verified_at"
-          ],
-          "filter_keys": [
-            "source_code",
-            "source_message_id",
-            "source_attachment_id",
-            "source_sha256"
-          ]
-        },
-        {
-          "table": "finance_archive_receipts",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Upsert Enumerated Archive Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "archive_receipt_id",
-            "archive_state",
-            "onedrive_etag",
-            "onedrive_item_id",
-            "run_id",
-            "source_attachment_id",
-            "source_code",
-            "source_message_id",
-            "source_sha256",
-            "updated_at",
-            "verified_at"
-          ],
-          "filter_keys": [
-            "source_code",
-            "source_message_id",
-            "source_attachment_id",
-            "source_sha256"
-          ]
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "archive_receipt_id",
@@ -2231,16 +2057,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2256,16 +2074,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2282,18 +2092,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2310,18 +2110,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2338,18 +2128,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2366,18 +2146,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2393,16 +2163,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2418,16 +2180,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2443,16 +2197,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2468,16 +2214,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         },
         {
@@ -2493,16 +2231,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with OneDrive evidence; default 7 years pending owner approval",
           "privacy": "restricted evidence identifiers",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Upsert Enumerated Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Durable Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Back Enumerated Archive Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Email Evidence Receipt",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Read Existing Enumerated Archive Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge archive identity with document processing while retaining separate state axes."
         }
       ]
@@ -2534,175 +2264,7 @@
       "retention": "co-retain with evidence; default 7 years pending owner approval",
       "privacy": "restricted finance and evidence metadata",
       "rationale": "Merge processing state with archive identity without storing content.",
-      "node_references": [
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Record Email PDF Render Requirement",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "attempt_count",
-            "document_id",
-            "document_profile",
-            "error_class",
-            "error_detail_redacted",
-            "onedrive_item_id",
-            "requested_schema_version",
-            "source_attachment_id",
-            "source_message_id",
-            "source_sha256",
-            "state",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "source_sha256",
-            "document_profile",
-            "requested_schema_version"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
-          "node": "Record Enumerated Attachment Disposition",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "attempt_count",
-            "document_id",
-            "document_profile",
-            "error_class",
-            "error_detail_redacted",
-            "onedrive_item_id",
-            "requested_schema_version",
-            "source_attachment_id",
-            "source_code",
-            "source_message_id",
-            "source_sha256",
-            "state",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "source_sha256",
-            "document_profile",
-            "requested_schema_version"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-          "node": "Load Existing Browser Archive Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "document_id"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-          "node": "Load MCP Reviewed Document Record",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "document_id"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-          "node": "Read Back Durable Browser Archive Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "document_id"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
-          "node": "Upsert Durable Browser Archive Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "attempt_count",
-            "document_id",
-            "document_profile",
-            "error_class",
-            "error_detail_redacted",
-            "onedrive_item_id",
-            "output_sha256",
-            "requested_schema_version",
-            "source_code",
-            "source_sha256",
-            "state",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "document_id"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
-          "node": "Load Immutable Document Record",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "document_id"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
-          "node": "Read Back Redacted Extraction Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "document_id",
-            "state"
-          ]
-        },
-        {
-          "table": "finance_document_operations",
-          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
-          "node": "Upsert Redacted Extraction Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "attempt_count",
-            "document_id",
-            "document_profile",
-            "error_class",
-            "error_detail_redacted",
-            "last_execution_id",
-            "output_sha256",
-            "parser_version",
-            "requested_schema_version",
-            "source_sha256",
-            "state",
-            "updated_at"
-          ],
-          "filter_keys": [
-            "document_id"
-          ]
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "document_id",
@@ -2717,21 +2279,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2748,21 +2297,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2779,21 +2315,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2810,21 +2333,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2840,18 +2350,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2867,17 +2367,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2893,17 +2384,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2919,17 +2401,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2946,13 +2419,7 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2969,13 +2436,7 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -2992,13 +2453,7 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3015,13 +2470,7 @@
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
           "producer_nodes": [],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3037,19 +2486,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3065,19 +2503,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3093,16 +2520,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3118,16 +2537,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3143,17 +2554,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3169,19 +2571,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3197,19 +2588,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         },
         {
@@ -3225,19 +2605,8 @@
           "owner": "finance evidence workflow",
           "retention": "co-retain with evidence; default 7 years pending owner approval",
           "privacy": "restricted finance and evidence metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Email PDF Render Requirement",
-            "integrations/n8n/workflows/01-outlook-finance-acquisition.json#Record Enumerated Attachment Disposition",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Upsert Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Upsert Redacted Extraction Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load Existing Browser Archive Receipt",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Load MCP Reviewed Document Record",
-            "integrations/n8n/workflows/11-interactive-artifact-handoff.json#Read Back Durable Browser Archive Receipt",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Load Immutable Document Record",
-            "integrations/n8n/workflows/13-document-extraction-request.json#Read Back Redacted Extraction Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Merge processing state with archive identity without storing content."
         }
       ]
@@ -3257,127 +2626,33 @@
         "CANCELLED"
       ],
       "allowed_review_states": [],
-      "target_table": null,
+      "target_table": "finance_ingestion_state",
       "target_artifact": null,
       "owner": "n8n execution history",
       "retention": "400 days",
       "privacy": "internal telemetry",
-      "rationale": "n8n execution history replaces duplicated run telemetry.",
+      "rationale": "Preserve every pipeline receipt as a typed ingestion-state record.",
       "node_references": [
         {
           "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Mark Terminal Readback Verified",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "run_id",
-            "terminal_readback_verified",
-            "updated_at",
-            "workflow_code"
-          ],
-          "filter_keys": [
-            "run_id",
-            "workflow_code"
-          ]
-        },
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Read Back Terminal Pipeline Receipt",
+          "file": "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json",
+          "node": "Read Verified Downstream Terminal Receipt",
           "operation": "get",
           "read_columns": [
             "*"
           ],
           "write_columns": [],
-          "filter_keys": [
-            "run_id",
-            "workflow_code",
-            "state"
-          ]
-        },
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Read Back Verified Terminal Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "run_id",
-            "workflow_code",
-            "terminal_readback_verified"
-          ]
-        },
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Upsert Terminal Pipeline Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "completed_at",
-            "config_version",
-            "receipt_sha256",
-            "run_id",
-            "source_code",
-            "state",
-            "terminal_readback_verified",
-            "trigger_kind",
-            "updated_at",
-            "workflow_code"
-          ],
-          "filter_keys": [
-            "run_id",
-            "workflow_code"
-          ]
-        },
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
-          "node": "Read Back Waiting or Deadline Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "run_id",
-            "workflow_code"
-          ]
-        },
-        {
-          "table": "finance_pipeline_runs",
-          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
-          "node": "Upsert Waiting or Deadline Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "config_version",
-            "run_id",
-            "source_code",
-            "state",
-            "terminal_readback_verified",
-            "trigger_kind",
-            "updated_at",
-            "workflow_code"
-          ],
-          "filter_keys": [
-            "run_id",
-            "workflow_code"
-          ]
+          "filter_keys": []
         }
       ],
       "columns": [
         {
           "source_column": "run_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.run_id",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -3385,28 +2660,19 @@
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "workflow_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.workflow_code",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -3414,172 +2680,133 @@
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "source_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.source_code",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "trigger_kind",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.trigger_kind",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "config_version",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.config_version",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "state",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.state",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "receipt_sha256",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.receipt_sha256",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "terminal_readback_verified",
           "source_type": "boolean",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.terminal_readback_verified",
           "constraints": [
             "type:boolean"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "started_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.started_at",
           "constraints": [
             "type:date"
           ],
@@ -3588,59 +2815,47 @@
           "privacy": "internal telemetry",
           "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "completed_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.completed_at",
           "constraints": [
             "type:date"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         },
         {
           "source_column": "updated_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.updated_at",
           "constraints": [
             "type:date"
           ],
           "owner": "n8n execution history",
           "retention": "400 days",
           "privacy": "internal telemetry",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Mark Terminal Readback Verified",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Upsert Waiting or Deadline Receipt"
-          ],
+          "producer_nodes": [],
           "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Terminal Pipeline Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Verified Terminal Receipt",
-            "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json#Read Back Waiting or Deadline Receipt"
+            "integrations/n8n/disposable/generated/90-derived-outlook-sweep-core.json#Read Verified Downstream Terminal Receipt"
           ],
-          "rationale": "n8n execution history replaces duplicated run telemetry."
+          "rationale": "Preserve every pipeline receipt as a typed ingestion-state record."
         }
       ]
     },
@@ -4342,50 +3557,7 @@
       "retention": "co-retain with statement evidence; default 7 years pending owner approval",
       "privacy": "restricted reconciliation metadata",
       "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion.",
-      "node_references": [
-        {
-          "table": "finance_reconciliations",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Read Back Reconciliation Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "source_code",
-            "period_key",
-            "state",
-            "reconciliation_version",
-            "statement_sha256",
-            "actual_verification_sha256"
-          ]
-        },
-        {
-          "table": "finance_reconciliations",
-          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
-          "node": "Upsert Reconciliation Receipt",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "actual_verification_sha256",
-            "cashback_close_id",
-            "difference_minor",
-            "period_key",
-            "reconciliation_version",
-            "source_code",
-            "state",
-            "statement_sha256",
-            "updated_at",
-            "verified_at"
-          ],
-          "filter_keys": [
-            "source_code",
-            "period_key",
-            "reconciliation_version"
-          ]
-        }
-      ],
+      "node_references": [],
       "columns": [
         {
           "source_column": "source_code",
@@ -4401,13 +3573,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4424,13 +3591,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4447,13 +3609,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt",
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4469,12 +3626,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4490,12 +3643,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4511,12 +3660,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4532,12 +3677,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4553,12 +3694,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4574,12 +3711,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         },
         {
@@ -4595,12 +3728,8 @@
           "owner": "finance reconciliation workflow",
           "retention": "co-retain with statement evidence; default 7 years pending owner approval",
           "privacy": "restricted reconciliation metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Upsert Reconciliation Receipt"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/03-shared-statement-pipeline.json#Read Back Reconciliation Receipt"
-          ],
+          "producer_nodes": [],
+          "consumer_nodes": [],
           "rationale": "Keep Actual verification pointers on the batch; Cashback close authority stays in the companion."
         }
       ]
@@ -4796,21 +3925,21 @@
         "HALF_OPEN"
       ],
       "allowed_review_states": [],
-      "target_table": null,
+      "target_table": "finance_ingestion_state",
       "target_artifact": null,
       "owner": "workflow retry policy and external alerting",
       "retention": "current row indefinitely; failure history remains in execution failures",
       "privacy": "internal operational metadata",
-      "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence.",
+      "rationale": "Preserve provider backoff state as a typed ingestion-state record.",
       "node_references": [],
       "columns": [
         {
           "source_column": "provider_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.provider_code",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -4820,15 +3949,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "state",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.state",
           "constraints": [
             "type:string"
           ],
@@ -4837,15 +3966,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "transient_failure_count",
           "source_type": "number",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.transient_failure_count",
           "constraints": [
             "type:number"
           ],
@@ -4854,15 +3983,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "last_error_class",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.last_error_class",
           "constraints": [
             "type:string"
           ],
@@ -4871,15 +4000,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "opened_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.opened_at",
           "constraints": [
             "type:date"
           ],
@@ -4888,15 +4017,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "retry_after",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.retry_after",
           "constraints": [
             "type:date"
           ],
@@ -4905,15 +4034,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "readback_verified",
           "source_type": "boolean",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.readback_verified",
           "constraints": [
             "type:boolean"
           ],
@@ -4922,15 +4051,15 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         },
         {
           "source_column": "updated_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.updated_at",
           "constraints": [
             "type:date"
           ],
@@ -4939,7 +4068,7 @@
           "privacy": "internal operational metadata",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Remove unless a shared circuit breaker is proven by disposable evidence."
+          "rationale": "Preserve provider backoff state as a typed ingestion-state record."
         }
       ]
     },
@@ -4951,21 +4080,21 @@
       ],
       "allowed_states": [],
       "allowed_review_states": [],
-      "target_table": null,
+      "target_table": "finance_ingestion_state",
       "target_artifact": null,
       "owner": "n8n execution history and observability",
       "retention": "400 days",
       "privacy": "internal redacted telemetry",
-      "rationale": "Use execution history and external observability.",
+      "rationale": "Preserve redacted failure receipts as typed ingestion-state records.",
       "node_references": [],
       "columns": [
         {
           "source_column": "execution_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.execution_id",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -4975,15 +4104,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "workflow_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.workflow_id",
           "constraints": [
             "type:string"
           ],
@@ -4992,15 +4121,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "workflow_name",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.workflow_name",
           "constraints": [
             "type:string"
           ],
@@ -5009,15 +4138,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "workflow_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.workflow_code",
           "constraints": [
             "type:string"
           ],
@@ -5026,15 +4155,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "run_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.run_id",
           "constraints": [
             "type:string"
           ],
@@ -5043,15 +4172,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "provider_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.provider_code",
           "constraints": [
             "type:string"
           ],
@@ -5060,15 +4189,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "error_class",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.error_class",
           "constraints": [
             "type:string"
           ],
@@ -5077,15 +4206,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "error_message_redacted",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.error_message_redacted",
           "constraints": [
             "type:string"
           ],
@@ -5094,15 +4223,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "first_seen_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.first_seen_at",
           "constraints": [
             "type:date"
           ],
@@ -5111,15 +4240,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "acknowledged_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.acknowledged_at",
           "constraints": [
             "type:date"
           ],
@@ -5128,15 +4257,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "replay_execution_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.replay_execution_id",
           "constraints": [
             "type:string"
           ],
@@ -5145,15 +4274,15 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         },
         {
           "source_column": "readback_verified",
           "source_type": "boolean",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.readback_verified",
           "constraints": [
             "type:boolean"
           ],
@@ -5162,7 +4291,7 @@
           "privacy": "internal redacted telemetry",
           "producer_nodes": [],
           "consumer_nodes": [],
-          "rationale": "Use execution history and external observability."
+          "rationale": "Preserve redacted failure receipts as typed ingestion-state records."
         }
       ]
     },
@@ -5179,121 +4308,21 @@
         "FAILED"
       ],
       "allowed_review_states": [],
-      "target_table": null,
+      "target_table": "finance_ingestion_state",
       "target_artifact": null,
       "owner": "n8n execution evidence and edge logs",
       "retention": "400 days",
       "privacy": "security audit metadata",
-      "rationale": "Use execution evidence and access logs.",
-      "node_references": [
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Mark MCP Receipt Verified",
-          "operation": "update",
-          "read_columns": [],
-          "write_columns": [
-            "readback_verified"
-          ],
-          "filter_keys": [
-            "request_id",
-            "result_sha256"
-          ]
-        },
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Read Back ACCEPTED MCP Request",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "request_id",
-            "state"
-          ]
-        },
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Read Back Terminal MCP Request",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "request_id",
-            "result_sha256"
-          ]
-        },
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Read Verified MCP Receipt",
-          "operation": "get",
-          "read_columns": [
-            "*"
-          ],
-          "write_columns": [],
-          "filter_keys": [
-            "request_id",
-            "readback_verified"
-          ]
-        },
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Upsert ACCEPTED MCP Request",
-          "operation": "upsert",
-          "read_columns": [],
-          "write_columns": [
-            "caller_subject_hash",
-            "created_at",
-            "error_class",
-            "error_message_redacted",
-            "operation_code",
-            "readback_verified",
-            "request_id",
-            "request_sha256",
-            "result_sha256",
-            "state",
-            "target_workflow_code"
-          ],
-          "filter_keys": [
-            "request_id"
-          ]
-        },
-        {
-          "table": "finance_mcp_requests",
-          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
-          "node": "Upsert Terminal MCP Request",
-          "operation": "update",
-          "read_columns": [],
-          "write_columns": [
-            "completed_at",
-            "error_class",
-            "error_message_redacted",
-            "readback_verified",
-            "result_sha256",
-            "state"
-          ],
-          "filter_keys": [
-            "request_id",
-            "request_sha256",
-            "state"
-          ]
-        }
-      ],
+      "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records.",
+      "node_references": [],
       "columns": [
         {
           "source_column": "request_id",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.request_id",
           "constraints": [
             "type:string",
             "logical-key-member"
@@ -5301,280 +4330,196 @@
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Mark MCP Receipt Verified",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "request_sha256",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.request_sha256",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "operation_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.operation_code",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "caller_subject_hash",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.caller_subject_hash",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "target_workflow_code",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.target_workflow_code",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "state",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.state",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "result_sha256",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.result_sha256",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Mark MCP Receipt Verified",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "error_class",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.error_class",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "error_message_redacted",
           "source_type": "string",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.error_message_redacted",
           "constraints": [
             "type:string"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "readback_verified",
           "source_type": "boolean",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.readback_verified",
           "constraints": [
             "type:boolean"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Mark MCP Receipt Verified",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "created_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.created_at",
           "constraints": [
             "type:date"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert ACCEPTED MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         },
         {
           "source_column": "completed_at",
           "source_type": "date",
-          "disposition": "remove",
+          "disposition": "transform",
           "target_table": null,
-          "target_artifact": null,
-          "target_field": null,
+          "target_artifact": "typed-operational-state-v1",
+          "target_field": "record_payload_json.completed_at",
           "constraints": [
             "type:date"
           ],
           "owner": "n8n execution evidence and edge logs",
           "retention": "400 days",
           "privacy": "security audit metadata",
-          "producer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Upsert Terminal MCP Request"
-          ],
-          "consumer_nodes": [
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back ACCEPTED MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Back Terminal MCP Request",
-            "integrations/n8n/workflows/10-finance-operations-status.json#Read Verified MCP Receipt"
-          ],
-          "rationale": "Use execution evidence and access logs."
+          "producer_nodes": [],
+          "consumer_nodes": [],
+          "rationale": "Preserve bounded MCP audit receipts as typed ingestion-state records."
         }
       ]
     },

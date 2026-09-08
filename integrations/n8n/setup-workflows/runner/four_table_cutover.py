@@ -9,6 +9,8 @@ bootstrap workflow and its persisted pre-delete reverse transition.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import contextlib
 import fcntl
 import hashlib
@@ -19,7 +21,7 @@ import re
 import stat
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,10 +29,15 @@ ROOT = Path(__file__).resolve().parents[4]
 N8N = ROOT / "integrations" / "n8n"
 MIGRATION_PATH = N8N / "generate_data_table_migration.py"
 MATRIX_PATH = N8N / "data-table-migration-matrix.json"
+LEGACY_REFERENCE_INVENTORY_PATH = Path(__file__).with_name(
+    "finance-four-table-legacy-reference-inventory-v1.json"
+)
 DATA_TABLES_PATH = N8N / "data-tables.json"
 READBACK_PARSER_PATH = Path(__file__).with_name("parse_n8n_redacted_wrapper_output.py")
 WORKFLOW_ROOT = N8N / "workflows"
 CREDENTIAL_BINDINGS_PATH = N8N / "credential-bindings.json"
+SOURCE_BINDINGS_MANIFEST_PATH = N8N / "source-contract-bindings.json"
+SOURCE_BINDINGS_GENERATOR_PATH = N8N / "generate_source_contract_bindings.py"
 TARGETS = (
     "finance_ingestion_state",
     "finance_documents",
@@ -87,9 +94,18 @@ EXPECTED_REFERENCE_ACTIONS = {
     "5c77dce64a30fe30": "remove_legacy_selector_bind_mcp_audit_contract",
 }
 DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
-APPROVED_QUIESCENCE_RECEIPT_DIGEST = "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
-APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST = "9b49963355aa4d025e414eb1fd02abcb2891b340afa96f8d2ed4f00102301154"
-APPROVED_CONTRACT_BIJECTION_DIGEST = "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
+APPROVED_QUIESCENCE_RECEIPT_DIGEST = (
+    "74b77a7f4c1c870815bbde8cf4563b20984d76785d076a050fcef8880a7a4b69"
+)
+APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST = (
+    "9b49963355aa4d025e414eb1fd02abcb2891b340afa96f8d2ed4f00102301154"
+)
+APPROVED_CONTRACT_BIJECTION_DIGEST = (
+    "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
+)
+APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = (
+    "73421a90985dd682e706cfa539553229719fe4fc9fe04e9bf69633f1eb279d88"
+)
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
 }
@@ -117,9 +133,9 @@ def _canonical(value: Any) -> Any:
 
 
 def _canonical_bytes(value: Any) -> bytes:
-    return (json.dumps(_canonical(value), ensure_ascii=False, separators=(",", ":")) + "\n").encode(
-        "utf-8"
-    )
+    return (
+        json.dumps(_canonical(value), ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
 
 
 def _digest_json_without_newline(value: Any) -> str:
@@ -189,7 +205,8 @@ def _binding_inputs(args: argparse.Namespace) -> dict[str, str]:
         "PROTECTED_QUIESCENCE_RECEIPT_DIGEST",
     )
     required_export_digest = _require_digest(
-        getattr(args, "required_live_export_digest", None) or APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
+        getattr(args, "required_live_export_digest", None)
+        or APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
         "REQUIRED_LIVE_EXPORT_DIGEST",
     )
     contract_digest = _require_digest(
@@ -279,12 +296,71 @@ def _reference_id(source_table: str, reference: Mapping[str, Any]) -> str:
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
 
 
-def _reference_inventory(matrix: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _load_legacy_reference_inventory() -> dict[str, Any]:
+    raw = _protected_bytes(
+        LEGACY_REFERENCE_INVENTORY_PATH,
+        "LEGACY_REFERENCE_INVENTORY",
+        limit=64 * 1024,
+        require_private=False,
+    ).replace(b"\r\n", b"\n")
+    if hashlib.sha256(raw).hexdigest() != APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256:
+        raise CutoverError("LEGACY_REFERENCE_INVENTORY_SHA256_MISMATCH")
+    try:
+        inventory = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (ValueError, UnicodeError) as error:
+        raise CutoverError("LEGACY_REFERENCE_INVENTORY_JSON_INVALID") from error
+    if (
+        not isinstance(inventory, dict)
+        or set(inventory)
+        != {
+            "schema_version",
+            "source_matrix",
+            "source_contract",
+            "source_snapshot",
+            "tables",
+        }
+        or inventory["schema_version"]
+        != "finance-four-table-legacy-reference-inventory-v1"
+        or not isinstance(inventory["source_snapshot"], dict)
+        or not isinstance(inventory["tables"], list)
+        or inventory["source_matrix"]
+        != {
+            "revision": "7aa50d783b492a5ea2d351a11aebe7b09d423670",
+            "path": "integrations/n8n/data-table-migration-matrix.json",
+            "sha256": "e0be0a3a2e0bdc90d6e77afa714d583389622a377bedd17569e98cb39ca5058c",
+        }
+    ):
+        raise CutoverError("LEGACY_REFERENCE_INVENTORY_SCHEMA_INVALID")
+    return inventory
+
+
+def _validate_legacy_reference_identity(
+    identity: Mapping[str, Any], args: argparse.Namespace
+) -> None:
+    _load_legacy_reference_inventory()
+    if "legacy_reference_inventory_sha256" not in identity:
+        receipt, _ = _read_forward_runtime_receipt(args)
+        if (
+            receipt is not None
+            and receipt["schema_version"] == "finance-four-table-runtime-plan-v1"
+        ):
+            return
+        raise CutoverError("ACCEPTED_LEGACY_REFERENCE_INVENTORY_PIN_REQUIRED")
+    if (
+        identity["legacy_reference_inventory_sha256"]
+        != APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256
+    ):
+        raise CutoverError("ACCEPTED_LEGACY_REFERENCE_INVENTORY_PIN_MISMATCH")
+
+
+def _reference_inventory() -> list[dict[str, Any]]:
     inventory: list[dict[str, Any]] = []
-    for table in matrix.get("tables", []):
+    for table in _load_legacy_reference_inventory()["tables"]:
         if not isinstance(table, Mapping):
             raise CutoverError("REFERENCE_INVENTORY_INVALID")
-        source_table = _require_text(table.get("source_table"), "REFERENCE_SOURCE_TABLE")
+        source_table = _require_text(
+            table.get("source_table"), "REFERENCE_SOURCE_TABLE"
+        )
         references = table.get("node_references")
         if not isinstance(references, list):
             raise CutoverError("REFERENCE_INVENTORY_INVALID")
@@ -296,7 +372,13 @@ def _reference_inventory(matrix: Mapping[str, Any]) -> list[dict[str, Any]]:
             if action is None:
                 raise CutoverError(f"UNDECLARED_REFERENCE_ACTION:{identifier}")
             target = table.get("target_table")
-            if action.endswith(("repository_contract", "mcp_audit_contract", "execution_history_receipt")):
+            if action.endswith(
+                (
+                    "repository_contract",
+                    "mcp_audit_contract",
+                    "execution_history_receipt",
+                )
+            ):
                 target = None
             elif target is None:
                 target = ABSENT_REFERENCE_TARGETS.get(source_table)
@@ -370,11 +452,38 @@ REFERENCE_SEMANTIC_FIELDS = (
     "in_flight",
 )
 WORKFLOW_BODY_FIELDS = ("name", "nodes", "connections", "settings", "meta", "pinData")
+def _source_binding_manifest() -> dict[str, Any]:
+    spec = importlib.util.spec_from_file_location(
+        "finance_source_contract_bindings", SOURCE_BINDINGS_GENERATOR_PATH
+    )
+    if spec is None or spec.loader is None:
+        raise CutoverError("SOURCE_BINDINGS_GENERATOR_UNAVAILABLE")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        module.validate_current()
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise CutoverError(str(error)) from error
+    manifest, _ = _read_json(SOURCE_BINDINGS_MANIFEST_PATH)
+    if manifest.get("contract_status") != "READY" or manifest.get("activation_prerequisites"):
+        raise CutoverError("SOURCE_BINDINGS_ACTIVATION_REQUIRED")
+    return manifest
+
+
+def _validate_source_binding_manifest() -> None:
+    _source_binding_manifest()
+
+
 
 
 def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
     contract, _ = _read_json(CREDENTIAL_BINDINGS_PATH)
-    if set(contract) != {"bindings", "schema_version", "source", "workflow_code_metadata_key"}:
+    if set(contract) != {
+        "bindings",
+        "schema_version",
+        "source",
+        "workflow_code_metadata_key",
+    }:
         raise CutoverError("CREDENTIAL_BINDINGS_SCHEMA_INVALID")
     source = contract.get("source")
     if (
@@ -390,13 +499,16 @@ def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
         raise CutoverError("CREDENTIAL_BINDINGS_SCHEMA_INVALID")
     leaves: dict[tuple[str, str], tuple[str, str]] = {}
     placeholders: set[str] = set()
-    credential_types: set[str] = set()
     for binding in contract["bindings"]:
-        if not isinstance(binding, Mapping) or set(binding) != {"credential_type", "node_type", "nodes", "placeholder"}:
+        if not isinstance(binding, Mapping) or set(binding) not in (
+            {"credential_type", "node_type", "nodes", "placeholder"},
+            {"credential_name", "credential_type", "node_type", "nodes", "placeholder"},
+        ):
             raise CutoverError("CREDENTIAL_BINDING_KEYS_INVALID")
         placeholder = binding.get("placeholder")
         credential_type = binding.get("credential_type")
         node_type = binding.get("node_type")
+        credential_name = binding.get("credential_name")
         if (
             not isinstance(placeholder, str)
             or re.fullmatch(r"BIND_[A-Z0-9_]+", placeholder) is None
@@ -404,14 +516,14 @@ def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
             or not credential_type
             or not isinstance(node_type, str)
             or not node_type
+            or (credential_name is not None and (not isinstance(credential_name, str) or not credential_name))
             or not isinstance(binding.get("nodes"), list)
             or not binding["nodes"]
         ):
             raise CutoverError("CREDENTIAL_BINDING_INVALID")
-        if placeholder in placeholders or credential_type in credential_types:
+        if placeholder in placeholders:
             raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
         placeholders.add(placeholder)
-        credential_types.add(credential_type)
     for binding in contract["bindings"]:
         for item in binding["nodes"]:
             if not isinstance(item, Mapping) or set(item) != {"node", "workflow"}:
@@ -423,16 +535,22 @@ def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
                 or set(workflow) != {"code", "file", "id"}
                 or not isinstance(node, Mapping)
                 or set(node) != {"id", "name"}
-                or not all(isinstance(workflow.get(field), str) and workflow[field] for field in ("code", "file", "id"))
+                or not all(
+                    isinstance(workflow.get(field), str) and workflow[field]
+                    for field in ("code", "file", "id")
+                )
                 or re.fullmatch(r"\S+\.json", workflow["file"]) is None
-                or not all(isinstance(node.get(field), str) and node[field] for field in ("id", "name"))
+                or not all(
+                    isinstance(node.get(field), str) and node[field]
+                    for field in ("id", "name")
+                )
             ):
                 raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
             key = (workflow["id"], node["id"])
             if key in leaves:
                 raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
             leaves[key] = (binding["placeholder"], binding["credential_type"])
-    if len(contract["bindings"]) != 8 or len(leaves) != 36:
+    if len(contract["bindings"]) != 9 or len(leaves) != 37:
         raise CutoverError("CREDENTIAL_BINDING_COVERAGE_INVALID")
     return leaves
 
@@ -460,7 +578,7 @@ def _workflow_body_projection(value: Mapping[str, Any]) -> dict[str, Any]:
             raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
         reference = credentials[credential_type]
         if (
-            not isinstance(reference, Mapping)
+            not isinstance(reference, dict)
             or set(reference) != {"id", "name"}
             or not isinstance(reference.get("id"), str)
             or not reference["id"]
@@ -470,15 +588,23 @@ def _workflow_body_projection(value: Mapping[str, Any]) -> dict[str, Any]:
             raise CutoverError("CREDENTIAL_REFERENCE_INVALID")
         reference["id"] = placeholder
         reference["name"] = placeholder
-    expected = {node_id for (bound_workflow, node_id) in leaves if bound_workflow == workflow_id}
-    observed = {str(node.get("id", "")) for node in body.get("nodes", []) if (workflow_id, str(node.get("id", ""))) in leaves}
+    expected = {
+        node_id for (bound_workflow, node_id) in leaves if bound_workflow == workflow_id
+    }
+    observed = {
+        str(node.get("id", ""))
+        for node in body.get("nodes", [])
+        if (workflow_id, str(node.get("id", ""))) in leaves
+    }
     if expected != observed:
         raise CutoverError("CREDENTIAL_BINDING_COVERAGE_INVALID")
     return body
 
 
 def _workflow_body_digest(value: Mapping[str, Any]) -> str:
-    return hashlib.sha256(_canonical_bytes(_workflow_body_projection(value))).hexdigest()
+    return hashlib.sha256(
+        _canonical_bytes(_workflow_body_projection(value))
+    ).hexdigest()
 
 
 def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
@@ -487,13 +613,20 @@ def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
     workflows = value.get("workflows")
     targets = value.get("targets")
     references = value.get("references")
-    if not isinstance(workflows, list) or not isinstance(targets, list) or not isinstance(references, list):
+    if (
+        not isinstance(workflows, list)
+        or not isinstance(targets, list)
+        or not isinstance(references, list)
+    ):
         raise CutoverError("LIVE_EXPORT_SEMANTIC_COLLECTIONS_INVALID")
     try:
         projected_workflows = sorted(
             [
                 {
-                    **{field: workflow[field] for field in WORKFLOW_SEMANTIC_FIELDS[:-1]},
+                    **{
+                        field: workflow[field]
+                        for field in WORKFLOW_SEMANTIC_FIELDS[:-1]
+                    },
                     "workflow_body_sha256": _require_digest(
                         workflow["workflow_body_sha256"], "WORKFLOW_BODY_SHA256"
                     ),
@@ -507,14 +640,19 @@ def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
                 {
                     "name": target["name"],
                     "table_id": target["table_id"],
-                    "schema_sha256": _require_digest(target["schema_sha256"], "TARGET_SCHEMA_SHA256"),
+                    "schema_sha256": _require_digest(
+                        target["schema_sha256"], "TARGET_SCHEMA_SHA256"
+                    ),
                 }
                 for target in targets
             ],
             key=lambda target: target["name"],
         )
         projected_references = sorted(
-            [{field: reference[field] for field in REFERENCE_SEMANTIC_FIELDS} for reference in references],
+            [
+                {field: reference[field] for field in REFERENCE_SEMANTIC_FIELDS}
+                for reference in references
+            ],
             key=lambda reference: reference["reference_id"],
         )
     except (KeyError, TypeError) as error:
@@ -530,7 +668,9 @@ def _export_semantic_projection(value: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _export_semantic_digest(value: Mapping[str, Any]) -> str:
-    return hashlib.sha256(_canonical_bytes(_export_semantic_projection(value))).hexdigest()
+    return hashlib.sha256(
+        _canonical_bytes(_export_semantic_projection(value))
+    ).hexdigest()
 
 
 def _validate_live_export(
@@ -544,6 +684,7 @@ def _validate_live_export(
     required_export_digest: str,
     matrix: Mapping[str, Any],
     project_id: str | None = None,
+    validate_target_schema: bool = True,
 ) -> dict[str, Any]:
     _require_protected(path, "PROTECTED_LIVE_EXPORT")
     export, raw = _read_json(path)
@@ -553,14 +694,19 @@ def _validate_live_export(
         raise CutoverError("LIVE_EXPORT_SCHEMA_INVALID")
     export_sha = export.get("export_sha256")
     export_sha = _require_digest(export_sha, "LIVE_EXPORT_SHA256")
-    if hashlib.sha256(_canonical_bytes(_export_without_hash(export))).hexdigest() != export_sha:
+    if (
+        hashlib.sha256(_canonical_bytes(_export_without_hash(export))).hexdigest()
+        != export_sha
+    ):
         raise CutoverError("LIVE_EXPORT_INTEGRITY_MISMATCH")
     semantic_digest = _export_semantic_digest(export)
     if semantic_digest != required_export_digest:
         raise CutoverError("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH")
     if export.get("repository_root") != str(ROOT):
         raise CutoverError("LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH")
-    export_project_id = _require_text(export.get("project_id"), "LIVE_EXPORT_PROJECT_ID")
+    export_project_id = _require_text(
+        export.get("project_id"), "LIVE_EXPORT_PROJECT_ID"
+    )
     if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", export_project_id):
         raise CutoverError("LIVE_EXPORT_PROJECT_ID_INVALID")
     if project_id is not None and export_project_id != project_id:
@@ -577,7 +723,11 @@ def _validate_live_export(
     if export.get("redacted") is not True:
         raise CutoverError("LIVE_EXPORT_REDACTION_REQUIRED")
     workflows = export.get("workflows")
-    if export.get("workflow_count") != 19 or not isinstance(workflows, list) or len(workflows) != 19:
+    if (
+        export.get("workflow_count") != 19
+        or not isinstance(workflows, list)
+        or len(workflows) != 19
+    ):
         raise CutoverError("EXACT_19_WORKFLOW_EXPORT_REQUIRED")
     if export.get("in_flight") != 0:
         raise CutoverError("WORKFLOW_QUIESCENCE_REQUIRED")
@@ -609,12 +759,18 @@ def _validate_live_export(
         or {item.get("name") for item in target_ids} != set(TARGETS)
     ):
         raise CutoverError("EXACT_TARGET_EXPORT_REQUIRED")
-    expected_schemas = _target_schema_digests(matrix)
+    expected_schemas = (
+        _target_schema_digests(matrix) if validate_target_schema else None
+    )
     for target in target_ids:
         _require_text(target.get("table_id"), "LIVE_TARGET_ID")
-        if target.get("schema_sha256") != expected_schemas[target["name"]]:
+        _require_digest(target.get("schema_sha256"), "LIVE_TARGET_SCHEMA_SHA256")
+        if (
+            expected_schemas is not None
+            and target.get("schema_sha256") != expected_schemas[target["name"]]
+        ):
             raise CutoverError(f"LIVE_TARGET_SCHEMA_DIGEST_MISMATCH:{target['name']}")
-    inventory = _reference_inventory(matrix)
+    inventory = _reference_inventory()
     references = export.get("references")
     if not isinstance(references, list) or len(references) != len(inventory):
         raise CutoverError("COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED")
@@ -641,34 +797,70 @@ def _validate_live_export(
             ("canonical_table_name", expected["canonical_table_name"]),
         ):
             if observed.get(field) != expected_value:
-                raise CutoverError(f"LIVE_REFERENCE_{field.upper()}_MISMATCH:{expected['reference_id']}")
-        if "source_table" in observed and observed.get("source_table") != observed.get("old_table_name"):
-            raise CutoverError(f"LIVE_REFERENCE_SOURCE_TABLE_MISMATCH:{expected['reference_id']}")
+                raise CutoverError(
+                    f"LIVE_REFERENCE_{field.upper()}_MISMATCH:{expected['reference_id']}"
+                )
+        if "source_table" in observed and observed.get("source_table") != observed.get(
+            "old_table_name"
+        ):
+            raise CutoverError(
+                f"LIVE_REFERENCE_SOURCE_TABLE_MISMATCH:{expected['reference_id']}"
+            )
         _require_text(observed.get("workflow_id"), "LIVE_REFERENCE_WORKFLOW_ID")
         observed_workflow_id = observed["workflow_id"]
-        observed_revision_id = _require_text(observed.get("revision_id"), "LIVE_REFERENCE_REVISION_ID")
+        observed_revision_id = _require_text(
+            observed.get("revision_id"), "LIVE_REFERENCE_REVISION_ID"
+        )
         if observed_workflow_id not in workflow_revisions:
-            raise CutoverError(f"LIVE_REFERENCE_WORKFLOW_UNKNOWN:{expected['reference_id']}")
+            raise CutoverError(
+                f"LIVE_REFERENCE_WORKFLOW_UNKNOWN:{expected['reference_id']}"
+            )
         if observed_revision_id != workflow_revisions[observed_workflow_id]:
-            raise CutoverError(f"LIVE_REFERENCE_REVISION_MISMATCH:{expected['reference_id']}")
+            raise CutoverError(
+                f"LIVE_REFERENCE_REVISION_MISMATCH:{expected['reference_id']}"
+            )
         _require_text(observed.get("node_id"), "LIVE_REFERENCE_NODE_ID")
         _require_text(observed.get("old_table_id"), "LIVE_REFERENCE_OLD_TABLE_ID")
         if observed["old_table_id"] != expected["legacy_table_id"]:
-            raise CutoverError(f"LIVE_REFERENCE_OLD_TABLE_ID_CONFLICT:{expected['reference_id']}")
+            raise CutoverError(
+                f"LIVE_REFERENCE_OLD_TABLE_ID_CONFLICT:{expected['reference_id']}"
+            )
         node_key = (observed_workflow_id, observed["node_id"])
         if node_key in node_aliases:
-            raise CutoverError(f"LIVE_REFERENCE_NODE_ALIAS_CONFLICT:{expected['reference_id']}")
+            raise CutoverError(
+                f"LIVE_REFERENCE_NODE_ALIAS_CONFLICT:{expected['reference_id']}"
+            )
         node_aliases.add(node_key)
-        if observed.get("active") is not False or observed.get("published") is not False or observed.get("in_flight") != 0:
+        if (
+            observed.get("active") is not False
+            or observed.get("published") is not False
+            or observed.get("in_flight") != 0
+        ):
             raise CutoverError("LIVE_REFERENCE_NOT_QUIESCENT")
         target_name = expected["canonical_table_name"]
         if target_name is None:
             if observed.get("canonical_table_id") not in {None, ""}:
-                raise CutoverError(f"UNDECLARED_REFERENCE_TARGET:{expected['reference_id']}")
+                raise CutoverError(
+                    f"UNDECLARED_REFERENCE_TARGET:{expected['reference_id']}"
+                )
         else:
-            if observed.get("canonical_table_id") != target_by_name[target_name]["table_id"]:
-                raise CutoverError(f"LIVE_REFERENCE_TARGET_ID_MISMATCH:{expected['reference_id']}")
-        actions.append({**expected, "workflow_id": observed["workflow_id"], "revision_id": observed["revision_id"], "node_id": observed["node_id"], "old_table_id": observed["old_table_id"], "canonical_table_id": observed.get("canonical_table_id")})
+            if (
+                observed.get("canonical_table_id")
+                != target_by_name[target_name]["table_id"]
+            ):
+                raise CutoverError(
+                    f"LIVE_REFERENCE_TARGET_ID_MISMATCH:{expected['reference_id']}"
+                )
+        actions.append(
+            {
+                **expected,
+                "workflow_id": observed["workflow_id"],
+                "revision_id": observed["revision_id"],
+                "node_id": observed["node_id"],
+                "old_table_id": observed["old_table_id"],
+                "canonical_table_id": observed.get("canonical_table_id"),
+            }
+        )
     return {
         "path": str(path),
         "project_id": export_project_id,
@@ -697,7 +889,10 @@ def _validate_lock_receipt(
 ) -> tuple[dict[str, Any], str]:
     _require_protected(path, "PROTECTED_WRITER_LOCK_RECEIPT")
     receipt, raw = _read_json(path)
-    if receipt.get("schema_version") != LOCK_RECEIPT_SCHEMA or receipt.get("lock_name") != LOCK_NAME:
+    if (
+        receipt.get("schema_version") != LOCK_RECEIPT_SCHEMA
+        or receipt.get("lock_name") != LOCK_NAME
+    ):
         raise CutoverError("WRITER_LOCK_RECEIPT_SCHEMA_INVALID")
     for field, expected in (
         ("project_id", project_id),
@@ -712,7 +907,9 @@ def _validate_lock_receipt(
         _validate_binding(receipt, binding, "WRITER_LOCK")
     if receipt.get("held") is not True or receipt.get("in_flight") != 0:
         raise CutoverError("EXCLUSIVE_WRITER_PRECONDITION_REQUIRED")
-    integrity = _require_digest(receipt.get("lock_receipt_sha256"), "LOCK_RECEIPT_SHA256")
+    integrity = _require_digest(
+        receipt.get("lock_receipt_sha256"), "LOCK_RECEIPT_SHA256"
+    )
     unsigned = dict(receipt)
     unsigned.pop("lock_receipt_sha256", None)
     if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != integrity:
@@ -730,12 +927,15 @@ def _lock_receipt(
     operation: str,
     binding: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    binding = dict(binding or {
-        "operation_nonce": DEFAULT_OPERATION_NONCE,
-        "protected_quiescence_receipt_digest": APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-        "required_live_export_digest": APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
-        "contract_bijection_digest": APPROVED_CONTRACT_BIJECTION_DIGEST,
-    })
+    binding = dict(
+        binding
+        or {
+            "operation_nonce": DEFAULT_OPERATION_NONCE,
+            "protected_quiescence_receipt_digest": APPROVED_QUIESCENCE_RECEIPT_DIGEST,
+            "required_live_export_digest": APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
+            "contract_bijection_digest": APPROVED_CONTRACT_BIJECTION_DIGEST,
+        }
+    )
     return _seal_with_key(
         {
             "schema_version": LOCK_RECEIPT_SCHEMA,
@@ -757,7 +957,9 @@ def _lock_receipt(
 
 
 def _load_migration_module() -> Any:
-    spec = importlib.util.spec_from_file_location("finance_four_table_migration", MIGRATION_PATH)
+    spec = importlib.util.spec_from_file_location(
+        "finance_four_table_migration", MIGRATION_PATH
+    )
     if spec is None or spec.loader is None:
         raise CutoverError("MIGRATION_GENERATOR_UNAVAILABLE")
     module = importlib.util.module_from_spec(spec)
@@ -778,10 +980,289 @@ def _legacy_names() -> set[str]:
     values = tables.get("tables")
     if not isinstance(values, list):
         raise CutoverError("SOURCE_TABLE_CONTRACT_INVALID")
-    names = {item.get("name") for item in values if isinstance(item, dict)}
-    if not names or not all(isinstance(name, str) for name in names):
+    names: set[str] = set()
+    for item in values:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name")
+        if not isinstance(name, str):
+            raise CutoverError("SOURCE_TABLE_CONTRACT_INVALID")
+        names.add(name)
+    if not names:
         raise CutoverError("SOURCE_TABLE_CONTRACT_INVALID")
     return names - set(TARGETS)
+
+
+def _protected_bytes(
+    path: Path, label: str, *, limit: int, require_private: bool = True
+) -> bytes:
+    if require_private:
+        _require_protected(path, f"PROTECTED_{label}")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as handle:
+            metadata = os.fstat(handle.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or (
+                require_private and stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise CutoverError(f"PROTECTED_{label}_MODE_REQUIRED")
+            raw = handle.read(limit + 1)
+    except OSError as error:
+        raise CutoverError(f"{label}_READ_FAILED") from error
+    if len(raw) > limit:
+        raise CutoverError(f"{label}_SIZE_EXCEEDED")
+    return raw
+
+
+def _read_forward_runtime_receipt(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any] | None, str | None]:
+    path = getattr(args, "forward_runtime_receipt", None)
+    if path is None:
+        return None, None
+    if getattr(args, "operation_kind", None) != "ROLLBACK":
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_ROLLBACK_ONLY")
+    raw = _protected_bytes(path, "FORWARD_RUNTIME_RECEIPT", limit=4 * 1024 * 1024)
+    try:
+        receipt = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (ValueError, UnicodeError) as error:
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_JSON_INVALID") from error
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema_version")
+        not in {
+            "finance-four-table-runtime-plan-v1",
+            "finance-four-table-runtime-plan-v2",
+        }
+        or receipt.get("operation") != "FORWARD"
+        or receipt.get("durable_journal") is not True
+        or receipt.get("commit_protocol") != "postgresql_synchronous_wal"
+        or receipt.get("readback_verified") is not True
+        or receipt.get("action_count") != len(EXPECTED_REFERENCE_ACTIONS)
+        or not isinstance(receipt.get("actions"), list)
+        or len(receipt["actions"]) != len(EXPECTED_REFERENCE_ACTIONS)
+    ):
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_SCHEMA_INVALID")
+    unsigned = dict(receipt)
+    digest = _require_digest(
+        unsigned.pop("runtime_plan_receipt_sha256", None),
+        "FORWARD_RUNTIME_RECEIPT_SHA256",
+    )
+    if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != digest:
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID")
+    if receipt["schema_version"] == "finance-four-table-runtime-plan-v2":
+        _require_digest(
+            receipt.get("canonical_source_sha256"), "CANONICAL_SOURCE_SHA256"
+        )
+        _require_digest(
+            receipt.get("rollback_workflows_sha256"), "ROLLBACK_WORKFLOWS_SHA256"
+        )
+    elif "canonical_source_sha256" in receipt or "rollback_workflows_sha256" in receipt:
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_VERSION_MISMATCH")
+    return receipt, hashlib.sha256(raw).hexdigest()
+
+
+def _validate_forward_runtime_binding(
+    receipt: Mapping[str, Any] | None,
+    export: Mapping[str, Any],
+    binding: Mapping[str, str],
+) -> None:
+    if receipt is None:
+        return
+    if (
+        receipt.get("project_id") != export["project_id"]
+        or receipt.get("export_sha256") != export["export_sha256"]
+        or receipt.get("lock_resource")
+        != f"{LOCK_RESOURCE_PREFIX}:{export['project_id']}"
+    ):
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_BINDING_INVALID")
+    _validate_binding(receipt, binding, "FORWARD_RUNTIME_RECEIPT")
+    expected = {action["reference_id"]: action for action in export["actions"]}
+    seen = set()
+    for action in receipt["actions"]:
+        if not isinstance(action, Mapping):
+            raise CutoverError("FORWARD_RUNTIME_ACTION_MISMATCH")
+        identifier = action.get("reference_id")
+        if (
+            not isinstance(identifier, str)
+            or identifier in seen
+            or identifier not in expected
+        ):
+            raise CutoverError("FORWARD_RUNTIME_ACTION_MISMATCH")
+        seen.add(identifier)
+        if (
+            any(
+                action.get(field) != expected[identifier].get(field)
+                for field in (
+                    "workflow_id",
+                    "node_id",
+                    "revision_id",
+                    "canonical_table_id",
+                )
+            )
+            or not isinstance(action.get("post_revision_id"), str)
+            or not action["post_revision_id"]
+        ):
+            raise CutoverError("FORWARD_RUNTIME_ACTION_MISMATCH")
+
+
+def _protected_resolver_input(
+    args: argparse.Namespace, name: str, identity: Mapping[str, Any], *, limit: int
+) -> dict[str, Any] | None:
+    path = getattr(args, name, None)
+    expected = getattr(args, f"{name}_sha256", None)
+    pins = identity.get("resolver_inputs", {})
+    if not isinstance(pins, Mapping) or set(pins) - {
+        "alias_bundle_sha256",
+        "verification_artifacts_sha256",
+    }:
+        raise CutoverError("RESOLVER_INPUT_PINS_INVALID")
+    pinned = pins.get(f"{name}_sha256")
+    label = name.upper()
+    if path is None and expected is None and pinned is None:
+        return None
+    if path is None or expected is None or pinned is None:
+        raise CutoverError(f"{label}_PINNED_INPUT_REQUIRED")
+    expected = _require_digest(expected, f"{label}_SHA256")
+    if expected != pinned:
+        raise CutoverError(f"{label}_ACCEPTED_DIGEST_MISMATCH")
+    raw = _protected_bytes(path, label, limit=limit)
+    if hashlib.sha256(raw).hexdigest() != expected:
+        raise CutoverError(f"{label}_SHA256_MISMATCH")
+    try:
+        value = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (ValueError, UnicodeError) as error:
+        raise CutoverError(f"{label}_JSON_INVALID") from error
+    if not isinstance(value, dict):
+        raise CutoverError(f"{label}_OBJECT_REQUIRED")
+    return value
+
+
+def _migration_runner(
+    args: argparse.Namespace,
+    module: Any,
+    source: Mapping[str, Any],
+    source_head: str,
+    source_backup_sha: str,
+) -> Any:
+    identity_path = args.accepted_identity or args.migration_receipt.with_name(
+        "finance-four-table-accepted-identity.json"
+    )
+    _require_protected(identity_path)
+    identity, _ = _read_json(identity_path)
+    aliases = _protected_resolver_input(
+        args, "alias_bundle", identity, limit=16 * 1024 * 1024
+    )
+    artifacts = _protected_resolver_input(
+        args, "verification_artifacts", identity, limit=64 * 1024 * 1024
+    )
+    try:
+        alias_resolver = (
+            module.AliasResolver(aliases, expected_source_commit=source_head)
+            if aliases is not None
+            else None
+        )
+        verification_resolver = None
+        if artifacts is not None:
+            if (
+                set(artifacts)
+                != {
+                    "schema_version",
+                    "source_commit",
+                    "source_backup_sha256",
+                    "artifacts",
+                }
+                or artifacts.get("schema_version")
+                != "finance-verification-artifacts-v1"
+                or artifacts.get("source_commit") != source_head
+                or artifacts.get("source_backup_sha256") != source_backup_sha
+                or not isinstance(artifacts.get("artifacts"), list)
+                or len(artifacts["artifacts"]) > 4096
+            ):
+                raise CutoverError("VERIFICATION_ARTIFACTS_SOURCE_BINDING_MISMATCH")
+            verification_resolver = module.VerificationResolver()
+            for artifact in artifacts["artifacts"]:
+                if (
+                    not isinstance(artifact, Mapping)
+                    or set(artifact) != {"pointer", "content_base64"}
+                    or not isinstance(artifact["pointer"], Mapping)
+                    or set(artifact["pointer"]) != module.VERIFICATION_POINTER_FIELDS
+                    or not isinstance(artifact["content_base64"], str)
+                    or len(artifact["content_base64"])
+                    > 4 * ((8 * 1024 * 1024 + 2) // 3)
+                ):
+                    raise CutoverError("VERIFICATION_ARTIFACT_ENTRY_INVALID")
+                try:
+                    content = base64.b64decode(
+                        artifact["content_base64"], validate=True
+                    )
+                except (ValueError, binascii.Error) as error:
+                    raise CutoverError(
+                        "VERIFICATION_ARTIFACT_CONTENT_INVALID"
+                    ) from error
+                if len(content) > 8 * 1024 * 1024:
+                    raise CutoverError("VERIFICATION_ARTIFACT_SIZE_EXCEEDED")
+                verification_resolver.import_artifact(artifact["pointer"], content)
+        rows = _source_rows(source)
+        for row in rows.get("finance_actual_verifications", []):
+            if verification_resolver is None:
+                raise CutoverError("ACTUAL_VERIFICATION_RESOLVER_REQUIRED")
+            verification_resolver.readback(
+                row, expected_sha256=row.get("verification_artifact_sha256")
+            )
+        return module.MigrationRunner(
+            rows,
+            alias_resolver=alias_resolver,
+            verification_resolver=verification_resolver,
+        )
+    except module.MigrationError as error:
+        raise CutoverError(str(error)) from error
+
+
+def _canonical_source_bundle(
+    args: argparse.Namespace,
+    source_head: str,
+    generator_head: str,
+    identity_digest: str,
+) -> dict[str, Any]:
+    _check_reference_rewrite(args.workflow_root)
+    _load_legacy_reference_inventory()
+    contract, _ = _read_json(CREDENTIAL_BINDINGS_PATH)
+    paths = sorted(args.workflow_root.glob("*.json"))
+    if len(paths) != 19:
+        raise CutoverError("EXACT_19_CANONICAL_WORKFLOWS_REQUIRED")
+    corpus = hashlib.sha256()
+    files = []
+    workflow_ids = set()
+    for path in paths:
+        if path.is_symlink() or not path.is_file():
+            raise CutoverError("CANONICAL_SOURCE_REGULAR_FILE_REQUIRED")
+        raw = path.read_bytes().replace(b"\r\n", b"\n")
+        try:
+            workflow = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+        except (ValueError, UnicodeError) as error:
+            raise CutoverError("CANONICAL_SOURCE_WORKFLOW_INVALID") from error
+        if not isinstance(workflow, Mapping):
+            raise CutoverError("CANONICAL_SOURCE_WORKFLOW_INVALID")
+        workflow_id = _require_text(workflow.get("id"), "CANONICAL_WORKFLOW_ID")
+        if workflow_id in workflow_ids or workflow.get("active") is not False:
+            raise CutoverError("CANONICAL_WORKFLOW_IDENTITY_INVALID")
+        workflow_ids.add(workflow_id)
+        relative = f"integrations/n8n/workflows/{path.name}"
+        corpus.update(relative.encode("utf-8") + b"\0" + raw + b"\0")
+        files.append({"path": relative, "content": raw.decode("utf-8")})
+    corpus_sha = corpus.hexdigest()
+    if contract.get("source", {}).get("sha256") != corpus_sha:
+        raise CutoverError("CANONICAL_SOURCE_CORPUS_DIGEST_MISMATCH")
+    return {
+        "schema_version": "finance-four-table-canonical-source-v1",
+        "source_head": source_head,
+        "generator_head": generator_head,
+        "accepted_identity_sha256": identity_digest,
+        "source_corpus_sha256": corpus_sha,
+        "legacy_reference_inventory_sha256": APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256,
+        "files": files,
+    }
 
 
 def _check_reference_rewrite(workflow_root: Path | None) -> dict[str, Any]:
@@ -792,12 +1273,20 @@ def _check_reference_rewrite(workflow_root: Path | None) -> dict[str, Any]:
     legacy = _legacy_names()
     references: list[dict[str, str]] = []
     for path in sorted(workflow_root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in {".json", ".js", ".cjs", ".ts", ".txt"}:
+        if not path.is_file() or path.suffix.lower() not in {
+            ".json",
+            ".js",
+            ".cjs",
+            ".ts",
+            ".txt",
+        }:
             continue
         text = path.read_text(encoding="utf-8")
         for name in sorted(legacy):
             if name in text:
-                references.append({"path": str(path.relative_to(workflow_root)), "table": name})
+                references.append(
+                    {"path": str(path.relative_to(workflow_root)), "table": name}
+                )
     if references:
         raise CutoverError("LEGACY_TABLE_REFERENCES_REMAIN")
     return {"checked": True, "verified": True, "legacy_references": []}
@@ -843,16 +1332,22 @@ def _source_rows(source: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
         raise CutoverError("SOURCE_BACKUP_TABLES_INVALID")
     result: dict[str, list[dict[str, Any]]] = {}
     for name, value in tables.items():
-        rows = value.get("rows") if isinstance(value, dict) and "rows" in value else value
-        if not isinstance(name, str) or not isinstance(rows, list) or any(
-            not isinstance(row, dict) for row in rows
+        rows = (
+            value.get("rows") if isinstance(value, dict) and "rows" in value else value
+        )
+        if (
+            not isinstance(name, str)
+            or not isinstance(rows, list)
+            or any(not isinstance(row, dict) for row in rows)
         ):
             raise CutoverError("SOURCE_BACKUP_ROWS_INVALID")
         result[name] = [dict(row) for row in rows]
     return result
 
 
-def _target_table_receipts(runner: Any, matrix: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _target_table_receipts(
+    runner: Any, matrix: Mapping[str, Any]
+) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for name in sorted(TARGETS):
         target_schema = matrix["target_schemas"][name]
@@ -870,7 +1365,8 @@ def _target_table_receipts(runner: Any, matrix: Mapping[str, Any]) -> list[dict[
         if not isinstance(rows, list):
             raise CutoverError(f"TARGET_ROWS_INVALID:{name}")
         row_strings = sorted(
-            json.dumps(_canonical(row), ensure_ascii=False, separators=(",", ":")) for row in rows
+            json.dumps(_canonical(row), ensure_ascii=False, separators=(",", ":"))
+            for row in rows
         )
         table = {
             "name": name,
@@ -920,8 +1416,13 @@ def _read_runtime_state(path: Path) -> tuple[dict[str, Any], str]:
     state, _ = _read_json(path)
     if state.get("schema_version") != RUNTIME_STATE_SCHEMA:
         raise CutoverError("RUNTIME_STATE_SCHEMA_INVALID")
-    observed = _require_digest(state.get("runtime_state_sha256"), "RUNTIME_STATE_SHA256")
-    if hashlib.sha256(_canonical_bytes(_runtime_state_without_hash(state))).hexdigest() != observed:
+    observed = _require_digest(
+        state.get("runtime_state_sha256"), "RUNTIME_STATE_SHA256"
+    )
+    if (
+        hashlib.sha256(_canonical_bytes(_runtime_state_without_hash(state))).hexdigest()
+        != observed
+    ):
         raise CutoverError("RUNTIME_STATE_INTEGRITY_MISMATCH")
     return state, observed
 
@@ -954,16 +1455,26 @@ def _validate_runtime_state(
         or state.get("deletion_authorized") is not False
     ):
         raise CutoverError("RUNTIME_STATE_BINDING_MISMATCH")
-    if workflow_export_sha256 is not None and state.get("workflow_export_sha256") != workflow_export_sha256:
+    if (
+        workflow_export_sha256 is not None
+        and state.get("workflow_export_sha256") != workflow_export_sha256
+    ):
         raise CutoverError("RUNTIME_STATE_EXPORT_BINDING_MISMATCH")
-    if lock_receipt_sha256 is not None and state.get("lock_receipt_sha256") != lock_receipt_sha256:
+    if (
+        lock_receipt_sha256 is not None
+        and state.get("lock_receipt_sha256") != lock_receipt_sha256
+    ):
         raise CutoverError("RUNTIME_STATE_LOCK_BINDING_MISMATCH")
     if binding is not None:
         _validate_binding(state, binding, "RUNTIME_STATE")
 
 
-def _parse_readback(path: Path, migration_sha256: str, expected_phase: str) -> dict[str, Any]:
-    parser_spec = importlib.util.spec_from_file_location("finance_readback_parser", READBACK_PARSER_PATH)
+def _parse_readback(
+    path: Path, migration_sha256: str, expected_phase: str
+) -> dict[str, Any]:
+    parser_spec = importlib.util.spec_from_file_location(
+        "finance_readback_parser", READBACK_PARSER_PATH
+    )
     if parser_spec is None or parser_spec.loader is None:
         raise CutoverError("READBACK_PARSER_UNAVAILABLE")
     parser = importlib.util.module_from_spec(parser_spec)
@@ -1054,12 +1565,17 @@ def _compare_readbacks(
     comparisons: list[dict[str, Any]] = []
     for left, right in zip(before_tables, after_tables, strict=True):
         name = left["name"]
-        if left["schema_sha256"] != expected_schema[name] or right["schema_sha256"] != expected_schema[name]:
+        if (
+            left["schema_sha256"] != expected_schema[name]
+            or right["schema_sha256"] != expected_schema[name]
+        ):
             raise CutoverError(f"TARGET_SCHEMA_DIGEST_MISMATCH:{name}")
         digest_fields = ("schema_sha256", "row_count", "rows_sha256", "digest_sha256")
         if any(left[field] != right[field] for field in digest_fields):
             raise CutoverError(f"PRE_POST_TABLE_DIGEST_MISMATCH:{name}")
-        comparisons.append({"name": name, **{field: right[field] for field in digest_fields}})
+        comparisons.append(
+            {"name": name, **{field: right[field] for field in digest_fields}}
+        )
     if before.get("digest_sha256") != after.get("digest_sha256"):
         raise CutoverError("PRE_POST_READBACK_DIGEST_MISMATCH")
     return {
@@ -1079,7 +1595,10 @@ def _validate_target_readback(
         raise CutoverError(f"{label}_READBACK_REQUIRED")
     tables = payload.get("tables")
     expected_names = sorted(TARGETS)
-    if not isinstance(tables, list) or [table.get("name") for table in tables] != expected_names:
+    if (
+        not isinstance(tables, list)
+        or [table.get("name") for table in tables] != expected_names
+    ):
         raise CutoverError("EXACT_FINANCE_DATA_TABLE_NAMES_REQUIRED")
     expected_schema = _target_schema_digests(matrix)
     result_tables: list[dict[str, Any]] = []
@@ -1103,7 +1622,9 @@ def _validate_target_readback(
     return {
         "verified": True,
         "phase": payload["phase"],
-        "digest_sha256": _require_digest(payload.get("digest_sha256"), f"{label}_DIGEST"),
+        "digest_sha256": _require_digest(
+            payload.get("digest_sha256"), f"{label}_DIGEST"
+        ),
         "finance_tables": 4,
         "total_rows": payload["total_rows"],
         "tables": result_tables,
@@ -1115,7 +1636,7 @@ def _compare_forward_readbacks(
     first_after: Mapping[str, Any],
     second_after: Mapping[str, Any],
     matrix: Mapping[str, Any],
-    expected_tables: list[Mapping[str, Any]],
+    expected_tables: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     if before.get("phase") != "FORWARD_PRE" or before.get("finance_tables") != 0:
         raise CutoverError("FORWARD_FIRST_RUN_PRE_READBACK_REQUIRED")
@@ -1153,7 +1674,14 @@ def _heads(
         raise CutoverError("WORKFLOW_ROOT_MISMATCH")
     try:
         clean = subprocess.run(
-            ["git", "-C", str(repository_root), "status", "--porcelain", "--untracked-files=no"],
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "status",
+                "--porcelain",
+                "--untracked-files=no",
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -1166,12 +1694,16 @@ def _heads(
             capture_output=True,
             text=True,
         ).stdout.strip()
-        generator_head = subprocess.run(
-            [sys.executable, str(MIGRATION_PATH), "--schema-digest"],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.splitlines()[-1].strip()
+        generator_head = (
+            subprocess.run(
+                [sys.executable, str(MIGRATION_PATH), "--schema-digest"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            .stdout.splitlines()[-1]
+            .strip()
+        )
     except (OSError, subprocess.CalledProcessError, IndexError) as error:
         raise CutoverError("SOURCE_GENERATOR_HEAD_UNAVAILABLE") from error
     source_head = _require_head(source_head, "SOURCE_HEAD")
@@ -1191,12 +1723,19 @@ def _heads(
         or identity.get("legacy_references") != []
     ):
         raise CutoverError("ACCEPTED_CHECKOUT_IDENTITY_MISMATCH")
-    identity_digest = _require_digest(identity.get("identity_sha256"), "IDENTITY_SHA256")
+    identity_digest = _require_digest(
+        identity.get("identity_sha256"), "IDENTITY_SHA256"
+    )
     unsigned_identity = dict(identity)
     unsigned_identity.pop("identity_sha256", None)
-    if hashlib.sha256(_canonical_bytes(unsigned_identity)).hexdigest() != identity_digest:
+    if (
+        hashlib.sha256(_canonical_bytes(unsigned_identity)).hexdigest()
+        != identity_digest
+    ):
         raise CutoverError("ACCEPTED_CHECKOUT_IDENTITY_INTEGRITY_MISMATCH")
-    receipt_sha = _require_digest(args.migration_receipt_sha256, "MIGRATION_RECEIPT_SHA256")
+    receipt_sha = _require_digest(
+        args.migration_receipt_sha256, "MIGRATION_RECEIPT_SHA256"
+    )
     source_backup_sha = _require_digest(
         args.source_backup_sha256, "SOURCE_BACKUP_SHA256"
     )
@@ -1206,6 +1745,7 @@ def _heads(
         raise CutoverError("ACCEPTED_SOURCE_BACKUP_SHA256_MISMATCH")
     if args.operator_ack != expected_ack or args.runtime_action != expected_action:
         raise CutoverError("NAMED_OPERATOR_ACK_REQUIRED")
+    _validate_legacy_reference_identity(identity, args)
     return source_head, generator_head, receipt_sha, source_backup_sha, identity_digest
 
 
@@ -1218,9 +1758,14 @@ def _bound_live_inputs(
     source_backup_sha: str,
     identity_digest: str,
     operation: str,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None, dict[str, str]]:
-    live_export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
-    lock_receipt_path = getattr(args, "lock_receipt", None) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
+    validate_target_schema: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any], str, dict[str, str]]:
+    live_export_path = getattr(
+        args, "live_export", None
+    ) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
+    lock_receipt_path = getattr(
+        args, "lock_receipt", None
+    ) or args.migration_receipt.with_name(LOCK_RECEIPT_FILENAME)
     matrix = _load_matrix()
     binding = _binding_inputs(args)
     export = _validate_live_export(
@@ -1233,6 +1778,7 @@ def _bound_live_inputs(
         required_export_digest=binding["required_live_export_digest"],
         matrix=matrix,
         project_id=getattr(args, "project_id", None),
+        validate_target_schema=validate_target_schema,
     )
     project_id = export["project_id"]
     lock_receipt, lock_sha = _validate_lock_receipt(
@@ -1258,6 +1804,8 @@ def _assert_currentness(
     source_backup_sha: str,
     identity_digest: str,
     export_sha: str | None,
+    runtime_receipt_sha: str | None = None,
+    verify_resolvers: bool = True,
 ) -> None:
     """Reject a source, receipt, or export changed after preflight."""
     try:
@@ -1267,39 +1815,69 @@ def _assert_currentness(
             capture_output=True,
             text=True,
         ).stdout.strip()
-        observed_generator = subprocess.run(
-            [sys.executable, str(MIGRATION_PATH), "--schema-digest"],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.splitlines()[-1].strip()
+        observed_generator = (
+            subprocess.run(
+                [sys.executable, str(MIGRATION_PATH), "--schema-digest"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            .stdout.splitlines()[-1]
+            .strip()
+        )
     except (OSError, subprocess.CalledProcessError, IndexError) as error:
         raise CutoverError("CURRENTNESS_CHECK_UNAVAILABLE") from error
     if observed_head != source_head or observed_generator != generator_head:
         raise CutoverError("SOURCE_CURRENTNESS_DRIFT")
     try:
-        observed_source_sha = hashlib.sha256(args.source_backup.read_bytes()).hexdigest()
-        observed_receipt_sha = hashlib.sha256(args.migration_receipt.read_bytes()).hexdigest()
+        observed_source_sha = hashlib.sha256(
+            args.source_backup.read_bytes()
+        ).hexdigest()
+        observed_receipt_sha = hashlib.sha256(
+            args.migration_receipt.read_bytes()
+        ).hexdigest()
     except OSError as error:
         raise CutoverError("CURRENTNESS_INPUT_UNAVAILABLE") from error
     if observed_source_sha != source_backup_sha or observed_receipt_sha != receipt_sha:
         raise CutoverError("RECEIPT_CURRENTNESS_DRIFT")
     if export_sha is not None:
-        export_path = getattr(args, "live_export", None) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
+        export_path = getattr(
+            args, "live_export", None
+        ) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
         export = _read_json(export_path)[0]
         observed_export_sha = export.get("export_sha256")
         if observed_export_sha != export_sha:
             raise CutoverError("LIVE_EXPORT_CURRENTNESS_DRIFT")
-    if args.accepted_identity:
-        identity, _ = _read_json(args.accepted_identity)
-        observed_identity = _require_digest(identity.get("identity_sha256"), "IDENTITY_SHA256")
-        if observed_identity != identity_digest:
-            raise CutoverError("ACCEPTED_IDENTITY_CURRENTNESS_DRIFT")
+    identity_path = args.accepted_identity or args.migration_receipt.with_name(
+        "finance-four-table-accepted-identity.json"
+    )
+    _require_protected(identity_path)
+    identity, _ = _read_json(identity_path)
+    unsigned_identity = dict(identity)
+    observed_identity = unsigned_identity.pop("identity_sha256", None)
+    if (
+        observed_identity != identity_digest
+        or hashlib.sha256(_canonical_bytes(unsigned_identity)).hexdigest()
+        != identity_digest
+    ):
+        raise CutoverError("ACCEPTED_IDENTITY_CURRENTNESS_DRIFT")
+    _validate_legacy_reference_identity(identity, args)
+    if verify_resolvers:
+        _protected_resolver_input(
+            args, "alias_bundle", identity, limit=16 * 1024 * 1024
+        )
+        _protected_resolver_input(
+            args, "verification_artifacts", identity, limit=64 * 1024 * 1024
+        )
+    if runtime_receipt_sha is not None:
+        _, observed_runtime_sha = _read_forward_runtime_receipt(args)
+        if observed_runtime_sha != runtime_receipt_sha:
+            raise CutoverError("FORWARD_RUNTIME_RECEIPT_CURRENTNESS_DRIFT")
 
 
 def run_forward(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
-        args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = (
+        _heads(args, REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION)
     )
     export, lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
@@ -1323,7 +1901,7 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
         args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
     module = _load_migration_module()
-    runner = module.MigrationRunner(_source_rows(source))
+    runner = _migration_runner(args, module, source, source_head, source_backup_sha)
     first = runner.run()
     second = runner.run()
     if first != expected_receipt:
@@ -1337,9 +1915,13 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
     references = _check_reference_rewrite(args.workflow_root)
     before = _parse_readback(args.pre_readback_raw, receipt_sha, "FORWARD_PRE")
     after = _parse_readback(args.post_readback_raw, receipt_sha, "FORWARD_POST")
-    second_after = _parse_readback(args.second_post_readback_raw, receipt_sha, "FORWARD_POST")
+    second_after = _parse_readback(
+        args.second_post_readback_raw, receipt_sha, "FORWARD_POST"
+    )
     table_receipts = _target_table_receipts(runner, matrix)
-    readback = _compare_forward_readbacks(before, after, second_after, matrix, table_receipts)
+    readback = _compare_forward_readbacks(
+        before, after, second_after, matrix, table_receipts
+    )
     runtime_state_sha = _write_runtime_state(
         args.runtime_state,
         {
@@ -1366,36 +1948,38 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
             **binding,
         },
     )
-    result = _seal({
-        "schema_version": "finance-four-table-cutover-receipt-v1",
-        "operation": "FORWARD",
-        "migration_receipt_sha256": receipt_sha,
-        **binding,
-        "source_head": source_head,
-        "generator_head": generator_head,
-        "accepted_identity_sha256": identity_digest,
-        "source_backup_sha256": observed_source_backup_sha,
-        "source_digest": first["source_digest"],
-        "target_digest": first["target_digest"],
-        "target_schema_sha256": schema_sha,
-        "target_tables": table_receipts,
-        "side_by_side_created": True,
-        "exact_target_names": True,
-        "reference_rewrite": references,
-        "second_run_noop": True,
-        "first_run_created": True,
-        "readback": readback,
-        "pre_readback": before,
-        "post_readback": after,
-        "second_post_readback": second_after,
-        "runtime_execution": True,
-        "runtime_action": FORWARD_RUNTIME_ACTION,
-        "runtime_state_sha256": runtime_state_sha,
-        "old_tables_preserved": True,
-        "runtime_cutover": False,
-        "deletion_authorized": False,
-        "operator_ack": REQUIRED_FORWARD_ACK,
-    })
+    result = _seal(
+        {
+            "schema_version": "finance-four-table-cutover-receipt-v1",
+            "operation": "FORWARD",
+            "migration_receipt_sha256": receipt_sha,
+            **binding,
+            "source_head": source_head,
+            "generator_head": generator_head,
+            "accepted_identity_sha256": identity_digest,
+            "source_backup_sha256": observed_source_backup_sha,
+            "source_digest": first["source_digest"],
+            "target_digest": first["target_digest"],
+            "target_schema_sha256": schema_sha,
+            "target_tables": table_receipts,
+            "side_by_side_created": True,
+            "exact_target_names": True,
+            "reference_rewrite": references,
+            "second_run_noop": True,
+            "first_run_created": True,
+            "readback": readback,
+            "pre_readback": before,
+            "post_readback": after,
+            "second_post_readback": second_after,
+            "runtime_execution": True,
+            "runtime_action": FORWARD_RUNTIME_ACTION,
+            "runtime_state_sha256": runtime_state_sha,
+            "old_tables_preserved": True,
+            "runtime_cutover": False,
+            "deletion_authorized": False,
+            "operator_ack": REQUIRED_FORWARD_ACK,
+        }
+    )
     if export is not None:
         result.update(
             {
@@ -1430,8 +2014,8 @@ def run_forward(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
-        args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = (
+        _heads(args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION)
     )
     export, lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
@@ -1454,9 +2038,10 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     source, migration_receipt, _, observed_source_backup_sha = _source_and_receipt(
         args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
-    if migration_receipt.get("old_tables_preserved") is not True or migration_receipt.get(
-        "deletion_authorized"
-    ) is not False:
+    if (
+        migration_receipt.get("old_tables_preserved") is not True
+        or migration_receipt.get("deletion_authorized") is not False
+    ):
         raise CutoverError("ROLLBACK_ONLY_BEFORE_LEGACY_DELETION")
     _require_protected(args.forward_receipt)
     forward, _ = _read_json(args.forward_receipt)
@@ -1482,11 +2067,14 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     )
     unsigned_forward = dict(forward)
     unsigned_forward.pop("cutover_receipt_sha256", None)
-    if hashlib.sha256(_canonical_bytes(unsigned_forward)).hexdigest() != forward_integrity:
+    if (
+        hashlib.sha256(_canonical_bytes(unsigned_forward)).hexdigest()
+        != forward_integrity
+    ):
         raise CutoverError("FORWARD_RECEIPT_INTEGRITY_MISMATCH")
     module = _load_migration_module()
     matrix = _load_matrix()
-    runner = module.MigrationRunner(_source_rows(source))
+    runner = _migration_runner(args, module, source, source_head, source_backup_sha)
     if runner.run() != migration_receipt:
         raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
     expected_tables = _target_table_receipts(runner, matrix)
@@ -1521,7 +2109,8 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         runtime_state.get("status") != "RESTORED"
         or runtime_state.get("target_tables_created") is not True
         or runtime_state.get("target_tables_untouched") is not True
-        or runtime_state.get("restored_source_digest") != migration_receipt.get("source_digest")
+        or runtime_state.get("restored_source_digest")
+        != migration_receipt.get("source_digest")
     ):
         raise CutoverError("RUNTIME_STATE_RESTORATION_REQUIRED")
     _verify_runtime_proof(
@@ -1539,7 +2128,9 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
     )
     _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
     try:
-        current_source_backup_sha = hashlib.sha256(args.source_backup.read_bytes()).hexdigest()
+        current_source_backup_sha = hashlib.sha256(
+            args.source_backup.read_bytes()
+        ).hexdigest()
     except OSError as error:
         raise CutoverError("SOURCE_BACKUP_UNAVAILABLE_AFTER_ROLLBACK") from error
     if current_source_backup_sha != observed_source_backup_sha:
@@ -1552,31 +2143,33 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         or runtime_state.get("target_tables_untouched") is not True
     ):
         raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
-    result = _seal({
-        "schema_version": "finance-four-table-cutover-receipt-v1",
-        "operation": "ROLLBACK",
-        "migration_receipt_sha256": receipt_sha,
-        **binding,
-        "source_head": source_head,
-        "generator_head": generator_head,
-        "accepted_identity_sha256": identity_digest,
-        "source_backup_sha256": observed_source_backup_sha,
-        "source_digest": source_digest,
-        "restored_source_digest": runtime_state["restored_source_digest"],
-        "restore_roundtrip": runtime_state["restore_roundtrip"],
-        "pre_delete": True,
-        "target_tables_untouched": True,
-        "old_tables_preserved": True,
-        "runtime_cutover": False,
-        "deletion_authorized": False,
-        "operator_ack": REQUIRED_ROLLBACK_ACK,
-        "readback": readback,
-        "pre_readback": before,
-        "post_readback": after,
-        "runtime_execution": True,
-        "runtime_action": ROLLBACK_RUNTIME_ACTION,
-        "runtime_state_sha256": runtime_state_sha,
-    })
+    result = _seal(
+        {
+            "schema_version": "finance-four-table-cutover-receipt-v1",
+            "operation": "ROLLBACK",
+            "migration_receipt_sha256": receipt_sha,
+            **binding,
+            "source_head": source_head,
+            "generator_head": generator_head,
+            "accepted_identity_sha256": identity_digest,
+            "source_backup_sha256": observed_source_backup_sha,
+            "source_digest": source_digest,
+            "restored_source_digest": runtime_state["restored_source_digest"],
+            "restore_roundtrip": runtime_state["restore_roundtrip"],
+            "pre_delete": True,
+            "target_tables_untouched": True,
+            "old_tables_preserved": True,
+            "runtime_cutover": False,
+            "deletion_authorized": False,
+            "operator_ack": REQUIRED_ROLLBACK_ACK,
+            "readback": readback,
+            "pre_readback": before,
+            "post_readback": after,
+            "runtime_execution": True,
+            "runtime_action": ROLLBACK_RUNTIME_ACTION,
+            "runtime_state_sha256": runtime_state_sha,
+        }
+    )
     if export is not None:
         result.update(
             {
@@ -1641,16 +2234,29 @@ def _verify_runtime_proof(
         or proof.get("target_tables_untouched") is not True
     ):
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_BINDING_MISMATCH")
-    if workflow_export_sha256 is not None and proof.get("workflow_export_sha256") != workflow_export_sha256:
+    if (
+        workflow_export_sha256 is not None
+        and proof.get("workflow_export_sha256") != workflow_export_sha256
+    ):
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_EXPORT_MISMATCH")
-    if lock_receipt_sha256 is not None and proof.get("lock_receipt_sha256") != lock_receipt_sha256:
+    if (
+        lock_receipt_sha256 is not None
+        and proof.get("lock_receipt_sha256") != lock_receipt_sha256
+    ):
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_LOCK_MISMATCH")
     if binding is not None:
         _validate_binding(proof, binding, "ROLLBACK_RUNTIME_PROOF")
-    source_digest = _load_migration_module().MigrationRunner(_source_rows(source)).backup_digest()
-    if proof.get("source_digest") != source_digest or proof.get("restored_source_digest") != source_digest:
+    source_digest = (
+        _load_migration_module().MigrationRunner(_source_rows(source)).backup_digest()
+    )
+    if (
+        proof.get("source_digest") != source_digest
+        or proof.get("restored_source_digest") != source_digest
+    ):
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_DIGEST_MISMATCH")
-    integrity = _require_digest(proof.get("runtime_proof_sha256"), "RUNTIME_PROOF_SHA256")
+    integrity = _require_digest(
+        proof.get("runtime_proof_sha256"), "RUNTIME_PROOF_SHA256"
+    )
     unsigned = dict(proof)
     unsigned.pop("runtime_proof_sha256", None)
     if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != integrity:
@@ -1658,8 +2264,8 @@ def _verify_runtime_proof(
 
 
 def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
-    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
-        args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = (
+        _heads(args, REQUIRED_ROLLBACK_ACK, ROLLBACK_RUNTIME_ACTION)
     )
     export, _lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
@@ -1682,15 +2288,18 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
     source, migration_receipt, _, observed_source_backup_sha = _source_and_receipt(
         args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
-    if migration_receipt.get("old_tables_preserved") is not True or migration_receipt.get(
-        "deletion_authorized"
-    ) is not False:
+    if (
+        migration_receipt.get("old_tables_preserved") is not True
+        or migration_receipt.get("deletion_authorized") is not False
+    ):
         raise CutoverError("ROLLBACK_ONLY_BEFORE_LEGACY_DELETION")
     module = _load_migration_module()
-    runner = module.MigrationRunner(_source_rows(source))
+    runner = _migration_runner(args, module, source, source_head, source_backup_sha)
     if runner.run() != migration_receipt:
         raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
-    source_digest = migration_receipt.get("source_digest")
+    source_digest = _require_digest(
+        migration_receipt.get("source_digest"), "SOURCE_DIGEST"
+    )
     runtime_state, previous_state_sha = _read_runtime_state(args.runtime_state)
     _validate_runtime_state(
         runtime_state,
@@ -1721,7 +2330,9 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
     _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
     try:
-        current_source_backup_sha = hashlib.sha256(args.source_backup.read_bytes()).hexdigest()
+        current_source_backup_sha = hashlib.sha256(
+            args.source_backup.read_bytes()
+        ).hexdigest()
     except OSError as error:
         raise CutoverError("SOURCE_BACKUP_UNAVAILABLE_AFTER_ROLLBACK") from error
     if current_source_backup_sha != observed_source_backup_sha:
@@ -1799,15 +2410,21 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         if args.operation_kind == "ROLLBACK"
         else (REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION)
     )
-    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
-        args, expected_ack, expected_action
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = (
+        _heads(args, expected_ack, expected_action)
     )
-    source, migration_receipt, observed_receipt_sha, observed_source_backup_sha = _source_and_receipt(
-        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
+    source, migration_receipt, observed_receipt_sha, observed_source_backup_sha = (
+        _source_and_receipt(
+            args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
+        )
     )
-    module = _load_migration_module()
-    if module.MigrationRunner(_source_rows(source)).run() != migration_receipt:
-        raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
+    runtime_receipt, runtime_receipt_sha = _read_forward_runtime_receipt(args)
+    legacy_rollback = (
+        runtime_receipt is not None
+        and runtime_receipt["schema_version"] == "finance-four-table-runtime-plan-v1"
+    )
+    if not legacy_rollback:
+        _validate_source_binding_manifest()
     export, _lock_receipt, lock_sha, binding = _bound_live_inputs(
         args,
         source_head=source_head,
@@ -1816,17 +2433,30 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
         operation=args.operation_kind,
+        validate_target_schema=not legacy_rollback,
     )
-    if export is not None:
-        _assert_currentness(
-            args,
-            source_head=source_head,
-            generator_head=generator_head,
-            receipt_sha=receipt_sha,
-            source_backup_sha=source_backup_sha,
-            identity_digest=identity_digest,
-            export_sha=export["export_sha256"],
-        )
+    _validate_forward_runtime_binding(runtime_receipt, export, binding)
+    if not legacy_rollback:
+        module = _load_migration_module()
+        if (
+            _migration_runner(
+                args, module, source, source_head, source_backup_sha
+            ).run()
+            != migration_receipt
+        ):
+            raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
+        _check_reference_rewrite(args.workflow_root)
+    _assert_currentness(
+        args,
+        source_head=source_head,
+        generator_head=generator_head,
+        receipt_sha=receipt_sha,
+        source_backup_sha=source_backup_sha,
+        identity_digest=identity_digest,
+        export_sha=export["export_sha256"],
+        runtime_receipt_sha=runtime_receipt_sha,
+        verify_resolvers=not legacy_rollback,
+    )
     return {
         "schema_version": "finance-four-table-cutover-inputs-v1",
         "source_head": source_head,
@@ -1837,7 +2467,7 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         "source_backup_sha256": observed_source_backup_sha,
         "source_digest": migration_receipt["source_digest"],
         "inputs_verified": True,
-        "workflow_export_sha256": export["export_sha256"] if export else None,
+        "workflow_export_sha256": export["export_sha256"],
         "lock_receipt_sha256": lock_sha,
     }
 
@@ -1848,11 +2478,26 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         if args.operation_kind == "ROLLBACK"
         else (REQUIRED_FORWARD_ACK, FORWARD_RUNTIME_ACTION)
     )
-    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = _heads(
-        args, expected_ack, expected_action
+    source_head, generator_head, receipt_sha, source_backup_sha, identity_digest = (
+        _heads(args, expected_ack, expected_action)
     )
     if args.live_export is None:
         raise CutoverError("PROTECTED_LIVE_EXPORT_REQUIRED")
+    source, migration_receipt, _, _ = _source_and_receipt(
+        args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
+    )
+    runtime_receipt, runtime_receipt_sha = _read_forward_runtime_receipt(args)
+    legacy_rollback = (
+        runtime_receipt is not None
+        and runtime_receipt["schema_version"] == "finance-four-table-runtime-plan-v1"
+    )
+    if not legacy_rollback:
+        _validate_source_binding_manifest()
+    if (
+        runtime_receipt is not None
+        and args.output.resolve() == args.forward_runtime_receipt.resolve()
+    ):
+        raise CutoverError("FORWARD_RUNTIME_RECEIPT_OUTPUT_CONFLICT")
     binding = _binding_inputs(args)
     export = _validate_live_export(
         args.live_export,
@@ -1864,7 +2509,43 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         required_export_digest=binding["required_live_export_digest"],
         matrix=_load_matrix(),
         project_id=getattr(args, "project_id", None),
+        validate_target_schema=not legacy_rollback,
     )
+    _validate_forward_runtime_binding(runtime_receipt, export, binding)
+    canonical_source = None
+    if not legacy_rollback:
+        module = _load_migration_module()
+        if (
+            _migration_runner(
+                args, module, source, source_head, source_backup_sha
+            ).run()
+            != migration_receipt
+        ):
+            raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
+        _check_reference_rewrite(args.workflow_root)
+        if getattr(args, "canonical_source_output", None) is not None:
+            inputs = [
+                args.source_backup,
+                args.migration_receipt,
+                args.live_export,
+                args.output,
+                args.accepted_identity
+                or args.migration_receipt.with_name(
+                    "finance-four-table-accepted-identity.json"
+                ),
+                getattr(args, "alias_bundle", None),
+                getattr(args, "verification_artifacts", None),
+                getattr(args, "forward_runtime_receipt", None),
+            ]
+            if (
+                args.canonical_source_output.is_symlink()
+                or args.canonical_source_output.resolve()
+                in {path.resolve() for path in inputs if path is not None}
+            ):
+                raise CutoverError("CANONICAL_SOURCE_OUTPUT_PATH_INVALID")
+            canonical_source = _canonical_source_bundle(
+                args, source_head, generator_head, identity_digest
+            )
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
@@ -1874,7 +2555,6 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         operation="PRECONDITION",
         binding=binding,
     )
-    _write_json(args.output, lock)
     result = {
         "schema_version": PRECONDITION_SCHEMA,
         "operation": args.operation_kind,
@@ -1891,6 +2571,8 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         "replay_noop": True,
         "lock_receipt_sha256": lock["lock_receipt_sha256"],
     }
+    if runtime_receipt is not None:
+        result["forward_runtime_receipt_schema"] = runtime_receipt["schema_version"]
     _assert_currentness(
         args,
         source_head=source_head,
@@ -1899,19 +2581,34 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
         export_sha=export["export_sha256"],
+        runtime_receipt_sha=runtime_receipt_sha,
+        verify_resolvers=not legacy_rollback,
     )
+    if canonical_source is not None:
+        _write_json(args.canonical_source_output, canonical_source)
+    _write_json(args.output, lock)
     return result
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="operation", required=True)
-    for operation in ("forward", "rollback", "rollback-runtime", "validate-inputs", "preflight"):
+    for operation in (
+        "forward",
+        "rollback",
+        "rollback-runtime",
+        "validate-inputs",
+        "preflight",
+    ):
         command = subparsers.add_parser(operation)
         command.add_argument("--source-backup", type=Path, required=True)
         command.add_argument("--migration-receipt", type=Path, required=True)
         command.add_argument("--migration-receipt-sha256", required=True)
         command.add_argument("--source-backup-sha256", required=True)
+        command.add_argument("--alias-bundle", type=Path)
+        command.add_argument("--alias-bundle-sha256")
+        command.add_argument("--verification-artifacts", type=Path)
+        command.add_argument("--verification-artifacts-sha256")
         command.add_argument("--operation-nonce")
         command.add_argument("--protected-quiescence-receipt-digest")
         command.add_argument("--required-live-export-digest")
@@ -1922,12 +2619,19 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--operator-ack", required=True)
         command.add_argument("--runtime-action", required=True)
         command.add_argument("--workflow-root", type=Path, required=True)
-        command.add_argument("--output", type=Path, required=operation != "validate-inputs")
+        command.add_argument(
+            "--output", type=Path, required=operation != "validate-inputs"
+        )
         command.add_argument("--live-export", type=Path)
         command.add_argument("--lock-receipt", type=Path)
         command.add_argument("--lock-path", type=Path)
         if operation in {"validate-inputs", "preflight"}:
-            command.add_argument("--operation-kind", choices=("FORWARD", "ROLLBACK"), default="FORWARD")
+            command.add_argument(
+                "--operation-kind", choices=("FORWARD", "ROLLBACK"), default="FORWARD"
+            )
+            command.add_argument("--forward-runtime-receipt", type=Path)
+        if operation == "preflight":
+            command.add_argument("--canonical-source-output", type=Path)
         if operation in {"forward", "rollback"}:
             command.add_argument("--pre-readback-raw", type=Path, required=True)
             command.add_argument("--post-readback-raw", type=Path, required=True)
@@ -1945,7 +2649,11 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         lock_path = getattr(args, "lock_path", None)
-        with (_exclusive_writer_lock(lock_path) if lock_path is not None else contextlib.nullcontext()):
+        with (
+            _exclusive_writer_lock(lock_path)
+            if lock_path is not None
+            else contextlib.nullcontext()
+        ):
             if args.operation == "forward":
                 result = run_forward(args)
             elif args.operation == "rollback":
@@ -1956,7 +2664,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = validate_preconditions(args)
             else:
                 result = run_rollback_runtime(args)
-    except (CutoverError, OSError, KeyError, TypeError) as error:
+    except (ValueError, OSError, KeyError, TypeError) as error:
         print(str(error), file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False, sort_keys=True, separators=(",", ":")))

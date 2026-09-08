@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Narrow Tool Input. Keep this deterministic and fail closed.\nconst allowed = ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'];\nconst forbidden = ['url', 'filesystem_path', 'path', 'provider', 'password', 'credential', 'actual_account_id', 'actual_id', 'commit', 'command', 'folder_id', 'sender', 'subject'];\nfor (const k of allowed)\n    if (!$json[k])\n        throw new Error(`Missing ${k}`);\nfor (const k of forbidden)\n    if (Object.hasOwn($json, k))\n        throw new Error(`Forbidden input ${k}`);\nif (!/^[a-f0-9]{64}$/i.test(String($json.expected_sha256)))\n    throw new Error('expected_sha256 must be SHA-256 hex');\nreturn [{ json: Object.fromEntries(allowed.map(k => [k, String($json[k])])) }];\n"
+        "jsCode": "// Purpose: Validate Narrow Tool Input. Keep this deterministic and fail closed.\nconst allowed = ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'];\nconst forbidden = ['url', 'filesystem_path', 'path', 'provider', 'password', 'credential', 'actual_account_id', 'actual_id', 'commit', 'command', 'folder_id', 'sender', 'subject'];\nfor (const k of allowed)\n    if (!$json[k])\n        throw new Error(`Missing ${k}`);\nfor (const k of forbidden)\n    if (Object.hasOwn($json, k))\n        throw new Error(`Forbidden input ${k}`);\nif (!/^[a-f0-9]{64}$/i.test(String($json.expected_sha256)))\n    throw new Error('expected_sha256 must be SHA-256 hex');\nconst crypto = require('crypto');\nconst canonicalDocumentId = (identityKind, components) => {\n    const fields = ['document-identity-v1', identityKind, ...components];\n    const encoded = Buffer.concat(fields.map(value => {\n        const bytes = Buffer.from(String(value ?? ''), 'utf8');\n        const length = Buffer.alloc(8);\n        length.writeBigUInt64BE(BigInt(bytes.length));\n        return Buffer.concat([length, bytes]);\n    }));\n    return `document-identity-v1_${crypto.createHash('sha256').update(encoded).digest('base64url')}`;\n};\nconst canonical_document_id = canonicalDocumentId('PROCESSING_ONLY', [$json.expected_sha256, $json.document_profile, $json.requested_schema_version]);\nif (String($json.document_id) !== canonical_document_id) {\n    throw new Error('DOCUMENT_IDENTITY_MISMATCH:PROCESSING_ONLY');\n}\nreturn [{ json: Object.fromEntries(allowed.map(k => [k, String($json[k])])) }];\n"
       }
     },
     {
@@ -43,7 +43,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -131,7 +131,7 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
+          "value": "finance_documents",
           "mode": "name"
         },
         "matchType": "allConditions",
@@ -184,7 +184,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_document_operations",
+          "value": "finance_documents",
           "mode": "name"
         },
         "returnAll": false,
@@ -299,7 +299,7 @@
     "financeWorkflowCode": "DOCUMENT_EXTRACTION_REQUEST",
     "mcpSafe": false,
     "migrationStatus": "SPEC_ONLY",
-    "terminalReceiptTable": "finance_document_operations",
+    "terminalReceiptTable": "finance_documents",
     "terminalReceiptReadbackRequired": true,
     "sensitivePayloadPersistenceForbidden": true,
     "importTested": false,

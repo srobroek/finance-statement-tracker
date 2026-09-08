@@ -8,7 +8,7 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "aebaddc02963d818bbd96b25fc44359c104a29496a1de8368bed1a0cd746bdd4"
+    "sha256": "80a03ad41b340679c34ecc873bb5cfb9c1870e69792de7f66dd7718dd8259c79"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -30,12 +30,12 @@
   },
   "fixture_manifest": {
     "path": "integrations/n8n/disposable/fixture-manifest.json",
-    "sha256": "1c60b55d248b4b5b17ba0e0f62f2cc6960a14f829a9f9ec08604763caf0c8fca"
+    "sha256": "6e91bbda84ec42db9c7257f39f150b8b283c5df2608f9d28208bf819154e0fa5"
   },
   "inactive_corpus": {
     "path": "integrations/n8n/workflows",
     "file_count": 19,
-      "sha256": "561158d21957edf97a62fd6f5d177384248621d71987baa8766727c30f6306e4",
+    "sha256": "5ac0528574384eaaeb7654da761bc1a9666fdff7b781e982eeba56604b98ad21",
     "required_state": {
       "active": false,
       "published": false,
@@ -43,23 +43,71 @@
     },
     "setup_corpus_excluded": true
   },
+  "source_contract_bindings": {
+    "path": "integrations/n8n/source-contract-bindings.json",
+    "sha256": "d0c612c0c8cc5bdb374a9968395363d348fa1f5a89f9e0294088c6bb10f20352"
+  },
   "credentials": {
     "placeholders": [
-      {"name": "Finance Outlook", "binding": "BIND_OUTLOOK", "type": "microsoftOutlookOAuth2Api"},
-      {"name": "Finance OneDrive", "binding": "BIND_ONEDRIVE", "type": "microsoftOneDriveOAuth2Api"},
-      {"name": "Cashback Ingest Bearer", "binding": "BIND_CASHBACK_INGEST", "type": "httpHeaderAuth"},
-      {"name": "Local n8n Operations", "binding": "BIND_N8N_API", "type": "n8nApi"},
-      {"name": "Issuer Statement Password", "binding": "BIND_CARD_PASSWORD", "type": "financeStatementPassword"},
-      {"name": "Finance MCP Trigger Bearer", "binding": "BIND_FINANCE_MCP_FACADE", "type": "httpBearerAuth"},
-      {"name": "Finance Operations Postgres", "binding": "BIND_FINANCE_OPS_DB", "type": "postgres"},
-      {"name": "Finance Actual", "binding": "BIND_ACTUAL", "type": "actualBudgetApi"}
+      {
+        "name": "Finance Outlook",
+        "binding": "BIND_OUTLOOK",
+        "type": "microsoftOutlookOAuth2Api"
+      },
+      {
+        "name": "Finance OneDrive",
+        "binding": "BIND_ONEDRIVE",
+        "type": "microsoftOneDriveOAuth2Api"
+      },
+      {
+        "name": "Cashback Ingest Bearer",
+        "binding": "BIND_CASHBACK_INGEST",
+        "type": "httpHeaderAuth"
+      },
+      {
+        "name": "Local n8n Operations",
+        "binding": "BIND_N8N_API",
+        "type": "n8nApi"
+      },
+      {
+        "name": "Issuer Statement Password",
+        "binding": "BIND_CARD_PASSWORD",
+        "type": "financeStatementPassword"
+      },
+      {
+        "name": "RAKBANK World Statement Password",
+        "binding": "BIND_RAKBANK_STATEMENT_PASSWORD",
+        "type": "financeStatementPassword"
+      },
+      {
+        "name": "Finance MCP Trigger Bearer",
+        "binding": "BIND_FINANCE_MCP_FACADE",
+        "type": "httpBearerAuth"
+      },
+      {
+        "name": "Finance Operations Postgres",
+        "binding": "BIND_FINANCE_OPS_DB",
+        "type": "postgres"
+      },
+      {
+        "name": "Finance Actual",
+        "binding": "BIND_ACTUAL",
+        "type": "actualBudgetApi"
+      }
     ],
     "binding_contract": {
       "path": "integrations/n8n/credential-bindings.json",
-      "sha256": "572e5e44e1b6321ef3df785af06f261a7c27a13553a104883f5cedc9e133f02b"
+      "sha256": "fb1399dfa51101b27c649eb4c532a16a7c532434fa5a9b6db4d665f5eda69447"
     },
     "values_included": false,
-    "forbidden_fields": ["id", "value", "token", "secret", "password", "client_secret"]
+    "forbidden_fields": [
+      "id",
+      "value",
+      "token",
+      "secret",
+      "password",
+      "client_secret"
+    ]
   },
   "mcp": {
     "contract": {
@@ -79,13 +127,41 @@
     ]
   },
   "validators": [
-    {"kind": "BUILD", "path": "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh", "command": "bash packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh"},
-    {"kind": "RUNTIME_ASSERTION", "path": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs", "command": "node /opt/finance-n8n/assert-runtime-registration.cjs export:nodes"},
-    {"kind": "RUNTIME_ASSERTION", "path": "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs", "command": "node /opt/finance-n8n/verify-immutable-extension.cjs"},
-    {"kind": "TEST", "path": "tests/test_n8n_custom_image.py", "command": "python -m unittest tests.test_n8n_custom_image -v"},
-    {"kind": "TEST", "path": "tests/test_n8n_application_manifest.py", "command": "python -m unittest tests.test_n8n_application_manifest -v"},
-    {"kind": "TEST", "path": "integrations/n8n/generate_credential_bindings.py", "command": "python integrations/n8n/generate_credential_bindings.py --check"},
-    {"kind": "TEST", "path": "tests/test_n8n_workflows.py", "command": "python -m unittest tests.test_n8n_workflows -v"}
+    {
+      "kind": "BUILD",
+      "path": "packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh",
+      "command": "bash packages/n8n-nodes-finance/scripts/build-finance-n8n-image.sh"
+    },
+    {
+      "kind": "RUNTIME_ASSERTION",
+      "path": "packages/n8n-nodes-finance/scripts/assert-runtime-registration.cjs",
+      "command": "node /opt/finance-n8n/assert-runtime-registration.cjs export:nodes"
+    },
+    {
+      "kind": "RUNTIME_ASSERTION",
+      "path": "packages/n8n-nodes-finance/scripts/verify-immutable-extension.cjs",
+      "command": "node /opt/finance-n8n/verify-immutable-extension.cjs"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_custom_image.py",
+      "command": "python -m unittest tests.test_n8n_custom_image -v"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_application_manifest.py",
+      "command": "python -m unittest tests.test_n8n_application_manifest -v"
+    },
+    {
+      "kind": "TEST",
+      "path": "integrations/n8n/generate_credential_bindings.py",
+      "command": "python integrations/n8n/generate_credential_bindings.py --check"
+    },
+    {
+      "kind": "TEST",
+      "path": "tests/test_n8n_workflows.py",
+      "command": "python -m unittest tests.test_n8n_workflows -v"
+    }
   ],
   "blockers": [
     "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",
