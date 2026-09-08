@@ -54,11 +54,14 @@ export interface NonRepresentableRule {
 export function normalizeTransaction(input: unknown): JsonObject {
   assertObject(input, 'transaction');
   const result: JsonObject = { ...input };
-  if (typeof result.merchant_raw === 'string') result.merchant_raw = result.merchant_raw.replace(/\s+/g, ' ').trim();
   if (typeof result.vendor === 'string') result.vendor = result.vendor.replace(/\s+/g, ' ').trim();
   if (typeof result.currency === 'string') result.currency = result.currency.trim().toUpperCase();
   if (Array.isArray(result.tags)) result.tags = [...new Set(result.tags.filter(value => typeof value === 'string').map(value => value.trim()).filter(Boolean))].sort();
   return result;
+}
+
+function normalizeMerchantForMatching(value: unknown): unknown {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : value;
 }
 
 function comparable(value: unknown, caseSensitive: boolean): unknown {
@@ -72,25 +75,26 @@ function safeRegexSource(value: unknown): string {
 }
 
 function conditionMatches(row: JsonObject, condition: NonRepresentableRule['match']['any'][number]['all'][number]): boolean {
-  const actual = comparable(row[condition.field], Boolean(condition.case_sensitive));
-  const expected = comparable(condition.value, Boolean(condition.case_sensitive));
+  const merchantField = condition.field === 'merchant_raw';
+  const actual = comparable(merchantField ? normalizeMerchantForMatching(row[condition.field]) : row[condition.field], Boolean(condition.case_sensitive));
+  const expected = comparable(merchantField ? normalizeMerchantForMatching(condition.value) : condition.value, Boolean(condition.case_sensitive));
   let matched: boolean;
   switch (condition.operator) {
     case 'equals': matched = actual === expected; break;
     case 'not_equals': matched = actual !== expected; break;
     case 'contains': matched = typeof actual === 'string' && typeof expected === 'string' && actual.includes(expected); break;
-    case 'contains_any': matched = Array.isArray(condition.value) && condition.value.some(item => typeof actual === 'string' && actual.includes(String(comparable(item, Boolean(condition.case_sensitive))))); break;
+    case 'contains_any': matched = Array.isArray(condition.value) && condition.value.some(item => typeof actual === 'string' && actual.includes(String(comparable(merchantField ? normalizeMerchantForMatching(item) : item, Boolean(condition.case_sensitive))))); break;
     case 'not_contains': matched = typeof actual === 'string' && typeof expected === 'string' && !actual.includes(expected); break;
     case 'starts_with': matched = typeof actual === 'string' && typeof expected === 'string' && actual.startsWith(expected); break;
     case 'ends_with': matched = typeof actual === 'string' && typeof expected === 'string' && actual.endsWith(expected); break;
     case 'regex': {
       const source = safeRegexSource(condition.value);
       const flags = condition.case_sensitive ? 0 : RE2JS.CASE_INSENSITIVE;
-      matched = typeof actual === 'string' && RE2JS.compile(source, flags).test(String(row[condition.field]));
+      matched = typeof actual === 'string' && RE2JS.compile(source, flags).test(String(actual));
       break;
     }
-    case 'in': matched = Array.isArray(condition.value) && condition.value.map(item => comparable(item, Boolean(condition.case_sensitive))).includes(actual); break;
-    case 'not_in': matched = Array.isArray(condition.value) && !condition.value.map(item => comparable(item, Boolean(condition.case_sensitive))).includes(actual); break;
+    case 'in': matched = Array.isArray(condition.value) && condition.value.map(item => comparable(merchantField ? normalizeMerchantForMatching(item) : item, Boolean(condition.case_sensitive))).includes(actual); break;
+    case 'not_in': matched = Array.isArray(condition.value) && !condition.value.map(item => comparable(merchantField ? normalizeMerchantForMatching(item) : item, Boolean(condition.case_sensitive))).includes(actual); break;
     case 'numeric_equals': matched = Number(actual) === Number(expected); break;
     case 'gt': matched = Number(actual) > Number(expected); break;
     case 'gte': matched = Number(actual) >= Number(expected); break;
@@ -198,6 +202,9 @@ export function finalizeTransactionType(input: JsonObject): JsonObject {
   const description = String(value.description ?? value.merchant_raw ?? '').toUpperCase();
   const direction = String(value.source_direction ?? value.direction ?? '').toUpperCase();
   let topic = typeof value.transaction_type === 'string' ? value.transaction_type.toUpperCase() : '';
+  // Statement parsers may emit CREDIT until transaction-normalization rules inspect it.
+  // Treat it as unresolved here so the deterministic fallback policy still applies.
+  if (topic === 'CREDIT') topic = '';
   if (!topic) {
     if (direction === 'CREDIT') {
       if (/(PAYMENT RECEIVED|CREDIT REPAYMENT|CARD REPAYMENT)/.test(description)) topic = 'PAYMENT';

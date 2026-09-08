@@ -1,11 +1,13 @@
+from datetime import date
 from decimal import Decimal
 from unittest import TestCase
 
 from finance_tracker.statements import (
+    DEFAULT_STATEMENT_ADAPTERS,
     AdcbStatementAdapter,
     BankStatementAdapter,
-    DEFAULT_STATEMENT_ADAPTERS,
     EmiratesIslamicStatementAdapter,
+    RakbankStatementAdapter,
     StatementAdapterRegistry,
     WioCreditStatementAdapter,
     parse_statement_text,
@@ -33,11 +35,69 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         statement = parse_statement_text(text, "ei.pdf")
         self.assertEqual(len(statement.transactions), 7)
         self.assertEqual(statement.transactions[0].transaction_type, "PAYMENT")
-        self.assertEqual(statement.transactions[2].transaction_type, "REFUND")
+        self.assertEqual(statement.transactions[2].transaction_type, "CREDIT")
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("285.70"))
         self.assertTrue(statement.balance_tied)
         self.assertEqual(statement.balance_difference_aed, Decimal("0.00"))
         self.assertEqual(statement.payment_due_date.isoformat(), "2026-08-25")
+
+    def test_emirates_compact_dates_use_statement_bounds_across_years(self) -> None:
+        text = """Statement of Card Account
+From: 1st Dec 2025
+31st Jan 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+01 JAN 31 DEC CROSS YEAR PURCHASE 10.00
+"""
+
+        statement = parse_statement_text(text, "ei-cross-year.pdf")
+
+        self.assertEqual(
+            statement.transactions[0].transaction_date,
+            date(2025, 12, 31),
+        )
+        self.assertEqual(
+            statement.transactions[0].post_date,
+            date(2026, 1, 1),
+        )
+
+    def test_emirates_compact_dates_without_statement_bounds_are_rejected(self) -> None:
+        text = """Statement of Card Account
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+02 JUL 02 JUL UNDATED PURCHASE 10.00
+"""
+
+        with self.assertRaisesRegex(ValueError, "statement bounds"):
+            parse_statement_text(text, "ei-undated.pdf")
+
+    def test_statement_credits_stay_provisional_until_normalization(self) -> None:
+        text = """Statement of Card Account
+From: 1st Jul 2026
+31st Jul 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+01 JUL 01 JUL SALARY PAYMENT 2,000.00CR
+02 JUL 02 JUL TRANSFER FROM SAVINGS 50.00CR
+03 JUL 03 JUL MERCHANT REFUND 25.00CR
+"""
+
+        statement = parse_statement_text(text, "ei-credit-types.pdf")
+
+        self.assertEqual(
+            [transaction.transaction_type for transaction in statement.transactions],
+            ["CREDIT", "CREDIT", "REFUND"],
+        )
+        self.assertEqual(
+            [transaction.direction for transaction in statement.transactions],
+            ["CREDIT", "CREDIT", "CREDIT"],
+        )
+        self.assertEqual(
+            [transaction.amount_aed for transaction in statement.transactions],
+            [Decimal("2000.00"), Decimal("50.00"), Decimal("25.00")],
+        )
 
     def test_adcb_statement_parses_card_sections_and_foreign_currency(self) -> None:
         text = """15/07/26
@@ -78,15 +138,71 @@ Card No : XXXXXXXXXXXX8833 - TEST USER
         self.assertEqual(statement.calculated_closing_balance_aed, Decimal("-50.00"))
         self.assertTrue(statement.balance_tied)
 
+
+    def test_rakbank_statement_preserves_dates_fx_and_printed_summary(self) -> None:
+        text = """RAKBANK CREDIT CARD STATEMENT
+DATE ISSUED : 31/07/2026 :
+STATEMENT PERIOD : 01/07/2026 TO 31/07/2026 :
+CARD NUMBER : 1234 XXXX 5678 :
+PREVIOUS BALANCE AED 100.00
+RETAIL TRANSACTIONS AED 28.25 +
+PAYMENTS AND CREDITS AED 23.25 -
+CURRENT BALANCE AED 105.00
+CREDIT CARD LIMIT
+AED 1,000.00
+MINIMUM PAYMENT DUE
+AED 10.00
+TOTAL AMOUNT DUE (TO AVOID INTEREST)
+AED 105.00
+PAYMENT DUE DATE
+15/08/2026
+DATE TRANSACTION
+DESCRIPTION
+TRANSACTION CURRENCY
+TRANSACTION AMOUNT
+TOTAL AMOUNT (AED)
+01/07/2026 LOCAL SHOP, DUBAI, AED 10.00 - 10.00
+02/07/2026 FOREIGN MERCHANT, EUROPE, EUR 5.00 18.25
+03/07/2026 PAYMENT RECEIVED - AED 23.25 CR - 23.25 CR
+"""
+
+        statement = parse_statement_text(text, "rakbank.pdf")
+
+        self.assertIsInstance(
+            DEFAULT_STATEMENT_ADAPTERS.adapter("rakbank_v1"),
+            RakbankStatementAdapter,
+        )
+        self.assertEqual(statement.statement_date, date(2026, 7, 31))
+        self.assertEqual(statement.period_start, date(2026, 7, 1))
+        self.assertEqual(statement.payment_due_date, date(2026, 8, 15))
+        self.assertEqual(statement.card_last4s, ("5678",))
+        self.assertEqual(len(statement.transactions), 3)
+        self.assertEqual(statement.transactions[1].amount_original, Decimal("5.00"))
+        self.assertEqual(statement.transactions[1].currency_original, "EUR")
+        self.assertEqual(statement.transactions[1].amount_aed, Decimal("18.25"))
+        self.assertIsNone(statement.transactions[1].exchange_rate)
+        self.assertEqual(statement.transactions[2].transaction_type, "PAYMENT")
+        self.assertTrue(statement.balance_tied)
+        self.assertEqual(statement.balance_difference_aed, Decimal("0.00"))
+
+        with self.assertRaisesRegex(ValueError, "printed summary does not reconcile"):
+            parse_statement_text(
+                text.replace("CURRENT BALANCE AED 105.00", "CURRENT BALANCE AED 106.00"),
+                "rakbank-bad-summary.pdf",
+            )
     def test_registry_is_the_bank_extension_boundary(self) -> None:
         adapters = (EmiratesIslamicStatementAdapter(), AdcbStatementAdapter())
         registry = StatementAdapterRegistry(adapters)
-        self.assertTrue(all(isinstance(adapter, BankStatementAdapter) for adapter in adapters))
+        self.assertTrue(
+            all(isinstance(adapter, BankStatementAdapter) for adapter in adapters)
+        )
         self.assertEqual(registry.adapter("adcb_v1").bank_name, "ADCB")
         with self.assertRaises(ValueError):
             registry.parse("not a statement")
 
-    def test_wio_credit_statement_parses_signed_transactions_and_account_suffixes(self) -> None:
+    def test_wio_credit_statement_parses_signed_transactions_and_account_suffixes(
+        self,
+    ) -> None:
         text = """CURRENCY MONTHLY INTEREST RATE ANNUAL INTEREST RATE
 CREDIT STATEMENT
 AED 3.25% 39.00%
@@ -113,7 +229,10 @@ Rate: 3.67 (AED/USD)
 
         statement = parse_statement_text(text, "wio.pdf")
 
-        self.assertIsInstance(DEFAULT_STATEMENT_ADAPTERS.adapter("wio_credit_v1"), WioCreditStatementAdapter)
+        self.assertIsInstance(
+            DEFAULT_STATEMENT_ADAPTERS.adapter("wio_credit_v1"),
+            WioCreditStatementAdapter,
+        )
         self.assertEqual(statement.card_last4s, ("5009", "4113"))
         self.assertEqual(len(statement.transactions), 4)
         self.assertEqual(statement.transactions[0].transaction_type, "PURCHASE")
@@ -124,7 +243,9 @@ Rate: 3.67 (AED/USD)
         self.assertIsNone(statement.transactions[2].amount_original)
         self.assertTrue(statement.balance_tied)
 
-    def test_wio_credit_statement_accepts_a_negative_overpaid_closing_balance(self) -> None:
+    def test_wio_credit_statement_accepts_a_negative_overpaid_closing_balance(
+        self,
+    ) -> None:
         text = """CREDIT STATEMENT
 FROM 01/07/2026 TO 01/08/2026
 Wio Bank PAYMENT DUE DATE MIN. PAYMENT DUE TOTAL TO PAY

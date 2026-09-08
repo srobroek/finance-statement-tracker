@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { assertPreparedOutbox } from './contracts';
-import { ISSUER_PROFILES, parseStatement, projectStatementToActual } from './statements';
+import { ISSUER_PROFILES, detectIssuerProfile, parseStatement, projectStatementToActual } from './statements';
 
 test('packaged issuer profiles exactly match ACTIVE repository source contracts', () => {
   const registryPath = path.resolve(process.cwd(), '../../config/statement-sources.json');
@@ -21,7 +21,54 @@ test('packaged issuer profiles exactly match ACTIVE repository source contracts'
   }
 });
 
-test('EI credits are typed as payment and refund and statement ties', () => {
+test('RAKBANK preserves explicit dates, FX facts, bank-posted AED, and summary ties', () => {
+  const text = `RAKBANK CREDIT CARD STATEMENT
+DATE ISSUED : 31/07/2026 :
+STATEMENT PERIOD : 01/07/2026 TO 31/07/2026 :
+CARD NUMBER : 1234 XXXX 5678 :
+PREVIOUS BALANCE AED 100.00
+RETAIL TRANSACTIONS AED 28.25 +
+PAYMENTS AND CREDITS AED 23.25 -
+CURRENT BALANCE AED 105.00
+CREDIT CARD LIMIT
+AED 1,000.00
+MINIMUM PAYMENT DUE
+AED 10.00
+TOTAL AMOUNT DUE (TO AVOID INTEREST)
+AED 105.00
+PAYMENT DUE DATE
+15/08/2026
+DATE TRANSACTION
+DESCRIPTION
+TRANSACTION CURRENCY
+TRANSACTION AMOUNT
+TOTAL AMOUNT (AED)
+01/07/2026 LOCAL SHOP, DUBAI, AED 10.00 - 10.00
+02/07/2026 FOREIGN MERCHANT, EUROPE, EUR 5.00 18.25
+03/07/2026 PAYMENT RECEIVED - AED 23.25 CR - 23.25 CR`;
+
+  assert.equal(detectIssuerProfile(text), 'rakbank_v1');
+  const statement = parseStatement(text, 'rakbank_v1', 'rakbank.pdf');
+  assert.equal(statement.statement_date, '2026-07-31');
+  assert.equal(statement.period_start, '2026-07-01');
+  assert.equal(statement.payment_due_date, '2026-08-15');
+  assert.deepEqual(statement.card_last4s, ['5678']);
+  assert.equal(statement.transactions.length, 3);
+  assert.equal(statement.transactions[1].amount_original, '5.00');
+  assert.equal(statement.transactions[1].currency_original, 'EUR');
+  assert.equal(statement.transactions[1].amount_aed, '18.25');
+  assert.equal(statement.transactions[1].exchange_rate, null);
+  assert.equal(statement.transactions[2].transaction_type, 'PAYMENT');
+  assert.equal(statement.balance_tied, true);
+  assert.deepEqual(projectStatementToActual(statement).map(row => row.amount), [-1000, -1825, 2325]);
+
+  assert.throws(
+    () => parseStatement(text.replace('CURRENT BALANCE AED 105.00', 'CURRENT BALANCE AED 106.00'), 'rakbank_v1'),
+    /printed summary does not reconcile/,
+  );
+});
+
+test('EI credits preserve provisional CREDIT while payment and reward topics stay explicit', () => {
   const statement = parseStatement(`Statement of Card Account
 From: 1st Jul 2026
 31st Jul 2026
@@ -34,8 +81,55 @@ PRIMARY CARD NO:5424XXXXXXXX0082
 Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
 50,000.00 49,966.84 100.00 25/08/26 33.16 0.00 33.16`, 'emirates_islamic_v1', 'ei.pdf');
   assert.equal(statement.transactions[0].transaction_type, 'PAYMENT');
-  assert.equal(statement.transactions[2].transaction_type, 'REFUND');
+  assert.equal(statement.transactions[2].transaction_type, 'CREDIT');
   assert.equal(statement.balance_tied, true);
+  const explicitRefund = parseStatement(`Statement of Card Account
+From: 1st Jul 2026
+31st Jul 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+13 JUL 12 JUL REFUND FROM MERCHANT 3.55CR
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,966.84 100.00 25/08/26 0.00 0.00 96.45`, 'emirates_islamic_v1');
+  assert.equal(explicitRefund.transactions[0].transaction_type, 'REFUND');
+});
+
+test('EI resolves December and January row years within statement bounds', () => {
+  const statement = parseStatement(`Statement of Card Account
+From: 15th Dec 2025
+14th Jan 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+31 DEC 02 JAN CROSS-YEAR PURCHASE 10.00
+02 JAN 03 JAN PAYMENT RECEIVED THANK YOU 5.00CR
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,966.84 100.00 25/02/26 5.00 0.00 5.00`, 'emirates_islamic_v1');
+  assert.equal(statement.period_start, '2025-12-15');
+  assert.equal(statement.period_end, '2026-01-14');
+  assert.equal(statement.transactions[0].transaction_date, '2026-01-02');
+  assert.equal(statement.transactions[0].post_date, '2025-12-31');
+  assert.equal(statement.transactions[0].description, 'CROSS-YEAR PURCHASE');
+  assert.equal(statement.transactions[0].amount_aed, '10.00');
+  assert.equal(statement.transactions[0].card_last4, '0082');
+  assert.equal(statement.transactions[1].transaction_date, '2026-01-03');
+  assert.equal(statement.transactions[1].post_date, '2026-01-02');
+});
+
+test('EI rejects rows whose date cannot be resolved from authoritative bounds', () => {
+  const base = `Statement of Card Account
+From: 15th Dec 2025
+14th Jan 2026
+To:
+OPENING BALANCE 100.00
+PRIMARY CARD NO:5424XXXXXXXX0082
+ROW
+Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
+50,000.00 49,966.84 100.00 25/02/26 100.00 0.00 100.00`;
+  assert.throws(() => parseStatement(base.replace('ROW', '31 FEB 02 JAN INVALID DATE 10.00'), 'emirates_islamic_v1'), /Ambiguous or out-of-period statement date/);
+  assert.throws(() => parseStatement(base.replace('From: 15th Dec 2025', 'From: 15th Dec 2024').replace('ROW', '01 JAN 02 JAN OUT OF PERIOD 10.00'), 'emirates_islamic_v1'), /Ambiguous or out-of-period statement date/);
+  assert.throws(() => parseStatement(base.replace('From: 15th Dec 2025', 'From: missing').replace('ROW', '31 DEC 02 JAN MISSING BOUNDS 10.00'), 'emirates_islamic_v1'), /without authoritative statement bounds/);
 });
 
 test('ADCB preserves foreign facts and reward credit semantics', () => {
