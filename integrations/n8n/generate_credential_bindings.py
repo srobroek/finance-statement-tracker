@@ -263,6 +263,10 @@ def _render_application_manifest(contract_text: str) -> str:
     _validate_fixture_manifest(
         ROOT / manifest["fixture_manifest"]["path"], workflow_files
     )
+    image_lock = manifest["image_lock"]
+    image_lock["sha256"] = hashlib.sha256(
+        _canonical_bytes(ROOT / image_lock["path"])
+    ).hexdigest()
     source_bindings = manifest["source_contract_bindings"]
     if source_bindings["path"] != "integrations/n8n/source-contract-bindings.json":
         raise ValueError("SOURCE_BINDING_MANIFEST_PATH_INVALID")
