@@ -34,37 +34,15 @@
     {
       "id": "22002",
       "name": "Load Trusted Source Contract",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         -520,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_source_contracts",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "source_code",
-              "condition": "eq",
-              "keyValue": "={{ $('Monthly Cycle Context').first().json.cycle_context.source_code }}"
-            },
-            {
-              "keyName": "enabled",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
+        "mode": "raw",
+        "jsonOutput": "{}",
         "options": {}
       }
     },
@@ -78,7 +56,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst sourceContract = $json;\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst bindings = $json;\nconst sourceContract = bindings[context.source_code];\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nif (!sourceContract || typeof sourceContract !== 'object')\n    throw new Error('SOURCE_BINDING_MISSING:' + context.source_code);\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
       }
     },
     {
@@ -252,7 +230,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_source_cursors",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -280,7 +258,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build W12 COMMIT Request. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;\nconst receiptHash = String(pipeline.receipt_sha256 || '');\nif (pipeline.state !== 'SUCCEEDED' || pipeline.terminal_readback_verified !== true || !/^[a-f0-9]{64}$/.test(receiptHash))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED');\nif (archive.archive_ready !== true || archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.receipt_readback_verified !== true || archive.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT');\nconst observedVersion = Number(cursor.cursor_version), sameRun = cursor.committed_run_id === source.run_id, sameWindow = cursor.cursor_value === source.run_upper_bound && cursor.run_upper_bound === source.run_upper_bound;\nif (cursor.source_code !== source.source_code || !Number.isInteger(observedVersion) || observedVersion < 0)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && observedVersion < 1)\n    throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');\nconst expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;\nreturn [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: archive.receipt_readback_verified, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Build W12 COMMIT Request. Keep this deterministic and fail closed.\nconst source = $('Assemble Trusted Acquisition Contract').first().json, archive = $('Acquire Archive and Read Back').first().json, pipeline = $('Run Shared Statement Pipeline').first().json, cursor = $json;\nconst receiptHash = String(pipeline.receipt_sha256 || '');\nconst archiveHash = String(archive.archive_receipt_sha256 || '');\nif (pipeline.run_id !== source.run_id || pipeline.source_code !== source.source_code || pipeline.workflow_code !== 'SHARED_STATEMENT_PIPELINE' || pipeline.state !== 'SUCCEEDED' || pipeline.terminal_readback_verified !== true || !/^[a-f0-9]{64}$/.test(receiptHash))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED');\nif (!/^[a-f0-9]{64}$/.test(archiveHash) || archive.archive_readback_verified !== true || archive.archive_ready !== true || archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.receipt_readback_verified !== true || archive.cursor_commit_eligible !== false)\n    throw new Error('ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT');\nconst observedVersion = Number(cursor.cursor_version), sameRun = cursor.committed_run_id === source.run_id, sameWindow = cursor.cursor_value === source.run_upper_bound && cursor.run_upper_bound === source.run_upper_bound;\nif (cursor.source_code !== source.source_code || !Number.isInteger(observedVersion) || observedVersion < 0)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && observedVersion < 1)\n    throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_INVALID');\nconst expected = sameRun && sameWindow ? observedVersion - 1 : observedVersion;\nreturn [{ json: { ...archive, ...source, operation: 'COMMIT', expected_cursor_version: expected, archive_receipt_sha256: archiveHash, downstream_receipt_sha256: receiptHash, attachment_verification_barrier: archive.attachment_verification_barrier, email_evidence_receipt_barrier: archive.email_evidence_receipt_barrier, email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified), archive_ready: true, receipt_readback_verified: archive.receipt_readback_verified, cursor_commit_eligible: false, pipeline_terminal_readback_verified: true } }];\n"
       }
     },
     {
@@ -326,7 +304,8 @@
             "receipt_readback_verified": "={{ $('Build W12 COMMIT Request').item.json.receipt_readback_verified }}",
             "matched_count": "={{ $('Build W12 COMMIT Request').item.json.matched_count }}",
             "scanned_count": "={{ $('Build W12 COMMIT Request').item.json.scanned_count }}",
-            "heartbeat": "={{ $('Build W12 COMMIT Request').item.json.heartbeat }}"
+            "heartbeat": "={{ $('Build W12 COMMIT Request').item.json.heartbeat }}",
+            "archive_receipt_sha256": "={{ $('Build W12 COMMIT Request').first().json.archive_receipt_sha256 }}"
           }
         }
       }
@@ -341,7 +320,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify W12 COMMIT Terminal Readback. Keep this deterministic and fail closed.\nconst request = $('Build W12 COMMIT Request').first().json, result = $json;\nif (result.status !== 'CURSOR_COMMITTED' || result.run_id !== request.run_id || result.source_code !== request.source_code || result.cursor !== request.run_upper_bound || Number(result.cursor_version) !== Number(request.expected_cursor_version) + 1 || result.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...request, ...result, terminal_readback_verified: true, status: 'COMMITTED' } }];\n"
+        "jsCode": "// Purpose: Verify W12 COMMIT Terminal Readback. Keep this deterministic and fail closed.\nconst request = $('Build W12 COMMIT Request').first().json, result = $json;\nif (result.status !== 'CURSOR_COMMITTED' || result.run_id !== request.run_id || result.source_code !== request.source_code || result.cursor !== request.run_upper_bound || Number(result.cursor_version) !== Number(request.expected_cursor_version) + 1 || result.archive_receipt_sha256 !== request.archive_receipt_sha256 || result.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { ...request, ...result, terminal_readback_verified: true, status: 'COMMITTED' } }];\n"
       }
     },
     {
@@ -358,35 +337,30 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+              "keyValue": "={{ JSON.stringify([String($('Assemble Trusted Acquisition Contract').first().json.run_id), String($('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT')]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
-            "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
-            "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
-            "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
-            "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
-            "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
-            "terminal_readback_verified": false,
-            "updated_at": "={{ $now.toISO() }}"
+            "record_type": "PIPELINE_RUN",
+            "record_key": "={{ JSON.stringify([String($('Assemble Trusted Acquisition Contract').first().json.run_id), String($('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT')]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"run_id\": $('Assemble Trusted Acquisition Contract').first().json.run_id, \"workflow_code\": $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT', \"source_code\": $('Assemble Trusted Acquisition Contract').first().json.source_code, \"trigger_kind\": $('Assemble Trusted Acquisition Contract').first().json.trigger_kind, \"config_version\": $('Assemble Trusted Acquisition Contract').first().json.config_version, \"state\": $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING', \"terminal_readback_verified\": false, \"updated_at\": $now.toISO()}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -412,7 +386,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_pipeline_runs",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -421,14 +395,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "run_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+              "keyValue": "PIPELINE_RUN"
             },
             {
-              "keyName": "workflow_code",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+              "keyValue": "={{ JSON.stringify([String($('Assemble Trusted Acquisition Contract').first().json.run_id), String($('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT')]) }}"
             }
           ]
         },
@@ -717,6 +691,78 @@
           "type": "string",
           "minLength": 1
         }
+      }
+    },
+    "financeSourceBindingSlots": {
+      "EI_AMAZON": {
+        "node": "Load Trusted Source Contract",
+        "parameter": "parameters.jsonOutput",
+        "allowedFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "onedrive_parent_id",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "actual_file_id",
+          "account_id",
+          "card_code",
+          "cashback_close_required",
+          "enabled",
+          "content_sha256",
+          "updated_at"
+        ],
+        "requiredFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "enabled"
+        ]
+      },
+      "WIO_CREDIT": {
+        "node": "Load Trusted Source Contract",
+        "parameter": "parameters.jsonOutput",
+        "allowedFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "onedrive_parent_id",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "actual_file_id",
+          "account_id",
+          "card_code",
+          "cashback_close_required",
+          "enabled",
+          "content_sha256",
+          "updated_at"
+        ],
+        "requiredFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "enabled"
+        ]
       }
     }
   },

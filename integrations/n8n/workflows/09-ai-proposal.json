@@ -276,43 +276,21 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Attach Trusted Proposal Archive Payload. Keep this deterministic and fail closed.\nconst contract = $json, artifact = $('SHA-256 Canonical Proposal Artifact').first().json;\nif (!contract.onedrive_parent_id)\n    throw new Error('AI_PROPOSAL_ARCHIVE_PARENT_MISSING');\nreturn [{ json: { ...artifact, onedrive_parent_id: contract.onedrive_parent_id } }];\n"
+        "jsCode": "// Purpose: Attach Trusted Proposal Archive Payload. Keep this deterministic and fail closed.\nconst bindings = $json, contract = bindings['AI_PROPOSAL_ARCHIVE'], artifact = $('SHA-256 Canonical Proposal Artifact').first().json;\nif (!contract || typeof contract !== 'object')\n    throw new Error('SOURCE_BINDING_MISSING:AI_PROPOSAL_ARCHIVE');\nif (!contract.onedrive_parent_id)\n    throw new Error('AI_PROPOSAL_ARCHIVE_PARENT_MISSING');\nreturn [{ json: { ...artifact, onedrive_parent_id: contract.onedrive_parent_id } }];\n"
       }
     },
     {
       "id": "9021",
       "name": "Load Trusted Proposal Archive Contract",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         680,
         380
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_source_contracts",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "source_code",
-              "condition": "eq",
-              "keyValue": "AI_PROPOSAL_ARCHIVE"
-            },
-            {
-              "keyName": "enabled",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
+        "mode": "raw",
+        "jsonOutput": "{}",
         "options": {}
       }
     },
@@ -943,7 +921,7 @@
     "requestSchema": "contracts/subscription-agent-handoff-v1.schema.json",
     "outputSchema": "contracts/ai-proposal-v1.schema.json",
     "policyContractTable": null,
-    "terminalReceiptTable": "finance_agent_jobs",
+    "terminalReceiptTable": "finance_ai_reviews",
     "terminalReceiptReadback": true,
     "proposalArtifactStore": "OneDrive",
     "proposalReviewRequired": true,
@@ -981,7 +959,39 @@
     ],
     "providerSelection": "SERVER_AI_POLICY_CONTRACT",
     "policyContractSource": "integrations/n8n/generated/application-contract-bundle.json",
-    "policyContractResolver": "generated-repository-bundle"
+    "policyContractResolver": "generated-repository-bundle",
+    "financeSourceBindingSlots": {
+      "AI_PROPOSAL_ARCHIVE": {
+        "node": "Load Trusted Proposal Archive Contract",
+        "parameter": "parameters.jsonOutput",
+        "allowedFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "onedrive_parent_id",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "actual_file_id",
+          "account_id",
+          "card_code",
+          "cashback_close_required",
+          "enabled",
+          "content_sha256",
+          "updated_at"
+        ],
+        "requiredFields": [
+          "source_code",
+          "config_version",
+          "onedrive_parent_id",
+          "manifest_onedrive_parent_id",
+          "enabled"
+        ]
+      }
+    }
   },
   "nodeGroups": [
     {

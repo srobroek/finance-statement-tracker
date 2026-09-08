@@ -35,7 +35,7 @@
       "type": "n8n-nodes-finance.financePdf",
       "typeVersion": 1,
       "position": [
-        -220,
+        380,
         0
       ],
       "parameters": {
@@ -54,7 +54,7 @@
       "type": "n8n-nodes-finance.financePdf",
       "typeVersion": 1,
       "position": [
-        80,
+        980,
         0
       ],
       "parameters": {
@@ -67,8 +67,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        0
+        -1120,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Deterministic Text Quality Gate. Keep this deterministic and fail closed.\nconst text = String($json.extracted_text || '');\nconst printable = (text.match(/[\\p{L}\\p{N}\\p{P}\\p{Zs}]/gu) || []).length;\nconst rows = text.split(/\\r?\\n/).filter(v => v.trim()).length;\nconst passed = text.length >= 200 && printable / Math.max(text.length, 1) >= 0.75 && rows >= 5;\nreturn [{ json: { ...$json, extracted_text: text, text_quality: { passed, characters: text.length, printable_ratio: printable / Math.max(text.length, 1), nonempty_lines: rows } } }];\n"
@@ -80,8 +80,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        680,
-        0
+        -820,
+        380
       ],
       "parameters": {
         "conditions": {
@@ -110,8 +110,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        980,
-        0
+        -520,
+        380
       ],
       "parameters": {
         "assignments": {
@@ -176,7 +176,7 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        -1120,
+        -220,
         380
       ],
       "parameters": {
@@ -209,18 +209,30 @@
             },
             {
               "id": "config-3",
+              "name": "source_code",
+              "type": "string",
+              "value": "={{ $json.source_code }}"
+            },
+            {
+              "id": "config-4",
+              "name": "card_code",
+              "type": "string",
+              "value": "={{ $json.card_code }}"
+            },
+            {
+              "id": "config-5",
               "name": "document_profile",
               "type": "string",
               "value": "STATEMENT_PDF_V1"
             },
             {
-              "id": "config-4",
+              "id": "config-6",
               "name": "minimum_characters",
               "type": "number",
               "value": 200
             },
             {
-              "id": "config-5",
+              "id": "config-7",
               "name": "minimum_printable_ratio",
               "type": "number",
               "value": 0.75
@@ -229,6 +241,95 @@
         },
         "includeOtherFields": false,
         "options": {}
+      }
+    },
+    {
+      "id": "14009",
+      "name": "Resolve Trusted Statement Password Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Resolve Trusted Statement Password Route. Keep this deterministic and fail closed.\nconst input = $json;\nconst card = String(input.card_code || '').trim();\nconst source = String(input.source_code || '').trim();\nif (!card && !source)\n    throw new Error('STATEMENT_CARD_IDENTITY_REQUIRED');\nif (card && source && card !== source && !(card === 'RAK_WORLD' && source === 'RAKBANK')) {\n    throw new Error('STATEMENT_CARD_IDENTITY_MISMATCH');\n}\nconst identity = card || source;\nconst routes = new Map([\n    ['RAK_WORLD', 'BIND_RAKBANK_STATEMENT_PASSWORD'],\n    ['RAKBANK', 'BIND_RAKBANK_STATEMENT_PASSWORD'],\n    ['ADCB_CASHBACK', 'BIND_CARD_PASSWORD'],\n    ['EI_AMAZON', 'BIND_CARD_PASSWORD'],\n    ['WIO_CREDIT', 'BIND_CARD_PASSWORD'],\n    ['SC_PLATINUM_X', 'BIND_CARD_PASSWORD'],\n]);\nconst statement_password_binding = routes.get(identity);\nif (!statement_password_binding)\n    throw new Error('STATEMENT_CARD_IDENTITY_UNSUPPORTED');\nreturn [{ json: { ...input, statement_password_binding } }];\n"
+      }
+    },
+    {
+      "id": "14011",
+      "name": "Produce RAKBANK Ephemeral Extractable PDF",
+      "type": "n8n-nodes-finance.financePdf",
+      "typeVersion": 1,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "operation": "unlock"
+      },
+      "credentials": {
+        "financeStatementPassword": {
+          "id": "BIND_RAKBANK_STATEMENT_PASSWORD",
+          "name": "RAKBANK World Statement Password"
+        }
+      }
+    },
+    {
+      "id": "14010",
+      "name": "Route Statement Password Credential",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.statement_password_binding }}",
+                    "rightValue": "BIND_RAKBANK_STATEMENT_PASSWORD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.statement_password_binding }}",
+                    "rightValue": "BIND_CARD_PASSWORD",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
       }
     }
   ],
@@ -248,7 +349,47 @@
       "main": [
         [
           {
+            "node": "Resolve Trusted Statement Password Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Trusted Statement Password Route": {
+      "main": [
+        [
+          {
+            "node": "Route Statement Password Credential",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Statement Password Credential": {
+      "main": [
+        [
+          {
+            "node": "Produce RAKBANK Ephemeral Extractable PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Produce Ephemeral Extractable PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Produce RAKBANK Ephemeral Extractable PDF": {
+      "main": [
+        [
+          {
+            "node": "Profile PDF Text in Isolated Utility",
             "type": "main",
             "index": 0
           }
@@ -335,6 +476,13 @@
     "credentialBindings": [
       {
         "placeholder": "BIND_CARD_PASSWORD",
+        "credential_name": "Issuer Statement Password",
+        "configured": false,
+        "action_required": true
+      },
+      {
+        "placeholder": "BIND_RAKBANK_STATEMENT_PASSWORD",
+        "credential_name": "RAKBANK World Statement Password",
         "configured": false,
         "action_required": true
       }
@@ -354,17 +502,27 @@
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: PDF Extraction Parameters to Ready for Deterministic Parser",
+      "name": "Stage 1: PDF Extraction Parameters to Profile PDF Text in Isolated Utility",
       "nodeIds": [
         "10000000-0000-4000-8000-000000000014-config",
         "14002",
+        "14009",
+        "14010",
         "14003",
-        "14004",
+        "14011",
+        "14004"
+      ],
+      "description": "Finance stage 1. Input starts at PDF Extraction Parameters; verified output leaves through Profile PDF Text in Isolated Utility."
+    },
+    {
+      "name": "Stage 2: Deterministic Text Quality Gate to Quarantine for OCR or Repair",
+      "nodeIds": [
         "14005",
         "14006",
-        "14007"
+        "14007",
+        "14008"
       ],
-      "description": "Finance stage 1. Input starts at PDF Extraction Parameters; verified output leaves through Ready for Deterministic Parser."
+      "description": "Finance stage 2. Input starts at Deterministic Text Quality Gate; verified output leaves through Quarantine for OCR or Repair."
     }
   ],
   "tags": [

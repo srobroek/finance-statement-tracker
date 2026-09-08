@@ -39,7 +39,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT', 'INITIALIZE'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['window_start', 'run_upper_bound', 'expected_cursor_version', 'downstream_receipt_sha256'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('Invalid downstream receipt hash');\n}\nif (operation === 'INITIALIZE') {\n    for (const k of ['config_version', 'initial_cursor_value'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (r.initial_cursor_source !== 'statement-sources')\n        throw new Error('VERSIONED_CURSOR_CONFIG_REQUIRED');\n}\nreturn [{ json: { ...r, operation } }];\n"
+        "jsCode": "// Purpose: Validate Sweep or Commit. Keep this deterministic and fail closed.\nconst r = $json, operation = String(r.operation || 'ENUMERATE');\nif (!['ENUMERATE', 'COMMIT', 'INITIALIZE'].includes(operation))\n    throw new Error('INVALID_SWEEP_OPERATION');\nfor (const k of ['run_id', 'source_code'])\n    if (!r[k])\n        throw new Error(`Missing ${k}`);\nif (operation === 'COMMIT') {\n    for (const k of ['window_start', 'run_upper_bound', 'expected_cursor_version', 'archive_receipt_sha256', 'downstream_receipt_sha256'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (!/^[a-f0-9]{64}$/.test(String(r.archive_receipt_sha256)))\n        throw new Error('Invalid archive receipt hash');\n    if (!/^[a-f0-9]{64}$/.test(String(r.downstream_receipt_sha256)))\n        throw new Error('Invalid downstream receipt hash');\n}\nif (operation === 'INITIALIZE') {\n    for (const k of ['config_version', 'initial_cursor_value'])\n        if (r[k] === undefined || r[k] === null || r[k] === '')\n            throw new Error(`Missing ${k}`);\n    if (r.initial_cursor_source !== 'statement-sources')\n        throw new Error('VERSIONED_CURSOR_CONFIG_REQUIRED');\n}\nreturn [{ json: { ...r, operation } }];\n"
       }
     },
     {
@@ -137,8 +137,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        760
+        -220,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Read Outlook Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, provider_code: 'MICROSOFT_GRAPH', state: 'CLOSED', transient_failure_count: 0, last_error_class: '', opened_at: null, retry_after: null, readback_verified: false } }];\n"
@@ -150,8 +150,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
-        760
+        80,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Gate Outlook Circuit. Keep this deterministic and fail closed.\nconst now = new Date(), row = $json?.provider_code ? $json : { state: 'CLOSED', transient_failure_count: 0 }, retry = row.retry_after ? new Date(row.retry_after) : null;\nif (row.state === 'OPEN' && retry && retry > now)\n    throw new Error('PROVIDER_CIRCUIT_OPEN:MICROSOFT_GRAPH');\nreturn [{ json: { provider_code: 'MICROSOFT_GRAPH', state: row.state === 'OPEN' ? 'HALF_OPEN' : 'CLOSED', transient_failure_count: Number(row.transient_failure_count || 0), last_error_class: row.last_error_class || '', opened_at: row.opened_at || null, retry_after: row.retry_after || null, readback_verified: false, updated_at: now.toISOString() } }];\n"
@@ -163,8 +163,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
-        760
+        380,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Persist Outlook Circuit Gate. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
@@ -176,8 +176,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        760
+        680,
+        380
       ],
       "parameters": {
         "jsCode": "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); if(kind==='zero') return [{json:{}}]; if(kind==='one-no-attachments') return [mk('m001',1000)]; if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; throw new Error('UNKNOWN_SWEEP_FIXTURE');"
@@ -189,8 +189,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        760
+        980,
+        380
       ],
       "parameters": {
         "jsCode": "// Purpose: Aggregate Exact Window Heartbeat. Keep this deterministic and fail closed.\nconst contract = $('Freeze Trusted Cursor Window').first().json;\nconst start = new Date(contract.window_start);\nconst upper = new Date(contract.run_upper_bound);\nconst scanned = $input.all().map(item => item.json).filter(message => message?.id);\nif (scanned.length > contract.max_messages) {\n    throw new Error(`SOURCE_RESULT_LIMIT_EXCEEDED:${scanned.length}`);\n}\nconst messages = scanned\n    .filter(message => {\n    const sender = String(message.from?.emailAddress?.address\n        || message.sender?.emailAddress?.address\n        || '').toLowerCase();\n    const subject = String(message.subject || '').toLowerCase();\n    const received = new Date(message.receivedDateTime);\n    return contract.senders.includes(sender)\n        && contract.subjects.some(fragment => subject.includes(fragment.toLowerCase()))\n        && received >= start\n        && received < upper;\n})\n    .sort((left, right) => (String(left.receivedDateTime).localeCompare(String(right.receivedDateTime))\n    || String(left.id).localeCompare(String(right.id))));\nreturn [{\n        json: {\n            run_id: contract.run_id,\n            source_code: contract.source_code,\n            folder_id: contract.folder_id,\n            senders: contract.senders,\n            subjects: contract.subjects,\n            window_start: contract.window_start,\n            run_upper_bound: contract.run_upper_bound,\n            onedrive_parent_id: contract.onedrive_parent_id,\n            pagination_exhausted: true,\n            pages_fetched: null,\n            scanned_count: scanned.length,\n            matched_count: messages.length,\n            heartbeat: messages.length === 0,\n            immutable_inventory: true,\n            messages,\n        },\n    }];\n"
@@ -202,8 +202,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        1140
+        680,
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Close Outlook Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
@@ -215,8 +215,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
-        1140
+        980,
+        760
       ],
       "parameters": {
         "resource": "row",
@@ -255,7 +255,9 @@
             "last_receipt_created_at": "={{ $now.toISO() }}",
             "attachment_ids_verified": "={{ $('Aggregate Immutable Archive Inventory').item.json.attachment_ids_verified }}",
             "attachment_identity_keys_json": "={{ JSON.stringify($('Aggregate Immutable Archive Inventory').item.json.attachment_identity_keys || []) }}",
-            "attachments_verified": "={{ ($('Aggregate Immutable Archive Inventory').item.json.attachment_identity_keys || []).length }}"
+            "attachments_verified": "={{ ($('Aggregate Immutable Archive Inventory').item.json.attachment_identity_keys || []).length }}",
+            "archive_receipt_sha256": "",
+            "archive_readback_verified": false
           },
           "matchingColumns": [],
           "schema": [],
@@ -273,7 +275,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        -1120,
         1140
       ],
       "parameters": {
@@ -310,7 +312,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
+        -520,
         1140
       ],
       "parameters": {
@@ -327,7 +329,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Commit Resume. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Commit Resume. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -336,11 +338,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        -820,
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -349,11 +351,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
-        3040
+        -820,
+        3420
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Terminal Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Terminal Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -362,11 +364,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        3040
+        -520,
+        3420
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Replay. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Replay. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -375,11 +377,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        -820,
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -388,11 +390,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        1900
+        -220,
+        1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -401,11 +403,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        1900
+        980,
+        1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Verified Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Verified Archive. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
       }
     },
     {
@@ -434,6 +436,21 @@
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Sweep or Commit').first().json.window_start }}"
             }
           ]
         },
@@ -450,7 +467,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Commit Resume State. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'downstream_receipt_sha256'])\n    if (String(receipt[field] ?? '') !== String(request[field] ?? ''))\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:' + field);\nif (!/^[a-f0-9]{64}$/.test(String(receipt.downstream_receipt_sha256 || '')))\n    throw new Error('ACQUISITION_RESUME_HASH_INVALID');\nif (receipt.terminal_state === 'ARCHIVED' && receipt.readback_verified === true)\n    return [{ json: { ...receipt, resume_terminal_state: 'ARCHIVED', resume_readback_verified: true } }];\nif (receipt.terminal_state === 'DOWNSTREAM_VERIFIED' && (receipt.readback_verified === false || receipt.readback_verified === true))\n    return [{ json: { ...receipt, resume_terminal_state: 'DOWNSTREAM_VERIFIED', resume_readback_verified: receipt.readback_verified } }];\nthrow new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n"
+        "jsCode": "// Purpose: Validate Commit Resume State. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'archive_receipt_sha256']) {\n    if (String(receipt[field] ?? '') !== String(request[field] ?? ''))\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:' + field);\n}\nif (!/^[a-f0-9]{64}$/.test(String(receipt.archive_receipt_sha256 || '')))\n    throw new Error('ACQUISITION_RESUME_HASH_INVALID');\nif (receipt.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nconst sameRun = receipt.committed_run_id === request.run_id;\nconst committed = sameRun\n    && receipt.cursor_value === request.run_upper_bound\n    && receipt.cursor_run_upper_bound === request.run_upper_bound\n    && Number(receipt.cursor_version) === Number(request.expected_cursor_version) + 1;\nif (sameRun && !committed)\n    throw new Error('SOURCE_CURSOR_RECOVERY_TUPLE_MISMATCH');\nif (![false, true].includes(receipt.readback_verified))\n    throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\nif (committed) {\n    if (receipt.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:downstream_receipt_sha256');\n}\nelse if (receipt.downstream_receipt_sha256) {\n    throw new Error('DOWNSTREAM_RECEIPT_WITHOUT_CURSOR_COMMIT');\n}\nif (receipt.terminal_state === 'ARCHIVED') {\n    return [{ json: { ...receipt, resume_terminal_state: 'ARCHIVED', resume_readback_verified: receipt.readback_verified } }];\n}\nif (receipt.terminal_state === 'DOWNSTREAM_VERIFIED' && committed) {\n    return [{ json: { ...receipt, resume_terminal_state: 'DOWNSTREAM_VERIFIED', resume_readback_verified: receipt.readback_verified } }];\n}\nthrow new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n"
       }
     },
     {
@@ -459,11 +476,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        380
+        680,
+        2660
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_id !== r.run_id || o.source_code !== r.source_code || o.window_start !== r.window_start || o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.terminal_state === 'ARCHIVED') {\n    if (o.readback_verified !== true)\n        throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\n}\nelse if (o.terminal_state === 'DOWNSTREAM_VERIFIED') {\n    if (![false, true].includes(o.readback_verified))\n        throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\n}\nelse {\n    throw new Error('DOWNSTREAM_RECEIPT_STATE_UNSUPPORTED');\n}\nif (o.archive_ready !== true || o.attachment_verification_barrier !== 'VERIFIED' || o.attachment_ids_verified !== true || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nif (!/^[a-f0-9]{64}$/.test(String(o.downstream_receipt_sha256 || '')))\n    throw new Error('DOWNSTREAM_RECEIPT_HASH_MISSING');\nlet attachmentKeys, emailKeys;\ntry {\n    attachmentKeys = JSON.parse(o.attachment_identity_keys_json);\n    emailKeys = JSON.parse(o.email_evidence_identity_keys_json);\n}\ncatch {\n    throw new Error('DOWNSTREAM_RECEIPT_KEYS_INVALID');\n}\nif (!Array.isArray(attachmentKeys) || !Array.isArray(emailKeys) || attachmentKeys.length !== Number(o.attachments_verified) || emailKeys.length !== Number(o.email_evidence_receipts_verified))\n    throw new Error('DOWNSTREAM_RECEIPT_COUNTS_MISMATCH');\nconst output = {\n    ...r,\n    folder_id: o.folder_id,\n    senders: o.senders,\n    subjects: o.subjects,\n    onedrive_parent_id: o.onedrive_parent_id,\n    window_start: o.window_start,\n    scanned_count: Number(o.scanned_count),\n    matched_count: Number(o.matched_count),\n    heartbeat: Boolean(o.heartbeat),\n    attachment_identity_keys: attachmentKeys,\n    attachments_verified: Number(o.attachments_verified),\n    email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified),\n    email_evidence_identity_keys: emailKeys,\n    email_evidence_receipt_barrier: o.email_evidence_receipt_barrier,\n    attachment_verification_barrier: o.attachment_verification_barrier,\n    attachment_ids_verified: o.attachment_ids_verified,\n    archive_ready: o.archive_ready,\n    downstream_receipt_sha256: o.downstream_receipt_sha256,\n    terminal_state: o.terminal_state,\n    readback_verified: o.readback_verified,\n};\nreturn [{ json: output }];\n"
+        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_id !== r.run_id || o.source_code !== r.source_code || o.window_start !== r.window_start || o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.terminal_state === 'ARCHIVED') {\n    if (o.archive_readback_verified !== true)\n        throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\n}\nelse if (o.terminal_state === 'DOWNSTREAM_VERIFIED') {\n    if (![false, true].includes(o.readback_verified))\n        throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\n}\nelse {\n    throw new Error('DOWNSTREAM_RECEIPT_STATE_UNSUPPORTED');\n}\nif (o.archive_ready !== true || o.attachment_verification_barrier !== 'VERIFIED' || o.attachment_ids_verified !== true || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nif (o.archive_receipt_sha256 !== r.archive_receipt_sha256 || o.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nif (o.downstream_terminal_readback_verified !== true || o.verified_downstream_receipt_sha256 !== r.downstream_receipt_sha256)\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\nlet attachmentKeys, emailKeys;\ntry {\n    attachmentKeys = JSON.parse(o.attachment_identity_keys_json);\n    emailKeys = JSON.parse(o.email_evidence_identity_keys_json);\n}\ncatch {\n    throw new Error('DOWNSTREAM_RECEIPT_KEYS_INVALID');\n}\nif (!Array.isArray(attachmentKeys) || !Array.isArray(emailKeys) || attachmentKeys.length !== Number(o.attachments_verified) || emailKeys.length !== Number(o.email_evidence_receipts_verified))\n    throw new Error('DOWNSTREAM_RECEIPT_COUNTS_MISMATCH');\nconst output = {\n    ...r,\n    window_start: o.window_start,\n    scanned_count: Number(o.scanned_count),\n    matched_count: Number(o.matched_count),\n    heartbeat: Boolean(o.heartbeat),\n    attachment_identity_keys: attachmentKeys,\n    attachments_verified: Number(o.attachments_verified),\n    email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified),\n    email_evidence_identity_keys: emailKeys,\n    email_evidence_receipt_barrier: o.email_evidence_receipt_barrier,\n    attachment_verification_barrier: o.attachment_verification_barrier,\n    attachment_ids_verified: o.attachment_ids_verified,\n    archive_ready: o.archive_ready,\n    archive_receipt_sha256: o.archive_receipt_sha256,\n    archive_readback_verified: true,\n    downstream_receipt_sha256: o.verified_downstream_receipt_sha256,\n    terminal_state: o.terminal_state,\n    readback_verified: o.readback_verified,\n};\nreturn [{ json: output }];\n"
       }
     },
     {
@@ -472,8 +489,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
-        380
+        -1120,
+        3040
       ],
       "parameters": {
         "resource": "row",
@@ -504,11 +521,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        380
+        -820,
+        3040
       ],
       "parameters": {
-        "jsCode": "// Purpose: Determine Existing Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $json, sameRun = cursor.committed_run_id === proof.run_id, sameWindow = cursor.cursor_value === proof.run_upper_bound && cursor.run_upper_bound === proof.run_upper_bound;\nif (cursor.source_code !== proof.source_code)\n    throw new Error('SOURCE_CURSOR_SOURCE_MISMATCH');\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && sameWindow) {\n    if (Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n        throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_MISMATCH');\n    const resumePath = proof.terminal_state === 'ARCHIVED' ? 'ARCHIVED_RECOVERY' : proof.readback_verified === true ? 'DOWNSTREAM_VERIFIED_REPLAY' : 'DOWNSTREAM_UNVERIFIED';\n    return [{ json: { ...proof, ...cursor, cursor_recovery: true, cursor_readback_verified: cursor.readback_verified === true, resume_path: resumePath } }];\n}\nif (proof.terminal_state !== 'ARCHIVED')\n    throw new Error('SOURCE_CURSOR_TERMINAL_COMMIT_MISSING');\nreturn [{ json: { ...proof, ...cursor, cursor_recovery: false, cursor_readback_verified: cursor.readback_verified === true, resume_path: 'CAS' } }];\n"
+        "jsCode": "// Purpose: Determine Existing Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $json;\nif (cursor.source_code !== proof.source_code)\n    throw new Error('SOURCE_CURSOR_SOURCE_MISMATCH');\nif (cursor.receipt_run_id !== proof.run_id || cursor.receipt_run_upper_bound !== proof.run_upper_bound\n    || cursor.last_window_start !== proof.window_start\n    || cursor.archive_receipt_sha256 !== proof.archive_receipt_sha256\n    || cursor.archive_readback_verified !== true)\n    throw new Error('ACQUISITION_CURSOR_PROOF_MISMATCH');\nconst sameRun = cursor.committed_run_id === proof.run_id;\nconst sameWindow = cursor.cursor_value === proof.run_upper_bound && cursor.run_upper_bound === proof.run_upper_bound;\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && sameWindow) {\n    if (Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n        throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_MISMATCH');\n    if (cursor.downstream_receipt_sha256 !== proof.downstream_receipt_sha256)\n        throw new Error('SOURCE_CURSOR_RECOVERY_RECEIPT_MISMATCH');\n    if (!['ARCHIVED', 'DOWNSTREAM_VERIFIED'].includes(cursor.last_terminal_state)\n        || ![false, true].includes(cursor.readback_verified))\n        throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n    const resumePath = cursor.last_terminal_state === 'ARCHIVED' ? 'ARCHIVED_RECOVERY'\n        : cursor.readback_verified === true ? 'DOWNSTREAM_VERIFIED_REPLAY' : 'DOWNSTREAM_UNVERIFIED';\n    return [{ json: { ...proof, ...cursor, downstream_receipt_sha256: proof.downstream_receipt_sha256, terminal_state: cursor.last_terminal_state,\n                cursor_recovery: true, cursor_readback_verified: true, resume_path: resumePath } }];\n}\nif (cursor.last_terminal_state !== 'ARCHIVED' || cursor.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_TERMINAL_COMMIT_MISSING');\nreturn [{ json: { ...proof, ...cursor, downstream_receipt_sha256: proof.downstream_receipt_sha256, cursor_recovery: false,\n            cursor_readback_verified: false, resume_path: 'CAS' } }];\n"
       }
     },
     {
@@ -517,7 +534,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -1120,
+        -220,
         3420
       ],
       "parameters": {
@@ -636,8 +653,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        80,
-        380
+        -520,
+        3040
       ],
       "parameters": {
         "conditions": {
@@ -666,7 +683,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        80,
         3420
       ],
       "parameters": {
@@ -691,9 +708,39 @@
               "keyValue": "ARCHIVED"
             },
             {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
-              "keyValue": "={{ $('Determine Existing Cursor Commit').item.json.downstream_receipt_sha256 }}"
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -721,7 +768,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        380,
         3420
       ],
       "parameters": {
@@ -759,6 +806,36 @@
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": false
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -784,7 +861,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        680,
         3420
       ],
       "parameters": {
@@ -803,27 +880,57 @@
             {
               "keyName": "source_code",
               "condition": "eq",
-              "keyValue": "={{ $json.source_code }}"
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.source_code }}"
             },
             {
               "keyName": "cursor_version",
               "condition": "eq",
-              "keyValue": "={{ $json.cursor_recovery === true ? $json.cursor_version : $json.next_cursor_version }}"
+              "keyValue": "={{ Number($('Verify Downstream Persistence Proof').first().json.expected_cursor_version) + 1 }}"
             },
             {
               "keyName": "cursor_value",
               "condition": "eq",
-              "keyValue": "={{ $json.run_upper_bound }}"
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
             },
             {
               "keyName": "run_upper_bound",
               "condition": "eq",
-              "keyValue": "={{ $json.run_upper_bound }}"
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
             },
             {
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": true
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -836,7 +943,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        980,
         3420
       ],
       "parameters": {
@@ -849,11 +956,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        3420
+        -1120,
+        3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, next_cursor_version: expected + 1 } }];\n"
+        "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $('Read Authoritative Source Cursor').first().json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nif (o.receipt_run_id !== r.run_id || o.receipt_run_upper_bound !== r.run_upper_bound\n    || o.last_window_start !== r.window_start || o.last_terminal_state !== 'ARCHIVED'\n    || o.archive_receipt_sha256 !== r.archive_receipt_sha256 || o.archive_readback_verified !== true\n    || o.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_ARCHIVE_PROOF_CHANGED');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, prior_cursor_value: o.cursor_value, next_cursor_version: expected + 1 } }];\n"
       }
     },
     {
@@ -862,8 +969,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        3420
+        -820,
+        3800
       ],
       "parameters": {
         "resource": "row",
@@ -885,6 +992,41 @@
               "keyName": "cursor_version",
               "condition": "eq",
               "keyValue": "={{ $json.prior_cursor_version }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_terminal_state",
+              "condition": "eq",
+              "keyValue": "ARCHIVED"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": ""
+            },
+            {
+              "keyName": "cursor_value",
+              "condition": "eq",
+              "keyValue": "={{ $json.prior_cursor_value }}"
             }
           ]
         },
@@ -898,7 +1040,8 @@
             "matched_count": "={{ $json.matched_count }}",
             "cursor_version": "={{ $json.next_cursor_version }}",
             "readback_verified": false,
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -908,7 +1051,8 @@
         "options": {
           "dryRun": false
         }
-      }
+      },
+      "alwaysOutputData": true
     },
     {
       "id": "12025",
@@ -916,8 +1060,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
-        3420
+        -520,
+        3800
       ],
       "parameters": {
         "resource": "row",
@@ -941,6 +1085,36 @@
               "keyName": "cursor_version",
               "condition": "eq",
               "keyValue": "={{ $('Build Cursor CAS Update').item.json.next_cursor_version }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -953,11 +1127,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst e = $('Build Cursor CAS Update').first().json, o = $json;\nif (o.cursor_value !== e.run_upper_bound || Number(o.cursor_version) !== e.next_cursor_version || o.committed_run_id !== e.run_id)\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: e }];\n"
+        "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor CAS Update').first().json, observed = $json;\nif (observed.source_code !== expected.source_code\n    || observed.receipt_run_id !== expected.run_id\n    || observed.receipt_run_upper_bound !== expected.run_upper_bound\n    || observed.cursor_value !== expected.run_upper_bound\n    || observed.run_upper_bound !== expected.run_upper_bound\n    || Number(observed.cursor_version) !== expected.next_cursor_version\n    || observed.committed_run_id !== expected.run_id\n    || observed.archive_receipt_sha256 !== expected.archive_receipt_sha256\n    || observed.archive_readback_verified !== true\n    || observed.downstream_receipt_sha256 !== expected.downstream_receipt_sha256\n    || observed.last_terminal_state !== 'ARCHIVED')\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: expected }];\n"
       }
     },
     {
@@ -966,7 +1140,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        80,
         3800
       ],
       "parameters": {
@@ -991,9 +1165,39 @@
               "keyValue": "ARCHIVED"
             },
             {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
-              "keyValue": "={{ $json.downstream_receipt_sha256 }}"
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1021,7 +1225,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
+        380,
         3800
       ],
       "parameters": {
@@ -1051,6 +1255,41 @@
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": false
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1063,11 +1302,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        680,
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, terminal = $('Verify Terminal Acquisition Receipt').first().json;\nif (terminal.readback_verified !== true || terminal.downstream_receipt_sha256 !== proof.downstream_receipt_sha256)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nconst recovered = cursor.cursor_recovery === true, version = recovered ? Number(cursor.cursor_version) : Number(proof.expected_cursor_version) + 1, value = recovered ? cursor.cursor_value : proof.run_upper_bound;\nif (!Number.isInteger(version) || version < 1 || !value)\n    throw new Error('ACQUISITION_TERMINAL_CURSOR_MISSING');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: value, cursor_version: version, downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: recovered } }];\n"
+        "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json;\nconst cursor = $('Determine Existing Cursor Commit').first().json;\nconst receipt = $json;\nif (receipt.source_code !== proof.source_code || receipt.receipt_run_id !== proof.run_id\n    || receipt.receipt_run_upper_bound !== proof.run_upper_bound\n    || receipt.last_window_start !== proof.window_start\n    || receipt.committed_run_id !== proof.run_id\n    || receipt.cursor_value !== proof.run_upper_bound || receipt.run_upper_bound !== proof.run_upper_bound\n    || Number(receipt.cursor_version) !== Number(proof.expected_cursor_version) + 1\n    || receipt.last_terminal_state !== 'DOWNSTREAM_VERIFIED' || receipt.readback_verified !== true\n    || receipt.archive_readback_verified !== true\n    || receipt.archive_receipt_sha256 !== proof.archive_receipt_sha256\n    || receipt.downstream_receipt_sha256 !== proof.downstream_receipt_sha256)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code,\n            cursor: receipt.cursor_value, cursor_version: Number(receipt.cursor_version),\n            archive_receipt_sha256: receipt.archive_receipt_sha256,\n            downstream_receipt_sha256: receipt.downstream_receipt_sha256,\n            recovered_after_cas: cursor.cursor_recovery === true } }];\n"
       }
     },
     {
@@ -1076,11 +1315,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
+        980,
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== false)\n    throw new Error('ACQUISITION_TERMINAL_STATE_MISMATCH');\nreturn [{ json: { ...observed, readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'archive_receipt_sha256', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.archive_readback_verified !== true || observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== false)\n    throw new Error('ACQUISITION_TERMINAL_STATE_MISMATCH');\nreturn [{ json: { ...observed, readback_verified: false } }];\n"
       }
     },
     {
@@ -1089,8 +1328,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
-        3800
+        -1120,
+        4180
       ],
       "parameters": {
         "resource": "row",
@@ -1114,14 +1353,44 @@
               "keyValue": "DOWNSTREAM_VERIFIED"
             },
             {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.downstream_receipt_sha256 }}"
-            },
-            {
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": false
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1147,8 +1416,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
-        3800
+        -820,
+        4180
       ],
       "parameters": {
         "resource": "row",
@@ -1169,11 +1438,6 @@
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
             },
             {
-              "keyName": "last_window_start",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.window_start }}"
-            },
-            {
               "keyName": "run_upper_bound",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_upper_bound }}"
@@ -1184,14 +1448,44 @@
               "keyValue": "DOWNSTREAM_VERIFIED"
             },
             {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.downstream_receipt_sha256 }}"
-            },
-            {
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": true
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1204,11 +1498,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
-        3800
+        -520,
+        4180
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'archive_receipt_sha256', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.archive_readback_verified !== true || observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
       }
     },
     {
@@ -1217,11 +1511,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         4180
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Replayed Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, replay = $('Verify Replayed Terminal Acquisition Receipt').first().json;\nif (replay.replay_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_NOT_VERIFIED');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: true, replayed: true } }];\n"
+        "jsCode": "// Purpose: Return Replayed Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, replay = $('Verify Replayed Terminal Acquisition Receipt').first().json;\nif (replay.replay_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_NOT_VERIFIED');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), archive_receipt_sha256: proof.archive_receipt_sha256, downstream_receipt_sha256: proof.downstream_receipt_sha256, recovered_after_cas: true, replayed: true } }];\n"
       }
     },
     {
@@ -1230,7 +1524,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        -1120,
         760
       ],
       "parameters": {
@@ -1243,11 +1537,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
+        -520,
         760
       ],
       "parameters": {
-        "jsCode": "return $input.all().flatMap(item => { const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; return attachments.length ? attachments.map(attachment => ({json: attachment})) : [{json:{}}]; });"
+        "jsCode": "return $input.all().flatMap((item,index) => { const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; return attachments.length ? attachments.map(attachment => ({json: attachment,pairedItem:index})) : [{json:{},pairedItem:index}]; });"
       }
     },
     {
@@ -1256,8 +1550,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        1140
+        -220,
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Stamp Immutable Attachment IDs. Keep this deterministic and fail closed.\nconst parent = $('Shape Immutable Message Inventory').item.json;\nreturn $input.all().map(item => {\n    const attachment = item.json || {}, attachmentId = String(attachment.id || '').trim();\n    if (!attachmentId)\n        return { json: { message_id: parent.message_id, attachment: null } };\n    const identity = parent.message_id + ':' + attachmentId;\n    return { json: { message_id: parent.message_id, source_code: parent.source_code, attachment: { id: attachmentId, attachment_identity: identity, name: attachment.name || 'attachment.bin', contentType: attachment.contentType || null, size: attachment.size ?? null, isInline: Boolean(attachment.isInline) } } };\n});\n"
@@ -1269,8 +1563,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
-        1140
+        380,
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Aggregate Immutable Archive Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Aggregate Exact Window Heartbeat').first().json;\nconst parents = $('Shape Immutable Message Inventory').all().filter(item => !item.json.empty_inventory);\nconst rows = $input.all().map(item => item.json);\nconst grouped = new Map();\nfor (const row of rows) {\n    const messageId = String(row.message_id || '').trim();\n    if (!messageId)\n        continue;\n    const bucket = grouped.get(messageId) || [];\n    if (row.attachment?.id)\n        bucket.push(row.attachment);\n    grouped.set(messageId, bucket);\n}\nconst messages = parents.map(item => {\n    const message = item.json;\n    const attachments = grouped.get(message.message_id) || [];\n    const seen = new Set();\n    for (const attachment of attachments) {\n        const identity = message.message_id + ':' + attachment.id;\n        if (seen.has(identity))\n            throw new Error('DUPLICATE_MESSAGE_ATTACHMENT_ID');\n        seen.add(identity);\n    }\n    attachments.sort((left, right) => String(left.id).localeCompare(String(right.id)));\n    return {\n        message_id: message.message_id,\n        message,\n        attachment_inventory: attachments,\n        attachment_ids: attachments.map(attachment => attachment.id),\n        attachment_identity_keys: attachments.map(attachment => message.message_id + ':' + attachment.id),\n    };\n});\nreturn [{ json: {\n            ...sweep,\n            messages,\n            empty_inventory: messages.length === 0,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: messages.flatMap(message => message.attachment_identity_keys),\n        } }];\n"
@@ -1282,12 +1576,12 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -520,
-        1520
+        380,
+        1140
       ],
       "parameters": {
         "source": "parameter",
-        "workflowJson": "{\"active\":false,\"connections\":{\"Called by Trusted Workflow\":{\"main\":[[{\"index\":0,\"node\":\"Emit Synthetic Archive Barrier\",\"type\":\"main\"}]]}},\"id\":\"10000000-0000-4000-8000-000000000001\",\"meta\":{\"disposableOnly\":true,\"externalNodeReplacement\":\"Synthetic archive barrier\",\"productionImportForbidden\":true},\"name\":\"DISPOSABLE ONLY · Synthetic Outlook archive boundary\",\"nodes\":[{\"id\":\"fixture-w01-trigger\",\"name\":\"Called by Trusted Workflow\",\"parameters\":{\"inputSource\":\"passthrough\"},\"position\":[-300,0],\"type\":\"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\":1.1},{\"id\":\"fixture-w01-archive\",\"name\":\"Emit Synthetic Archive Barrier\",\"parameters\":{\"jsCode\":\"const input=$json||{}; return [{json:{...input, status:'ARCHIVED', archive_ready:true, attachment_verification_barrier:'VERIFIED', attachment_ids_verified:true, attachments_verified:Number(input.attachments_verified||0), email_evidence_receipt_barrier:'VERIFIED', email_evidence_receipts_verified:Number(input.email_evidence_receipts_verified||input.matched_count||0), email_evidence_identity_keys:Array.isArray(input.email_evidence_identity_keys)?input.email_evidence_identity_keys:[], archive_identity_keys:Array.isArray(input.attachment_identity_keys)?input.attachment_identity_keys:[], archive_readback_verified:true}}];\"},\"position\":[0,0],\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2}],\"pinData\":{},\"settings\":{\"executionOrder\":\"v1\",\"saveDataErrorExecution\":\"none\",\"saveDataSuccessExecution\":\"none\",\"timezone\":\"Asia/Dubai\"}}",
+        "workflowJson": "{\"active\":false,\"connections\":{\"Called by Trusted Workflow\":{\"main\":[[{\"index\":0,\"node\":\"Emit Synthetic Archive Barrier\",\"type\":\"main\"}]]}},\"id\":\"10000000-0000-4000-8000-000000000001\",\"meta\":{\"disposableOnly\":true,\"externalNodeReplacement\":\"Synthetic archive barrier\",\"productionImportForbidden\":true},\"name\":\"DISPOSABLE ONLY · Synthetic Outlook archive boundary\",\"nodes\":[{\"id\":\"fixture-w01-trigger\",\"name\":\"Called by Trusted Workflow\",\"parameters\":{\"inputSource\":\"passthrough\"},\"position\":[-300,0],\"type\":\"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\":1.1},{\"id\":\"fixture-w01-archive\",\"name\":\"Emit Synthetic Archive Barrier\",\"parameters\":{\"jsCode\":\"const input=$json; if(input.immutable_inventory!==true||!Array.isArray(input.messages)) throw new Error('FIXTURE_IMMUTABLE_INVENTORY_REQUIRED'); const ids=input.messages.map(row=>String(row?.message_id||row?.message?.id||row?.id||'').trim()); if(ids.some(id=>!id)||new Set(ids).size!==ids.length||Number(input.matched_count)!==ids.length) throw new Error('FIXTURE_MESSAGE_INVENTORY_MISMATCH'); const attachments=input.messages.flatMap((row,index)=>(Array.isArray(row.attachment_inventory)?row.attachment_inventory:[]).map(attachment=>{ if(!attachment.id) throw new Error('FIXTURE_ATTACHMENT_ID_REQUIRED'); return ids[index]+':'+attachment.id; })); const expected=input.attachment_identity_keys; if(!Array.isArray(expected)||new Set(attachments).size!==attachments.length||expected.length!==attachments.length||attachments.some(id=>!expected.includes(id))) throw new Error('FIXTURE_ATTACHMENT_INVENTORY_MISMATCH'); const emails=ids.map(id=>id+':INLINE_BODY'); return [{json:{...input,status:'ARCHIVED',archive_ready:true,attachment_verification_barrier:'VERIFIED',attachment_ids_verified:true,attachment_identity_keys:attachments,attachments_verified:attachments.length,email_evidence_receipt_barrier:'VERIFIED',email_evidence_receipts_verified:emails.length,email_evidence_identity_keys:emails,archive_identity_keys:[...attachments,...emails].sort(),archive_readback_verified:false,cursor_commit_eligible:false}}];\"},\"position\":[0,0],\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2}],\"pinData\":{},\"settings\":{\"executionOrder\":\"v1\",\"saveDataErrorExecution\":\"none\",\"saveDataSuccessExecution\":\"none\",\"timezone\":\"Asia/Dubai\"}}",
         "options": {
           "waitForSubWorkflow": true
         }
@@ -1299,8 +1593,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        1520
+        680,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Attachment Archive Barrier. Keep this deterministic and fail closed.\nconst result = $json, contract = $('Attach Immutable Inventory to Sweep').first().json;\nif (result.attachment_verification_barrier !== 'VERIFIED' || result.attachment_ids_verified !== true || result.email_evidence_receipt_barrier !== 'VERIFIED')\n    throw new Error('ATTACHMENT_AND_EMAIL_EVIDENCE_BARRIER_REQUIRED');\nconst expected = Array.isArray(contract.attachment_identity_keys) ? contract.attachment_identity_keys : [], observed = Array.isArray(result.attachment_identity_keys) ? result.attachment_identity_keys : [];\nif (new Set(observed).size !== expected.length || expected.some(identity => !observed.includes(identity)))\n    throw new Error('COMPOSITE_ATTACHMENT_IDENTITY_BARRIER_MISMATCH');\nif (Number(result.email_evidence_receipts_verified) !== Number(contract.matched_count))\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH');\nreturn [{ json: { ...contract, ...result, archive_ready: true, cursor_commit_eligible: false } }];\n"
@@ -1312,8 +1606,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
-        380
+        980,
+        2660
       ],
       "parameters": {
         "jsCode": "// Purpose: Require Verified Attachment Barrier. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.attachment_verification_barrier !== 'VERIFIED' || row.email_evidence_receipt_barrier !== 'VERIFIED' || row.archive_ready !== true || Number(row.email_evidence_receipts_verified) !== Number(row.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nreturn [{ json: row }];\n"
@@ -1325,7 +1619,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        680,
+        -820,
         760
       ],
       "parameters": {
@@ -1355,8 +1649,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
-        1140
+        80,
+        760
       ],
       "parameters": {
         "jsCode": "// Purpose: Empty Immutable Archive Inventory. Keep this deterministic and fail closed.\nconst sweep = $('Aggregate Exact Window Heartbeat').first().json;\nreturn [{ json: {\n            ...sweep,\n            messages: [],\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            empty_inventory: true,\n        } }];\n"
@@ -1368,8 +1662,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        1520
+        -220,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Attach Immutable Inventory to Sweep. Keep this deterministic and fail closed.\nconst receipt = $json, inventory = $('Aggregate Immutable Archive Inventory').first().json;\nreturn [{ json: { ...receipt, folder_id: receipt.folder_id, senders: receipt.senders, subjects: receipt.subjects, onedrive_parent_id: receipt.onedrive_parent_id, messages: inventory.messages, immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: inventory.attachment_identity_keys || [], empty_inventory: inventory.empty_inventory === true } }];\n"
@@ -1381,7 +1675,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        380,
+        -1120,
         380
       ],
       "alwaysOutputData": true,
@@ -1419,7 +1713,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        980,
+        -520,
         380
       ],
       "parameters": {
@@ -1449,8 +1743,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
-        1520
+        80,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Existing ENUMERATED Receipt. Keep this deterministic and fail closed.\nconst trusted = $('Freeze Trusted Cursor Window').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])\n    if (String(receipt[field] ?? '') !== String(trusted[field] ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\nif (receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.attachment_ids_verified !== true)\n    throw new Error('ENUMERATED_RECEIPT_REPLAY_NOT_SAFE');\nlet attachmentIdentityKeys;\ntry {\n    attachmentIdentityKeys = JSON.parse(String(receipt.attachment_identity_keys_json || '[]'));\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_INVALID');\n}\nif (!Array.isArray(attachmentIdentityKeys) || Number(receipt.attachments_verified) !== attachmentIdentityKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_NOT_SAFE');\nreturn [{ json: { ...trusted, ...receipt, messages: [], immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: attachmentIdentityKeys, empty_inventory: Number(receipt.matched_count || 0) === 0, replay_noop: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
@@ -1462,8 +1756,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        1520
+        980,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Durable Archive Barrier Receipt. Keep this deterministic and fail closed.\nconst result = $json, contract = $('Attach Immutable Inventory to Sweep').first().json;\nif (result.run_id !== contract.run_id || result.source_code !== contract.source_code || result.run_upper_bound !== contract.run_upper_bound)\n    throw new Error('ARCHIVE_BARRIER_CONTEXT_MISMATCH');\nif (result.attachment_verification_barrier !== 'VERIFIED' || result.attachment_ids_verified !== true || result.email_evidence_receipt_barrier !== 'VERIFIED' || result.archive_ready !== true)\n    throw new Error('ARCHIVE_BARRIER_NOT_VERIFIED');\nconst attachmentKeys = Array.isArray(result.attachment_identity_keys) ? [...new Set(result.attachment_identity_keys)].sort() : [];\nconst emailKeys = Array.isArray(result.email_evidence_identity_keys) ? [...new Set(result.email_evidence_identity_keys)].sort() : [];\nif (attachmentKeys.length !== Number(result.attachments_verified) || emailKeys.length !== Number(result.email_evidence_receipts_verified) || Number(result.email_evidence_receipts_verified) !== Number(contract.matched_count))\n    throw new Error('ARCHIVE_BARRIER_COUNTS_MISMATCH');\nconst barrier = { schema_version: 1, run_id: contract.run_id, source_code: contract.source_code, window_start: contract.window_start, run_upper_bound: contract.run_upper_bound, matched_count: Number(contract.matched_count), attachment_verification_barrier: 'VERIFIED', attachment_ids_verified: true, attachment_identity_keys: attachmentKeys, attachments_verified: Number(result.attachments_verified), email_evidence_receipt_barrier: 'VERIFIED', email_evidence_receipts_verified: Number(result.email_evidence_receipts_verified), email_evidence_identity_keys: emailKeys, archive_ready: true };\nreturn [{ json: { ...contract, ...result, attachment_identity_keys_json: JSON.stringify(attachmentKeys), email_evidence_identity_keys_json: JSON.stringify(emailKeys), barrier_receipt_json: JSON.stringify(barrier), cursor_commit_eligible: false } }];\n"
@@ -1475,14 +1769,14 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        380,
+        -1120,
         1520
       ],
       "parameters": {
         "action": "hash",
         "type": "SHA256",
         "value": "={{ $json.barrier_receipt_json }}",
-        "dataPropertyName": "downstream_receipt_sha256"
+        "dataPropertyName": "archive_receipt_sha256"
       }
     },
     {
@@ -1491,7 +1785,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
+        -820,
         1520
       ],
       "parameters": {
@@ -1514,6 +1808,21 @@
               "keyName": "last_terminal_state",
               "condition": "eq",
               "keyValue": "ENUMERATED"
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.window_start }}"
             }
           ]
         },
@@ -1528,10 +1837,11 @@
             "email_evidence_receipts_verified": "={{ $('Build Durable Archive Barrier Receipt').item.json.email_evidence_receipts_verified }}",
             "email_evidence_identity_keys_json": "={{ $('Build Durable Archive Barrier Receipt').item.json.email_evidence_identity_keys_json }}",
             "archive_ready": "={{ $('Build Durable Archive Barrier Receipt').item.json.archive_ready }}",
-            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}",
             "readback_verified": false,
             "updated_at": "={{ $now.toISO() }}",
-            "last_terminal_state": "ARCHIVED"
+            "last_terminal_state": "ARCHIVED",
+            "archive_receipt_sha256": "={{ $json.archive_receipt_sha256 }}",
+            "archive_readback_verified": false
           },
           "matchingColumns": [],
           "schema": [],
@@ -1549,7 +1859,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        980,
+        -520,
         1520
       ],
       "parameters": {
@@ -1576,9 +1886,24 @@
               "keyValue": "ARCHIVED"
             },
             {
-              "keyName": "downstream_receipt_sha256",
+              "keyName": "archive_receipt_sha256",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.window_start }}"
             }
           ]
         },
@@ -1591,11 +1916,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
-        1900
+        80,
+        1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify ARCHIVED Acquisition Receipt. Keep this deterministic and fail closed.\nconst expected = $('Build Durable Archive Barrier Receipt').first().json, hash = $('SHA-256 Durable Archive Barrier Receipt').first().json.downstream_receipt_sha256, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(field === 'downstream_receipt_sha256' ? hash : field === 'terminal_state' ? 'ARCHIVED' : expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_READBACK_MISMATCH:' + field);\nif (observed.archive_ready !== true || observed.readback_verified !== false)\n    throw new Error('ARCHIVED_RECEIPT_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...observed, readback_verified: true, receipt_readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Verify ARCHIVED Acquisition Receipt. Keep this deterministic and fail closed.\nconst expected = $('Build Durable Archive Barrier Receipt').first().json, hash = $('SHA-256 Durable Archive Barrier Receipt').first().json.archive_receipt_sha256, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'archive_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(field === 'archive_receipt_sha256' ? hash : field === 'terminal_state' ? 'ARCHIVED' : expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_READBACK_MISMATCH:' + field);\nif (observed.archive_ready !== true || observed.archive_readback_verified !== false)\n    throw new Error('ARCHIVED_RECEIPT_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...observed, archive_readback_verified: false, receipt_readback_verified: false } }];\n"
       }
     },
     {
@@ -1604,8 +1929,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
-        1900
+        380,
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -1629,14 +1954,29 @@
               "keyValue": "ARCHIVED"
             },
             {
-              "keyName": "downstream_receipt_sha256",
+              "keyName": "archive_receipt_sha256",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.archive_receipt_sha256 }}"
             },
             {
-              "keyName": "readback_verified",
+              "keyName": "archive_readback_verified",
               "condition": "eq",
               "keyValue": false
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.window_start }}"
             }
           ]
         },
@@ -1644,7 +1984,8 @@
           "mappingMode": "defineBelow",
           "value": {
             "readback_verified": true,
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "archive_readback_verified": true
           },
           "matchingColumns": [],
           "schema": [],
@@ -1662,8 +2003,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
-        1900
+        680,
+        1520
       ],
       "parameters": {
         "resource": "row",
@@ -1689,14 +2030,29 @@
               "keyValue": "ARCHIVED"
             },
             {
-              "keyName": "downstream_receipt_sha256",
+              "keyName": "archive_receipt_sha256",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.downstream_receipt_sha256 }}"
+              "keyValue": "={{ $('SHA-256 Durable Archive Barrier Receipt').item.json.archive_receipt_sha256 }}"
             },
             {
-              "keyName": "readback_verified",
+              "keyName": "archive_readback_verified",
               "condition": "eq",
               "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Durable Archive Barrier Receipt').first().json.window_start }}"
             }
           ]
         },
@@ -1709,11 +2065,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        -1120,
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified ARCHIVED Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.readback_verified !== true || observed.archive_ready !== true)\n    throw new Error('ARCHIVED_RECEIPT_TERMINAL_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...expected, ...observed, readback_verified: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
+        "jsCode": "// Purpose: Return Verified ARCHIVED Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'archive_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(expected[field] ?? ''))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_READBACK_MISMATCH:' + field);\nif (observed.archive_readback_verified !== true || observed.archive_ready !== true)\n    throw new Error('ARCHIVED_RECEIPT_TERMINAL_STATE_MISMATCH');\nfor (const field of ['attachment_verification_barrier', 'attachment_ids_verified', 'attachment_identity_keys_json', 'attachments_verified', 'email_evidence_receipt_barrier', 'email_evidence_receipts_verified', 'email_evidence_identity_keys_json'])\n    if (JSON.stringify(observed[field]) !== JSON.stringify(expected[field]))\n        throw new Error('ARCHIVED_RECEIPT_TERMINAL_BARRIER_MISMATCH:' + field);\nreturn [{ json: { ...expected, ...observed, archive_readback_verified: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
       }
     },
     {
@@ -1722,7 +2078,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        680,
+        -820,
         1900
       ],
       "alwaysOutputData": true,
@@ -1754,7 +2110,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
+        -520,
         1900
       ],
       "parameters": {
@@ -1767,8 +2123,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        -1120,
-        2280
+        -220,
+        1900
       ],
       "parameters": {
         "conditions": {
@@ -1797,8 +2153,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
-        2280
+        80,
+        1900
       ],
       "parameters": {
         "resource": "row",
@@ -1838,8 +2194,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -520,
-        2280
+        380,
+        1900
       ],
       "alwaysOutputData": true,
       "parameters": {
@@ -1870,8 +2226,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
-        2280
+        680,
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Verify Cursor v0 Initialization Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor v0 Initialization').first().json, rows = $input.all().map(item => item.json).filter(row => row && row.source_code);\nif (rows.length !== 1)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_COLLISION');\nconst row = rows[0];\nif (row.source_code !== expected.source_code || Number(row.cursor_version) !== 0 || row.cursor_value !== expected.cursor_value || row.run_upper_bound !== expected.run_upper_bound || String(row.committed_run_id || '') !== '' || row.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...row, status: 'CURSOR_INITIALIZED', initialized: true, readback_verified: true } }];\n"
@@ -1883,8 +2239,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        80,
-        2280
+        980,
+        1900
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Existing Cursor Initialization Readback. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.status !== 'CURSOR_ALREADY_INITIALIZED' || row.readback_verified !== true || !Number.isInteger(Number(row.cursor_version)) || Number(row.cursor_version) < 0)\n    throw new Error('SOURCE_CURSOR_INITIALIZATION_READBACK_REQUIRED');\nreturn [{ json: { ...row, initialized: false } }];\n"
@@ -1896,7 +2252,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
+        -1120,
         2280
       ],
       "parameters": {
@@ -1909,7 +2265,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        -820,
         2280
       ],
       "parameters": {
@@ -1922,7 +2278,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
+        -520,
         2280
       ],
       "parameters": {
@@ -1935,8 +2291,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
-        2660
+        -220,
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Match Outlook Evidence to Transactions. Keep this deterministic and fail closed.\nconst request = $('Validate Evidence Request').first().json, rows = $input.all().map(item => item.json || {});\nif (rows.length > request.max_messages)\n    throw new Error('EVIDENCE_SEARCH_BOUND_EXCEEDED');\nconst normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst tokens = value => normalize(value).split(/\\s+/).filter(token => token.length >= 3);\nconst bodyText = message => typeof message.body === 'string' ? message.body : String(message.body?.content || message.bodyPreview || '');\nconst sender = message => String(message.from?.emailAddress?.address || message.sender?.emailAddress?.address || '').trim().toLowerCase();\nconst messageDate = message => String(message.receivedDateTime || message.order_date || '').slice(0, 10);\nconst dayDistance = (left, right) => Math.round(Math.abs(new Date(left + 'T00:00:00Z') - new Date(right + 'T00:00:00Z')) / 86400000);\nconst currencyCode = value => ({ '$': 'USD', '€': 'EUR', '£': 'GBP' }[value] || String(value || '').toUpperCase());\nconst amountRecords = message => {\n    const records = [];\n    for (const value of [message.amount_minor, message.total_amount_minor, message.totalAmountMinor, message.amountMinor])\n        if (Number.isInteger(value))\n            records.push({ minor: Math.abs(value), currency: currencyCode(message.currency || message.amount_currency || message.total_currency), signed: value < 0 });\n    const text = bodyText(message), before = /(-?)\\s*(AED|USD|EUR|GBP|\\$|€|£)\\s*([0-9]+(?:[.,][0-9]{1,2})?)/gi, after = /(-?)\\s*([0-9]+(?:[.,][0-9]{1,2})?)\\s*(AED|USD|EUR|GBP)/gi;\n    for (const match of text.matchAll(before))\n        records.push({ minor: Math.round(Number(match[3].replace(',', '.')) * 100), currency: currencyCode(match[2]), signed: match[1] === '-' });\n    for (const match of text.matchAll(after))\n        records.push({ minor: Math.round(Number(match[2].replace(',', '.')) * 100), currency: currencyCode(match[3]), signed: match[1] === '-' });\n    return records.filter(row => /^[A-Z]{3}$/.test(row.currency));\n};\nconst refundMarker = text => /\\b(refund(?:ed)?|reversal|credited|credit memo|money back|return processed)\\b/i.test(text), kindMarker = (kind, text) => {\n    if (kind === 'REFUND')\n        return refundMarker(text);\n    if (refundMarker(text))\n        return false;\n    if (kind === 'SUBSCRIPTION')\n        return /\\b(subscription|renewal|recurring|membership)\\b/i.test(text);\n    if (kind === 'TRAVEL')\n        return /\\b(booking|itinerary|flight|hotel|ticket|reservation)\\b/i.test(text);\n    if (kind === 'RECEIPT')\n        return /\\b(receipt|invoice|order|purchase)\\b/i.test(text);\n    if (kind === 'ORDER')\n        return /\\b(order|purchase|receipt|invoice|shipped|delivered)\\b/i.test(text);\n    return true;\n}, directionOf = (message, text, records) => {\n    const explicit = String(message.direction || message.transaction_type || '').toUpperCase();\n    if (explicit === 'DEBIT' || explicit === 'CREDIT')\n        return explicit;\n    if (records.some(row => row.signed))\n        return 'DEBIT';\n    if (refundMarker(text))\n        return 'CREDIT';\n    if (/\\b(charged|debit|paid|purchase)\\b/i.test(text))\n        return 'DEBIT';\n    return null;\n};\nconst candidateRows = rows.map(message => {\n    const id = String(message.id || message.message_id || '').trim();\n    if (!id)\n        throw new Error('EVIDENCE_SOURCE_MESSAGE_ID_MISSING');\n    const text = normalize(String(message.subject || '') + ' ' + bodyText(message)), amounts = amountRecords(message);\n    return { message, id, sender: sender(message), date: messageDate(message), text, amounts, direction: directionOf(message, text, amounts) };\n});\nconst splitTotals = new Map();\nfor (const transaction of request.transactions.filter(row => row.split_group))\n    splitTotals.set(transaction.split_group, (splitTotals.get(transaction.split_group) || 0) + Math.abs(transaction.amount_minor));\nconst matched = [], unresolved = [], replayKeys = [], usedIds = new Set(), messageOwners = new Map();\nfor (const transaction of request.transactions) {\n    const merchantTokens = tokens(transaction.merchant), expectedAmount = Math.abs(transaction.amount_minor), ownership = transaction.split_group ? 'SPLIT:' + transaction.split_group : 'NON_SPLIT';\n    const candidates = candidateRows.map(candidate => {\n        const merchantMatch = merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token));\n        const amountMatch = candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency);\n        const currencyMatch = candidate.amounts.some(row => row.currency === transaction.currency);\n        const dateMatch = /^\\d{4}-\\d{2}-\\d{2}$/.test(candidate.date) && dayDistance(candidate.date, transaction.transaction_date) <= 3;\n        const reference = candidate.message.order_number || candidate.message.orderNumber || candidate.message.transaction_ref || '';\n        const referenceMatch = normalize(reference).length > 0 && normalize(reference).includes(normalize(transaction.transaction_id));\n        const kindMatch = kindMarker(transaction.kind, candidate.text);\n        const directionMatch = !candidate.direction || candidate.direction === transaction.direction;\n        const splitMatch = !transaction.split_group || candidate.amounts.some(row => row.minor === splitTotals.get(transaction.split_group) && row.currency === transaction.currency);\n        const score = (merchantMatch ? 3 : 0) + (amountMatch ? 3 : 0) + (dateMatch ? 1 : 0) + (referenceMatch ? 2 : 0) + (kindMatch ? 2 : 0) + (currencyMatch ? 1 : 0) + (directionMatch ? 1 : 0);\n        return { ...candidate, score, merchantMatch, amountMatch, currencyMatch, dateMatch, kindMatch, directionMatch, splitMatch };\n    })\n        .filter(candidate => candidate.merchantMatch && candidate.amountMatch && candidate.currencyMatch && candidate.dateMatch && candidate.kindMatch && candidate.directionMatch && candidate.splitMatch && candidate.score >= 10)\n        .filter(candidate => { const owner = messageOwners.get(candidate.id); return !owner || (transaction.split_group && owner === ownership); })\n        .sort((left, right) => right.score - left.score || left.date.localeCompare(right.date) || left.id.localeCompare(right.id));\n    if (!candidates.length) {\n        const allEligible = candidateRows.filter(candidate => merchantTokens.length > 0 && merchantTokens.every(token => candidate.text.includes(token)) && candidate.amounts.some(row => row.minor === expectedAmount && row.currency === transaction.currency)), ownershipConflict = allEligible.some(candidate => { const owner = messageOwners.get(candidate.id); return owner && (!transaction.split_group || owner !== ownership); }), status = ownershipConflict ? (transaction.split_group ? 'SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT' : 'MESSAGE_REUSE_REQUIRES_SPLIT_GROUP') : 'NO_MATCH';\n        unresolved.push({ transaction_id: transaction.transaction_id, status, candidate_count: allEligible.length, candidate_ids: allEligible.map(candidate => candidate.id).sort() });\n        continue;\n    }\n    const best = candidates[0], tied = candidates.filter(candidate => candidate.score === best.score);\n    if (tied.length !== 1) {\n        unresolved.push({ transaction_id: transaction.transaction_id, status: 'AMBIGUOUS', candidate_count: candidates.length, candidate_ids: candidates.map(candidate => candidate.id) });\n        continue;\n    }\n    const sourceMessageId = best.id, replayKey = request.source_code + ':' + transaction.transaction_id + ':' + sourceMessageId;\n    messageOwners.set(sourceMessageId, ownership);\n    if (!transaction.split_group)\n        usedIds.add(sourceMessageId);\n    replayKeys.push(replayKey);\n    matched.push({\n        transaction_id: transaction.transaction_id,\n        replay_key: replayKey,\n        identity: {\n            source_message_id: sourceMessageId,\n            internet_message_id: best.message.internetMessageId || best.message.internet_message_id || null,\n            received_at: best.message.receivedDateTime,\n            sender: best.sender,\n            subject: String(best.message.subject || '').slice(0, 500),\n        },\n        facts: {\n            merchant: transaction.merchant,\n            amount_minor: transaction.amount_minor,\n            currency: transaction.currency,\n            transaction_date: transaction.transaction_date,\n            kind: transaction.kind,\n            direction: transaction.direction,\n            split_group: transaction.split_group,\n        },\n        confidence: Math.min(1, best.score / 13),\n        allowed_fields: transaction.allowed_fields,\n    });\n}\nconst selectedIds = new Set(matched.map(row => row.identity.source_message_id)), messages = candidateRows.filter(candidate => selectedIds.has(candidate.id)).map(candidate => ({ ...candidate.message, id: candidate.id, message_id: candidate.id, attachment_inventory: [] }));\nreturn [{ json: {\n            schema_version: 1,\n            operation_code: 'EMAIL_ENRICHMENT_EVIDENCE',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            onedrive_parent_id: request.onedrive_parent_id,\n            messages,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: [],\n            empty_inventory: messages.length === 0,\n            matched,\n            unresolved,\n            replay_keys: [...new Set(replayKeys)],\n            matched_count: matched.length,\n            unresolved_count: unresolved.length,\n            evidence_status: matched.length ? 'MATCHED' : (unresolved.some(row => row.status === 'AMBIGUOUS') ? 'AMBIGUOUS' : 'NO_MATCH'),\n        } }];\n"
@@ -1948,12 +2304,12 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -820,
-        2660
+        80,
+        2280
       ],
       "parameters": {
         "source": "parameter",
-        "workflowJson": "{\"active\":false,\"connections\":{\"Called by Trusted Workflow\":{\"main\":[[{\"index\":0,\"node\":\"Emit Synthetic Archive Barrier\",\"type\":\"main\"}]]}},\"id\":\"10000000-0000-4000-8000-000000000001\",\"meta\":{\"disposableOnly\":true,\"externalNodeReplacement\":\"Synthetic archive barrier\",\"productionImportForbidden\":true},\"name\":\"DISPOSABLE ONLY · Synthetic Outlook archive boundary\",\"nodes\":[{\"id\":\"fixture-w01-trigger\",\"name\":\"Called by Trusted Workflow\",\"parameters\":{\"inputSource\":\"passthrough\"},\"position\":[-300,0],\"type\":\"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\":1.1},{\"id\":\"fixture-w01-archive\",\"name\":\"Emit Synthetic Archive Barrier\",\"parameters\":{\"jsCode\":\"const input=$json||{}; return [{json:{...input, status:'ARCHIVED', archive_ready:true, attachment_verification_barrier:'VERIFIED', attachment_ids_verified:true, attachments_verified:Number(input.attachments_verified||0), email_evidence_receipt_barrier:'VERIFIED', email_evidence_receipts_verified:Number(input.email_evidence_receipts_verified||input.matched_count||0), email_evidence_identity_keys:Array.isArray(input.email_evidence_identity_keys)?input.email_evidence_identity_keys:[], archive_identity_keys:Array.isArray(input.attachment_identity_keys)?input.attachment_identity_keys:[], archive_readback_verified:true}}];\"},\"position\":[0,0],\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2}],\"pinData\":{},\"settings\":{\"executionOrder\":\"v1\",\"saveDataErrorExecution\":\"none\",\"saveDataSuccessExecution\":\"none\",\"timezone\":\"Asia/Dubai\"}}",
+        "workflowJson": "{\"active\":false,\"connections\":{\"Called by Trusted Workflow\":{\"main\":[[{\"index\":0,\"node\":\"Emit Synthetic Archive Barrier\",\"type\":\"main\"}]]}},\"id\":\"10000000-0000-4000-8000-000000000001\",\"meta\":{\"disposableOnly\":true,\"externalNodeReplacement\":\"Synthetic archive barrier\",\"productionImportForbidden\":true},\"name\":\"DISPOSABLE ONLY · Synthetic Outlook archive boundary\",\"nodes\":[{\"id\":\"fixture-w01-trigger\",\"name\":\"Called by Trusted Workflow\",\"parameters\":{\"inputSource\":\"passthrough\"},\"position\":[-300,0],\"type\":\"n8n-nodes-base.executeWorkflowTrigger\",\"typeVersion\":1.1},{\"id\":\"fixture-w01-archive\",\"name\":\"Emit Synthetic Archive Barrier\",\"parameters\":{\"jsCode\":\"const input=$json; if(input.immutable_inventory!==true||!Array.isArray(input.messages)) throw new Error('FIXTURE_IMMUTABLE_INVENTORY_REQUIRED'); const ids=input.messages.map(row=>String(row?.message_id||row?.message?.id||row?.id||'').trim()); if(ids.some(id=>!id)||new Set(ids).size!==ids.length||Number(input.matched_count)!==ids.length) throw new Error('FIXTURE_MESSAGE_INVENTORY_MISMATCH'); const attachments=input.messages.flatMap((row,index)=>(Array.isArray(row.attachment_inventory)?row.attachment_inventory:[]).map(attachment=>{ if(!attachment.id) throw new Error('FIXTURE_ATTACHMENT_ID_REQUIRED'); return ids[index]+':'+attachment.id; })); const expected=input.attachment_identity_keys; if(!Array.isArray(expected)||new Set(attachments).size!==attachments.length||expected.length!==attachments.length||attachments.some(id=>!expected.includes(id))) throw new Error('FIXTURE_ATTACHMENT_INVENTORY_MISMATCH'); const emails=ids.map(id=>id+':INLINE_BODY'); return [{json:{...input,status:'ARCHIVED',archive_ready:true,attachment_verification_barrier:'VERIFIED',attachment_ids_verified:true,attachment_identity_keys:attachments,attachments_verified:attachments.length,email_evidence_receipt_barrier:'VERIFIED',email_evidence_receipts_verified:emails.length,email_evidence_identity_keys:emails,archive_identity_keys:[...attachments,...emails].sort(),archive_readback_verified:false,cursor_commit_eligible:false}}];\"},\"position\":[0,0],\"type\":\"n8n-nodes-base.code\",\"typeVersion\":2}],\"pinData\":{},\"settings\":{\"executionOrder\":\"v1\",\"saveDataErrorExecution\":\"none\",\"saveDataSuccessExecution\":\"none\",\"timezone\":\"Asia/Dubai\"}}",
         "options": {
           "waitForSubWorkflow": true
         }
@@ -1965,8 +2321,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
-        2660
+        380,
+        2280
       ],
       "parameters": {
         "jsCode": "// Purpose: Build Evidence Handoff. Keep this deterministic and fail closed.\nconst evidence = $('Match Outlook Evidence to Transactions').first().json, archive = $('Archive Matched Email Evidence in W01').first().json;\nif (archive.attachment_verification_barrier !== 'VERIFIED' || archive.email_evidence_receipt_barrier !== 'VERIFIED' || archive.archive_ready !== true || archive.archive_readback_verified === false)\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_BARRIER_REQUIRED');\nconst matched = Array.isArray(evidence.matched) ? evidence.matched : [], unresolved = Array.isArray(evidence.unresolved) ? evidence.unresolved : [], replayKeys = [...new Set(matched.map(row => String(row.replay_key || '')).filter(Boolean))];\nif (replayKeys.length !== matched.length)\n    throw new Error('EMAIL_ENRICHMENT_REPLAY_KEY_MISSING');\nconst archiveIdentityKeys = [...new Set(Array.isArray(archive.archive_identity_keys) ? archive.archive_identity_keys.map(String) : [])].sort(), archiveItemIds = [...new Set(Array.isArray(archive.archive_item_ids) ? archive.archive_item_ids.map(String) : [])].sort(), archiveProofRows = Array.isArray(archive.email_evidence_archive_proof) ? archive.email_evidence_archive_proof : [];\nfor (const proof of archiveProofRows) {\n    if (!/^[a-f0-9]{64}$/.test(String(proof.email_evidence_sha256 || '')))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_INVALID');\n    if (!String(proof.onedrive_item_id || '') || !archiveItemIds.includes(String(proof.onedrive_item_id)))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_MESSAGE_PROOF_MISSING');\n}\nfor (const row of matched) {\n    const identity = String(row.identity?.source_message_id) + ':INLINE_BODY';\n    if (!archiveIdentityKeys.includes(identity) || !archiveProofRows.some(proof => proof.email_evidence_identity === identity && archiveItemIds.includes(proof.onedrive_item_id)))\n        throw new Error('EMAIL_ENRICHMENT_ARCHIVE_MESSAGE_PROOF_MISSING');\n}\nif (matched.length && (!archiveIdentityKeys.length || !archiveItemIds.length || archiveProofRows.length !== archive.email_evidence_receipts_verified))\n    throw new Error('EMAIL_ENRICHMENT_ARCHIVE_PROOF_INCOMPLETE');\nconst archiveProof = { identity_keys: archiveIdentityKeys, item_ids: archiveItemIds, messages: archiveProofRows };\nreturn [{ json: {\n            schema_version: 1,\n            operation_code: 'EMAIL_ENRICHMENT_EVIDENCE',\n            run_id: evidence.run_id,\n            source_code: evidence.source_code,\n            window_start: evidence.window_start,\n            run_upper_bound: evidence.run_upper_bound,\n            matched,\n            unresolved,\n            replay_keys: replayKeys,\n            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n            archive_proof: archiveProof,\n            archive_receipt: {\n                status: archive.status,\n                source_message_id: archive.source_message_id || null,\n                archive_ready: archive.archive_ready === true,\n                email_evidence_receipts_verified: Number(archive.email_evidence_receipts_verified || 0),\n                identity_keys: archiveIdentityKeys,\n                item_ids: archiveItemIds,\n            },\n            replay_protected: true,\n            archive_readback_verified: true,\n        } }];\n"
@@ -1978,8 +2334,8 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        80,
-        2660
+        980,
+        2280
       ],
       "parameters": {
         "action": "hash",
@@ -1994,7 +2350,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        380,
+        -1120,
         2660
       ],
       "parameters": {
@@ -2026,7 +2382,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        -820,
         2660
       ],
       "parameters": {
@@ -2039,7 +2395,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        80,
+        980,
         3040
       ],
       "parameters": {
@@ -2056,8 +2412,8 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        -220,
-        2660
+        680,
+        2280
       ],
       "parameters": {
         "action": "hash",
@@ -2072,7 +2428,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        980,
+        -520,
         2660
       ],
       "parameters": {
@@ -2085,11 +2441,152 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        3040
+        -1120,
+        3420
       ],
       "parameters": {
         "jsCode": "// Purpose: Validate Email Proposal Result. Keep this deterministic and fail closed.\nconst input = $('Build Idempotent W09 Email Handoff').first().json;\nconst providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');\nif (providerError) {\n    if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {\n        throw new Error('PRODEX_AUTH_REQUIRED: restore the existing persistent one-time subscription auth state from protected state');\n    }\n    throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');\n}\nlet providerResult;\ntry {\n    providerResult = typeof $json.output === 'string'\n        ? JSON.parse($json.output)\n        : ($json.output && typeof $json.output === 'object' ? $json.output : $json);\n}\ncatch {\n    throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');\n}\nif (!providerResult || typeof providerResult !== 'object' || Array.isArray(providerResult)) {\n    throw new Error('AGENT_PROVIDER_PROPOSAL_OBJECT_REQUIRED');\n}\nfor (const field of ['policy_id', 'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256']) {\n    if (providerResult[field] !== undefined && providerResult[field] !== input[field]) {\n        throw new Error('AGENT_PROVIDER_POLICY_ENVELOPE_MISMATCH');\n    }\n}\nconst normalized = {\n    ...providerResult,\n    agent_provider: input.agent_provider,\n    policy_id: input.policy_id,\n    policy_class: input.policy_class,\n    policy_sha256: input.policy_sha256,\n    config_sha256: input.config_sha256,\n    output_schema_sha256: input.output_schema_sha256,\n    runner_model: providerResult.runner_model || input.provider_model,\n    runner_reasoning_effort: providerResult.runner_reasoning_effort || input.provider_reasoning_effort,\n    auth_mode: providerResult.auth_mode || input.provider_auth_mode,\n};\nconst request = {\n    job_id: input.job_id,\n    idempotency_key: input.idempotency_key,\n    agent_provider: input.agent_provider,\n    policy_id: input.policy_id,\n    policy_class: input.policy_class,\n    policy_sha256: input.policy_sha256,\n    config_sha256: input.config_sha256,\n    output_schema_sha256: input.output_schema_sha256,\n    unresolved: Array.isArray(input.unresolved) ? input.unresolved : [],\n};\nconst response = normalized;\nconst envelopeFields = new Set([\n    'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',\n    'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',\n    'runner_receipt_id', 'runner_model', 'runner_reasoning_effort', 'auth_mode',\n    'proposals',\n]);\nif (Object.keys(response).some(field => !envelopeFields.has(field))) {\n    throw new Error('Agent proposal has unknown envelope field');\n}\nfor (const field of envelopeFields) {\n    if (response[field] === undefined) {\n        throw new Error(`Agent proposal schema missing ${field}`);\n    }\n}\nif (response.schema_version !== 1\n    || response.job_id !== request.job_id\n    || response.idempotency_key !== request.idempotency_key\n    || response.agent_provider !== request.agent_provider\n    || response.policy_id !== request.policy_id\n    || response.policy_class !== request.policy_class\n    || response.policy_sha256 !== request.policy_sha256\n    || response.config_sha256 !== request.config_sha256\n    || response.output_schema_sha256 !== request.output_schema_sha256) {\n    throw new Error('Agent proposal envelope mismatch');\n}\nif (typeof response.runner_receipt_id !== 'string'\n    || !response.runner_receipt_id.length\n    || response.runner_receipt_id.length > 256) {\n    throw new Error('Invalid runner receipt identity');\n}\nconst providerPolicy = {\n    CODEX_SUBSCRIPTION: {\n        NORMAL: ['gpt-5.6-luna', 'max', 'CHATGPT_SUBSCRIPTION'],\n        EXCEPTION: ['gpt-5.6-sol', 'medium', 'CHATGPT_SUBSCRIPTION'],\n    },\n};\nconst expectedRunner = providerPolicy[request.agent_provider]?.[request.policy_class];\nif (!expectedRunner\n    || response.runner_model !== expectedRunner[0]\n    || response.runner_reasoning_effort !== expectedRunner[1]\n    || response.auth_mode !== expectedRunner[2]) {\n    throw new Error('Agent runner auth or model policy mismatch');\n}\nconst maxProposals = Math.min(600, request.unresolved.reduce((count, item) => count + item.allowed_fields.length, 0));\nif (!Array.isArray(response.proposals) || response.proposals.length > maxProposals) {\n    throw new Error('Invalid proposal count');\n}\nconst requestById = new Map(request.unresolved.map(item => [item.transaction_id, item]));\nconst seenPairs = new Set();\nconst lockedFields = new Set([\n    'amount', 'date', 'source_id', 'imported_id', 'direction', 'topic',\n    'dedupe_key', 'reconciliation_state', 'cashback', 'cashback_amount',\n]);\nconst stringFields = new Set([\n    'vendor', 'category', 'subcategory', 'evidence_policy', 'property_code',\n    'rental_unit', 'channel', 'reward_bucket',\n]);\nconst proposalFields = new Set([\n    'transaction_id', 'field', 'value', 'confidence', 'reason_code',\n]);\nfor (const proposal of response.proposals) {\n    if (!proposal\n        || typeof proposal !== 'object'\n        || Array.isArray(proposal)\n        || Object.keys(proposal).some(field => !proposalFields.has(field))) {\n        throw new Error('Invalid proposal object');\n    }\n    if (typeof proposal.transaction_id !== 'string'\n        || !proposal.transaction_id.length\n        || proposal.transaction_id.length > 256\n        || typeof proposal.field !== 'string') {\n        throw new Error('Invalid proposal identity');\n    }\n    const item = requestById.get(proposal.transaction_id);\n    const allowedFields = new Set(item?.allowed_fields || []);\n    const pair = JSON.stringify([proposal.transaction_id, proposal.field]);\n    if (seenPairs.has(pair)) {\n        throw new Error('Duplicate proposal field');\n    }\n    seenPairs.add(pair);\n    if (!item || lockedFields.has(proposal.field) || !allowedFields.has(proposal.field)) {\n        throw new Error('Agent proposed forbidden field');\n    }\n    if (typeof proposal.confidence !== 'number'\n        || proposal.confidence < 0\n        || proposal.confidence > 1) {\n        throw new Error('Invalid proposal confidence');\n    }\n    if (typeof proposal.reason_code !== 'string'\n        || !/^[A-Z0-9_:-]{0,128}$/.test(proposal.reason_code)) {\n        throw new Error('Invalid proposal reason');\n    }\n    if (proposal.field === 'tags'\n        && (!Array.isArray(proposal.value)\n            || !proposal.value.length\n            || proposal.value.length > 12\n            || new Set(proposal.value).size !== proposal.value.length\n            || proposal.value.some(value => (typeof value !== 'string'\n                || value.length > 64\n                || !/^[a-z0-9:_-]+$/.test(value))))) {\n        throw new Error('Invalid tags proposal');\n    }\n    if (['review_required', 'is_subscription'].includes(proposal.field)\n        && typeof proposal.value !== 'boolean') {\n        throw new Error('Invalid boolean proposal');\n    }\n    if (stringFields.has(proposal.field)\n        && (typeof proposal.value !== 'string'\n            || !proposal.value.length\n            || proposal.value.length > 128)) {\n        throw new Error('Invalid string proposal');\n    }\n    if (proposal.field === 'category_recommendation'\n        && (!proposal.value\n            || typeof proposal.value !== 'object'\n            || Array.isArray(proposal.value)\n            || Object.keys(proposal.value).some(field => !['name', 'group', 'reason'].includes(field))\n            || typeof proposal.value.name !== 'string'\n            || !proposal.value.name.length\n            || proposal.value.name.length > 80\n            || typeof proposal.value.group !== 'string'\n            || !proposal.value.group.length\n            || proposal.value.group.length > 80\n            || typeof proposal.value.reason !== 'string'\n            || !proposal.value.reason.length\n            || proposal.value.reason.length > 300)) {\n        throw new Error('Invalid category recommendation');\n    }\n    if (proposal.field === 'rule_recommendation'\n        && (!proposal.value\n            || typeof proposal.value !== 'object'\n            || Array.isArray(proposal.value)\n            || Object.keys(proposal.value).some(field => !['enabled', 'evidence_count'].includes(field))\n            || proposal.value.enabled !== false\n            || !Number.isInteger(proposal.value.evidence_count)\n            || proposal.value.evidence_count < 3\n            || proposal.value.evidence_count > 10000)) {\n        throw new Error('Invalid rule recommendation');\n    }\n    const domain = item.allowed_values?.[proposal.field];\n    if (Array.isArray(domain)) {\n        if (proposal.field === 'tags' && !proposal.value.every(value => domain.includes(value))) {\n            throw new Error('Tag proposal outside configured domain');\n        }\n        if (proposal.field !== 'tags' && !domain.includes(proposal.value)) {\n            throw new Error('Proposal outside configured domain');\n        }\n    }\n}\nreturn [{ json: { ...response, evidence_archive_sha256: input.archive_sha256, evidence_replay_keys: input.evidence_replay_keys, archive_identity_keys: input.archive_identity_keys, archive_item_ids: input.archive_item_ids, evidence_unresolved: input.evidence_unresolved, archive_readback_verified: true, proposal_dispatch: 'SUBMITTED' } }];\n"
+      }
+    },
+    {
+      "id": "12094",
+      "name": "Verify Downstream Terminal Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        380,
+        2660
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Verify Downstream Terminal Receipt. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json;\nconst acquisition = $('Validate Commit Resume State').first().json;\nconst rows = $input.all().map(item => item.json).filter(row => row && row.run_id);\nif (rows.length !== 1)\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_UNIQUE');\nconst receipt = rows[0];\nfor (const field of ['run_id', 'source_code']) {\n    if (receipt[field] !== request[field])\n        throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_BINDING_MISMATCH:' + field);\n}\nif (receipt.workflow_code !== 'SHARED_STATEMENT_PIPELINE'\n    || receipt.state !== 'SUCCEEDED'\n    || receipt.terminal_readback_verified !== true\n    || receipt.receipt_sha256 !== request.downstream_receipt_sha256\n    || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_BINDING_MISMATCH');\nreturn [{ json: {\n            ...acquisition,\n            downstream_terminal_readback_verified: true,\n            verified_downstream_receipt_sha256: receipt.receipt_sha256,\n        } }];\n"
+      }
+    },
+    {
+      "id": "12093",
+      "name": "Read Verified Downstream Terminal Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "alwaysOutputData": true,
+      "position": [
+        -220,
+        2660
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ingestion_state",
+          "mode": "name"
+        },
+        "returnAll": true,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "PIPELINE_RUN"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Validate Sweep or Commit').first().json.run_id), String(\"SHARED_STATEMENT_PIPELINE\")]) }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "12095",
+      "name": "Read Back Verified Terminal Acquisition Receipt",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        4180
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ingestion_state",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
+            },
+            {
+              "keyName": "last_terminal_state",
+              "condition": "eq",
+              "keyValue": "DOWNSTREAM_VERIFIED"
+            },
+            {
+              "keyName": "last_window_start",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.window_start }}"
+            },
+            {
+              "keyName": "archive_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
+            },
+            {
+              "keyName": "archive_readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
+              "keyName": "receipt_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "receipt_run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "downstream_receipt_sha256",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "12093-typed-decode",
+      "name": "Decode Read Verified Downstream Terminal Receipt Typed Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        2660
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Decode Read Verified Downstream Terminal Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"PIPELINE_RUN\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
       }
     },
     {
@@ -2098,7 +2595,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -220,
         3040
       ],
       "parameters": {
@@ -2111,7 +2608,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -820,
+        80,
         3040
       ],
       "parameters": {
@@ -2124,7 +2621,7 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        -520,
+        380,
         3040
       ],
       "parameters": {
@@ -2140,7 +2637,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        680,
         3040
       ],
       "parameters": {
@@ -2288,7 +2785,7 @@
       "main": [
         [
           {
-            "node": "Verify Downstream Persistence Proof",
+            "node": "Read Verified Downstream Terminal Receipt",
             "type": "main",
             "index": 0
           }
@@ -2726,7 +3223,7 @@
       "main": [
         [
           {
-            "node": "Return Verified Cursor Commit",
+            "node": "Read Back Verified Terminal Acquisition Receipt",
             "type": "main",
             "index": 0
           }
@@ -3138,6 +3635,50 @@
           }
         ]
       ]
+    },
+    "Read Verified Downstream Terminal Receipt": {
+      "main": [
+        [
+          {
+            "node": "Decode Read Verified Downstream Terminal Receipt Typed Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Downstream Terminal Receipt": {
+      "main": [
+        [
+          {
+            "node": "Verify Downstream Persistence Proof",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Terminal Acquisition Receipt": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Commit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Read Verified Downstream Terminal Receipt Typed Record": {
+      "main": [
+        [
+          {
+            "node": "Verify Downstream Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -3167,146 +3708,147 @@
       "description": "Finance stage 1. Input starts at Validate Sweep or Commit; verified output leaves through Validate Commit Resume State."
     },
     {
-      "name": "Stage 2: Verify Downstream Persistence Proof to Source Cursor Recovery Readback Needed",
-      "nodeIds": [
-        "12021",
-        "12030",
-        "12022",
-        "12045",
-        "12051"
-      ],
-      "description": "Finance stage 2. Input starts at Verify Downstream Persistence Proof; verified output leaves through Source Cursor Recovery Readback Needed."
-    },
-    {
-      "name": "Stage 2: Read Existing ENUMERATED Receipt to Existing ENUMERATED Receipt Present",
+      "name": "Stage 2: Read Existing ENUMERATED Receipt to Aggregate Exact Window Heartbeat",
       "nodeIds": [
         "12036",
         "12090",
-        "12037"
-      ],
-      "description": "Finance stage 2. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Existing ENUMERATED Receipt Present."
-    },
-    {
-      "name": "Stage 3: Read Outlook Circuit to List Immutable Message Attachments",
-      "nodeIds": [
+        "12037",
         "12005",
         "12006",
         "12007",
         "12008",
-        "12009",
-        "12014",
-        "12033",
-        "12015"
+        "12009"
       ],
-      "description": "Finance stage 3. Input starts at Read Outlook Circuit; verified output leaves through List Immutable Message Attachments."
+      "description": "Finance stage 2. Input starts at Read Existing ENUMERATED Receipt; verified output leaves through Aggregate Exact Window Heartbeat."
     },
     {
-      "name": "Stage 4: Stamp Immutable Attachment IDs to Verify Receipt and Return Sweep",
+      "name": "Stage 3: Shape Immutable Message Inventory to Upsert ENUMERATED Receipt",
       "nodeIds": [
+        "12014",
+        "12033",
+        "12015",
         "12016",
         "12034",
         "12017",
         "12010",
-        "12011",
-        "12012",
-        "12087",
-        "12013"
+        "12011"
       ],
-      "description": "Finance stage 4. Input starts at Stamp Immutable Attachment IDs; verified output leaves through Verify Receipt and Return Sweep."
+      "description": "Finance stage 3. Input starts at Shape Immutable Message Inventory; verified output leaves through Upsert ENUMERATED Receipt."
     },
     {
-      "name": "Stage 5: Attach Immutable Inventory to Sweep to Read Back ARCHIVED Acquisition Receipt",
+      "name": "Stage 4: Read Back ENUMERATED Receipt to Build Durable Archive Barrier Receipt",
       "nodeIds": [
+        "12012",
+        "12087",
+        "12013",
         "12035",
         "12038",
         "12018",
         "12019",
-        "12039",
-        "12040",
-        "12041",
-        "12042"
+        "12039"
       ],
-      "description": "Finance stage 5. Input starts at Attach Immutable Inventory to Sweep; verified output leaves through Read Back ARCHIVED Acquisition Receipt."
+      "description": "Finance stage 4. Input starts at Read Back ENUMERATED Receipt; verified output leaves through Build Durable Archive Barrier Receipt."
     },
     {
-      "name": "Stage 6: Project Enumeration Receipt Fields for Archive to Return Verified ARCHIVED Receipt",
+      "name": "Stage 5: SHA-256 Durable Archive Barrier Receipt to Project Enumeration Receipt Fields for Verified Archive",
       "nodeIds": [
+        "12040",
+        "12041",
+        "12042",
         "12091",
         "12043",
         "12044",
         "12068",
-        "12092",
-        "12069"
+        "12092"
       ],
-      "description": "Finance stage 6. Input starts at Project Enumeration Receipt Fields for Archive; verified output leaves through Return Verified ARCHIVED Receipt."
+      "description": "Finance stage 5. Input starts at SHA-256 Durable Archive Barrier Receipt; verified output leaves through Project Enumeration Receipt Fields for Verified Archive."
     },
     {
-      "name": "Stage 6: Read Source Cursor for Initialization to Build Cursor v0 Initialization",
+      "name": "Stage 6: Read Source Cursor for Initialization to Return Existing Cursor Initialization Readback",
       "nodeIds": [
         "12060",
-        "12061"
-      ],
-      "description": "Finance stage 6. Input starts at Read Source Cursor for Initialization; verified output leaves through Build Cursor v0 Initialization."
-    },
-    {
-      "name": "Stage 7: Cursor Initialization Needed to Return Verified Cursor Initialization",
-      "nodeIds": [
+        "12061",
         "12062",
         "12063",
         "12064",
         "12065",
-        "12066",
-        "12067"
+        "12066"
       ],
-      "description": "Finance stage 7. Input starts at Cursor Initialization Needed; verified output leaves through Return Verified Cursor Initialization."
+      "description": "Finance stage 6. Input starts at Read Source Cursor for Initialization; verified output leaves through Return Existing Cursor Initialization Readback."
     },
     {
-      "name": "Stage 7: Validate Evidence Request to Search Outlook Evidence",
+      "name": "Stage 7: Validate Evidence Request to SHA-256 Evidence Handoff",
       "nodeIds": [
         "12070",
-        "12071"
-      ],
-      "description": "Finance stage 7. Input starts at Validate Evidence Request; verified output leaves through Search Outlook Evidence."
-    },
-    {
-      "name": "Stage 8: Match Outlook Evidence to Transactions to Prepare W21 Email Request",
-      "nodeIds": [
+        "12071",
         "12072",
         "12073",
         "12074",
         "12079",
-        "12075",
+        "12075"
+      ],
+      "description": "Finance stage 7. Input starts at Validate Evidence Request; verified output leaves through SHA-256 Evidence Handoff."
+    },
+    {
+      "name": "Stage 8: Evidence Has Matches? to Prepare W21 Email Request",
+      "nodeIds": [
         "12076",
         "12077",
         "12080"
       ],
-      "description": "Finance stage 8. Input starts at Match Outlook Evidence to Transactions; verified output leaves through Prepare W21 Email Request."
+      "description": "Finance stage 8. Input starts at Evidence Has Matches?; verified output leaves through Prepare W21 Email Request."
     },
     {
-      "name": "Stage 9: Read Active W09 Email Policy Contract to Validate Email Proposal Result",
+      "name": "Stage 8: Read Verified Downstream Terminal Receipt to Require Verified Attachment Barrier",
+      "nodeIds": [
+        "12093",
+        "12093-typed-decode",
+        "12094",
+        "12021",
+        "12030"
+      ],
+      "description": "Finance stage 8. Input starts at Read Verified Downstream Terminal Receipt; verified output leaves through Require Verified Attachment Barrier."
+    },
+    {
+      "name": "Stage 9: Read Authoritative Source Cursor to Source Cursor Recovery Readback Needed",
+      "nodeIds": [
+        "12022",
+        "12045",
+        "12051"
+      ],
+      "description": "Finance stage 9. Input starts at Read Authoritative Source Cursor; verified output leaves through Source Cursor Recovery Readback Needed."
+    },
+    {
+      "name": "Stage 9: Read Active W09 Email Policy Contract to Send Evidence to W21",
       "nodeIds": [
         "12082",
         "12083",
         "12084",
         "12085",
-        "12078",
-        "12081"
+        "12078"
       ],
-      "description": "Finance stage 9. Input starts at Read Active W09 Email Policy Contract; verified output leaves through Validate Email Proposal Result."
+      "description": "Finance stage 9. Input starts at Read Active W09 Email Policy Contract; verified output leaves through Send Evidence to W21."
     },
     {
-      "name": "Stage 10: Route Commit Resume State to Read Back CAS Cursor",
+      "name": "Stage 10: Route Commit Resume State to Verify Source Cursor Readback",
       "nodeIds": [
         "12046",
         "12047",
         "12052",
         "12053",
-        "12054",
+        "12054"
+      ],
+      "description": "Finance stage 10. Input starts at Route Commit Resume State; verified output leaves through Verify Source Cursor Readback."
+    },
+    {
+      "name": "Stage 11: Build Cursor CAS Update to Compare CAS Cursor Readback",
+      "nodeIds": [
         "12023",
         "12024",
-        "12025"
+        "12025",
+        "12026"
       ],
-      "description": "Finance stage 10. Input starts at Route Commit Resume State; verified output leaves through Read Back CAS Cursor."
+      "description": "Finance stage 11. Input starts at Build Cursor CAS Update; verified output leaves through Compare CAS Cursor Readback."
     },
     {
       "name": "Stage 11: Mark Acquisition DOWNSTREAM_VERIFIED to Read Back Terminal Acquisition Receipt",
@@ -3317,13 +3859,20 @@
       "description": "Finance stage 11. Input starts at Mark Acquisition DOWNSTREAM_VERIFIED; verified output leaves through Read Back Terminal Acquisition Receipt."
     },
     {
-      "name": "Stage 11: Return Verified Cursor Commit to Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
+      "name": "Stage 12: Mark DOWNSTREAM_VERIFIED Receipt Readback Verified to Read Back Verified Terminal Acquisition Receipt",
       "nodeIds": [
-        "12029",
-        "12048",
-        "12049"
+        "12049",
+        "12095"
       ],
-      "description": "Finance stage 11. Input starts at Return Verified Cursor Commit; verified output leaves through Mark DOWNSTREAM_VERIFIED Receipt Readback Verified."
+      "description": "Finance stage 12. Input starts at Mark DOWNSTREAM_VERIFIED Receipt Readback Verified; verified output leaves through Read Back Verified Terminal Acquisition Receipt."
+    },
+    {
+      "name": "Stage 12: Verify Replayed Terminal Acquisition Receipt to Return Replayed Cursor Commit",
+      "nodeIds": [
+        "12056",
+        "12057"
+      ],
+      "description": "Finance stage 12. Input starts at Verify Replayed Terminal Acquisition Receipt; verified output leaves through Return Replayed Cursor Commit."
     }
   ],
   "tags": [

@@ -4,37 +4,40 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "8e10b8381f90488594f6ec6026fe577aaa7c800bec9aafd46d2be439701ba63e",
-    "12-outlook-message-sweep.json": "94c8de55dbeea02239cfcf75fd5e2d5eacc2cfc9ff23973eec8b1855826b401f",
+    "01-outlook-finance-acquisition.json": "9a9031b3fe3b5e48643e030637efdfd0d25090c18c54dcf3566261aaa2829011",
+    "09-ai-proposal.json": "2541b0cf5bfd61ffd539a02eb6f15df039d54b06f48a114196c1ae0311f7104e",
+    "12-outlook-message-sweep.json": "c3e8f71111286ac54a0ffdede858e12a4732152880651f14fe0d9111bc5d5d7e",
     "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
-    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
+    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7",
+    "20-actual-outbox-apply.json": "e25e3b0adbaa6ae27207b8e643df0321d46fdf27f8c87ffbf5b90d882e4a44ac",
+    "21-subscription-agent-adapter.json": "ebcfce8b11cc96ade245ad9ca1ddb6e894f88144a9eff438fee9844ee2f2bfba"
   },
   "workflows": [
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "456b2002ec0b62b30e9544de159c895d9436e7aa129673b3a2ce265370f86980"
+      "sha256": "fb6aa0de81a0f2b90c927ede4c1da14b798bccebea5bf29cac44901574cc8757"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "d46de8f68a564696e6bcfce1895897fa22c2a08b170b920e2c6f1a13fb094508"
+      "sha256": "0b193cff8cb59689c7dff17425a9a32966f9a7996c3a71c99e13a98ea3a84c72"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "03b310240ba86e4242dc59980269600da21385fabb216da0ee02e1c6c927465b"
+      "sha256": "cf265dde89dc76a09c160d0cf6da3a83d152ef4c79ace7628341b9d517dc3052"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "3c3003f2b38a1b7ee323be272b277cd851d1005a56991bfea6163f57a78fc5e7"
+      "sha256": "d4de6b1f72d7e68344047b10fbb28bb4ddac460d10cf2a7776d993ce02415f6c"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "72f12b6f454313d848ce0bc54e7cc1739889f229c8a63ec2bb682f50d7b3ff2e"
+      "sha256": "4bed800f672fa99aa90ca8410aa2cfdd5f9baa0429a209412bcce1b2bcf59aa5"
     },
     {
       "file": "95-lease-acquire-a.json",
@@ -54,27 +57,27 @@
     {
       "file": "98-ai-caller-model-rejected.json",
       "id": "90000000-0000-4000-8000-000000000908",
-      "sha256": "f71f630437eb1fc053325ad9ddd314d37b92edfdb1d87dfb52debca204e052b7"
+      "sha256": "d0f4da7452e6c991acbef39473a9c3b7aa250eb7263965293e2f75b01663ecde"
     },
     {
       "file": "99-ai-locked-field-rejected.json",
       "id": "90000000-0000-4000-8000-000000000909",
-      "sha256": "5c442c705519390d68fa4dfa021c992900ce5bf6af0ce48013e319e6c0e2ea64"
+      "sha256": "d444e9979eb6cd1c0f55c9d064009758c8f9b1204c83de68f9cbace37425ad0c"
     },
     {
       "file": "100-ai-missing-policy-rejected.json",
       "id": "90000000-0000-4000-8000-000000000910",
-      "sha256": "fe25ea40150a22fc7d10f535434291318c38edbffc48527a570fe52d3eb82706"
+      "sha256": "dede8c83f8bb048b8f693e2068b72553b0b54db03e826f6233d292a8a8fe30bd"
     },
     {
       "file": "106-ai-positive-luna.json",
       "id": "90000000-0000-4000-8000-000000000911",
-      "sha256": "d0b2d84105b99a8e74f2c9cbee5911c41a24d047c10d733ce7adf85866ffa593"
+      "sha256": "f149c72562e59cb93c25664b71df43d5e6f4231ed103f0966e81943d2a025959"
     },
     {
       "file": "107-ai-positive-sol-gated.json",
       "id": "90000000-0000-4000-8000-000000000912",
-      "sha256": "91ef770a172dad629505da9c68cb519f3e0970ab47b356677db21e628a85ab60"
+      "sha256": "35f42252d26c78b6b9c59f294dff00ee184c1dc29a0f5605b036e538fe3df74d"
     },
     {
       "file": "101-error-redaction.json",
@@ -84,22 +87,22 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "a45cdb82c75ff12349afe588617b89790ff4b26fe7dd0cfe964da848da3ccbd6"
+      "sha256": "f4b45e5f4476cf353105ff0be4b5435cbcff26a3ac847ebcac5cbd78e167258c"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "8ec59fd5f61aafbcaa713bf2103653e2e02204a233b70593d7517137dfcd5608"
+      "sha256": "90cd50007db092b373c8ec3eb80fb5eb0732187bd421436af1b24987b00fd01b"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "08ce5e8be400fb95b72aea8ce2c346cc3cff03be3a16379b27de075295b7823e"
+      "sha256": "d8ea98fc1705b20bc75f3fa82bb94196fb598d5c360465f6c83f68227d735bd0"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "9cc2ce7b7467b1cca71f7a87e673f891e0934b72154cd68bc84d4b3cbc720f23"
+      "sha256": "58aec2387fb20bc6cd6e593466de6eb85adca9379038647d1d44c268530824ba"
     }
   ],
   "scenario_contract": {
@@ -207,7 +210,7 @@
   },
   "blocked_runtime_scenarios": {
     "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
-    "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements."
+    "real_actual_recovery_write": "Forbidden in disposable fixtures; derived recovery substitutes fixed provider responses while preserving artifact hashes, fenced leases, and durable receipt readbacks."
   },
-  "warning": "Derived fixtures are runtime evidence for deterministic orchestration branches only, not evidence that external providers or Actual were called."
+  "warning": "Generated fixtures are deterministic test inputs, not execution receipts or evidence that external providers or Actual were called. Executed fixture receipts prove only disposable orchestration branches."
 }

@@ -67,37 +67,15 @@
     {
       "id": "2011",
       "name": "Load Trusted Mail Contract",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         -220,
         0
       ],
       "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "finance_source_contracts",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 1,
-        "matchType": "allConditions",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "source_code",
-              "condition": "eq",
-              "keyValue": "RAKBANK_CARD_TRANSACTION"
-            },
-            {
-              "keyName": "enabled",
-              "condition": "eq",
-              "keyValue": true
-            }
-          ]
-        },
+        "mode": "raw",
+        "jsonOutput": "{}",
         "options": {}
       }
     },
@@ -111,7 +89,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Sweep Contract. Keep this deterministic and fail closed.\nconst w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;\nreturn [{ json: { ...w, folder_id: c.folder_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Sweep Contract. Keep this deterministic and fail closed.\nconst w = $('Freeze Cursor Minus Overlap Window').first().json, bindings = $json, c = bindings['RAKBANK_CARD_TRANSACTION'];\nif (!c || typeof c !== 'object')\n    throw new Error('SOURCE_BINDING_MISSING:RAKBANK_CARD_TRANSACTION');\nreturn [{ json: { ...w, folder_id: c.folder_id, senders: JSON.parse(c.senders_json), subjects: JSON.parse(c.subjects_json) } }];\n"
       }
     },
     {
@@ -412,7 +390,39 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "financeSourceBindingSlots": {
+      "RAKBANK_CARD_TRANSACTION": {
+        "node": "Load Trusted Mail Contract",
+        "parameter": "parameters.jsonOutput",
+        "allowedFields": [
+          "source_code",
+          "config_version",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "onedrive_parent_id",
+          "manifest_onedrive_parent_id",
+          "overlap_seconds",
+          "cycle_day",
+          "deadline_days",
+          "actual_file_id",
+          "account_id",
+          "card_code",
+          "cashback_close_required",
+          "enabled",
+          "content_sha256",
+          "updated_at"
+        ],
+        "requiredFields": [
+          "source_code",
+          "folder_id",
+          "senders_json",
+          "subjects_json",
+          "enabled"
+        ]
+      }
+    }
   },
   "nodeGroups": [
     {

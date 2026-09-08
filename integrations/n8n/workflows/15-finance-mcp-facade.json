@@ -187,7 +187,7 @@
       "finance.document.request.v1",
       "finance.reviewed-artifact.handoff.v1"
     ],
-    "auditTable": "finance_mcp_requests",
+    "auditTable": "finance_ingestion_state",
     "importTested": false,
     "fixtureExecuted": false,
     "credentialBindings": [
@@ -326,7 +326,8 @@
           "Finance MCP Server Trigger"
         ]
       }
-    }
+    },
+    "auditRecordType": "MCP_REQUEST"
   },
   "nodeGroups": [],
   "tags": [

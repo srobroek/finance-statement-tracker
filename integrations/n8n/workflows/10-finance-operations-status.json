@@ -114,33 +114,30 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $json.request_id }}"
+              "keyValue": "MCP_REQUEST"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "request_id": "={{ $json.request_id }}",
-            "request_sha256": "={{ $json.request_sha256 }}",
-            "operation_code": "={{ $json.operation_code }}",
-            "caller_subject_hash": "73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275",
-            "target_workflow_code": "={{ $json.target_workflow_code }}",
-            "state": "ACCEPTED",
-            "result_sha256": "",
-            "error_class": "",
-            "error_message_redacted": "",
-            "readback_verified": false,
-            "created_at": "={{ $now.toISO() }}"
+            "record_type": "MCP_REQUEST",
+            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"request_id\": $json.request_id, \"request_sha256\": $json.request_sha256, \"operation_code\": $json.operation_code, \"caller_subject_hash\": \"73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275\", \"target_workflow_code\": $json.target_workflow_code, \"state\": \"ACCEPTED\", \"result_sha256\": \"\", \"error_class\": \"\", \"error_message_redacted\": \"\", \"readback_verified\": false, \"created_at\": $now.toISO()}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -166,7 +163,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -175,14 +172,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 MCP Request').item.json.request_id }}"
+              "keyValue": "MCP_REQUEST"
             },
             {
-              "keyName": "state",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "ACCEPTED"
+              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Request').item.json.request_id)]) }}"
             }
           ]
         },
@@ -195,7 +192,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1120,
+        -820,
         380
       ],
       "parameters": {
@@ -208,7 +205,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        -820,
+        -520,
         380
       ],
       "parameters": {
@@ -284,7 +281,7 @@
       "type": "n8n-nodes-base.n8n",
       "typeVersion": 1,
       "position": [
-        -520,
+        -220,
         380
       ],
       "onError": "continueRegularOutput",
@@ -307,7 +304,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -220,
+        80,
         380
       ],
       "parameters": {
@@ -320,7 +317,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        80,
+        380,
         380
       ],
       "onError": "continueRegularOutput",
@@ -351,7 +348,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        380,
+        680,
         380
       ],
       "onError": "continueRegularOutput",
@@ -385,7 +382,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        680,
+        980,
         380
       ],
       "parameters": {
@@ -398,8 +395,8 @@
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 1,
       "position": [
-        980,
-        380
+        -1120,
+        760
       ],
       "parameters": {
         "action": "hash",
@@ -414,7 +411,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -1120,
+        -820,
         760
       ],
       "parameters": {
@@ -422,38 +419,30 @@
         "operation": "update",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $json.request_id }}"
+              "keyValue": "MCP_REQUEST"
             },
             {
-              "keyName": "request_sha256",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "={{ $json.request_sha256 }}"
-            },
-            {
-              "keyName": "state",
-              "condition": "eq",
-              "keyValue": "ACCEPTED"
+              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "state": "={{ $json.state }}",
-            "result_sha256": "={{ $json.result_sha256 }}",
-            "error_class": "={{ $json.error_class }}",
-            "error_message_redacted": "={{ $json.error_message_redacted }}",
-            "readback_verified": false,
-            "completed_at": "={{ $now.toISO() }}"
+            "record_type": "MCP_REQUEST",
+            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"state\": $json.state, \"result_sha256\": $json.result_sha256, \"error_class\": $json.error_class, \"error_message_redacted\": $json.error_message_redacted, \"readback_verified\": false, \"completed_at\": $now.toISO()}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -471,7 +460,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -820,
+        -520,
         760
       ],
       "parameters": {
@@ -479,7 +468,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -488,14 +477,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
+              "keyValue": "MCP_REQUEST"
             },
             {
-              "keyName": "result_sha256",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 MCP Result').item.json.result_sha256 }}"
+              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Result').item.json.request_id)]) }}"
             }
           ]
         },
@@ -508,7 +497,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -520,
+        80,
         760
       ],
       "parameters": {
@@ -521,7 +510,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -220,
+        380,
         760
       ],
       "parameters": {
@@ -529,28 +518,30 @@
         "operation": "update",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $json.request_id }}"
+              "keyValue": "MCP_REQUEST"
             },
             {
-              "keyName": "result_sha256",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": "={{ $json.result_sha256 }}"
+              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "readback_verified": true
+            "record_type": "MCP_REQUEST",
+            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
+            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"readback_verified\": true}) }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -568,7 +559,7 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        80,
+        680,
         760
       ],
       "parameters": {
@@ -576,7 +567,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_mcp_requests",
+          "value": "finance_ingestion_state",
           "mode": "name"
         },
         "returnAll": false,
@@ -585,14 +576,14 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "request_id",
+              "keyName": "record_type",
               "condition": "eq",
-              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
+              "keyValue": "MCP_REQUEST"
             },
             {
-              "keyName": "readback_verified",
+              "keyName": "record_key",
               "condition": "eq",
-              "keyValue": true
+              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Result').item.json.request_id)]) }}"
             }
           ]
         },
@@ -605,11 +596,50 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        380,
-        760
+        -1120,
+        1140
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Redacted MCP Result. Keep this deterministic and fail closed.\nconst r = $('SHA-256 MCP Result').first().json;\nif (r.state !== 'COMPLETED')\n    throw new Error(`MCP_DISPATCH_FAILED:${r.error_class}`);\nreturn [{ json: r.result }];\n"
+      }
+    },
+    {
+      "id": "10013-typed-decode",
+      "name": "Decode Read Back ACCEPTED MCP Request Typed Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Decode Read Back ACCEPTED MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+      }
+    },
+    {
+      "id": "10023-typed-decode",
+      "name": "Decode Read Back Terminal MCP Request Typed Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Decode Read Back Terminal MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+      }
+    },
+    {
+      "id": "10026-typed-decode",
+      "name": "Decode Read Verified MCP Receipt Typed Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        760
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Decode Read Verified MCP Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
       }
     }
   ],
@@ -684,7 +714,7 @@
       "main": [
         [
           {
-            "node": "Compare ACCEPTED MCP Readback",
+            "node": "Decode Read Back ACCEPTED MCP Request Typed Record",
             "type": "main",
             "index": 0
           }
@@ -808,7 +838,7 @@
       "main": [
         [
           {
-            "node": "Compare and Mark MCP Readback",
+            "node": "Decode Read Back Terminal MCP Request Typed Record",
             "type": "main",
             "index": 0
           }
@@ -841,6 +871,39 @@
       "main": [
         [
           {
+            "node": "Decode Read Verified MCP Receipt Typed Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Read Back ACCEPTED MCP Request Typed Record": {
+      "main": [
+        [
+          {
+            "node": "Compare ACCEPTED MCP Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Read Back Terminal MCP Request Typed Record": {
+      "main": [
+        [
+          {
+            "node": "Compare and Mark MCP Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decode Read Verified MCP Receipt Typed Record": {
+      "main": [
+        [
+          {
             "node": "Return Redacted MCP Result",
             "type": "main",
             "index": 0
@@ -861,7 +924,7 @@
     "financeWorkflowCode": "FINANCE_OPERATIONS_STATUS",
     "mcpSafe": false,
     "migrationStatus": "SPEC_ONLY",
-    "mcpAuditTable": "finance_mcp_requests",
+    "mcpAuditTable": "finance_ingestion_state",
     "mcpTerminalReadback": true,
     "importTested": false,
     "fixtureExecuted": false,
@@ -882,7 +945,8 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "mcpAuditRecordType": "MCP_REQUEST"
   },
   "nodeGroups": [
     {
@@ -904,30 +968,32 @@
       "description": "Finance stage 1. Input starts at Validate Bounded MCP Dispatch; verified output leaves through Read Back ACCEPTED MCP Request."
     },
     {
-      "name": "Stage 2: Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
+      "name": "Stage 2: Decode Read Back ACCEPTED MCP Request Typed Record to Build Redacted MCP Terminal Receipt",
       "nodeIds": [
+        "10013-typed-decode",
         "10014",
         "10015",
         "10016",
         "10017",
         "10018",
         "10019",
-        "10020",
-        "10021"
+        "10020"
       ],
-      "description": "Finance stage 2. Input starts at Compare ACCEPTED MCP Readback; verified output leaves through SHA-256 MCP Result."
+      "description": "Finance stage 2. Input starts at Decode Read Back ACCEPTED MCP Request Typed Record; verified output leaves through Build Redacted MCP Terminal Receipt."
     },
     {
-      "name": "Stage 3: Upsert Terminal MCP Request to Return Redacted MCP Result",
+      "name": "Stage 3: SHA-256 MCP Result to Decode Read Verified MCP Receipt Typed Record",
       "nodeIds": [
+        "10021",
         "10022",
         "10023",
+        "10023-typed-decode",
         "10024",
         "10025",
         "10026",
-        "10027"
+        "10026-typed-decode"
       ],
-      "description": "Finance stage 3. Input starts at Upsert Terminal MCP Request; verified output leaves through Return Redacted MCP Result."
+      "description": "Finance stage 3. Input starts at SHA-256 MCP Result; verified output leaves through Decode Read Verified MCP Receipt Typed Record."
     }
   ],
   "tags": [
