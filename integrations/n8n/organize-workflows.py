@@ -14,7 +14,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 CONTRACT_PATH = Path(__file__).resolve().parent / "workflow-folders.json"
 CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -92,7 +92,7 @@ def persisted_workflow_body_md5(workflow: Mapping[str, Any]) -> str:
     return hashlib.md5(body.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
-def _fail(message: str) -> None:
+def _fail(message: str) -> NoReturn:
     raise ValueError(message)
 
 
