@@ -8,7 +8,7 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "8658e904657e2a8fce04919705027cb14784998d132b50fbd182383edf1830c3"
+    "sha256": "f4164c3f8cd30763d61a2e6d14f74c0d2b75ccf9753ce698e34d4d402b4a4a09"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
