@@ -352,19 +352,6 @@ export async function reconcileTagsAndPayees({ api, config, apply, tags, payees,
   }
 }
 
-export async function reconcileCategoryLearning({ api, config, apply, changes }) {
-  if (config.actual_settings?.category_learning !== false) return;
-  const learningPayees = (await api.aqlQuery(
-    api.q("payees").select(["id", "name", "transfer_acct", "learn_categories"]),
-  )).data;
-  for (const payee of learningPayees.filter(item => !item.transfer_acct)) {
-    if (payee.learn_categories !== false) {
-      changes.push({ action: "disable", type: "payee_category_learning", name: payee.name });
-      if (apply) await api.updatePayee(payee.id, { learn_categories: false });
-    }
-  }
-}
-
 export function resolveBootstrapReferences(value, refs, { strict = true } = {}) {
   if (Array.isArray(value)) return value.map(item => resolveBootstrapReferences(item, refs, { strict }));
   if (value && typeof value === "object" && value.ref && value.name) {
@@ -631,7 +618,6 @@ export async function reconcileBootstrapResources({
     tags = await api.getTags();
     payees = await api.getPayees();
   }
-  await reconcileCategoryLearning({ api, config, apply, changes });
 
   const refs = {
     account: byName(accounts),
