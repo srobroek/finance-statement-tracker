@@ -5,6 +5,7 @@ import {
   managedScheduleName,
   parseManagedScheduleName,
   reconcileAccounts,
+  reconcileBootstrapResources,
   reconcileCategories,
   reconcileSchedules,
 } from "./bootstrap-resources.mjs";
@@ -287,4 +288,48 @@ test("bootstrap replaces obsolete native vendor boundaries and preserves manual 
   const secondChanges = [];
   await reconcileRules({ api, config, apply: false, configPath, refs: refMap, changes: secondChanges, readJson });
   assert.deepEqual(secondChanges, []);
+});
+
+test("bootstrap preserves manual payee learning while reconciling configured resources", async () => {
+  const state = {
+    tags: [],
+    payees: [{ id: "manual-payee", name: "Manual", learn_categories: true }],
+  };
+  const api = {
+    getAccounts: async () => [],
+    getCategoryGroups: async () => [],
+    getCategories: async () => [],
+    getTags: async () => state.tags,
+    getPayees: async () => state.payees,
+    createTag: async fields => state.tags.push(fields),
+    createPayee: async fields => state.payees.push({ id: "configured-payee", ...fields }),
+    q: name => ({ select: fields => ({ name, fields }) }),
+    aqlQuery: async () => ({ data: state.payees }),
+    updatePayee: async (id, fields) => {
+      Object.assign(state.payees.find(payee => payee.id === id), fields);
+    },
+    getRules: async () => [],
+    getSchedules: async () => [],
+    sync: async () => {},
+  };
+
+  const result = await reconcileBootstrapResources({
+    api,
+    config: {
+      schema_version: 1,
+      actual_settings: { category_learning: false },
+      tags: [{ tag: "configured" }],
+      payees: [{ name: "Configured" }],
+    },
+    apply: true,
+    syncRemote: false,
+    readJson: async () => [],
+  });
+
+  assert.equal(result.status, "applied");
+  assert.deepEqual(state.tags, [{ tag: "configured", description: "" }]);
+  assert.deepEqual(state.payees, [
+    { id: "manual-payee", name: "Manual", learn_categories: true },
+    { id: "configured-payee", name: "Configured" },
+  ]);
 });
