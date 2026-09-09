@@ -5,7 +5,7 @@ import calendar
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, NotRequired, TypedDict
 
 from .cashback import (
     PaymentIntent,
@@ -23,7 +23,7 @@ from .cashback import (
 )
 from .models import Transaction
 from .actual_pipeline import account_maps, account_owner_map
-from .fx import FxConversionError, FxConversionRequest, convert
+from .fx import FxConversionError, FxConversionRequest, FxQuote, convert
 from .transaction_semantics import REFUND_TOPICS, TOPIC_BY_TAG
 
 
@@ -36,6 +36,43 @@ _CURRENCY = re.compile(
 
 def _tags(notes: str) -> set[str]:
     return {match.group(1) for match in _TAG.finditer(notes or "")}
+
+
+class _RoutingCandidateRow(TypedDict):
+    card: str
+    bucket: str
+    payment_channel: str
+    purpose: str
+    policy: str
+    policy_priority: int
+    pace_status: str
+    strategy_rank: int
+    condition: str
+    tracking_mode: str
+    position_mode: str
+    tier_before: str
+    tier_after: str
+    target_tier: str
+    target_rate_percent: str
+    estimated_net_value_aed: str
+    estimated_net_return_percent: str
+    current_state_marginal_reward_aed: str
+    current_state_marginal_return_percent: str
+    current_tier_rate_percent: str
+    configured_fx_fee_percent: str
+    conditional_target_reward_aed: str
+    conditional_target_rate_percent: str
+    estimate_basis: str
+    card_spend_aed: str
+    card_target_aed: str | None
+    card_target_remaining_aed: str | None
+    tier_threshold_aed: str
+    tier_remaining_aed: str
+    bucket_spend_aed: str
+    bucket_cap_aed: str | None
+    bucket_remaining_aed: str | None
+    order: NotRequired[int]
+    status: NotRequired[str]
 
 
 def _canonical_topic(tags: set[str]) -> str | None:
@@ -54,6 +91,7 @@ def _canonical_topic(tags: set[str]) -> str | None:
 
 def _plain(value: Decimal) -> str:
     return format(value, "f")
+
 
 def _snapshot_value(row: dict[str, Any], *names: str) -> object:
     for name in names:
@@ -229,11 +267,16 @@ def transactions_from_actual_snapshot(
         fx_trace: dict[str, Any] | None = None
         fx_review_required = False
         if currency != "AED":
-            quote = _snapshot_value(row, "quote", "fx_quote")
+            quote_value = _snapshot_value(row, "quote", "fx_quote")
+            quote = quote_value if isinstance(quote_value, (FxQuote, Mapping)) else None
             try:
                 conversion = convert(
                     FxConversionRequest(
-                        original_amount=original_amount,
+                        original_amount=(
+                            original_amount
+                            if isinstance(original_amount, (Decimal, str, int, float))
+                            else str(original_amount)
+                        ),
                         original_currency=currency,
                         transaction_date=str(row["date"]),
                         source=f"actual:{source_id}",
@@ -282,14 +325,22 @@ def transactions_from_actual_snapshot(
         result.append(
             Transaction(
                 transaction_id=str(row.get("imported_id") or f"actual:{row['id']}"),
-                transaction_at=datetime.combine(date.fromisoformat(str(row["date"])), time.min),
+                transaction_at=datetime.combine(
+                    date.fromisoformat(str(row["date"])), time.min
+                ),
                 card=card,
                 account=account_name,
                 owner=owner_by_card.get(card),
                 merchant_raw=merchant,
                 vendor=row.get("payee_name"),
                 amount_aed=amount_aed,
-                amount_original=original_amount if currency != "AED" else None,
+                amount_original=(
+                    original_amount
+                    if isinstance(original_amount, Decimal)
+                    else Decimal(str(original_amount))
+                )
+                if original_amount is not None and currency != "AED"
+                else None,
                 source_direction="CREDIT" if amount_minor > 0 else "DEBIT",
                 currency=currency,
                 channel=channel,
@@ -297,11 +348,15 @@ def transactions_from_actual_snapshot(
                 category=category,
                 subcategory=row.get("category_name"),
                 transaction_type=transaction_type,
-                reward_bucket=_reward_bucket(programs, card, category, channel, currency, tags),
+                reward_bucket=_reward_bucket(
+                    programs, card, category, channel, currency, tags
+                ),
                 tags={
                     tag
                     for tag in tags
-                    if not tag.casefold().startswith(("channel-", "cashback-", "owner-"))
+                    if not tag.casefold().startswith(
+                        ("channel-", "cashback-", "owner-")
+                    )
                 },
                 review_required=(
                     row.get("category_name") is None
@@ -669,8 +724,11 @@ def _build_routing_graphs(
         amount = Decimal("1")  # rate coefficient; not a purchase amount
         category = str(profile["category"])
         currency = str(profile.get("currency") or "AED")
-        route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
-        for route in profile.get("routes") or ():
+        route_candidates: dict[tuple[str, str, str], _RoutingCandidateRow] = {}
+        routes_value = profile.get("routes") or ()
+        if not isinstance(routes_value, list):
+            raise ValueError("Routing profile routes must be a list")
+        for route in routes_value:
             card = str(route["card"])
             program = routing_programs_by_card.get(card)
             if program is None:
@@ -691,11 +749,18 @@ def _build_routing_graphs(
             policy = active_route_policies.get(policy_code)
             if not isinstance(policy, dict):
                 raise ValueError(f"Unknown routing policy: {policy_code}")
-            when = policy.get("when") or {}
-            ranking = policy.get("ranking") or {}
-            reasons = policy.get("reasons") or {}
-            if not isinstance(when, dict) or not isinstance(ranking, dict) or not isinstance(reasons, dict):
+            when_value = policy.get("when") or {}
+            ranking_value = policy.get("ranking") or {}
+            reasons_value = policy.get("reasons") or {}
+            if (
+                not isinstance(when_value, dict)
+                or not isinstance(ranking_value, dict)
+                or not isinstance(reasons_value, dict)
+            ):
                 raise ValueError(f"Routing policy {policy_code} must define object policies")
+            when: dict[str, object] = when_value
+            ranking: dict[str, object] = ranking_value
+            reasons: dict[str, object] = reasons_value
             bucket_open = candidate.bucket_remaining_aed is None or candidate.bucket_remaining_aed > 0
             bucket_fits_purchase = bucket_open  # no purchase amount supplied
             target_remaining = (
@@ -726,18 +791,36 @@ def _build_routing_graphs(
                     + ", ".join(sorted(unknown_checks))
                 )
             active = all(not required or checks[name] for name, required in when.items() if name in checks)
-            pace_in = {str(value).upper() for value in when.get("pace_in", [])}
-            pace_not_in = {str(value).upper() for value in when.get("pace_not_in", [])}
+            pace_in_value = when.get("pace_in", [])
+            pace_not_in_value = when.get("pace_not_in", [])
+            if (
+                not isinstance(pace_in_value, list)
+                or any(not isinstance(value, str) for value in pace_in_value)
+                or not isinstance(pace_not_in_value, list)
+                or any(not isinstance(value, str) for value in pace_not_in_value)
+            ):
+                raise ValueError(
+                    f"Routing policy {policy_code} pace checks must be string lists"
+                )
+            pace_in = {value.upper() for value in pace_in_value}
+            pace_not_in = {value.upper() for value in pace_not_in_value}
             active = active and (not pace_in or pace_status_value in pace_in)
             active = active and pace_status_value not in pace_not_in
             condition = str(reasons.get(pace_status_value) or reasons.get("*") or route.get("reason") or policy_code.replace("_", " ").title())
             if not active:
                 continue
-            groups_by_pace = ranking.get("groups_by_pace") or {"*": 100}
-            if not isinstance(groups_by_pace, dict):
+            groups_by_pace_value = ranking.get("groups_by_pace") or {"*": 100}
+            if not isinstance(groups_by_pace_value, dict):
                 raise ValueError(f"Routing policy {policy_code} groups_by_pace must be an object")
-            strategy_rank = int(groups_by_pace.get(pace_status_value, groups_by_pace.get("*", 100)))
-            row = {
+            groups_by_pace: Mapping[str, object] = groups_by_pace_value
+            strategy_rank_value = groups_by_pace.get(
+                pace_status_value,
+                groups_by_pace.get("*", 100),
+            )
+            if not isinstance(strategy_rank_value, (str, int, float)):
+                raise ValueError(f"Routing policy {policy_code} ranks must be numeric")
+            strategy_rank = int(strategy_rank_value)
+            row: _RoutingCandidateRow = {
                 "card": candidate.card,
                 "bucket": candidate.bucket,
                 "payment_channel": channel,
@@ -762,16 +845,13 @@ def _build_routing_graphs(
                     if amount
                     else Decimal("0")
                 ),
-                "current_tier_rate_percent": _plain(
-                    current_tier_rate * Decimal("100")
-                ),
+                "current_tier_rate_percent": _plain(current_tier_rate * Decimal("100")),
                 "configured_fx_fee_percent": _plain(
                     program.fx_cost_rate * Decimal("100")
-                    if currency.upper() != program.base_currency else Decimal("0")
+                    if currency.upper() != program.base_currency
+                    else Decimal("0")
                 ),
-                "conditional_target_reward_aed": _plain(
-                    candidate.strategic_reward_aed
-                ),
+                "conditional_target_reward_aed": _plain(candidate.strategic_reward_aed),
                 "conditional_target_rate_percent": _plain(
                     candidate.target_rate * Decimal("100")
                 ),
@@ -781,26 +861,36 @@ def _build_routing_graphs(
                     else "CURRENT_TIER"
                 ),
                 "estimated_net_return_percent": _plain(
-                    candidate.net_value_aed / amount * Decimal("100") if amount else Decimal("0")
+                    candidate.net_value_aed / amount * Decimal("100")
+                    if amount
+                    else Decimal("0")
                 ),
                 "card_spend_aed": _plain(candidate.card_spend_before_aed),
-                "card_target_aed": None if program.safety_target is None else _plain(program.safety_target),
-                "card_target_remaining_aed": None if target_remaining is None else _plain(target_remaining),
+                "card_target_aed": None
+                if program.safety_target is None
+                else _plain(program.safety_target),
+                "card_target_remaining_aed": None
+                if target_remaining is None
+                else _plain(target_remaining),
                 "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
                 "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
                 "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
-                "bucket_cap_aed": None if candidate.bucket_spend_cap_aed is None else _plain(candidate.bucket_spend_cap_aed),
-                "bucket_remaining_aed": None if candidate.bucket_remaining_aed is None else _plain(candidate.bucket_remaining_aed),
+                "bucket_cap_aed": None
+                if candidate.bucket_spend_cap_aed is None
+                else _plain(candidate.bucket_spend_cap_aed),
+                "bucket_remaining_aed": None
+                if candidate.bucket_remaining_aed is None
+                else _plain(candidate.bucket_remaining_aed),
             }
             identity = (card, candidate.bucket, channel)
             existing = route_candidates.get(identity)
-            if existing is None or int(row["policy_priority"]) < int(existing["policy_priority"]):
+            if existing is None or row["policy_priority"] < existing["policy_priority"]:
                 route_candidates[identity] = row
         ranked_routes = sorted(
             route_candidates.values(),
             key=lambda candidate: (
-                int(candidate["strategy_rank"]),
-                int(candidate["policy_priority"]),
+                candidate["strategy_rank"],
+                candidate["policy_priority"],
                 -Decimal(str(candidate["estimated_net_value_aed"])),
                 str(candidate["card"]),
             ),
