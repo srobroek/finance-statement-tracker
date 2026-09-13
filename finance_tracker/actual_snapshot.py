@@ -55,6 +55,15 @@ def _plain(value: Decimal) -> str:
     return format(value, "f")
 
 
+def _routing_int(value: object, message: str) -> int:
+    if not isinstance(value, (int, str)) or isinstance(value, bool):
+        raise ValueError(message)
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(message) from error
+
+
 def _reward_bucket(
     programs: Iterable[Any],
     card: str,
@@ -186,6 +195,7 @@ def transactions_from_actual_snapshot(
                 transaction_id=str(row.get("imported_id") or f"actual:{row['id']}"),
                 transaction_at=datetime.combine(date.fromisoformat(str(row["date"])), time.min),
                 card=card,
+                merchant_raw=merchant,
                 account=account_name,
                 category=category,
                 subcategory=native_category,
@@ -195,8 +205,6 @@ def transactions_from_actual_snapshot(
                 currency=currency,
                 channel=channel,
                 source_type="actual_snapshot",
-                category=category,
-                subcategory=row.get("category_name"),
                 transaction_type=transaction_type,
                 reward_bucket=_reward_bucket(programs, card, category, channel, currency, tags),
                 tags={
@@ -533,8 +541,11 @@ def _build_routing_graphs(
         )
         category = str(profile["category"])
         currency = str(profile.get("currency") or "AED")
+        routes = profile.get("routes") or []
+        if not isinstance(routes, list) or any(not isinstance(route, dict) for route in routes):
+            raise ValueError("Routing profile routes must be a list of objects")
         route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
-        for route in profile.get("routes") or ():
+        for route in routes:
             card = str(route["card"])
             program = routing_programs_by_card.get(card)
             if program is None:
@@ -596,14 +607,23 @@ def _build_routing_graphs(
             groups_by_pace = ranking.get("groups_by_pace") or {"*": 100}
             if not isinstance(groups_by_pace, dict):
                 raise ValueError(f"Routing policy {policy_code} groups_by_pace must be an object")
-            strategy_rank = int(groups_by_pace.get(pace_status_value, groups_by_pace.get("*", 100)))
+            strategy_rank_value = groups_by_pace.get(pace_status_value, groups_by_pace.get("*", 100))
+            strategy_rank = _routing_int(
+                strategy_rank_value,
+                f"Routing policy {policy_code} strategy rank must be an integer",
+            )
+            policy_priority_value = route.get("priority") or 100
+            policy_priority = _routing_int(
+                policy_priority_value,
+                f"Routing policy {policy_code} route priority must be an integer",
+            )
             row = {
                 "card": candidate.card,
                 "bucket": candidate.bucket,
                 "payment_channel": channel,
                 "purpose": purpose,
                 "policy": policy_code,
-                "policy_priority": int(route.get("priority") or 100),
+                "policy_priority": policy_priority,
                 "pace_status": pace_status_value,
                 "strategy_rank": strategy_rank,
                 "condition": condition,
@@ -628,13 +648,13 @@ def _build_routing_graphs(
             }
             identity = (card, candidate.bucket, channel)
             existing = route_candidates.get(identity)
-            if existing is None or int(row["policy_priority"]) < int(existing["policy_priority"]):
+            if existing is None or int(row["policy_priority"]) < _routing_int(existing["policy_priority"], "Routing policy route priority must be an integer"):
                 route_candidates[identity] = row
         ranked_routes = sorted(
             route_candidates.values(),
             key=lambda candidate: (
-                int(candidate["strategy_rank"]),
-                int(candidate["policy_priority"]),
+                _routing_int(candidate["strategy_rank"], "Routing policy strategy rank must be an integer"),
+                _routing_int(candidate["policy_priority"], "Routing policy route priority must be an integer"),
                 -Decimal(str(candidate["estimated_net_value_aed"])),
                 str(candidate["card"]),
             ),

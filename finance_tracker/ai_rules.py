@@ -266,9 +266,13 @@ class AIEnrichmentEngine:
             )
         field = str(raw.get("field") or "")
         value = raw.get("value")
-        try:
-            confidence = float(raw.get("confidence"))
-        except (TypeError, ValueError):
+        confidence_value = raw.get("confidence")
+        if isinstance(confidence_value, (int, float, str)) and not isinstance(confidence_value, bool):
+            try:
+                confidence = float(confidence_value)
+            except ValueError:
+                confidence = 0
+        else:
             confidence = 0
         rationale = str(raw.get("rationale") or "")
         refs = raw.get("source_refs") or []
