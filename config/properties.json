@@ -5,8 +5,12 @@
       "property_code": "LT713",
       "display_name": "Lake Terrace 713",
       "occupancy": "RENTAL",
+      "ownership": "PERSONAL",
       "rental_unit": "LT713",
-      "tags": ["rental", "rental:lt713"],
+      "tags": [
+        "rental",
+        "rental:lt713"
+      ],
       "utility_accounts": [
         {
           "provider": "DEWA",
@@ -23,8 +27,12 @@
       "property_code": "INDIGO1414",
       "display_name": "Indigo 1414",
       "occupancy": "RENTAL",
+      "ownership": "JOINT",
       "rental_unit": "Indigo1414",
-      "tags": ["rental", "rental:indigo1414"],
+      "tags": [
+        "rental",
+        "rental:indigo1414"
+      ],
       "utility_accounts": [
         {
           "provider": "DEWA",
@@ -41,8 +49,11 @@
       "property_code": "BLUEWATERS_B7_306",
       "display_name": "Bluewaters B7-306",
       "occupancy": "OWNER_OCCUPIED",
+      "ownership": "JOINT",
       "rental_unit": null,
-      "tags": ["home"],
+      "tags": [
+        "home"
+      ],
       "utility_accounts": [
         {
           "provider": "DEWA",
