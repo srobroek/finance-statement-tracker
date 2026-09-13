@@ -28,6 +28,12 @@ on:
       - "uv.lock"
       - "README.md"
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Run the host-mutating deployment on main
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -42,6 +48,7 @@ env:
 
 jobs:
   test:
+    if: github.event_name != 'workflow_dispatch' || inputs.deploy == true
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -97,6 +104,7 @@ jobs:
           done
 
   publish:
+    if: github.event_name != 'workflow_dispatch' || inputs.deploy == true
     needs: test
     outputs:
       image_digest: ${{ steps.publish.outputs.digest }}
@@ -141,7 +149,7 @@ jobs:
           sbom: true
 
   deploy:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || inputs.deploy == true)
     needs: publish
     env:
       PUBLISHED_IMAGE_DIGEST: ${{ needs.publish.outputs.image_digest }}
@@ -291,3 +299,23 @@ jobs:
           sudo docker exec finance-cashback-control python -c \
             "import json; d=json.load(open('/var/lib/cashback-control/cashback-dashboard.json')); assert d['cards']; assert d['routing_graphs']"
           curl -fsS http://127.0.0.1:5006/ >/dev/null
+
+  readback:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy == false
+    permissions:
+      contents: read
+    runs-on:
+      - self-hosted
+      - finance-ci
+    steps:
+      - name: Read-only finance-ci inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          service=finance-cashback-control
+          if ! sudo docker inspect --type=container "$service" >/dev/null 2>&1; then
+            printf '%s\n' 'service=cashback-control container=finance-cashback-control status=not-found health=unknown'
+            exit 0
+          fi
+          sudo docker inspect --type=container "$service" --format \
+            'service=cashback-control container={{.Name}} image={{.Config.Image}} version={{.Image}} status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}'
