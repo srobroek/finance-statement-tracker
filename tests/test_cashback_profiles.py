@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
+
+from jsonschema import Draft202012Validator
 
 from finance_tracker.ai_rules import load_ai_policies
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
@@ -16,6 +19,7 @@ from finance_tracker.cashback import (
     validate_program_configuration,
 )
 from finance_tracker.models import Transaction
+from finance_tracker.models import CashbackPeriod, period_for_timestamp, validate_cashback_state
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +46,67 @@ def dashboard(
     )
 
 
+def cashback_state() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "receipts": [{
+            "receipt_id": "receipt-1",
+            "source_identity": "mail:message-1",
+            "card_code": "CARD_A",
+            "original_received_at": "2026-09-01T00:00:00Z",
+            "period_id": "period-1",
+        }],
+        "periods": [
+            {
+                "period_id": "period-1",
+                "card_code": "CARD_A",
+                "period_start": "2026-08-01T00:00:00Z",
+                "period_end": "2026-09-01T00:00:00Z",
+                "status": "CLOSED",
+                "closed_by_receipt_id": "receipt-1",
+            },
+            {
+                "period_id": "period-2",
+                "card_code": "CARD_A",
+                "period_start": "2026-09-01T00:00:00Z",
+                "period_end": "2026-10-01T00:00:00Z",
+                "status": "OPEN",
+                "closed_by_receipt_id": None,
+            },
+        ],
+        "memberships": [{"card_code": "CARD_A", "coverage": "UNKNOWN", "sc_held": None}],
+        "accounting": [{
+            "period_id": "period-1",
+            "card_code": "CARD_A",
+            "qualifying_spend": "100",
+            "refund_deductions": "5",
+            "consumed_cap_headroom": "20",
+        }],
+        "category_assessments": [{
+            "transaction_id": "tx-1",
+            "status": "UNRESOLVED",
+            "category": None,
+            "review_required": True,
+            "reason": "missing evidence",
+        }],
+        "fx_snapshots": [{
+            "schema_version": 1,
+            "snapshot_id": "fx-1",
+            "provider": "RAK",
+            "base_currency": "AED",
+            "quote_currency": "USD",
+            "observed_at": "2026-09-01T01:00:00Z",
+            "quote_date": "2026-09-01",
+            "quote_basis": "BASE_PER_QUOTE",
+            "rate": "3.69",
+            "precision": 5,
+            "max_age_seconds": 3600,
+            "source_identity": "rak:2026-09-01",
+            "uncertainty": "ESTIMATE",
+        }],
+    }
+
+
 class PublicCashbackProfileTests(TestCase):
     def test_all_public_example_profiles_validate(self) -> None:
         for path in sorted(PROFILES.glob("*.json")):
@@ -56,6 +121,57 @@ class PublicCashbackProfileTests(TestCase):
         self.assertEqual(routes["GENERAL"]["use_card"], "EVERYDAY_2")
         self.assertEqual(routes["TRAVEL"]["use_card"], "TRAVEL_4")
         self.assertEqual({card["short_name"] for card in result["cards"]}, {"Everyday", "Travel"})
+
+    def test_profile_authoring_rejects_runtime_arrays(self) -> None:
+        for version in (1, 2):
+            schema = json.loads((ROOT / "config" / f"cashback-profile-schema-v{version}.json").read_text())
+            invalid = load_profile("flat-rate-usd.json")
+            invalid["schema_version"] = version
+            invalid["live_ingestion"] = {"receipts": []}
+            self.assertTrue(list(Draft202012Validator(schema).iter_errors(invalid)))
+
+    def test_cashback_state_validates_independent_contracts(self) -> None:
+        validate_cashback_state(cashback_state())
+        periods = (
+            CashbackPeriod("period-1", "CARD_A", datetime(2026, 8, 1, tzinfo=UTC), datetime(2026, 9, 1, tzinfo=UTC)),
+            CashbackPeriod("period-2", "CARD_A", datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 1, tzinfo=UTC)),
+        )
+        self.assertEqual(period_for_timestamp(periods, datetime(2026, 9, 1, tzinfo=UTC)), periods[1])
+
+    def test_cashback_state_rejects_closed_period_with_missing_receipt(self) -> None:
+        missing_receipt = deepcopy(cashback_state())
+        missing_receipt["periods"][0]["closed_by_receipt_id"] = "missing-receipt"
+        with self.assertRaisesRegex(ValueError, "unknown receipt"):
+            validate_cashback_state(missing_receipt)
+
+    def test_cashback_state_rejects_open_period_closure_receipt(self) -> None:
+        open_period = deepcopy(cashback_state())
+        open_period["periods"][1]["closed_by_receipt_id"] = "receipt-1"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(open_period)
+        with self.assertRaises(ValueError):
+            CashbackPeriod(
+                "period-2",
+                "CARD_A",
+                datetime(2026, 9, 1, tzinfo=UTC),
+                datetime(2026, 10, 1, tzinfo=UTC),
+                status="OPEN",
+                closed_by_receipt_id="receipt-1",
+            )
+
+    def test_cashback_state_rejects_ambiguous_accounting_and_fx_dates(self) -> None:
+        negative = deepcopy(cashback_state())
+        negative["accounting"][0]["qualifying_spend"] = "-1"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(negative)
+        ambiguous = deepcopy(cashback_state())
+        ambiguous["accounting"][0]["net_spend"] = "95"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(ambiguous)
+        future_quote = deepcopy(cashback_state())
+        future_quote["fx_snapshots"][0]["quote_date"] = "2026-09-02"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(future_quote)
 
     def test_tiered_profile_caps_category_then_routes_to_tier_card(self) -> None:
         source = load_profile("tiered-gbp.json")

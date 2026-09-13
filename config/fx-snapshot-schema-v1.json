@@ -6,8 +6,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "snapshot_id", "provider", "base_currency",
-    "quote_currency", "observed_at", "rate", "precision", "max_age_seconds",
-    "source_identity"
+    "quote_currency", "observed_at", "quote_date", "quote_basis", "rate",
+    "precision", "max_age_seconds", "source_identity", "uncertainty"
   ],
   "properties": {
     "schema_version": {"const": 1},
@@ -16,9 +16,12 @@
     "base_currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
     "quote_currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
     "observed_at": {"type": "string", "format": "date-time"},
+    "quote_date": {"type": "string", "format": "date"},
+    "quote_basis": {"enum": ["BASE_PER_QUOTE", "QUOTE_PER_BASE"]},
     "rate": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
     "precision": {"type": "integer", "minimum": 0, "maximum": 12},
     "max_age_seconds": {"type": "integer", "minimum": 1},
-    "source_identity": {"type": "string", "minLength": 1}
+    "source_identity": {"type": "string", "minLength": 1},
+    "uncertainty": {"enum": ["KNOWN", "ESTIMATE", "UNKNOWN"]}
   }
 }
