@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
-import subprocess
-import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +16,9 @@ RUNNER_DIR = ROOT / "integrations" / "n8n" / "setup-workflows" / "runner"
 PYTHON_RUNNER = RUNNER_DIR / "four_table_cutover.py"
 CJS_RUNNER = RUNNER_DIR / "n8n-cli-four-table-cutover.cjs"
 SHELL_RUNNER = RUNNER_DIR / "run-four-table-cutover.sh"
+READBACK_FIXTURE = (
+    ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
+)
 INVENTORY = RUNNER_DIR / "finance-four-table-legacy-reference-inventory-v1.json"
 APPROVED_INVENTORY_SHA256 = (
     "e414e2ee0e2a31aa9f7aec8bce03498b9f9e1d2c8598a9c193150f339248a6a3"

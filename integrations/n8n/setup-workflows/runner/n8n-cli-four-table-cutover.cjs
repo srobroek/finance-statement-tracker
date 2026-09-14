@@ -83,6 +83,18 @@ const REFERENCE_SEMANTIC_FIELDS = [
 const WORKFLOW_BODY_FIELDS = ['name', 'nodes', 'connections', 'settings', 'meta', 'pinData'];
 const CREDENTIAL_BINDINGS_SCHEMA = 1;
 const PRESERVED_SOURCE_TABLE = 'finance_source_contracts';
+const PRESERVED_OPERATIONAL_SELECTOR_NAMES = new Set([
+  PRESERVED_SOURCE_TABLE,
+  'finance_pipeline_runs',
+  'finance_mcp_requests',
+  'finance_execution_failures',
+]);
+const PRESERVED_OPERATIONAL_SELECTOR_IDS = new Set(
+  [...PRESERVED_OPERATIONAL_SELECTOR_NAMES]
+    .map((name) => LEGACY_TABLE_IDS.get(name))
+    .filter((id) => typeof id === 'string'),
+);
+
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -521,8 +533,8 @@ function validateCanonicalGraph(workflow, targetIds) {
     const selected = selectorId(parameters.dataTableId);
     if (!selected) throw new Error('NULL_TABLE_SELECTOR_GRAPH_REFUSED');
     if (
-      selected === PRESERVED_SOURCE_TABLE
-      || selected === LEGACY_TABLE_IDS.get(PRESERVED_SOURCE_TABLE)
+      PRESERVED_OPERATIONAL_SELECTOR_NAMES.has(selected)
+      || PRESERVED_OPERATIONAL_SELECTOR_IDS.has(selected)
     ) continue;
     const tableId = targetIds.get(selected) || ([...targetIds.values()].includes(selected) ? selected : null);
     if (!tableId) throw new Error(`CANONICAL_SOURCE_TABLE_SELECTOR_INVALID:${node.id}`);

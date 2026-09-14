@@ -1566,7 +1566,7 @@ def _parse_readback(
     prefix = "finance data table digest verified:"
     try:
         raw_payload = parser.extract_payload(raw, prefix)
-        payload = parser.parse_data_table_receipt(raw, expected_phase=expected_phase)
+        payload = parser.parse_data_table_receipt(raw)
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise CutoverError("READBACK_RECEIPT_INVALID") from error
     migration_receipt = payload.get("migration_receipt")

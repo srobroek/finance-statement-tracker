@@ -78,7 +78,7 @@ readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
 canonical_source="$receipt_dir/finance-four-table-canonical-source.json"
 rollback_receipt_args=()
-if [[ "$FINANCE_N8N_RUNTIME_MODE" = PRODUCTION_ONLY && "$operation" = rollback ]]; then
+if [[ "$operation" = rollback ]]; then
   rollback_receipt_args+=(--forward-runtime-receipt "$forward_runtime_receipt")
 fi
 resolver_args=()
