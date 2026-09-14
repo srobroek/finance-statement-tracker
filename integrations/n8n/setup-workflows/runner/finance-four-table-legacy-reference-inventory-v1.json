@@ -560,7 +560,69 @@
     {
       "source_table": "finance_execution_failures",
       "target_table": null,
-      "node_references": []
+      "node_references": [
+        {
+          "table": "finance_execution_failures",
+          "file": "integrations/n8n/workflows/16-operations-error-handler.json",
+          "node": "Upsert Durable Failure Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "execution_id",
+            "workflow_id",
+            "workflow_name",
+            "workflow_code",
+            "run_id",
+            "provider_code",
+            "error_class",
+            "error_message_redacted",
+            "first_seen_at",
+            "readback_verified"
+          ],
+          "filter_keys": [
+            "execution_id"
+          ]
+        },
+        {
+          "table": "finance_execution_failures",
+          "file": "integrations/n8n/workflows/16-operations-error-handler.json",
+          "node": "Read Back Failure Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "execution_id"
+          ]
+        },
+        {
+          "table": "finance_execution_failures",
+          "file": "integrations/n8n/workflows/16-operations-error-handler.json",
+          "node": "Mark Failure Readback Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified"
+          ],
+          "filter_keys": [
+            "execution_id"
+          ]
+        },
+        {
+          "table": "finance_execution_failures",
+          "file": "integrations/n8n/workflows/16-operations-error-handler.json",
+          "node": "Read Back Verified Failure Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "execution_id"
+          ]
+        }
+      ]
     },
     {
       "source_table": "finance_mcp_requests",

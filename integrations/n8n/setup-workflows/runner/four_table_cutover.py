@@ -92,6 +92,10 @@ EXPECTED_REFERENCE_ACTIONS = {
     "e970341672eab21f": "remove_legacy_selector_bind_mcp_audit_contract",
     "6f99252a931a2e20": "remove_legacy_selector_bind_mcp_audit_contract",
     "5c77dce64a30fe30": "remove_legacy_selector_bind_mcp_audit_contract",
+    "3e0c621e2d6ee86a": "remove_legacy_selector_preserve_execution_history_receipt",
+    "ba9fa9c55be7f5f0": "remove_legacy_selector_preserve_execution_history_receipt",
+    "eeed27a3a2474c9a": "remove_legacy_selector_preserve_execution_history_receipt",
+    "a386f881d3964a1f": "remove_legacy_selector_preserve_execution_history_receipt",
 }
 DEFAULT_OPERATION_NONCE = "r6-20260826-orc-partial-cutover-recovery-plan"
 APPROVED_QUIESCENCE_RECEIPT_DIGEST = (
@@ -104,7 +108,7 @@ APPROVED_CONTRACT_BIJECTION_DIGEST = (
     "b8c25ec57b00e1bd8b511a33fa576d390d3a46c7aa58708237268cb51c29d00a"
 )
 APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = (
-    "e414e2ee0e2a31aa9f7aec8bce03498b9f9e1d2c8598a9c193150f339248a6a3"
+    "dd8dc76fa2b46adf894f3ae9896f9ea7ed9836fb7442be7eefd3428498e5148c"
 )
 ABSENT_REFERENCE_TARGETS = {
     "finance_pipeline_runs": "finance_ingestion_state",
@@ -117,6 +121,7 @@ LEGACY_TABLE_IDS = {
     "finance_pipeline_runs": "sha256:48eb19e5",
     "finance_reconciliations": "sha256:f47bf1e1",
     "finance_mcp_requests": "sha256:3b9034f0",
+    "finance_execution_failures": "sha256:59c34ab8",
 }
 PRESERVED_SOURCE_TABLES = frozenset({"finance_source_contracts"})
 PRESERVED_LEGACY_AUDIT_TABLES = frozenset(
@@ -453,7 +458,7 @@ def _reference_inventory() -> list[dict[str, Any]]:
     } != set(EXPECTED_REFERENCE_ACTIONS):
         raise CutoverError("COMPLETE_REFERENCE_ACTION_MAP_REQUIRED")
     if {item["source_table"] for item in inventory} != set(LEGACY_TABLE_IDS):
-        raise CutoverError("EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED")
+        raise CutoverError("EXACT_PRESERVED_LEGACY_TABLE_ID_MAP_REQUIRED")
     for item in inventory:
         item["legacy_table_id"] = LEGACY_TABLE_IDS[item["source_table"]]
     return sorted(inventory, key=lambda item: item["reference_id"])

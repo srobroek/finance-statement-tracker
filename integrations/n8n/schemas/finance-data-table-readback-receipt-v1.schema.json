@@ -51,6 +51,48 @@
     },
     "tables": {
       "type": "array",
+      "prefixItems": [
+        {
+          "properties": {
+            "name": {
+              "const": "finance_actual_batches"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "properties": {
+            "name": {
+              "const": "finance_ai_reviews"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "properties": {
+            "name": {
+              "const": "finance_documents"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        },
+        {
+          "properties": {
+            "name": {
+              "const": "finance_ingestion_state"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      ],
       "items": {
         "$ref": "#/$defs/table"
       }

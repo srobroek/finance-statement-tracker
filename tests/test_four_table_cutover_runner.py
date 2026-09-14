@@ -24,7 +24,7 @@ READBACK_FIXTURE = (
 )
 INVENTORY = RUNNER_DIR / "finance-four-table-legacy-reference-inventory-v1.json"
 APPROVED_INVENTORY_SHA256 = (
-    "e414e2ee0e2a31aa9f7aec8bce03498b9f9e1d2c8598a9c193150f339248a6a3"
+    "dd8dc76fa2b46adf894f3ae9896f9ea7ed9836fb7442be7eefd3428498e5148c"
 )
 TARGETS = {
     "finance_ingestion_state",
@@ -138,6 +138,7 @@ const TARGET_NAMES = new Set([
   'finance_ai_reviews',
 ]);
 const COMPATIBILITY_TABLE_NAMES = new Set(TARGET_NAMES);
+const LEGACY_TABLE_IDS = new Map();
 const TARGET_SYSTEM_COLUMNS = ['id', 'createdAt', 'updatedAt'];
 const WORKFLOW_BODY_FIELDS = ['marker'];
 const canonical = (value) => {
@@ -290,7 +291,7 @@ function credentialLeavesFromEnvironment() { return []; }
 function assertWorkflow() {}
 async function loadWorkflows() { return new Map([['wf', clone(workflowState)]]); }
 function findReferences() {
-  return Array.from({ length: 33 }, (_, index) => ({
+  return Array.from({ length: 37 }, (_, index) => ({
     reference: {
       reference_id: `ref-${index}`,
       workflow_id: 'wf',
@@ -414,6 +415,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 "finance_pipeline_runs",
                 "finance_reconciliations",
                 "finance_mcp_requests",
+                "finance_execution_failures",
             },
         )
         inventory = runner._load_legacy_reference_inventory()
@@ -682,7 +684,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             export = {
                 "project_id": "synthetic-project",
                 "export_sha256": "c" * 64,
-                "reference_count": 33,
+                "reference_count": 37,
                 "unresolved": [],
             }
             binding = {"required_live_export_digest": "b" * 64}

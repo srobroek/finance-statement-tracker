@@ -39,6 +39,13 @@ const PRESERVED_TABLE_NAMES = [
   'finance_source_contracts',
   'finance_source_cursors',
   'finance_execution_failures',
+  'finance_acquisition_receipts',
+  'finance_actual_outbox',
+  'finance_actual_verifications',
+  'finance_config_versions',
+  'finance_provider_circuits',
+  'finance_agent_jobs',
+  'finance_ai_policy_contracts',
 ];
 const ALLOWED_PROJECT_TABLES = new Set([
   ...CANONICAL_TABLE_NAMES,

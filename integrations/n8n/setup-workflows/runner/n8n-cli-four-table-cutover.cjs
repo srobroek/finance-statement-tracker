@@ -28,7 +28,7 @@ const APPROVED_LOCK_TIMEOUT_MS = 5_000;
 const APPROVED_STATEMENT_TIMEOUT_MS = 30_000;
 const FORWARD_RECOVERY_REASON = 'FORWARD_RUNTIME_FAILURE';
 const ROLLBACK_RECOVERY_REASON = 'ROLLBACK_RUNTIME_FAILURE';
-const APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = 'e414e2ee0e2a31aa9f7aec8bce03498b9f9e1d2c8598a9c193150f339248a6a3';
+const APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = 'dd8dc76fa2b46adf894f3ae9896f9ea7ed9836fb7442be7eefd3428498e5148c';
 const TARGET_NAMES = new Set([
   'finance_ingestion_state',
   'finance_documents',
@@ -51,10 +51,18 @@ const LEGACY_TABLE_IDS = new Map([
   ['finance_pipeline_runs', 'sha256:48eb19e5'],
   ['finance_reconciliations', 'sha256:f47bf1e1'],
   ['finance_mcp_requests', 'sha256:3b9034f0'],
+  ['finance_execution_failures', 'sha256:59c34ab8'],
 ]);
 const COMPATIBILITY_TABLE_NAMES = new Set([
   ...LEGACY_TABLE_IDS.keys(),
+  'finance_acquisition_receipts',
+  'finance_actual_outbox',
+  'finance_actual_verifications',
+  'finance_config_versions',
+  'finance_provider_circuits',
   'finance_execution_failures',
+  'finance_agent_jobs',
+  'finance_ai_policy_contracts',
   ...TARGET_NAMES,
 ]);
 const LIVE_EXPORT_FIELDS = new Set([
@@ -430,7 +438,7 @@ function validateExport(exported) {
   }
   const targetIds = new Map(exported.targets.map((target) => [target.name, target.table_id]));
   if (targetIds.size !== 4 || new Set(targetIds.values()).size !== 4) throw new Error('LIVE_TARGET_ID_DUPLICATE');
-  if (!Array.isArray(exported.references) || exported.references.length !== 33) {
+  if (!Array.isArray(exported.references) || exported.references.length !== 37) {
     throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
   }
   const references = new Map();
@@ -464,7 +472,7 @@ function validateExport(exported) {
     nodeAliases.add(nodeKey);
     references.set(id, reference);
   }
-  if (references.size !== 33) throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
+  if (references.size !== 37) throw new Error('COMPLETE_LIVE_REFERENCE_EXPORT_REQUIRED');
   const legacyTables = new Set([...references.values()].map((reference) => reference.old_table_name));
   if (legacyTables.size !== LEGACY_TABLE_IDS.size || [...legacyTables].some((name) => !LEGACY_TABLE_IDS.has(name))) {
     throw new Error('EXACT_SEVEN_LEGACY_TABLE_ID_MAP_REQUIRED');
@@ -486,6 +494,7 @@ function assertWorkflow(workflow, expectedRevision, expectedBodyDigest, workflow
 }
 
 async function loadWorkflows(client, graph, strict = true) {
+  await client.query('LOCK TABLE workflow_entity, shared_workflow IN SHARE MODE');
   const loaded = new Map();
   const result = await client.query(
     `SELECT w.id, w.name, w.active, w."activeVersionId", w."versionId", w.nodes, w.connections,
@@ -827,17 +836,24 @@ function workflowOpaqueCredentialObjectsDigest(workflows, origins) {
 }
 
 async function credentialState(client) {
+  await client.query('LOCK TABLE credentials_entity, shared_credentials IN SHARE MODE');
   const result = await client.query(
     `SELECT c.id, c.name, c.type, s."projectId" AS project_id, s.role
        FROM credentials_entity c
        JOIN shared_credentials s ON s."credentialsId" = c.id
-      WHERE s.role = 'credential:owner'
+      WHERE c.id IN (
+        SELECT "credentialsId" FROM shared_credentials WHERE "projectId" = $1
+      )
       ORDER BY c.id, s."projectId"`,
+    [projectId],
   );
   const rows = result.rows || [];
   const ownerShares = new Map();
   for (const row of rows) {
-    if (!row.id || !row.name || !row.type || !row.project_id || row.role !== 'credential:owner') throw new Error('CREDENTIAL_ASSOCIATION_INVALID');
+    if (!row.id || !row.name || !row.type || !row.project_id ||
+        !['credential:owner', 'credential:user'].includes(row.role)) {
+      throw new Error('CREDENTIAL_ASSOCIATION_INVALID');
+    }
     const normalized = { id: String(row.id), name: String(row.name), type: String(row.type), project_id: String(row.project_id), role: row.role };
     const shares = ownerShares.get(normalized.id) || [];
     shares.push(normalized);
@@ -845,7 +861,8 @@ async function credentialState(client) {
   }
   const byType = new Map();
   const byTypeName = new Map();
-  for (const row of rows.filter((candidate) => String(candidate.project_id) === projectId)) {
+  for (const row of rows.filter((candidate) =>
+    String(candidate.project_id) === projectId && candidate.role === 'credential:owner')) {
     const type = String(row.type);
     const name = String(row.name);
     const value = { id: String(row.id), name, type, project_id: String(row.project_id), role: row.role };
@@ -1078,6 +1095,7 @@ function targetSnapshot(state) {
 
 async function loadTargetState(client, targets) {
   const targetIds = new Map([...targets].map(([name, target]) => [name, target.tableId]));
+  await client.query('LOCK TABLE data_table, data_table_column IN SHARE MODE');
   const result = await client.query(
     `SELECT id, name
        FROM data_table
@@ -1089,6 +1107,10 @@ async function loadTargetState(client, targets) {
   const projectTables = result.rows || [];
   if (projectTables.length !== COMPATIBILITY_TABLE_NAMES.size ||
       projectTables.some((table) => !COMPATIBILITY_TABLE_NAMES.has(String(table.name))) ||
+      projectTables.some((table) => {
+        const expectedId = LEGACY_TABLE_IDS.get(String(table.name));
+        return expectedId !== undefined && String(table.id) !== expectedId;
+      }) ||
       new Set(projectTables.map((table) => String(table.name))).size !== projectTables.length ||
       new Set(projectTables.map((table) => String(table.id))).size !== projectTables.length) {
     throw new Error('CLOSED_PROJECT_DATA_TABLE_SET_REQUIRED');
@@ -1359,7 +1381,7 @@ function validateLockReceipt(lockReceipt, exported, binding, resource) {
 function validateForwardReceipt(receipt, exported, resource, binding, canonicalSourceSha256 = null) {
   if (!receipt || ![LEGACY_RUNTIME_SCHEMA, PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) || receipt.operation !== 'FORWARD' ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
-      receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 33 ||
+      receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 37 ||
       receipt.durable_journal !== true || receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
       receipt.readback_verified !== true || typeof receipt.readback_digest_sha256 !== 'string' ||
       !/^[0-9a-f]{64}$/.test(receipt.readback_digest_sha256) ||
@@ -1423,7 +1445,7 @@ function validateForwardReceipt(receipt, exported, resource, binding, canonicalS
   delete unsigned.runtime_plan_receipt_sha256;
   if (digest(unsigned) !== receipt.runtime_plan_receipt_sha256 ||
       receipt.actions.some((action) => !action || typeof action !== 'object' || Array.isArray(action)) ||
-      new Map(receipt.actions.map((action) => [action.reference_id, action])).size !== 33) {
+      new Map(receipt.actions.map((action) => [action.reference_id, action])).size !== 37) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
   }
   for (const action of receipt.actions) {
@@ -1572,8 +1594,8 @@ function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
       receipt.export_sha256 !== exported.export_sha256 ||
       receipt.durable_journal !== true ||
       receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
-      receipt.readback_verified !== true || receipt.action_count !== 33 ||
-      !Array.isArray(receipt.actions) || receipt.actions.length !== 33 ||
+      receipt.readback_verified !== true || receipt.action_count !== 37 ||
+      !Array.isArray(receipt.actions) || receipt.actions.length !== 37 ||
       !/^[0-9a-f]{64}$/.test(receipt.readback_digest_sha256) ||
       !/^[0-9a-f]{64}$/.test(receipt.credential_state_digest_after) ||
       !/^[0-9a-f]{64}$/.test(receipt.workflow_credential_objects_digest_after) ||
@@ -1854,7 +1876,7 @@ async function execute() {
       const targetRowCounts = Object.fromEntries(
         [...canonicalSource.targets].map(([name, target]) => [name, target.rows.length]),
       );
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions, canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows), target_digest: canonicalSource.targetDigest, target_projection_sha256: canonicalSource.targetProjectionSha256, target_readback_sha256: targetStateDigest(targetPlan.after), rollback_targets_sha256: digest(targetPlan.rollbackTargets), target_row_counts: targetRowCounts, preserved_table_writes: false };
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 37, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions, canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows), target_digest: canonicalSource.targetDigest, target_projection_sha256: canonicalSource.targetProjectionSha256, target_readback_sha256: targetStateDigest(targetPlan.after), rollback_targets_sha256: digest(targetPlan.rollbackTargets), target_row_counts: targetRowCounts, preserved_table_writes: false };
       unsigned.target_prestate = targetStateEvidence(targetPlan.before);
       return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) }, rollbackWorkflows, targetPlan.rollbackTargets);
     }
@@ -1945,7 +1967,7 @@ async function execute() {
         !sameJson(targetStateEvidence(restoredTargets), forwardReceipt.target_prestate)) {
       throw new Error('ROLLBACK_TARGET_PRESTATE_RESTORATION_MISMATCH');
     }
-    const unsignedRollback = { schema_version: forwardReceipt.schema_version, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: byId.size === 33 ? [...byId.values()] : [] };
+    const unsignedRollback = { schema_version: forwardReceipt.schema_version, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 37, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: byId.size === 37 ? [...byId.values()] : [] };
     if (forwardReceipt.schema_version === RUNTIME_SCHEMA) {
       Object.assign(unsignedRollback, {
         canonical_source_sha256: canonicalSource.sha256,

@@ -78,6 +78,7 @@ credential_bindings="$repo_dir/integrations/n8n/credential-bindings.json"
 readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
 canonical_source="$receipt_dir/finance-four-table-canonical-source.json"
+precondition_receipt="$receipt_dir/finance-four-table-precondition.json"
 rollback_receipt_args=()
 if [[ "$operation" = rollback ]]; then
   rollback_receipt_args+=(
@@ -85,6 +86,33 @@ if [[ "$operation" = rollback ]]; then
     --forward-receipt "$forward_receipt"
   )
 fi
+protected_inputs=(
+  "$source_backup"
+  "$migration_receipt"
+  "$accepted_identity"
+  "$live_export"
+  "$runtime_script"
+  "$credential_bindings"
+)
+if [[ "$operation" = rollback ]]; then
+  protected_inputs+=("$forward_receipt" "$forward_runtime_receipt")
+fi
+
+prepare_output() {
+  local destination="$1"
+  local protected temporary
+  for protected in "${protected_inputs[@]}"; do
+    test "$(realpath -m -- "$destination")" != "$(realpath -e -- "$protected")"
+  done
+  temporary="$(mktemp --tmpdir="$receipt_dir" .four-table-output.XXXXXX)"
+  chmod 0600 "$temporary"
+  mv -T -- "$temporary" "$destination"
+  test -f "$destination"
+  test ! -L "$destination"
+  test "$(stat -c '%a' "$destination")" = 600
+  test "$(stat -c '%h' "$destination")" = 1
+  test "$(stat -c '%u' "$destination")" = "$(id -u)"
+}
 resolver_args=()
 if [[ -n "${FINANCE_FOUR_TABLE_ALIAS_BUNDLE:-}${FINANCE_FOUR_TABLE_ALIAS_BUNDLE_SHA256:-}" ]]; then
   resolver_args+=(
@@ -202,6 +230,8 @@ recover_runtime_receipt() {
     -e "FINANCE_FOUR_TABLE_RECOVERY_REASON=${operation^^}_RUNTIME_FAILURE"
   )
   local recovery_status
+  prepare_output "$recovery_stdout"
+  prepare_output "$recovery_stderr"
   if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
     <"$recovery_input" >"$recovery_stdout" 2>"$recovery_stderr"; then
     recovery_status=0
@@ -213,6 +243,7 @@ recover_runtime_receipt() {
     return "$recovery_status"
   fi
   local recovered_json="$receipt_dir/finance-four-table-runtime-${operation}-recovered.json"
+  prepare_output "$recovered_json"
   grep '^finance four-table runtime verified:' "$recovery_stdout" |
     tail -n 1 |
     sed 's/^finance four-table runtime verified://' \
@@ -221,6 +252,7 @@ recover_runtime_receipt() {
   chmod 0600 "$recovered_json"
   cp -- "$recovery_stdout" "$runtime_stdout"
   if [[ "$operation" = forward ]]; then
+    prepare_output "$forward_runtime_receipt"
     cp -- "$recovered_json" "$forward_runtime_receipt"
     chmod 0600 "$forward_runtime_receipt"
   fi
@@ -281,6 +313,8 @@ run_runtime() {
     runtime_env+=(-e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")")
   fi
 
+  prepare_output "$runtime_stdout"
+  prepare_output "$runtime_stderr"
   if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
     <"$runtime_input" >"$runtime_stdout" 2>"$runtime_stderr"; then
     runtime_status=0
@@ -294,6 +328,7 @@ run_runtime() {
   fi
   chmod 0600 "$runtime_stdout" "$runtime_stderr"
   runtime_json="$receipt_dir/finance-four-table-runtime-${operation}.json"
+  prepare_output "$runtime_json"
   grep '^finance four-table runtime verified:' "$runtime_stdout" |
     tail -n 1 |
     sed 's/^finance four-table runtime verified://' \
@@ -307,6 +342,7 @@ run_runtime() {
 
 preflight() {
   local -a canonical_args=(--canonical-source-output "$canonical_source")
+  prepare_output "$precondition_receipt"
   python3 "$runner_dir/four_table_cutover.py" preflight \
     "${resolver_args[@]}" "${canonical_args[@]}" "${rollback_receipt_args[@]}" \
     --source-backup "$source_backup" \
@@ -325,8 +361,8 @@ preflight() {
     --workflow-root "$workflow_root" \
     --live-export "$live_export" \
     --operation-kind "${3^^}" \
-    --output "$lock_receipt" >"$receipt_dir/finance-four-table-precondition.json"
-  chmod 0600 "$lock_receipt" "$receipt_dir/finance-four-table-precondition.json"
+    --output "$lock_receipt" >"$precondition_receipt"
+  chmod 0600 "$lock_receipt" "$precondition_receipt"
 }
 run_rollback_restore() {
   python3 "$runner_dir/four_table_cutover.py" rollback-runtime \
@@ -358,6 +394,7 @@ run_rollback_restore() {
 run_readback() {
   local destination="$1"
   local phase="$2"
+  prepare_output "$destination"
   docker exec -i \
     -e FINANCE_DATA_TABLE_DIGEST_ACK=READ_ONLY_IN_MEMORY \
     -e FINANCE_DATA_TABLE_READBACK_PHASE="$phase" \
