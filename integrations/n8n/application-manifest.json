@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "contract_status": "SPEC_ONLY",
+  "contract_status": "DISPOSABLE_VERIFIED",
   "application": {
     "name": "finance-statement-tracker",
     "repository": "srobroek/finance-statement-tracker"
   },
-  "finance_commit": null,
+  "finance_commit": "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0",
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "8658e904657e2a8fce04919705027cb14784998d132b50fbd182383edf1830c3"
+    "sha256": "d6ec1afa1d32988700c585ee32710ba77218794ed93b9c90f729195d4b2c94f1"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -16,12 +16,12 @@
     "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec"
   },
   "extension_image": {
-    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
-    "digest": null,
+    "reference": "ghcr.io/srobroek/finance-n8n@sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b",
+    "digest": "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b",
     "base_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "0ec49cb161ab3037bc8e8fbaae1835ed675f353495b4ed4dd0363c033a4268f7"
+      "sha256": "74baf24740c9c1b300d9a425610d341019862ccfd9dd1b8455e965e5c0575bbf"
     }
   },
   "workflow_manifest": {
@@ -155,10 +155,8 @@
     }
   ],
   "blockers": [
-    "LIVE_FINANCE_IMAGE_BUILD_REQUIRED",
-    "LIVE_REGISTRY_DIGEST_REQUIRED",
-    "SBOM_SCAN_ATTESTATION_REQUIRED",
-    "DISPOSABLE_IMAGE_IMPORT_REQUIRED",
-    "DISPOSABLE_WORKFLOW_EXECUTION_REQUIRED"
+    "GITHUB_ACTIONS_VERIFIED_CI_RECEIPT_REQUIRED",
+    "SLSA_IN_TOTO_ATTESTATION_REQUIRED",
+    "PRODUCTION_ACTIVATION_REVIEW_REQUIRED"
   ]
 }

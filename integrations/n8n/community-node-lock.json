@@ -25,7 +25,7 @@
   },
   "lockfile": {
     "path": "packages/n8n-nodes-finance/community-ai/package-lock.json",
-    "sha256": "6271bc36b879426de90ff7866170ad05472a9972c682498647e7b5d08d16349f"
+    "sha256": "f072302085dc6eca97ce7d555075ccd621703baed21b53a672c9a25f544b103f"
   },
   "registration": {
     "status": "SPEC_ONLY",

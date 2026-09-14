@@ -10,8 +10,11 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OFFICIAL_BASE_DIGEST = "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec"
 OFFICIAL_SOURCE_COMMIT = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e"
-OVERLAY_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
-NODEMAILER_TARBALL_SHA256 = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3"
+OVERLAY_SOURCE_REPOSITORY = "https://github.com/srobroek/finance-statement-tracker"
+OVERLAY_SOURCE_COMMIT = "c0e5253515c052c57d4198e0fa2fe074adab70cb"
+OVERLAY_DOCKERFILE_BLOB = "bad0e94d0b70e541c726d37e441daea706514efe"
+OVERLAY_SMOKE_BLOB = "296c57da94232a974428c59cf531e68a3b09a556"
+NODEMAILER_TARBALL_SHA256 = "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db"
 ALPINE_SECURITY_PACKAGES = {
     "libcrypto3": "3.5.8-r0",
     "libssl3": "3.5.8-r0",
@@ -34,6 +37,41 @@ JAVASCRIPT_SECURITY_PACKAGES = {
         "version": "4.2.0",
         "integrity": "sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==",
         "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml",
+    },
+    "@tiptap/core": {
+        "version": "3.30.5",
+        "integrity": "sha512-3O7N0FyKIfuLV+xrdWyDM3V5eUY/q2CgLjhhMwOAbM1Pu7VPp9VP+TpEYOdH8aRyB+h1vj5hX5A747D8ZrPfHA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@tiptap+core@3.27.0_@tiptap+pm@3.27.0/node_modules/@tiptap/core",
+    },
+    "@tiptap/pm": {
+        "version": "3.30.5",
+        "integrity": "sha512-gufkLkW2tA6PZPjivYxDiGzTIIftwqhmYI6lvvKu2S4FbhcysJgMAe/GXVSywzCRVVex9SrvCe6RFYrqnwRitQ==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@tiptap+pm@3.27.0/node_modules/@tiptap/pm",
+    },
+    "prosemirror-model": {
+        "version": "1.25.11",
+        "integrity": "sha512-QWg9RhnpLlogAmp3p96uEFrE5txQpFynd4vhBAELkwgOCWQs/X0yCzB3/hrHqiPwf91RG5KyWq6553zs9JqIOQ==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/prosemirror-model@1.25.10/node_modules/prosemirror-model",
+    },
+    "prosemirror-view": {
+        "version": "1.41.9",
+        "integrity": "sha512-clTunTX+eaLbr87L1V1QPheRlEQJyTlL3gXe9x3jQIk3rL0RVWxviDGz8tFaydwIVm+hKhYCyr+R/zBtWr9s6A==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/prosemirror-view@1.41.8/node_modules/prosemirror-view",
+    },
+    "@xmldom/xmldom": {
+        "version": "0.8.15",
+        "integrity": "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@xmldom+xmldom@0.8.14/node_modules/@xmldom/xmldom",
+    },
+    "js-yaml": {
+        "version": "4.3.2",
+        "integrity": "sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/js-yaml@4.3.1/node_modules/js-yaml",
+    },
+    "multer": {
+        "version": "2.3.0",
+        "integrity": "sha512-cjNbm3sttszgZeGfJR124D+jFEfkXCVAsoPBmFn9X7UxmDSFHWqE2CoEj0vrmSpuAFnqWR1Szcm9QTsiHr60Xw==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/multer@2.2.0/node_modules/multer",
     },
 }
 
@@ -66,17 +104,19 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
         self.assertIn('org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker"', dockerfile)
         self.assertIn('io.finance.n8n.base-source="https://github.com/n8n-io/n8n@' + OFFICIAL_SOURCE_COMMIT, dockerfile)
+        self.assertIn('io.finance.n8n.nodemailer-recipe="' + OVERLAY_SOURCE_REPOSITORY + "@" + OVERLAY_SOURCE_COMMIT, dockerfile)
         overlay = provenance["nodemailer_overlay"]
+        self.assertEqual(overlay["source_repository"], OVERLAY_SOURCE_REPOSITORY)
         self.assertEqual(overlay["source_commit"], OVERLAY_SOURCE_COMMIT)
+        self.assertEqual(overlay["dockerfile_blob"], OVERLAY_DOCKERFILE_BLOB)
+        self.assertEqual(overlay["smoke_blob"], OVERLAY_SMOKE_BLOB)
         self.assertEqual(overlay["tarball_sha256"], NODEMAILER_TARBALL_SHA256)
-        self.assertEqual(overlay["smoke_blob"], "cdb2c9c08500e798ab7881818707fdf710709213")
-        self.assertIn("npm pack nodemailer@9.0.1", dockerfile)
+        self.assertIn("npm pack nodemailer@9.1.0", dockerfile)
         self.assertIn(NODEMAILER_TARBALL_SHA256, dockerfile)
         self.assertIn(".pnpm/nodemailer@8.0.10/node_modules/nodemailer", dockerfile)
         self.assertIn("node /tmp/nodemailer-smoke.cjs", dockerfile)
         smoke = ROOT / "packages/n8n-nodes-finance/scripts/nodemailer-smoke.cjs"
-        import subprocess
-        self.assertEqual(subprocess.check_output(["git", "hash-object", smoke], text=True).strip(), overlay["smoke_blob"])
+        self.assertIn("assert.equal(packageJson.version, '9.1.0')", smoke.read_text(encoding="utf-8"))
         self.assertIn("AS node-builder", dockerfile)
         self.assertIn("/opt/finance-n8n/custom-extensions/n8n-nodes-finance", dockerfile)
         self.assertIn("/opt/finance-n8n/community-extensions", dockerfile)
@@ -168,28 +208,32 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISSING", builder)
         self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISMATCH", builder)
         self.assertIn("FINANCE_BASE_SOURCE_COMMIT", builder)
+        self.assertIn("FINANCE_NODEMAILER_DOCKERFILE_BLOB_INVALID", builder)
+        self.assertIn("FINANCE_NODEMAILER_SMOKE_BLOB_INVALID", builder)
         self.assertIn("FINANCE_RUNTIME_RECEIPT_MUST_BE_EXTERNAL", builder)
         self.assertIn("FINANCE_SOURCE_TREE_MUST_BE_CLEAN", builder)
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
         self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
-        self.assertEqual(receipt["status"], "SPEC_ONLY")
-        self.assertIsNone(receipt["image"]["image_digest"])
-        self.assertIsNone(receipt["image"]["local_image_id"])
-        # SPEC_ONLY records the current build recipe without claiming runtime
-        # identity. CI writes the external receipt after it has pushed and scanned.
-        self.assertEqual(receipt["base_image"]["digest"], OFFICIAL_BASE_DIGEST)
-        self.assertEqual(receipt["base_image"]["source_commit"], OFFICIAL_SOURCE_COMMIT)
-        self.assertEqual(
-            receipt["base_image"]["source_repository"],
-            "https://github.com/n8n-io/n8n",
-        )
-        self.assertEqual(receipt["base_image"]["nodemailer_overlay"]["tarball_sha256"], NODEMAILER_TARBALL_SHA256)
+        self.assertEqual(receipt["status"], "TESTED_IN_DISPOSABLE")
+        self.assertEqual(receipt["image"]["requested_reference"], "ghcr.io/srobroek/finance-n8n@sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(receipt["image"]["image_digest"], "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(receipt["image"]["local_image_id"], "sha256:cc835d2eb8dff22a99c813c58332f7a2718cdfccf66e0182898e5d48294e5f4e")
+        self.assertEqual(receipt["source_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
+        self.assertEqual(receipt["base_image"]["reference"], "ghcr.io/n8n-io/n8n:2.37.10@" + OFFICIAL_BASE_DIGEST)
+        self.assertEqual(receipt["base_image"]["provenance_sha256"], "fcd628b0805ad628adb6cf5485af8e2860a36de109057c07e599278e66365e5a")
+        self.assertEqual(receipt["base_image"]["nodemailer_overlay"]["recipe_commit"], OVERLAY_SOURCE_COMMIT)
+        self.assertEqual(receipt["scan"], {
+            "tool": "Trivy 0.74.0 (local immutable-reference scan)",
+            "result": "PASS",
+            "high": 0,
+            "critical": 0,
+            "artifact_sha256": "1b773709e469ec277d4a3717c50c5fa0a7aad37cefe984325f518dad7ac1ce82",
+        })
+        self.assertEqual(receipt["local_scan"]["artifact_sha256"], "ecb00b5e50040fc944b89b8aa174d167cc2ac6dfe0266542147ba8ce85876a4f")
+        self.assertEqual(receipt["build"]["tool"], "Podman 4.9.3 / Buildah")
         self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
-        self.assertEqual(
-            receipt["blockers"],
-            ["LIVE_REGISTRY_DIGEST_REQUIRED", "SBOM_SCAN_ATTESTATION_REQUIRED", "DISPOSABLE_IMAGE_IMPORT_REQUIRED"],
-        )
+        self.assertIn("GITHUB_ACTIONS_VERIFIED_CI_RECEIPT_REQUIRED", receipt["limitations"])
 
     def test_package_test_does_not_rebuild_production_output(self):
         package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))

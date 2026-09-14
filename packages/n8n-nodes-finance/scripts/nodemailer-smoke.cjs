@@ -14,7 +14,7 @@ if (!moduleRoot) {
 const nodemailer = require(moduleRoot);
 const packageJson = JSON.parse(fs.readFileSync(path.join(moduleRoot, 'package.json'), 'utf8'));
 assert.equal(packageJson.name, 'nodemailer');
-assert.equal(packageJson.version, '9.0.1');
+assert.equal(packageJson.version, '9.1.0');
 assert.equal(typeof nodemailer.createTransport, 'function');
 
 function smtpServer({ rejectRecipient = false, advertiseStartTls = false } = {}) {

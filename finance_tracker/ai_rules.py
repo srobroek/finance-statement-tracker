@@ -271,10 +271,18 @@ class AIEnrichmentEngine:
             )
         field = str(raw.get("field") or "")
         value = raw.get("value")
-        try:
-            confidence = float(raw.get("confidence"))
-        except (TypeError, ValueError):
-            confidence = 0
+        confidence_value: object = raw.get("confidence")
+        if isinstance(confidence_value, str):
+            try:
+                confidence_text: str = confidence_value
+                confidence = float(confidence_text)
+            except (TypeError, ValueError):
+                confidence = 0.0
+        elif isinstance(confidence_value, (int, float)):
+            confidence_number: int | float = confidence_value
+            confidence = float(confidence_number)
+        else:
+            confidence = 0.0
         rationale = str(raw.get("rationale") or "")
         refs = raw.get("source_refs") or []
         source_refs = tuple(str(ref) for ref in refs) if isinstance(refs, list) else ()

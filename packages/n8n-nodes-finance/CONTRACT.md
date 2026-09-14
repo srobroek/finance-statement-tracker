@@ -12,7 +12,7 @@ image, runtime, and destination gates are accepted.
 
 The image build starts from the official immutable n8n 2.37.10 digest. In the
 same Dockerfile it replaces only n8n's existing pnpm Nodemailer 8.0.10 payload
-with the reviewed Nodemailer 9.0.1 tarball, whose SHA-256 is pinned in the build
+with the reviewed Nodemailer 9.1.0 tarball, whose SHA-256 is pinned in the build
 and provenance record. The build fails if the upstream pnpm path changes, then
 runs the reviewed SMTP behavior and file/URL access denial smoke test against
 both the unpacked payload and its final runtime resolution. This keeps the
