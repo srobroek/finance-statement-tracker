@@ -49,6 +49,7 @@ _PROJECTION_FIELDS: Final[frozenset[str]] = frozenset(
         "protected_economic_fields",
         "protected_actual_structural_fields",
         "direct_commit_forbidden",
+        "profile_policy",
         "forbidden_side_effect_capabilities",
         "effect_matrix",
     }
@@ -493,7 +494,10 @@ def lint_effect_projection(projection: Mapping[str, Any]) -> ValidationReceipt:
             _fail(ReasonCode.SCHEMA_DRIFT, f"effect projection {name} drifted")
 
     target_fields = _strict_sequence(data["target_fields"], "target_fields")
-    expected_targets = set(DETERMINISTIC_WRITABLE_FIELDS) | set(SUGGESTION_ONLY_FIELDS)
+    # review_required is an induced deterministic effect, not an AI-authored target.
+    expected_targets = (set(DETERMINISTIC_WRITABLE_FIELDS) - {"review_required"}) | set(
+        SUGGESTION_ONLY_FIELDS
+    )
     if (
         len(target_fields) != len(set(target_fields))
         or set(target_fields) != expected_targets

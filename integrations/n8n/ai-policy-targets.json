@@ -22,8 +22,7 @@
     "rule_recommendation",
     "subcategory",
     "tags",
-    "vendor",
-    "review_required"
+    "vendor"
   ],
   "deterministic_writable_fields": [
     "vendor",
@@ -71,6 +70,18 @@
     "actual_transaction_id",
     "deduplication_key"
   ],
+  "profile_policy": {
+    "LUNA_MAX": {
+      "policy_class": "NORMAL",
+      "runner_model": "gpt-5.6-luna",
+      "runner_reasoning_effort": "max"
+    },
+    "SOL_MEDIUM": {
+      "policy_class": "EXCEPTION",
+      "runner_model": "gpt-5.6-sol",
+      "runner_reasoning_effort": "medium"
+    }
+  },
   "direct_commit_forbidden": true,
   "forbidden_side_effect_capabilities": [
     "APPLY_ACTUAL",
