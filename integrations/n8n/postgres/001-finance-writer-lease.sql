@@ -12,8 +12,37 @@ CREATE TABLE IF NOT EXISTS finance_ops.writer_leases (
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 
+CREATE TABLE IF NOT EXISTS finance_ops.actual_writer_effects (
+    resource_key text NOT NULL,
+    outbox_id text NOT NULL,
+    account_id text NOT NULL,
+    budget_id text NOT NULL,
+    payload_sha256 text NOT NULL CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+    verified_payload_sha256 text CHECK (verified_payload_sha256 IS NULL OR verified_payload_sha256 ~ '^[0-9a-f]{64}$'),
+    period_start date NOT NULL,
+    period_end date NOT NULL CHECK (period_start <= period_end),
+    state text NOT NULL CHECK (state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN', 'VERIFIED', 'RECONCILED', 'COMMITTED')),
+    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    lease_id uuid,
+    lease_owner text,
+    fencing_token bigint CHECK (fencing_token IS NULL OR fencing_token > 0),
+    issued_at timestamptz,
+    last_error_class text,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((lease_id IS NULL AND lease_owner IS NULL AND fencing_token IS NULL) OR (lease_id IS NOT NULL AND lease_owner IS NOT NULL AND fencing_token IS NOT NULL)),
+    CHECK (state NOT IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') OR (lease_id IS NOT NULL AND lease_owner IS NOT NULL AND fencing_token IS NOT NULL)),
+    CHECK (state NOT IN ('VERIFIED', 'RECONCILED', 'COMMITTED') OR verified_payload_sha256 IS NOT NULL),
+    PRIMARY KEY (resource_key, outbox_id)
+);
+
+CREATE INDEX IF NOT EXISTS actual_writer_effects_admission_idx
+    ON finance_ops.actual_writer_effects (resource_key, state, updated_at);
+
+
 REVOKE ALL ON SCHEMA finance_ops FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA finance_ops FROM PUBLIC;
+GRANT USAGE ON SCHEMA finance_ops TO n8n;
+GRANT SELECT, INSERT, UPDATE ON finance_ops.actual_writer_effects TO n8n;
 
 DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);
 
@@ -61,6 +90,10 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION finance_ops.acquire_writer_lease(text, text, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.acquire_writer_lease(text, text, integer) TO n8n;
+
+
 CREATE OR REPLACE FUNCTION finance_ops.assert_writer_lease(
     p_resource_key text,
     p_lease_id uuid,
@@ -75,6 +108,10 @@ CREATE OR REPLACE FUNCTION finance_ops.assert_writer_lease(
           AND expires_at > clock_timestamp()
     );
 $$;
+
+REVOKE ALL ON FUNCTION finance_ops.assert_writer_lease(text, uuid, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.assert_writer_lease(text, uuid, bigint) TO n8n;
+
 
 CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease(
     p_resource_key text,
@@ -105,5 +142,8 @@ BEGIN
     );
 END;
 $$;
+
+REVOKE ALL ON FUNCTION finance_ops.release_writer_lease(text, uuid, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.release_writer_lease(text, uuid, bigint) TO n8n;
 
 COMMIT;

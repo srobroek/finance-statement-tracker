@@ -3,12 +3,24 @@ import { applyMaintenancePlan, buildMaintenancePlan, MaintenanceApi, Maintenance
 import { applyLedgerProjectionRules, normalizeTransaction } from './rules';
 import { loadPackagedLedgerRules } from './runtime-rules';
 import { NormalizedStatement, projectStatementToActual } from './statements';
-import { mkdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import * as actualApi from '@actual-app/api';
-import { ACTUAL_DATA_DIR, ActualCredential, ActualImportTransaction, JsonObject, PreparedActualOutbox, assertActualImportTransactions, assertIsoDate, assertObject, assertPreparedOutbox, requiredString } from './contracts';
+import { ACTUAL_DATA_DIR, ActualCredential, ActualImportTransaction, JsonObject, PreparedActualOutbox, assertActualImportTransactions, assertActualWriterLease, assertIsoDate, assertObject, assertPreparedOutbox, requiredString } from './contracts';
 
-type ActualReturnedTransaction = Awaited<ReturnType<typeof actualApi.getTransactions>>[number];
+export interface ActualReturnedTransaction {
+  id?: unknown;
+  parent_id?: unknown;
+  account?: unknown;
+  imported_id?: unknown;
+  date?: unknown;
+  amount: number;
+  imported_payee?: unknown;
+  category?: unknown;
+  notes?: unknown;
+  cleared?: unknown;
+  payee?: unknown;
+}
 
 // Historical ADCB statements may need to be replayed into an account that is
 // already closed. Keep that exception narrow: a caller must opt in from the
@@ -116,6 +128,14 @@ function importedIdReadRequest(value: unknown): { account_id: string; imported_i
   const end = assertIsoDate(value.end_date, 'read.end_date');
   if (start > end) throw new Error('read date range is reversed');
   return { account_id: accountId, imported_ids: importedIds, start_date: start, end_date: end };
+}
+
+function resourceKey(outbox: PreparedActualOutbox, syncId: string): string {
+  const target = outbox.actual_file_id ?? syncId;
+  if (outbox.actual_file_id !== undefined && outbox.actual_file_id !== syncId) throw new Error('outbox Actual budget does not match credential sync ID');
+  const expected = `actual:${target}`;
+  if (outbox.writer_lease.resource_key !== expected) throw new Error('outbox writer lease resource does not match Actual budget');
+  return expected;
 }
 
 function assertHistoricalOutboxAllowed(
@@ -258,12 +278,8 @@ export class ActualSession {
   async run<T>(credentialValue: ActualCredential, operation: (api: ActualApi, credential: ActualCredential) => Promise<T>): Promise<T> {
     const credential = validateCredential(credentialValue);
     return serialized(async () => {
-      // A sync ID is only unique within an Actual server. Include the
-      // canonical server origin so a cloned/migrated budget cannot reuse a
-      // different server's local cache and encryption metadata.
-      const cacheKey = `${credential.serverUrl}\n${credential.syncId}`;
-      const directory = path.join(this.dataRoot, createHash('sha256').update(cacheKey).digest('hex').slice(0, 16));
-      await mkdir(directory, { recursive: true });
+      await mkdir(this.dataRoot, { recursive: true });
+      const directory = await mkdtemp(path.join(this.dataRoot, 'actual-session-'));
       let initialized = false;
       try {
         await this.api.init({ dataDir: directory, serverURL: credential.serverUrl, password: credential.password, verbose: false });
@@ -287,7 +303,11 @@ export class ActualSession {
         await this.api.sync();
         return result;
       } finally {
-        if (initialized) await this.api.shutdown();
+        try {
+          if (initialized) await this.api.shutdown();
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
       }
     });
   }
@@ -308,8 +328,13 @@ export class ActualSession {
     return this.run(credential, async api => ({ shape: 'transactionsByImportedIds', ...(await readTransactionsByImportedIds(api, verified)) }));
   }
 
-  async preflight(credential: ActualCredential, input: unknown): Promise<JsonObject> {
+  async preflight(credentialValue: ActualCredential, input: unknown): Promise<JsonObject> {
     const outbox = assertPreparedOutbox(input);
+    const credential = validateCredential(credentialValue);
+    // Preflight is the admission boundary: reject a stale or cross-budget
+    // fence before any Actual reads can produce an apparently valid plan.
+    assertActualWriterLease(outbox.writer_lease, 'outbox.writer_lease');
+    resourceKey(outbox, credential.syncId);
     return this.run(credential, async api => {
       const accounts = await api.getAccounts();
       const account = accounts.find(row => String(row.id) === outbox.account_id);
@@ -327,10 +352,12 @@ export class ActualSession {
       return { status: 'PREFLIGHT_OK', outbox_id: outbox.outbox_id, account_id: outbox.account_id, transaction_count: outbox.transactions.length, already_observed: existing.found_ids };
     });
   }
-
-  async import(credential: ActualCredential, input: unknown): Promise<JsonObject> {
+  async import(credentialValue: ActualCredential, input: unknown): Promise<JsonObject> {
     const outbox = assertPreparedOutbox(input);
+    const credential = validateCredential(credentialValue);
     if (credential.mutationEnabled !== true) throw new Error('Actual mutation credential is disabled');
+    const lease = assertActualWriterLease(outbox.writer_lease, 'outbox.writer_lease');
+    resourceKey(outbox, credential.syncId);
     return this.run(credential, async api => {
       const accounts = await api.getAccounts();
       const account = accounts.find(row => String(row.id) === outbox.account_id);
@@ -345,6 +372,10 @@ export class ActualSession {
       const existing = await existingTransactionsForOutbox(api, outbox);
       if (existing.duplicate_ids.length) throw new Error(`Actual contains duplicate imported IDs: ${existing.duplicate_ids.join(', ')}`);
       assertExistingImmutableFacts(outbox, existing.rows);
+      // Preparation reads may consume the lease; never cross the mutation
+      // boundary with an expired or mismatched writer tuple.
+      assertActualWriterLease(outbox.writer_lease, 'outbox.writer_lease');
+      resourceKey(outbox, credential.syncId);
       const balanceBefore = await api.getAccountBalance(outbox.account_id);
       // Do not send replayed IDs back through Actual's reconciler. It normally
       // preserves payee/category/notes, but can still propagate a changed
@@ -429,7 +460,7 @@ export class ActualSession {
       }
       return {
         status: 'ACTUAL_OBSERVED', outbox_id: outbox.outbox_id,
-        writer_lease: outbox.writer_lease, imported_ids: outbox.transactions.map(row => row.imported_id), already_observed: existing.found_ids,
+        writer_lease: lease, imported_ids: outbox.transactions.map(row => row.imported_id), already_observed: existing.found_ids,
         balance_before: balanceBefore, balance_after: balanceAfter,
         expected_balance_after: expectedBalanceAfter, applied_delta: appliedDelta,
         added_imported_ids: addedImportedIds.sort(), reconciled_imported_ids: reconciledImportedIds.sort(),

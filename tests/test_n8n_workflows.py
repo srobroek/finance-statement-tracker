@@ -1102,7 +1102,7 @@ try {{
         )
         self.assertEqual(
             self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Exact Actual Verification Receipt Replay"]["main"][0][0]["node"],
-            "Return Verified Commit Receipt Replay",
+            "Read Back Released Recovery Writer Fence Replay",
         )
         self.assertEqual(
             self.workflow("20-actual-outbox-apply.json")["connections"]["Recovery Import PREPARED"]["main"][0][0]["node"],
@@ -1442,6 +1442,12 @@ try {{
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
+            "Read Back Released Recovery Writer Fence Replay": {"json": {
+                "resource_key": "actual:actual-file:replay-1",
+                "lease_owner": committed["lease_owner"],
+                "fencing_token": committed["lease_fence"],
+                "released": True,
+            }},
         }
         connections = self.workflow("20-actual-outbox-apply.json")["connections"]
         replay_route = ["Verify Recovery Contract", "Route Recovery State"]
@@ -1460,6 +1466,7 @@ try {{
                 "Route Recovery State",
                 "Read Back COMMITTED Recovery Replay",
                 "Read Back Exact Actual Verification Receipt Replay",
+                "Read Back Released Recovery Writer Fence Replay",
                 "Return Verified Commit Receipt Replay",
             ],
         )
@@ -1574,7 +1581,7 @@ try {{
                 },
             )
             self.assertFalse(rejected["ok"])
-        later_lease_state_is_irrelevant = self.run_exported_workflow_node(
+        unreleased_replay = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
             "Return Verified Commit Receipt Replay",
             receipt,
@@ -1588,7 +1595,7 @@ try {{
                 }},
             },
         )
-        self.assertTrue(later_lease_state_is_irrelevant["ok"], later_lease_state_is_irrelevant)
+        self.assertFalse(unreleased_replay["ok"], unreleased_replay)
 
     def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
@@ -1600,7 +1607,19 @@ try {{
         for function in ("finance_ops.acquire_writer_lease", "finance_ops.assert_writer_lease", "finance_ops.release_writer_lease"):
             self.assertIn(function, queries)
         acquire = next(node for node in postgres if "acquire_writer_lease" in node["parameters"]["query"])
-        self.assertEqual(acquire["parameters"]["query"].count("$"), 3)
+        self.assertIn(
+            "finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer)",
+            acquire["parameters"]["query"],
+        )
+        self.assertIn(
+            "state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN')",
+            acquire["parameters"]["query"],
+        )
+        self.assertIn(
+            "attempt_count = 0 AND $5::text = 'INITIAL'",
+            acquire["parameters"]["query"],
+        )
+        self.assertIn("NOT EXISTS (SELECT 1 FROM blockers)", acquire["parameters"]["query"])
         self.assertNotIn("$json.lease_id", acquire["parameters"]["options"]["queryReplacement"])
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))

@@ -18,11 +18,7 @@ from pathlib import Path
 N8N = Path(__file__).resolve().parent
 WORKFLOWS = N8N / "workflows"
 TYPESCRIPT = (
-    N8N.parent.parent
-    / "packages"
-    / "n8n-nodes-finance"
-    / "node_modules"
-    / "typescript"
+    N8N.parent.parent / "packages" / "n8n-nodes-finance" / "node_modules" / "typescript"
 )
 ACTUAL_APPLY_PATH = WORKFLOWS / "20-actual-outbox-apply.json"
 AGENT_ADAPTER_PATH = WORKFLOWS / "21-subscription-agent-adapter.json"
@@ -32,7 +28,9 @@ MONTHLY_SHARED_WORKFLOW_ID = "10000000-0000-4000-8000-000000000024"
 MONTHLY_SHARED_WORKFLOW_CODE = "SHARED_MONTHLY_STATEMENT_CYCLE"
 MONTHLY_SHARED_WORKFLOW_NAME = "Finance · Shared Monthly Statement Cycle"
 DATA_TABLE_MIGRATION_MATRIX_PATH = N8N / "data-table-migration-matrix.json"
-LEGACY_NAME_SUFFIXES = frozenset({"SPEC ONLY", "PAUSED", " ".join(("SETUP", "REQUIRED"))})
+LEGACY_NAME_SUFFIXES = frozenset(
+    {"SPEC ONLY", "PAUSED", " ".join(("SETUP", "REQUIRED"))}
+)
 MONTHLY_SHARED_INPUT_CONTRACT = {
     "schema_version": 1,
     "mapping_mode": "defineBelow",
@@ -123,7 +121,9 @@ def compact_policy_resolver(node: dict[str, object]) -> None:
     except json.JSONDecodeError as exc:
         raise RuntimeError("W09 policy resolver rows are not valid JSON") from exc
     serialized = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
-    chunks = [serialized[index : index + 220] for index in range(0, len(serialized), 220)]
+    chunks = [
+        serialized[index : index + 220] for index in range(0, len(serialized), 220)
+    ]
     literals = "\n".join(
         ("    " if index == 0 else "    + ") + json.dumps(chunk, ensure_ascii=False)
         for index, chunk in enumerate(chunks)
@@ -134,30 +134,41 @@ def compact_policy_resolver(node: dict[str, object]) -> None:
 
 def monthly_shared_trigger_parameters() -> dict:
     """Return the native Execute Workflow trigger input declaration."""
-    return {"workflowInputs": {"values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))}}
-FOLDER_CONTRACT = json.loads((N8N / "workflow-folders.json").read_text(encoding="utf-8"))
+    return {
+        "workflowInputs": {
+            "values": json.loads(json.dumps(MONTHLY_SHARED_TRIGGER_INPUTS))
+        }
+    }
+
+
+FOLDER_CONTRACT = json.loads(
+    (N8N / "workflow-folders.json").read_text(encoding="utf-8")
+)
 AI_PROPOSAL_SCHEMA = json.loads(
     (N8N / "contracts" / "ai-proposal-v1.schema.json").read_text(encoding="utf-8")
 )
-BROWSER_CAPTURE_SCHEMA_PATH = N8N.parent.parent / "config" / "browser-capture-schema-v1.json"
+BROWSER_CAPTURE_SCHEMA_PATH = (
+    N8N.parent.parent / "config" / "browser-capture-schema-v1.json"
+)
 BROWSER_CAPTURE_SCHEMA_BYTES = BROWSER_CAPTURE_SCHEMA_PATH.read_bytes()
 BROWSER_CAPTURE_SCHEMA = json.loads(BROWSER_CAPTURE_SCHEMA_BYTES)
 BROWSER_CAPTURE_VALIDATOR_PATH = N8N / "generated" / "browser-capture-validator-v1.js"
 BROWSER_CAPTURE_VALIDATOR = BROWSER_CAPTURE_VALIDATOR_PATH.read_text(encoding="utf-8")
 BROWSER_CAPTURE_SCHEMA_SHA256 = hashlib.sha256(BROWSER_CAPTURE_SCHEMA_BYTES).hexdigest()
-if f"browser-capture-schema-v1.json sha256:{BROWSER_CAPTURE_SCHEMA_SHA256}" not in BROWSER_CAPTURE_VALIDATOR:
+if (
+    f"browser-capture-schema-v1.json sha256:{BROWSER_CAPTURE_SCHEMA_SHA256}"
+    not in BROWSER_CAPTURE_VALIDATOR
+):
     raise RuntimeError(
         "browser capture validator is stale; run generate_browser_capture_validator.mjs"
     )
 FOLDER_BY_ID = {folder["id"]: folder for folder in FOLDER_CONTRACT["folders"]}
 FOLDER_BY_CODE = {
-    workflow["code"]: workflow["folder_id"]
-    for workflow in FOLDER_CONTRACT["workflows"]
+    workflow["code"]: workflow["folder_id"] for workflow in FOLDER_CONTRACT["workflows"]
 }
-TAG_BY_NAME = {
-    tag["name"]: tag["id"] for tag in FOLDER_CONTRACT["tag_definitions"]
-}
+TAG_BY_NAME = {tag["name"]: tag["id"] for tag in FOLDER_CONTRACT["tag_definitions"]}
 DEFAULT_WORKFLOW_TAGS = FOLDER_CONTRACT["workflow_tags"]
+
 
 def normalize_workflow_name(name: str) -> str:
     """Keep imported workflow titles descriptive and free of legacy status labels."""
@@ -165,6 +176,7 @@ def normalize_workflow_name(name: str) -> str:
     if parts and parts[-1].upper() in LEGACY_NAME_SUFFIXES:
         return " · ".join(parts[:-1]).rstrip()
     return name.rstrip()
+
 
 BLOCKER_WORKFLOW_CODES = {
     "FINANCE_MCP_FACADE",
@@ -288,7 +300,11 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         if table.get("node_references")
     }
     legacy = sorted(
-        (table for table in legacy_contract["tables"] if table["name"] in referenced_legacy),
+        (
+            table
+            for table in legacy_contract["tables"]
+            if table["name"] in referenced_legacy
+        ),
         key=lambda row: (row["name"] != "finance_execution_failures", row["name"]),
     )
     targets = list(matrix["targets"])
@@ -296,7 +312,8 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
     bootstrap = next(
         workflow
         for workflow in workflows
-        if workflow.get("meta", {}).get("financeWorkflowCode") == "PLATFORM_DATA_TABLE_BOOTSTRAP"
+        if workflow.get("meta", {}).get("financeWorkflowCode")
+        == "PLATFORM_DATA_TABLE_BOOTSTRAP"
     )
     creates = [
         node
@@ -308,15 +325,23 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
     observed = [node["parameters"].get("tableName") for node in creates]
     expected_order = [table["name"] for table in legacy] + targets
     if observed != expected_order:
-        raise ValueError(f"W19 side-by-side table order differs from contracts: {observed!r}")
-    for node, table in zip(creates[:len(legacy)], legacy, strict=True):
+        raise ValueError(
+            f"W19 side-by-side table order differs from contracts: {observed!r}"
+        )
+    for node, table in zip(creates[: len(legacy)], legacy, strict=True):
         parameters = node["parameters"]
         if parameters.get("options") != {"createIfNotExists": True}:
-            raise ValueError(f"W19 {table['name']} must use idempotent createIfNotExists")
-        expected = [{"name": field, "type": kind} for field, kind in table["columns"].items()]
+            raise ValueError(
+                f"W19 {table['name']} must use idempotent createIfNotExists"
+            )
+        expected = [
+            {"name": field, "type": kind} for field, kind in table["columns"].items()
+        ]
         if parameters.get("columns", {}).get("column") != expected:
-            raise ValueError(f"W19 {table['name']} schema differs from data-tables.json")
-    target_creates = creates[len(legacy):]
+            raise ValueError(
+                f"W19 {table['name']} schema differs from data-tables.json"
+            )
+    target_creates = creates[len(legacy) :]
     for node, target in zip(target_creates, targets, strict=True):
         parameters = node["parameters"]
         if parameters.get("options") != {"createIfNotExists": True}:
@@ -327,11 +352,18 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         ]
         if parameters.get("columns", {}).get("column") != expected:
             raise ValueError(f"W19 {target} schema differs from migration matrix")
-    row_nodes = [node for node in bootstrap["nodes"] if (
-        node.get("type") == "n8n-nodes-base.dataTable"
-        and node.get("parameters", {}).get("resource") == "row"
-    )]
-    if len(row_nodes) != 1 or row_nodes[0].get("name") != "Upsert Disabled Source Contract Templates":
+    row_nodes = [
+        node
+        for node in bootstrap["nodes"]
+        if (
+            node.get("type") == "n8n-nodes-base.dataTable"
+            and node.get("parameters", {}).get("resource") == "row"
+        )
+    ]
+    if (
+        len(row_nodes) != 1
+        or row_nodes[0].get("name") != "Upsert Disabled Source Contract Templates"
+    ):
         raise ValueError("W19 may only seed disabled source-contract templates")
     lists = [
         node
@@ -343,7 +375,10 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
     if len(lists) != 1 or lists[0]["name"] != "List Canonical Target Tables":
         raise ValueError("W19 must use one canonical native table-list readback")
     list_parameters = lists[0]["parameters"]
-    if list_parameters.get("returnAll") is not True or list_parameters.get("options") != {}:
+    if (
+        list_parameters.get("returnAll") is not True
+        or list_parameters.get("options") != {}
+    ):
         raise ValueError("W19 table-list readback must return all table schemas")
     guard = node_by_name(bootstrap, "Verify Canonical Target Contract")
     readback = node_by_name(bootstrap, "Verify Canonical Target Table Readback")
@@ -373,7 +408,9 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
     if metadata.get("legacyTableCreationForbidden") is not False:
         raise ValueError("W19 must retain legacy compatibility-table creation")
     if metadata.get("legacyCompatibilityTables") != [table["name"] for table in legacy]:
-        raise ValueError("W19 compatibility table metadata differs from live workflow references")
+        raise ValueError(
+            "W19 compatibility table metadata differs from live workflow references"
+        )
     omitted = [
         table["name"]
         for table in sorted(
@@ -383,7 +420,9 @@ def assert_four_table_bootstrap(workflows: list[dict]) -> None:
         if table["name"] not in referenced_legacy
     ]
     if metadata.get("legacyTablesNotProvisioned") != omitted:
-        raise ValueError("W19 omitted legacy-table metadata differs from live workflow references")
+        raise ValueError(
+            "W19 omitted legacy-table metadata differs from live workflow references"
+        )
     if metadata.get("existingTableDeletionForbidden") is not True:
         raise ValueError("W19 must forbid deletion of existing legacy tables")
 
@@ -421,13 +460,17 @@ def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
     missing = sorted(required_shared - shared_nodes.keys())
     if missing:
         raise ValueError(
-            "shared monthly cycle missing explicit commit nodes: "
-            + ", ".join(missing)
+            "shared monthly cycle missing explicit commit nodes: " + ", ".join(missing)
         )
     shared_commit = shared_nodes["Commit Source Cursor via W12"]
-    if shared_commit["parameters"]["workflowId"].get("value") != "10000000-0000-4000-8000-000000000012":
+    if (
+        shared_commit["parameters"]["workflowId"].get("value")
+        != "10000000-0000-4000-8000-000000000012"
+    ):
         raise ValueError("shared monthly cycle commit target is not W12")
-    shared_mapped = shared_commit["parameters"].get("workflowInputs", {}).get("value", {})
+    shared_mapped = (
+        shared_commit["parameters"].get("workflowInputs", {}).get("value", {})
+    )
     for field in (
         "operation",
         "downstream_receipt_sha256",
@@ -447,7 +490,9 @@ def assert_monthly_cycle_commit_graph(workflows: list[dict]) -> None:
     for source, target in expected_edges.items():
         edges = shared["connections"].get(source, {}).get("main", [[]])[0]
         if not any(edge.get("node") == target for edge in edges):
-            raise ValueError(f"shared monthly cycle missing connection {source} -> {target}")
+            raise ValueError(
+                f"shared monthly cycle missing connection {source} -> {target}"
+            )
 
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
         workflow = by_code[code]
@@ -500,7 +545,9 @@ def assert_archive_readback_contract(workflows: list[dict]) -> None:
         projected = [
             edge.get("node")
             for edge in edges
-            if str(edge.get("node", "")).startswith("Project Enumeration Receipt Fields")
+            if str(edge.get("node", "")).startswith(
+                "Project Enumeration Receipt Fields"
+            )
         ]
         if projected and any(
             any(
@@ -511,25 +558,37 @@ def assert_archive_readback_contract(workflows: list[dict]) -> None:
         ):
             continue
         if not any(edge.get("node") == target for edge in edges):
-            raise ValueError(f"W12 archive readback missing connection {source} -> {target}")
-    verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"]["jsCode"]
+            raise ValueError(
+                f"W12 archive readback missing connection {source} -> {target}"
+            )
+    verify_code = w12_nodes["Verify ARCHIVED Acquisition Receipt"]["parameters"][
+        "jsCode"
+    ]
     return_code = w12_nodes["Return Verified ARCHIVED Receipt"]["parameters"]["jsCode"]
     if "receipt_readback_verified: false" not in verify_code:
-        raise ValueError("W12 pre-update archive verifier must expose a pending canonical receipt")
+        raise ValueError(
+            "W12 pre-update archive verifier must expose a pending canonical receipt"
+        )
     if "receipt_readback_verified: true" not in return_code:
-        raise ValueError("W12 terminal archive return must expose canonical receipt_readback_verified")
+        raise ValueError(
+            "W12 terminal archive return must expose canonical receipt_readback_verified"
+        )
     build_code = next(
         node for node in w22["nodes"] if node["name"] == "Build W12 COMMIT Request"
     )["parameters"]["jsCode"]
     if "archive.receipt_readback_verified !== true" not in build_code:
         raise ValueError("W22 commit guard must require W12 canonical archive readback")
     if "receipt_readback_verified: archive.receipt_readback_verified" not in build_code:
-        raise ValueError("W22 commit request must propagate W12 canonical archive readback")
+        raise ValueError(
+            "W22 commit request must propagate W12 canonical archive readback"
+        )
 
 
 def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
     """Extract EI/Wio's immutable cycle core behind one source-aware boundary."""
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     shared = by_code.get(MONTHLY_SHARED_WORKFLOW_CODE)
     core_names = (
         "Load Trusted Source Contract",
@@ -554,10 +613,12 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
         source_nodes = {node["name"]: node for node in source["nodes"]}
         missing = sorted(set(core_names) - source_nodes.keys())
         if missing:
-            raise ValueError("cannot extract monthly cycle; source nodes missing: " + ", ".join(missing))
+            raise ValueError(
+                "cannot extract monthly cycle; source nodes missing: "
+                + ", ".join(missing)
+            )
         node_ids = {
-            name: f"220{index:02d}"
-            for index, name in enumerate(core_names, start=2)
+            name: f"220{index:02d}" for index, name in enumerate(core_names, start=2)
         }
         trigger = {
             "id": "22001",
@@ -595,14 +656,30 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
                 "migrationStatus": "SPEC_ONLY",
                 "reusableBoundary": "SHARED_MONTHLY_SOURCE_CYCLE_V1",
                 "sourceIdentityOwnedBy": "trusted source contract",
-                "callerInputAllowlist": ["cycle_context", "deadline_policy", "execution_id"],
-                "workflowInputContract": json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT)),
+                "callerInputAllowlist": [
+                    "cycle_context",
+                    "deadline_policy",
+                    "execution_id",
+                ],
+                "workflowInputContract": json.loads(
+                    json.dumps(MONTHLY_SHARED_INPUT_CONTRACT)
+                ),
                 "sourceCodes": ["EI_AMAZON", "WIO_CREDIT"],
-                "credentialBindings": json.loads(json.dumps(source_for_graph["meta"].get("credentialBindings", []))),
+                "credentialBindings": json.loads(
+                    json.dumps(source_for_graph["meta"].get("credentialBindings", []))
+                ),
                 "setupRequired": True,
                 "importTested": False,
-                "workflowFolder": json.loads(json.dumps(source_for_graph["meta"].get("workflowFolder", {}))),
-                "workflowTags": json.loads(json.dumps(source_for_graph["meta"].get("workflowTags", DEFAULT_WORKFLOW_TAGS))),
+                "workflowFolder": json.loads(
+                    json.dumps(source_for_graph["meta"].get("workflowFolder", {}))
+                ),
+                "workflowTags": json.loads(
+                    json.dumps(
+                        source_for_graph["meta"].get(
+                            "workflowTags", DEFAULT_WORKFLOW_TAGS
+                        )
+                    )
+                ),
             },
             "tags": json.loads(json.dumps(source_for_graph.get("tags", []))),
         }
@@ -615,32 +692,42 @@ def ensure_shared_monthly_cycle(workflows: list[dict]) -> None:
         shared["meta"]["financeWorkflowCode"] = MONTHLY_SHARED_WORKFLOW_CODE
         shared["meta"]["reusableBoundary"] = "SHARED_MONTHLY_SOURCE_CYCLE_V1"
         shared["meta"]["sourceIdentityOwnedBy"] = "trusted source contract"
-        shared["meta"]["callerInputAllowlist"] = ["cycle_context", "deadline_policy", "execution_id"]
-        shared["meta"]["workflowInputContract"] = json.loads(json.dumps(MONTHLY_SHARED_INPUT_CONTRACT))
+        shared["meta"]["callerInputAllowlist"] = [
+            "cycle_context",
+            "deadline_policy",
+            "execution_id",
+        ]
+        shared["meta"]["workflowInputContract"] = json.loads(
+            json.dumps(MONTHLY_SHARED_INPUT_CONTRACT)
+        )
         shared["meta"]["sourceCodes"] = ["EI_AMAZON", "WIO_CREDIT"]
         shared["meta"]["workflowTags"] = json.loads(json.dumps(DEFAULT_WORKFLOW_TAGS))
         for node in shared["nodes"]:
-            if node.get("type") == "n8n-nodes-base.stickyNote" and str(node.get("id", "")).endswith("-generated-note-1"):
+            if node.get("type") == "n8n-nodes-base.stickyNote" and str(
+                node.get("id", "")
+            ).endswith("-generated-note-1"):
                 node["id"] = f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1"
 
     if not any(node["type"] == "n8n-nodes-base.stickyNote" for node in shared["nodes"]):
-        shared["nodes"].append({
-            "id": f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1",
-            "name": "Stage 1 · Monthly Cycle Context to Read Back Waiting or Deadline Receipt",
-            "type": "n8n-nodes-base.stickyNote",
-            "typeVersion": 1,
-            "position": [-1160, -180],
-            "parameters": {
-                "content": (
-                    "## Stage 1 · Shared monthly source cycle\n"
-                    "**Input:** Monthly Cycle Context  ·  **Output:** terminal pipeline or wait/deadline receipt\n"
-                    "Any rejected invariant stops this stage and routes only a redacted failure receipt."
-                ),
-                "height": 110,
-                "width": 2240,
-                "color": 7,
-            },
-        })
+        shared["nodes"].append(
+            {
+                "id": f"{MONTHLY_SHARED_WORKFLOW_ID}-generated-note-1",
+                "name": "Stage 1 · Monthly Cycle Context to Read Back Waiting or Deadline Receipt",
+                "type": "n8n-nodes-base.stickyNote",
+                "typeVersion": 1,
+                "position": [-1160, -180],
+                "parameters": {
+                    "content": (
+                        "## Stage 1 · Shared monthly source cycle\n"
+                        "**Input:** Monthly Cycle Context  ·  **Output:** terminal pipeline or wait/deadline receipt\n"
+                        "Any rejected invariant stops this stage and routes only a redacted failure receipt."
+                    ),
+                    "height": 110,
+                    "width": 2240,
+                    "color": 7,
+                },
+            }
+        )
 
     by_code[MONTHLY_SHARED_WORKFLOW_CODE] = shared
     shared_nodes = {node["name"]: node for node in shared["nodes"]}
@@ -678,22 +765,43 @@ return [{ json: {
 } }];
 """.strip()
     upsert = shared_nodes["Upsert Waiting or Deadline Receipt"]
-    upsert["parameters"]["columns"]["value"].update({
-        "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
-        "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
-        "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
-        "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
-        "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
-        "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
-    })
-    upsert["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
-    upsert["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    upsert["parameters"]["columns"]["value"].update(
+        {
+            "run_id": "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}",
+            "workflow_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}",
+            "source_code": "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code }}",
+            "trigger_kind": "={{ $('Assemble Trusted Acquisition Contract').first().json.trigger_kind }}",
+            "config_version": "={{ $('Assemble Trusted Acquisition Contract').first().json.config_version }}",
+            "state": "={{ $now.toISO() >= $('Assemble Trusted Acquisition Contract').first().json.deadline_at ? 'FAILED' : 'WAITING' }}",
+        }
+    )
+    upsert["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+        "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    )
+    upsert["parameters"]["filters"]["conditions"][1]["keyValue"] = (
+        "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    )
     readback = shared_nodes["Read Back Waiting or Deadline Receipt"]
-    readback["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
-    readback["parameters"]["filters"]["conditions"][1]["keyValue"] = "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
-    shared["meta"]["credentialBindings"] = json.loads(json.dumps(
-        shared["meta"].get("credentialBindings", [{"placeholder": "BIND_ONEDRIVE", "configured": False, "action_required": True}])
-    ))
+    readback["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+        "={{ $('Assemble Trusted Acquisition Contract').first().json.run_id }}"
+    )
+    readback["parameters"]["filters"]["conditions"][1]["keyValue"] = (
+        "={{ $('Assemble Trusted Acquisition Contract').first().json.source_code === 'EI_AMAZON' ? 'EI_MONTHLY_STATEMENT' : 'WIO_MONTHLY_STATEMENT' }}"
+    )
+    shared["meta"]["credentialBindings"] = json.loads(
+        json.dumps(
+            shared["meta"].get(
+                "credentialBindings",
+                [
+                    {
+                        "placeholder": "BIND_ONEDRIVE",
+                        "configured": False,
+                        "action_required": True,
+                    }
+                ],
+            )
+        )
+    )
 
     for code in ("EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT"):
         caller = by_code[code]
@@ -703,7 +811,9 @@ return [{ json: {
         open_window = node_by_name(caller, "Open Configured Cycle Window")
         cycle_day = int(caller["meta"]["cycleDay"])
         deadline_days = int(caller["meta"].get("deadlineDays", 5))
-        open_window["parameters"]["jsCode"] = f"""// Poll the delivery month in Asia/Dubai.
+        open_window["parameters"][
+            "jsCode"
+        ] = f"""// Poll the delivery month in Asia/Dubai.
 const now = new Date();
 const cycleDay = {cycle_day}, deadlineDays = {deadline_days};
 const dubai = new Date(now.getTime() + 4 * 60 * 60 * 1000);
@@ -734,8 +844,12 @@ return [{{json:{{run_id:'{source_code}:'+upper,source_code:'{source_code}',windo
                     "matchingColumns": [],
                     "schema": json.loads(json.dumps(MONTHLY_SHARED_CALLER_SCHEMA)),
                     "value": {
-                        "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: '" + source_code + "', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
-                        "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: " + str(caller["meta"].get("deadlineDays", 5)) + " } }}",
+                        "cycle_context": "={{ { run_id: $('Open Configured Cycle Window').item.json.run_id, source_code: '"
+                        + source_code
+                        + "', window_start: $('Open Configured Cycle Window').item.json.window_start, run_upper_bound: $('Open Configured Cycle Window').item.json.run_upper_bound, cycle_day: $('Open Configured Cycle Window').item.json.cycle_day, period_key: $('Open Configured Cycle Window').item.json.period_key, trigger_kind: $('Open Configured Cycle Window').item.json.trigger_kind } }}",
+                        "deadline_policy": "={{ { deadline_at: $('Open Configured Cycle Window').item.json.deadline_at, deadline_days: "
+                        + str(caller["meta"].get("deadlineDays", 5))
+                        + " } }}",
                         "execution_id": "={{ $execution.id }}",
                     },
                 },
@@ -743,8 +857,12 @@ return [{{json:{{run_id:'{source_code}:'+upper,source_code:'{source_code}',windo
         }
         caller["nodes"] = [schedule, open_window, execute]
         caller["connections"] = {
-            schedule["name"]: {"main": [[{"node": open_window["name"], "type": "main", "index": 0}]]},
-            open_window["name"]: {"main": [[{"node": execute["name"], "type": "main", "index": 0}]]},
+            schedule["name"]: {
+                "main": [[{"node": open_window["name"], "type": "main", "index": 0}]]
+            },
+            open_window["name"]: {
+                "main": [[{"node": execute["name"], "type": "main", "index": 0}]]
+            },
         }
         caller["nodeGroups"] = []
         caller_meta = caller["meta"]
@@ -753,15 +871,21 @@ return [{{json:{{run_id:'{source_code}:'+upper,source_code:'{source_code}',windo
         caller_meta["sourceIdentity"] = source_code
         caller_meta["credentialBindings"] = []
         caller_meta["workflowCode"] = workflow_code
-        caller["tags"] = json.loads(json.dumps(shared.get("tags", caller.get("tags", []))))
+        caller["tags"] = json.loads(
+            json.dumps(shared.get("tags", caller.get("tags", [])))
+        )
 
 
 def harden_exact_node_contracts(workflows: list[dict]) -> None:
     """Regenerate exact fail-closed node contracts before formatting."""
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     cashback = by_code["RAKBANK_LIVE_CASHBACK"]
     node_by_name(cashback, "Load Trusted Mail Contract")["alwaysOutputData"] = True
-    node_by_name(cashback, "Assemble Trusted Sweep Contract")["parameters"]["jsCode"] = r"""
+    node_by_name(cashback, "Assemble Trusted Sweep Contract")["parameters"][
+        "jsCode"
+    ] = r"""
 const w = $('Freeze Cursor Minus Overlap Window').first().json, c = $json;
 if (c.source_code !== w.source_code || c.enabled !== true || !String(c.folder_id || '').trim())
   throw new Error('CASHBACK_MAIL_CONTRACT_MISSING_OR_DISABLED');
@@ -771,7 +895,9 @@ if (![senders, subjects].every(values => Array.isArray(values) && values.length 
   throw new Error('CASHBACK_MAIL_CONTRACT_FILTERS_INVALID');
 return [{ json: { ...w, folder_id: c.folder_id, onedrive_parent_id: c.onedrive_parent_id, senders, subjects } }];
 """.strip()
-    node_by_name(cashback, "Build Frozen Mailbox Envelope")["parameters"]["jsCode"] = r"""
+    node_by_name(cashback, "Build Frozen Mailbox Envelope")["parameters"][
+        "jsCode"
+    ] = r"""
 const p = $('Freeze Cursor Minus Overlap Window').first().json, sweep = $input.first().json;
 if (sweep.pagination_exhausted !== true || sweep.run_upper_bound !== p.run_upper_bound)
   throw new Error('Sweep did not exhaust the frozen window');
@@ -794,28 +920,84 @@ return [{ json: { schema_version: 1, run_id: p.run_id, source: p.cursor_key, sou
     # Normalize inside the task runner; only compact individual events cross
     # the companion API boundary. A zero-event scan still traverses the loop
     # once as an explicit marker and commits a verified heartbeat receipt.
-    if any(node["name"] == "Parse and Upsert Cashback Events" for node in cashback["nodes"]):
-        rename_node(cashback, "Parse and Upsert Cashback Events", "Upsert One Cashback Transaction")
+    if any(
+        node["name"] == "Parse and Upsert Cashback Events" for node in cashback["nodes"]
+    ):
+        rename_node(
+            cashback,
+            "Parse and Upsert Cashback Events",
+            "Upsert One Cashback Transaction",
+        )
     upsert = node_by_name(cashback, "Upsert One Cashback Transaction")
     upsert["parameters"]["url"] = "http://cashback:5010/api/ingest/transaction"
-    upsert["parameters"]["jsonBody"] = "={{ {source:$json.source,completed_at:$json.completed_at,cursor:$json.cursor,event:$json.event} }}"
+    upsert["parameters"]["jsonBody"] = (
+        "={{ {source:$json.source,completed_at:$json.completed_at,cursor:$json.cursor,event:$json.event} }}"
+    )
     additions = [
-        ("w02-normalize-notifications", "Normalize Archived Notifications", "n8n-nodes-base.code", 2, {
-            "language": "pythonNative", "mode": "runOnceForAllItems",
-            "pythonCode": "from finance_tracker.n8n_notifications import normalize_archived_mailbox\nreturn [{'json': normalize_archived_mailbox(_items[0]['json'])}]"}),
-        ("w02-split-transactions", "Split Compact Cashback Transactions", "n8n-nodes-base.code", 2, {"jsCode": r"""
+        (
+            "w02-normalize-notifications",
+            "Normalize Archived Notifications",
+            "n8n-nodes-base.code",
+            2,
+            {
+                "language": "pythonNative",
+                "mode": "runOnceForAllItems",
+                "pythonCode": "from finance_tracker.n8n_notifications import normalize_archived_mailbox\nreturn [{'json': normalize_archived_mailbox(_items[0]['json'])}]",
+            },
+        ),
+        (
+            "w02-split-transactions",
+            "Split Compact Cashback Transactions",
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": r"""
 const batch = $json;
 if (!Array.isArray(batch.events) || batch.events.length !== batch.accepted_count)
   throw new Error('NORMALIZED_TRANSACTION_COUNT_MISMATCH');
 const context = {source:batch.source,completed_at:batch.completed_at,cursor:batch.cursor};
 return batch.events.length ? batch.events.map(event => ({json:{...context,event},pairedItem:{item:0}}))
   : [{json:{...context,empty_scan:true},pairedItem:{item:0}}];
-""".strip()}),
-        ("w02-loop-transactions", "Ingest One Transaction at a Time", "n8n-nodes-base.splitInBatches", 3, {"batchSize": 1, "options": {}}),
-        ("w02-transaction-present", "Compact Transaction Present", "n8n-nodes-base.if", 2.2, {
-            "conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"}, "combinator": "and", "conditions": [
-                {"leftValue": "={{ $json.empty_scan !== true }}", "rightValue": True, "operator": {"type": "boolean", "operation": "true", "singleValue": True}}]}}),
-        ("w02-verify-transaction", "Verify Individual Transaction Receipt", "n8n-nodes-base.code", 2, {"jsCode": r"""
+""".strip()
+            },
+        ),
+        (
+            "w02-loop-transactions",
+            "Ingest One Transaction at a Time",
+            "n8n-nodes-base.splitInBatches",
+            3,
+            {"batchSize": 1, "options": {}},
+        ),
+        (
+            "w02-transaction-present",
+            "Compact Transaction Present",
+            "n8n-nodes-base.if",
+            2.2,
+            {
+                "conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.empty_scan !== true }}",
+                            "rightValue": True,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true",
+                                "singleValue": True,
+                            },
+                        }
+                    ],
+                }
+            },
+        ),
+        (
+            "w02-verify-transaction",
+            "Verify Individual Transaction Receipt",
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": r"""
 const expected = $('Ingest One Transaction at a Time').item.json, response = $json, receipt = response.service_receipt;
 if (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt
     || receipt.receipt_kind !== 'TRANSACTION' || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))
@@ -828,8 +1010,16 @@ if (receipt.scanned_count !== 1 || receipt.accepted_count !== 1 || !Array.isArra
     || receipt.event_ids.length !== 1 || receipt.event_ids[0] !== expected.event.source_event_id)
   throw new Error('TRANSACTION_RECEIPT_EVENT_MISMATCH');
 return [{json:{source_event_id:expected.event.source_event_id,receipt_id:receipt.receipt_id,receipt_sha256:receipt.receipt_sha256}}];
-""".strip()}),
-        ("w02-aggregate-transactions", "Assemble Complete Scan Receipt", "n8n-nodes-base.code", 2, {"jsCode": r"""
+""".strip()
+            },
+        ),
+        (
+            "w02-aggregate-transactions",
+            "Assemble Complete Scan Receipt",
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": r"""
 const batch = $('Normalize Archived Notifications').first().json, rows = $input.all().map(item => item.json);
 const expectedIds = batch.events.map(event => event.source_event_id).sort();
 const receipts = rows.filter(row => row.empty_scan !== true);
@@ -843,17 +1033,34 @@ if (batch.scanned_count !== batch.accepted_count + batch.ignored_count + batch.r
   throw new Error('SCAN_DISPOSITION_COUNTS_MISMATCH');
 const {events, ...manifest} = batch;
 return [{json:{...manifest,receipts:receipts.map(({receipt_id,receipt_sha256}) => ({receipt_id,receipt_sha256}))}}];
-""".strip()}),
+""".strip()
+            },
+        ),
     ]
     for node_id, name, kind, version, parameters in additions:
-        existing = next((node for node in cashback["nodes"] if node["name"] == name), None)
+        existing = next(
+            (node for node in cashback["nodes"] if node["name"] == name), None
+        )
         if existing is None:
-            cashback["nodes"].append({"id":node_id,"name":name,"type":kind,"typeVersion":version,"position":[0,0],"parameters":parameters})
+            cashback["nodes"].append(
+                {
+                    "id": node_id,
+                    "name": name,
+                    "type": kind,
+                    "typeVersion": version,
+                    "position": [0, 0],
+                    "parameters": parameters,
+                }
+            )
         else:
             existing["parameters"] = parameters
-    if not any(node["name"] == "Persist Aggregate Scan Receipt" for node in cashback["nodes"]):
+    if not any(
+        node["name"] == "Persist Aggregate Scan Receipt" for node in cashback["nodes"]
+    ):
         aggregate_http = json.loads(json.dumps(upsert))
-        aggregate_http.update(id="w02-persist-scan-receipt", name="Persist Aggregate Scan Receipt")
+        aggregate_http.update(
+            id="w02-persist-scan-receipt", name="Persist Aggregate Scan Receipt"
+        )
         cashback["nodes"].append(aggregate_http)
     aggregate_http = node_by_name(cashback, "Persist Aggregate Scan Receipt")
     aggregate_http["parameters"]["url"] = "http://cashback:5010/api/ingest/receipt"
@@ -867,16 +1074,24 @@ return [{json:{...manifest,receipts:receipts.map(({receipt_id,receipt_sha256}) =
         ("Assemble Complete Scan Receipt", "Persist Aggregate Scan Receipt"),
         ("Persist Aggregate Scan Receipt", "Verify Service Receipt Before Cursor"),
     ]:
-        cashback["connections"][source] = {"main":[[{"node":target,"type":"main","index":0}]]}
-    cashback["connections"]["Ingest One Transaction at a Time"] = {"main":[
-        [{"node":"Assemble Complete Scan Receipt","type":"main","index":0}],
-        [{"node":"Compact Transaction Present","type":"main","index":0}],
-    ]}
-    cashback["connections"]["Compact Transaction Present"] = {"main":[
-        [{"node":"Upsert One Cashback Transaction","type":"main","index":0}],
-        [{"node":"Ingest One Transaction at a Time","type":"main","index":0}],
-    ]}
-    node_by_name(cashback, "Verify Service Receipt Before Cursor")["parameters"]["jsCode"] = r"""
+        cashback["connections"][source] = {
+            "main": [[{"node": target, "type": "main", "index": 0}]]
+        }
+    cashback["connections"]["Ingest One Transaction at a Time"] = {
+        "main": [
+            [{"node": "Assemble Complete Scan Receipt", "type": "main", "index": 0}],
+            [{"node": "Compact Transaction Present", "type": "main", "index": 0}],
+        ]
+    }
+    cashback["connections"]["Compact Transaction Present"] = {
+        "main": [
+            [{"node": "Upsert One Cashback Transaction", "type": "main", "index": 0}],
+            [{"node": "Ingest One Transaction at a Time", "type": "main", "index": 0}],
+        ]
+    }
+    node_by_name(cashback, "Verify Service Receipt Before Cursor")["parameters"][
+        "jsCode"
+    ] = r"""
 const expected = $('Assemble Complete Scan Receipt').first().json, response = $json, receipt = response.service_receipt;
 if (response.cursor_committed !== false || response.cursor_candidate !== expected.cursor || !receipt
     || !receipt.receipt_id || !/^[a-f0-9]{64}$/.test(String(receipt.receipt_sha256 || '')))
@@ -925,10 +1140,12 @@ return [{ json: { ...w, ...c, operation: 'ENUMERATE', onedrive_parent_id: c.mani
     )
     if not legacy_graph:
         # Keep the legacy rewrite below inert while rendering the immutable W01 shape.
-        acquisition["nodes"].extend([
-            {"name": "Get Messages from Configured Folder"},
-            {"name": "Exact Sender Subject and Window Filter", "parameters": {}},
-        ])
+        acquisition["nodes"].extend(
+            [
+                {"name": "Get Messages from Configured Folder"},
+                {"name": "Exact Sender Subject and Window Filter", "parameters": {}},
+            ]
+        )
 
     validate = node_by_name(acquisition, "Validate Bounded Source Request")
     validate["parameters"]["jsCode"] = r"""
@@ -1079,20 +1296,35 @@ return candidates
     # Data Table node replaces its input, so the exact filter deliberately
     # reads the immutable Outlook result set by node reference.
     acquisition["connections"]["Get Messages from Configured Folder"] = {
-        "main": [[{"node": "Close Microsoft Graph Circuit", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "Close Microsoft Graph Circuit", "type": "main", "index": 0}]
+        ]
     }
     acquisition["connections"]["Close Microsoft Graph Circuit"] = {
-        "main": [[{"node": "Exact Sender Subject and Window Filter", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Exact Sender Subject and Window Filter",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     if not legacy_graph:
         acquisition["nodes"] = [
-            node for node in acquisition["nodes"]
-            if node["name"] not in {
+            node
+            for node in acquisition["nodes"]
+            if node["name"]
+            not in {
                 "Get Messages from Configured Folder",
                 "Exact Sender Subject and Window Filter",
             }
         ]
-        for name in ("Get Messages from Configured Folder", "Close Microsoft Graph Circuit"):
+        for name in (
+            "Get Messages from Configured Folder",
+            "Close Microsoft Graph Circuit",
+        ):
             acquisition["connections"].pop(name, None)
 
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
@@ -1157,18 +1389,46 @@ return [{ json: { ...contract, status: 'ARCHIVED', archive_ready: true,
     }
     for index, (name, code) in enumerate(archive_code.items()):
         if not any(node["name"] == name for node in sweep["nodes"]):
-            sweep["nodes"].append({"id": f"12080-{index}", "name": name, "type": "n8n-nodes-base.code", "typeVersion": 2,
-                                   "position": [0, 0], "parameters": {}})
+            sweep["nodes"].append(
+                {
+                    "id": f"12080-{index}",
+                    "name": name,
+                    "type": "n8n-nodes-base.code",
+                    "typeVersion": 2,
+                    "position": [0, 0],
+                    "parameters": {},
+                }
+            )
         node_by_name(sweep, name)["parameters"]["jsCode"] = code
-    node_by_name(sweep, "Archive Enumerated Messages in W01")["parameters"]["mode"] = "each"
+    node_by_name(sweep, "Archive Enumerated Messages in W01")["parameters"]["mode"] = (
+        "each"
+    )
     existing_lookup = node_by_name(sweep, "Read Existing ENUMERATED Receipt")
     existing_lookup["parameters"]["filters"]["conditions"] = [
-        {"keyName": "source_code", "condition": "eq", "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.source_code }}"},
+        {
+            "keyName": "source_code",
+            "condition": "eq",
+            "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.source_code }}",
+        },
         {"keyName": "last_terminal_state", "condition": "eq", "keyValue": "ENUMERATED"},
-        *({"keyName": column, "condition": "eq", "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json." + source + " }}"}
-          for column, source in (("receipt_run_id", "run_id"), ("receipt_run_upper_bound", "run_upper_bound"), ("last_window_start", "window_start"))),
+        *(
+            {
+                "keyName": column,
+                "condition": "eq",
+                "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json."
+                + source
+                + " }}",
+            }
+            for column, source in (
+                ("receipt_run_id", "run_id"),
+                ("receipt_run_upper_bound", "run_upper_bound"),
+                ("last_window_start", "window_start"),
+            )
+        ),
     ]
-    node_by_name(sweep, "Return Existing ENUMERATED Receipt")["parameters"]["jsCode"] = r"""
+    node_by_name(sweep, "Return Existing ENUMERATED Receipt")["parameters"][
+        "jsCode"
+    ] = r"""
 const trusted = $('Freeze Trusted Cursor Window').first().json, receipt = $json;
 for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])
   if (String(receipt[field] ?? '') !== String(trusted[field] ?? ''))
@@ -1179,42 +1439,119 @@ if (receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== 
 // this same frozen window; W01 reuses exact hash-verified per-message receipts.
 return [{ json: { ...trusted, resume_enumeration: true, replay_noop: false, cursor_commit_eligible: false } }];
 """.strip()
-    for source, target in (("Attach Immutable Inventory to Sweep", "Split Immutable Messages for Archive"),
-                           ("Return Existing ENUMERATED Receipt", "Read Outlook Circuit"),
-                           ("Split Immutable Messages for Archive", "Archive Enumerated Messages in W01"),
-                           ("Archive Enumerated Messages in W01", "Aggregate Verified Message Archives"),
-                           ("Aggregate Verified Message Archives", "Build Durable Archive Barrier Receipt")):
-        sweep["connections"][source] = {"main": [[{"node": target, "type": "main", "index": 0}]]}
+    for source, target in (
+        ("Attach Immutable Inventory to Sweep", "Split Immutable Messages for Archive"),
+        ("Return Existing ENUMERATED Receipt", "Read Outlook Circuit"),
+        ("Split Immutable Messages for Archive", "Archive Enumerated Messages in W01"),
+        ("Archive Enumerated Messages in W01", "Aggregate Verified Message Archives"),
+        (
+            "Aggregate Verified Message Archives",
+            "Build Durable Archive Barrier Receipt",
+        ),
+    ):
+        sweep["connections"][source] = {
+            "main": [[{"node": target, "type": "main", "index": 0}]]
+        }
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
     acquisition["connections"]["Archive Inventory Present"]["main"][0] = [
         {"node": "Expand Enumerated Attachment Items", "type": "main", "index": 0},
         {"node": "Build Original Email Evidence", "type": "main", "index": 0},
     ]
     acquisition["connections"]["Record Email PDF Render Requirement"] = {
-        "main": [[{"node": "Merge Archive Verification Inputs", "type": "main", "index": 1}]]}
-    node_by_name(acquisition, "Record Email PDF Render Requirement")["parameters"]["columns"]["value"]["onedrive_item_id"] = "={{ $json.onedrive_item_id }}"
+        "main": [
+            [{"node": "Merge Archive Verification Inputs", "type": "main", "index": 1}]
+        ]
+    }
+    node_by_name(acquisition, "Record Email PDF Render Requirement")["parameters"][
+        "columns"
+    ]["value"]["onedrive_item_id"] = "={{ $json.onedrive_item_id }}"
     # Isolate each attachment before optional native DataTable reads.
-    if not any(node["name"] == 'Archive One Attachment at a Time' for node in acquisition["nodes"]):
-        acquisition["nodes"].append({'parameters': {'batchSize': 1, 'options': {}}, 'id': 'w01-loop-enumerated-attachments', 'name': 'Archive One Attachment at a Time', 'type': 'n8n-nodes-base.splitInBatches', 'typeVersion': 3, 'position': [1460, 120]})
-    if not any(node["name"] == 'Return Verified Attachment to Loop' for node in acquisition["nodes"]):
-        acquisition["nodes"].append({'parameters': {'jsCode': "// Preserve the hash-verified receipt through the document-operation write.\nconst verified = $('Verify Enumerated Archive Receipt').item.json;\nif (verified.attachment_verified !== true || !verified.attachment_identity || !verified.onedrive_item_id)\n    throw new Error('ATTACHMENT_VERIFIED_RESULT_REQUIRED');\nreturn [{ json: verified }];\n"}, 'id': 'w01-return-verified-attachment', 'name': 'Return Verified Attachment to Loop', 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [3900, 120]})
-    acquisition["connections"]['Expand Enumerated Attachment Items'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
-    acquisition["connections"]['Archive One Attachment at a Time'] = {'main': [[{'node': 'Merge Archive Verification Inputs', 'type': 'main', 'index': 0}], [{'node': 'Enumerated Attachment Present', 'type': 'main', 'index': 0}]]}
-    acquisition["connections"]['Record Enumerated Attachment Disposition'] = {'main': [[{'node': 'Return Verified Attachment to Loop', 'type': 'main', 'index': 0}]]}
-    acquisition["connections"]['Return Verified Attachment to Loop'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
-    acquisition["connections"]['Verify Existing Enumerated Archive Receipt'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
-    acquisition["connections"]['Empty Enumerated Attachment Verification'] = {'main': [[{'node': 'Archive One Attachment at a Time', 'type': 'main', 'index': 0}]]}
-    node_by_name(acquisition, "Upsert Enumerated Archive Receipt")["parameters"]["columns"]["value"]["archive_receipt_id"] = "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}"
+    if not any(
+        node["name"] == "Archive One Attachment at a Time"
+        for node in acquisition["nodes"]
+    ):
+        acquisition["nodes"].append(
+            {
+                "parameters": {"batchSize": 1, "options": {}},
+                "id": "w01-loop-enumerated-attachments",
+                "name": "Archive One Attachment at a Time",
+                "type": "n8n-nodes-base.splitInBatches",
+                "typeVersion": 3,
+                "position": [1460, 120],
+            }
+        )
+    if not any(
+        node["name"] == "Return Verified Attachment to Loop"
+        for node in acquisition["nodes"]
+    ):
+        acquisition["nodes"].append(
+            {
+                "parameters": {
+                    "jsCode": "// Preserve the hash-verified receipt through the document-operation write.\nconst verified = $('Verify Enumerated Archive Receipt').item.json;\nif (verified.attachment_verified !== true || !verified.attachment_identity || !verified.onedrive_item_id)\n    throw new Error('ATTACHMENT_VERIFIED_RESULT_REQUIRED');\nreturn [{ json: verified }];\n"
+                },
+                "id": "w01-return-verified-attachment",
+                "name": "Return Verified Attachment to Loop",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [3900, 120],
+            }
+        )
+    acquisition["connections"]["Expand Enumerated Attachment Items"] = {
+        "main": [
+            [{"node": "Archive One Attachment at a Time", "type": "main", "index": 0}]
+        ]
+    }
+    acquisition["connections"]["Archive One Attachment at a Time"] = {
+        "main": [
+            [{"node": "Merge Archive Verification Inputs", "type": "main", "index": 0}],
+            [{"node": "Enumerated Attachment Present", "type": "main", "index": 0}],
+        ]
+    }
+    acquisition["connections"]["Record Enumerated Attachment Disposition"] = {
+        "main": [
+            [{"node": "Return Verified Attachment to Loop", "type": "main", "index": 0}]
+        ]
+    }
+    acquisition["connections"]["Return Verified Attachment to Loop"] = {
+        "main": [
+            [{"node": "Archive One Attachment at a Time", "type": "main", "index": 0}]
+        ]
+    }
+    acquisition["connections"]["Verify Existing Enumerated Archive Receipt"] = {
+        "main": [
+            [{"node": "Archive One Attachment at a Time", "type": "main", "index": 0}]
+        ]
+    }
+    acquisition["connections"]["Empty Enumerated Attachment Verification"] = {
+        "main": [
+            [{"node": "Archive One Attachment at a Time", "type": "main", "index": 0}]
+        ]
+    }
+    node_by_name(acquisition, "Upsert Enumerated Archive Receipt")["parameters"][
+        "columns"
+    ]["value"][
+        "archive_receipt_id"
+    ] = "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}"
     for workflow in (by_code["OUTLOOK_FINANCE_ACQUISITION"], sweep):
         for node in workflow["nodes"]:
-            if (node["type"] == "n8n-nodes-base.dataTable"
-                    and node["parameters"].get("operation") == "get"
-                    and (node["name"].startswith("Read Back ")
-                         or node["name"] in {"Read Authoritative Source Cursor", "Read Acquisition Receipt for Commit Resume"})):
+            if (
+                node["type"] == "n8n-nodes-base.dataTable"
+                and node["parameters"].get("operation") == "get"
+                and (
+                    node["name"].startswith("Read Back ")
+                    or node["name"]
+                    in {
+                        "Read Authoritative Source Cursor",
+                        "Read Acquisition Receipt for Commit Resume",
+                    }
+                )
+            ):
                 # A missing mandatory durable row must reach its verifier and
                 # raise; zero output must never silently complete a workflow.
                 node["alwaysOutputData"] = True
-    node_by_name(sweep, "Return Verified ARCHIVED Receipt")["parameters"]["jsCode"] = r"""
+    node_by_name(sweep, "Return Verified ARCHIVED Receipt")["parameters"][
+        "jsCode"
+    ] = r"""
 const expected = $('Verify ARCHIVED Acquisition Receipt').first().json, observed = $json;
 const inventory = $('Attach Immutable Inventory to Sweep').first().json;
 for (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'terminal_state', 'downstream_receipt_sha256'])
@@ -1254,7 +1591,8 @@ return [{ json: {
         if node["name"].startswith("Project Enumeration Receipt Fields"):
             node["parameters"]["jsCode"] = (
                 "if (Object.keys($json).length === 0) return [{ json: {} }];\n"
-                if node["name"] == "Project Enumeration Receipt Fields for Existing Gate"
+                if node["name"]
+                == "Project Enumeration Receipt Fields for Existing Gate"
                 else ""
             ) + receipt_projection
     freeze = node_by_name(sweep, "Freeze Trusted Cursor Window")
@@ -1474,35 +1812,49 @@ return [{ json: {
     }
     if any(node["name"] in browser_generated_names for node in statement["nodes"]):
         statement["nodes"] = [
-            node for node in statement["nodes"] if node["name"] not in browser_generated_names
+            node
+            for node in statement["nodes"]
+            if node["name"] not in browser_generated_names
         ]
         for name in browser_generated_names:
             statement.get("connections", {}).pop(name, None)
     if not any(node["name"] == "Browser Capture?" for node in statement["nodes"]):
-        statement["nodes"].extend([
-            {
-                "id": "3021-browser-capture-if",
-                "name": "Browser Capture?",
-                "type": "n8n-nodes-base.if",
-                "typeVersion": 2.2,
-                "position": [-220, 0],
-                "parameters": {"conditions": {
-                    "options": {"caseSensitive": True, "typeValidation": "strict"},
-                    "combinator": "and",
-                    "conditions": [{
-                        "leftValue": "={{ $json.document_profile }}",
-                        "rightValue": "BROWSER_CAPTURE_V1",
-                        "operator": {"type": "string", "operation": "equals"},
-                    }],
-                }},
-            },
-            {
-                "id": "3022-browser-capture-adapter",
-                "name": "Parse Browser Capture Adapter",
-                "type": "n8n-nodes-base.code",
-                "typeVersion": 2,
-                "position": [680, 0],
-                "parameters": {"jsCode": r"""
+        statement["nodes"].extend(
+            [
+                {
+                    "id": "3021-browser-capture-if",
+                    "name": "Browser Capture?",
+                    "type": "n8n-nodes-base.if",
+                    "typeVersion": 2.2,
+                    "position": [-220, 0],
+                    "parameters": {
+                        "conditions": {
+                            "options": {
+                                "caseSensitive": True,
+                                "typeValidation": "strict",
+                            },
+                            "combinator": "and",
+                            "conditions": [
+                                {
+                                    "leftValue": "={{ $json.document_profile }}",
+                                    "rightValue": "BROWSER_CAPTURE_V1",
+                                    "operator": {
+                                        "type": "string",
+                                        "operation": "equals",
+                                    },
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "id": "3022-browser-capture-adapter",
+                    "name": "Parse Browser Capture Adapter",
+                    "type": "n8n-nodes-base.code",
+                    "typeVersion": 2,
+                    "position": [680, 0],
+                    "parameters": {
+                        "jsCode": r"""
 const input = $json;
 const capture = input.browser_capture;
 if (!capture || capture.schema_version !== 1 || !capture.source?.provider || !capture.account?.label) {
@@ -1584,15 +1936,17 @@ return [{ json: {
   actual_mutation: false,
   cashback_mutation: false,
 } }];
-""".strip()},
-            },
-            {
-                "id": "3023-browser-match-retry",
-                "name": "Match Browser Capture Rows and Bound Retry",
-                "type": "n8n-nodes-base.code",
-                "typeVersion": 2,
-                "position": [-820, 380],
-                "parameters": {"jsCode": r"""
+""".strip()
+                    },
+                },
+                {
+                    "id": "3023-browser-match-retry",
+                    "name": "Match Browser Capture Rows and Bound Retry",
+                    "type": "n8n-nodes-base.code",
+                    "typeVersion": 2,
+                    "position": [-820, 380],
+                    "parameters": {
+                        "jsCode": r"""
 const input = $json;
 if (!String(input.adapter || '').startsWith('browser_capture_v1')) return [{ json: input }];
 const rows = Array.isArray(input.transactions) ? input.transactions : [];
@@ -1608,39 +1962,53 @@ if (Number(retry.attempt) > Number(retry.max_attempts)) {
   throw new Error('BROWSER_CAPTURE_RETRY_EXHAUSTED');
 }
 return [{ json: { ...input, browser_match_status: 'MATCHED_REVIEW_ONLY', browser_retry: { ...retry, exhausted: true } } }];
-""".strip()},
-            },
-            {
-                "id": "3024-browser-write-if",
-                "name": "Browser Capture Write?",
-                "type": "n8n-nodes-base.if",
-                "typeVersion": 2.2,
-                "position": [980, 380],
-                "parameters": {"conditions": {
-                    "options": {"caseSensitive": True, "typeValidation": "strict"},
-                    "combinator": "and",
-                    "conditions": [{
-                        "leftValue": "={{ $json.document_profile }}",
-                        "rightValue": "BROWSER_CAPTURE_V1",
-                        "operator": {"type": "string", "operation": "equals"},
-                    }],
-                }},
-            },
-            {
-                "id": "3025-browser-terminal",
-                "name": "Complete Browser Capture Headless Receipt",
-                "type": "n8n-nodes-base.code",
-                "typeVersion": 2,
-                "position": [380, 1520],
-                "parameters": {"jsCode": r"""
+""".strip()
+                    },
+                },
+                {
+                    "id": "3024-browser-write-if",
+                    "name": "Browser Capture Write?",
+                    "type": "n8n-nodes-base.if",
+                    "typeVersion": 2.2,
+                    "position": [980, 380],
+                    "parameters": {
+                        "conditions": {
+                            "options": {
+                                "caseSensitive": True,
+                                "typeValidation": "strict",
+                            },
+                            "combinator": "and",
+                            "conditions": [
+                                {
+                                    "leftValue": "={{ $json.document_profile }}",
+                                    "rightValue": "BROWSER_CAPTURE_V1",
+                                    "operator": {
+                                        "type": "string",
+                                        "operation": "equals",
+                                    },
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "id": "3025-browser-terminal",
+                    "name": "Complete Browser Capture Headless Receipt",
+                    "type": "n8n-nodes-base.code",
+                    "typeVersion": 2,
+                    "position": [380, 1520],
+                    "parameters": {
+                        "jsCode": r"""
 const input = $json;
 if (!String(input.adapter || '').startsWith('browser_capture_v1') || input.actual_mutation !== false || input.cashback_mutation !== false) {
   throw new Error('BROWSER_CAPTURE_WRITE_BOUNDARY_FAILED');
 }
 return [{ json: { ...input, browser_handoff_status: 'STAGED_REVIEW_REQUIRED', actual_mutation: false, cashback_mutation: false, direct_actual_writer: false, direct_cashback_writer: false } }];
-""".strip()},
-            },
-        ])
+""".strip()
+                    },
+                },
+            ]
+        )
     verify_context = node_by_name(statement, "Verify Archive and Execution Context")
     verify_context["parameters"]["jsCode"] = r"""
 const r = $json;
@@ -1701,15 +2069,27 @@ return [{
     statement["connections"][verify_context["name"]] = {
         "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
     }
-    statement["connections"]["Browser Capture?"] = {"main": [
-        [{"node": "Parse Browser Capture Adapter", "type": "main", "index": 0}],
-        [{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}],
-    ]}
+    statement["connections"]["Browser Capture?"] = {
+        "main": [
+            [{"node": "Parse Browser Capture Adapter", "type": "main", "index": 0}],
+            [{"node": "Run Isolated PDF Extraction", "type": "main", "index": 0}],
+        ]
+    }
     statement["connections"]["Parse Browser Capture Adapter"] = {
-        "main": [[{"node": "Normalize Locked Source Semantics", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "Normalize Locked Source Semantics", "type": "main", "index": 0}]
+        ]
     }
     statement["connections"]["Apply N8N Only Rules"] = {
-        "main": [[{"node": "Match Browser Capture Rows and Bound Retry", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Match Browser Capture Rows and Bound Retry",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     statement["connections"]["Match Browser Capture Rows and Bound Retry"] = {
         "main": [[{"node": "Unresolved Fields", "type": "main", "index": 0}]]
@@ -1717,10 +2097,18 @@ return [{
     statement["connections"]["Validate Statement Reconciliation and IDs"] = {
         "main": [[{"node": "Browser Capture Write?", "type": "main", "index": 0}]]
     }
-    statement["connections"]["Browser Capture Write?"] = {"main": [
-        [{"node": "Complete Browser Capture Headless Receipt", "type": "main", "index": 0}],
-        [{"node": "Project Actual Import Rows", "type": "main", "index": 0}],
-    ]}
+    statement["connections"]["Browser Capture Write?"] = {
+        "main": [
+            [
+                {
+                    "node": "Complete Browser Capture Headless Receipt",
+                    "type": "main",
+                    "index": 0,
+                }
+            ],
+            [{"node": "Project Actual Import Rows", "type": "main", "index": 0}],
+        ]
+    }
     validation = node_by_name(statement, "Validate Statement Reconciliation and IDs")
     validation["parameters"]["jsCode"] = r"""
 const r = $json;
@@ -1745,29 +2133,35 @@ return [{ json: r }];
     statement["nodes"] = [
         node for node in statement["nodes"] if node["name"] not in replaced_pdf_nodes
     ]
-    if not any(node["name"] == "Run Isolated PDF Extraction" for node in statement["nodes"]):
-        statement["nodes"].append({
-            "id": "3020-pdf-subworkflow",
-            "name": "Run Isolated PDF Extraction",
-            "type": "n8n-nodes-base.executeWorkflow",
-            "typeVersion": 1.2,
-            "position": [-500, 0],
-            "parameters": {
-                "workflowId": {
-                    "__rl": True,
-                    "value": "10000000-0000-4000-8000-000000000014",
-                    "mode": "id",
+    if not any(
+        node["name"] == "Run Isolated PDF Extraction" for node in statement["nodes"]
+    ):
+        statement["nodes"].append(
+            {
+                "id": "3020-pdf-subworkflow",
+                "name": "Run Isolated PDF Extraction",
+                "type": "n8n-nodes-base.executeWorkflow",
+                "typeVersion": 1.2,
+                "position": [-500, 0],
+                "parameters": {
+                    "workflowId": {
+                        "__rl": True,
+                        "value": "10000000-0000-4000-8000-000000000014",
+                        "mode": "id",
+                    },
+                    "options": {"waitForSubWorkflow": True},
                 },
-                "options": {"waitForSubWorkflow": True},
-            },
-        })
+            }
+        )
     for old in replaced_pdf_nodes:
         statement.get("connections", {}).pop(old, None)
     statement["connections"]["Verify Archive and Execution Context"] = {
         "main": [[{"node": "Browser Capture?", "type": "main", "index": 0}]]
     }
     statement["connections"]["Run Isolated PDF Extraction"] = {
-        "main": [[{"node": "Parse Verified Statement Profile", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "Parse Verified Statement Profile", "type": "main", "index": 0}]
+        ]
     }
     merge_proposals = node_by_name(statement, "Merge Allowed AI Proposals")
     merge_proposals["parameters"]["jsCode"] = r"""
@@ -1799,17 +2193,42 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
     # Set nodes are exact projectors: caller fields are copied by explicit
     # assignments and arbitrary input keys are never forwarded.
     ready["parameters"]["includeOtherFields"] = False
-    caller_names = {"document_id", "source_sha256", "extracted_text", "validation_status"}
+    caller_names = {
+        "document_id",
+        "source_sha256",
+        "extracted_text",
+        "validation_status",
+    }
     ready_assignments = [
         assignment
         for assignment in ready["parameters"]["assignments"]["assignments"]
         if assignment["name"] not in caller_names
     ]
     ready_assignments[:0] = [
-        {"id": "caller-1", "name": "document_id", "type": "string", "value": "={{ $json.document_id }}"},
-        {"id": "caller-2", "name": "source_sha256", "type": "string", "value": "={{ $json.source_sha256 }}"},
-        {"id": "caller-3", "name": "extracted_text", "type": "string", "value": "={{ $json.extracted_text }}"},
-        {"id": "caller-4", "name": "validation_status", "type": "string", "value": "={{ $json.validation_status }}"},
+        {
+            "id": "caller-1",
+            "name": "document_id",
+            "type": "string",
+            "value": "={{ $json.document_id }}",
+        },
+        {
+            "id": "caller-2",
+            "name": "source_sha256",
+            "type": "string",
+            "value": "={{ $json.source_sha256 }}",
+        },
+        {
+            "id": "caller-3",
+            "name": "extracted_text",
+            "type": "string",
+            "value": "={{ $json.extracted_text }}",
+        },
+        {
+            "id": "caller-4",
+            "name": "validation_status",
+            "type": "string",
+            "value": "={{ $json.validation_status }}",
+        },
     ]
     ready["parameters"]["assignments"]["assignments"] = ready_assignments
     local_pdf["meta"]["reusableBoundary"] = "PDF_VALIDATE_UNLOCK_PROFILE_QUALITY"
@@ -1837,7 +2256,8 @@ return [{ json: { ...base, accepted_ai_proposals: proposals } }];
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [-750, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const request = $json;
 if (!request.artifact_id || !/^[A-Za-z0-9:_-]{1,128}$/.test(String(request.artifact_id))) {
   throw new Error('artifact_id is required');
@@ -1884,7 +2304,8 @@ return [{
   },
   binary: $binary,
 }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "11003",
@@ -1896,15 +2317,23 @@ return [{
             "parameters": {
                 "resource": "row",
                 "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_document_operations",
+                    "mode": "name",
+                },
                 "returnAll": False,
                 "limit": 1,
                 "matchType": "allConditions",
-                "filters": {"conditions": [{
-                    "keyName": "document_id",
-                    "condition": "eq",
-                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                }]},
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "document_id",
+                            "condition": "eq",
+                            "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                        }
+                    ]
+                },
                 "options": {},
             },
         },
@@ -1921,7 +2350,10 @@ return [{
                 "binaryPropertyName": "data",
             },
             "credentials": {
-                "microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+                "microsoftOneDriveOAuth2Api": {
+                    "id": "BIND_ONEDRIVE",
+                    "name": "Finance OneDrive",
+                }
             },
         },
         {
@@ -1944,7 +2376,8 @@ return [{
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [250, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const expected = $('Validate Reviewed Artifact Reference').first().json;
 const record = $('Load Durable Document Record').first().json;
 const observed = String($json.reviewed_sha256 || '').toLowerCase();
@@ -1984,7 +2417,8 @@ return [{
   },
   binary: $binary,
 }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "11007",
@@ -1992,15 +2426,19 @@ return [{
             "type": "n8n-nodes-base.if",
             "typeVersion": 2.2,
             "position": [500, 0],
-            "parameters": {"conditions": {
-                "options": {"caseSensitive": True, "typeValidation": "strict"},
-                "combinator": "and",
-                "conditions": [{
-                    "leftValue": "={{ $json.document_profile }}",
-                    "rightValue": "STATEMENT_PDF_V1",
-                    "operator": {"type": "string", "operation": "equals"},
-                }],
-            }},
+            "parameters": {
+                "conditions": {
+                    "options": {"caseSensitive": True, "typeValidation": "strict"},
+                    "combinator": "and",
+                    "conditions": [
+                        {
+                            "leftValue": "={{ $json.document_profile }}",
+                            "rightValue": "STATEMENT_PDF_V1",
+                            "operator": {"type": "string", "operation": "equals"},
+                        }
+                    ],
+                }
+            },
         },
         {
             "id": "11008",
@@ -2009,7 +2447,11 @@ return [{
             "typeVersion": 1.2,
             "position": [750, -100],
             "parameters": {
-                "workflowId": {"__rl": True, "value": "10000000-0000-4000-8000-000000000003", "mode": "id"},
+                "workflowId": {
+                    "__rl": True,
+                    "value": "10000000-0000-4000-8000-000000000003",
+                    "mode": "id",
+                },
                 "options": {"waitForSubWorkflow": True},
             },
         },
@@ -2019,130 +2461,166 @@ return [{
             "type": "n8n-nodes-base.stopAndError",
             "typeVersion": 1,
             "position": [750, 100],
-            "parameters": {"errorMessage": "BROWSER_CAPTURE_VALIDATOR_REQUIRED: non-statement artifacts never enter the statement parser"},
+            "parameters": {
+                "errorMessage": "BROWSER_CAPTURE_VALIDATOR_REQUIRED: non-statement artifacts never enter the statement parser"
+            },
         },
     ]
     input_hash = node_by_name(handoff, "Load Durable Document Record")
-    input_hash.update({
-        "name": "SHA-256 Browser Capture Input",
-        "type": "n8n-nodes-base.crypto",
-        "typeVersion": 1,
-        "parameters": {
-            "action": "hash",
-            "type": "SHA256",
-            "binaryData": True,
-            "binaryPropertyName": "data",
-            "dataPropertyName": "input_sha256",
-        },
-    })
+    input_hash.update(
+        {
+            "name": "SHA-256 Browser Capture Input",
+            "type": "n8n-nodes-base.crypto",
+            "typeVersion": 1,
+            "parameters": {
+                "action": "hash",
+                "type": "SHA256",
+                "binaryData": True,
+                "binaryPropertyName": "data",
+                "dataPropertyName": "input_sha256",
+            },
+        }
+    )
     input_hash.pop("alwaysOutputData", None)
     archive = node_by_name(handoff, "Download Existing Reviewed Artifact")
-    archive.update({
-        "name": "Archive Browser Capture in OneDrive",
-        "type": "n8n-nodes-base.microsoftOneDrive",
-        "typeVersion": 1.1,
-        "parameters": {
-            "resource": "file",
-            "operation": "upload",
-            "binaryPropertyName": "data",
-            "binaryData": True,
-            "fileName": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id + '.browser-capture-v1.json' }}",
-            "parentId": "={{ $vars.FINANCE_BROWSER_ARCHIVE_PARENT_ID }}",
-        },
-    })
-    upsert = node_by_name(handoff, "SHA-256 Reviewed Artifact")
-    upsert.update({
-        "name": "Upsert Durable Browser Archive Receipt",
-        "type": "n8n-nodes-base.dataTable",
-        "typeVersion": 1.1,
-        "parameters": {
-            "resource": "row",
-            "operation": "upsert",
-            "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
-            "matchType": "allConditions",
-            "filters": {"conditions": [
-                {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
-            ]},
-            "columns": {
-                "mappingMode": "defineBelow",
-                "value": {
-                    "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                    "source_sha256": "={{ $('Resolve Capture Hash Contract').first().json.expected_source_sha256 }}",
-                    "document_profile": "BROWSER_CAPTURE_V1",
-                    "requested_schema_version": "browser-capture-schema-v1",
-                    "onedrive_item_id": "={{ $json.id }}",
-                    "source_code": "BROWSER_CAPTURE",
-                    "state": "RECEIVED",
-                    "attempt_count": 0,
-                    "output_sha256": "={{ $('SHA-256 Browser Capture Input').first().json.input_sha256 }}",
-                    "error_class": "",
-                    "error_detail_redacted": "",
-                    "updated_at": "={{ $now.toISO() }}",
-                },
-                "matchingColumns": [],
-                "schema": [],
-                "attemptToConvertTypes": False,
-                "convertFieldsToString": False,
+    archive.update(
+        {
+            "name": "Archive Browser Capture in OneDrive",
+            "type": "n8n-nodes-base.microsoftOneDrive",
+            "typeVersion": 1.1,
+            "parameters": {
+                "resource": "file",
+                "operation": "upload",
+                "binaryPropertyName": "data",
+                "binaryData": True,
+                "fileName": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id + '.browser-capture-v1.json' }}",
+                "parentId": "={{ $vars.FINANCE_BROWSER_ARCHIVE_PARENT_ID }}",
             },
-            "options": {"dryRun": False},
-        },
-    })
+        }
+    )
+    upsert = node_by_name(handoff, "SHA-256 Reviewed Artifact")
+    upsert.update(
+        {
+            "name": "Upsert Durable Browser Archive Receipt",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "parameters": {
+                "resource": "row",
+                "operation": "upsert",
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_document_operations",
+                    "mode": "name",
+                },
+                "matchType": "allConditions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "document_id",
+                            "condition": "eq",
+                            "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                        },
+                    ]
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "document_id": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                        "source_sha256": "={{ $('Resolve Capture Hash Contract').first().json.expected_source_sha256 }}",
+                        "document_profile": "BROWSER_CAPTURE_V1",
+                        "requested_schema_version": "browser-capture-schema-v1",
+                        "onedrive_item_id": "={{ $json.id }}",
+                        "source_code": "BROWSER_CAPTURE",
+                        "state": "RECEIVED",
+                        "attempt_count": 0,
+                        "output_sha256": "={{ $('SHA-256 Browser Capture Input').first().json.input_sha256 }}",
+                        "error_class": "",
+                        "error_detail_redacted": "",
+                        "updated_at": "={{ $now.toISO() }}",
+                    },
+                    "matchingColumns": [],
+                    "schema": [],
+                    "attemptToConvertTypes": False,
+                    "convertFieldsToString": False,
+                },
+                "options": {"dryRun": False},
+            },
+        }
+    )
     readback = node_by_name(handoff, "Verify Durable Artifact Contract")
-    readback.update({
-        "name": "Read Back Durable Browser Archive Receipt",
-        "type": "n8n-nodes-base.dataTable",
-        "typeVersion": 1.1,
-        "alwaysOutputData": True,
-        "parameters": {
-            "resource": "row",
-            "operation": "get",
-            "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
-            "returnAll": False,
-            "limit": 1,
-            "matchType": "allConditions",
-            "filters": {"conditions": [
-                {"keyName": "document_id", "condition": "eq", "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}"},
-            ]},
-            "options": {},
-        },
-    })
+    readback.update(
+        {
+            "name": "Read Back Durable Browser Archive Receipt",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "parameters": {
+                "resource": "row",
+                "operation": "get",
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_document_operations",
+                    "mode": "name",
+                },
+                "returnAll": False,
+                "limit": 1,
+                "matchType": "allConditions",
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "document_id",
+                            "condition": "eq",
+                            "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                        },
+                    ]
+                },
+                "options": {},
+            },
+        }
+    )
     download = node_by_name(handoff, "Verified Statement PDF?")
-    download.update({
-        "name": "Download Archived Browser Capture",
-        "type": "n8n-nodes-base.microsoftOneDrive",
-        "typeVersion": 1.1,
-        "parameters": {
-            "resource": "file",
-            "operation": "download",
-            "fileId": "={{ $json.onedrive_item_id }}",
-            "binaryPropertyName": "data",
-        },
-        "credentials": {
-            "microsoftOneDriveOAuth2Api": {
-                "id": "BIND_ONEDRIVE",
-                "name": "Finance OneDrive",
-            }
-        },
-    })
+    download.update(
+        {
+            "name": "Download Archived Browser Capture",
+            "type": "n8n-nodes-base.microsoftOneDrive",
+            "typeVersion": 1.1,
+            "parameters": {
+                "resource": "file",
+                "operation": "download",
+                "fileId": "={{ $json.onedrive_item_id }}",
+                "binaryPropertyName": "data",
+            },
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {
+                    "id": "BIND_ONEDRIVE",
+                    "name": "Finance OneDrive",
+                }
+            },
+        }
+    )
     archive_hash = node_by_name(handoff, "Run Statement Pipeline")
-    archive_hash.update({
-        "name": "SHA-256 Archived Browser Capture",
-        "type": "n8n-nodes-base.crypto",
-        "typeVersion": 1,
-        "parameters": {
-            "action": "hash",
-            "type": "SHA256",
-            "binaryData": True,
-            "binaryPropertyName": "data",
-            "dataPropertyName": "archived_sha256",
-        },
-    })
+    archive_hash.update(
+        {
+            "name": "SHA-256 Archived Browser Capture",
+            "type": "n8n-nodes-base.crypto",
+            "typeVersion": 1,
+            "parameters": {
+                "action": "hash",
+                "type": "SHA256",
+                "binaryData": True,
+                "binaryPropertyName": "data",
+                "dataPropertyName": "archived_sha256",
+            },
+        }
+    )
     verify = node_by_name(handoff, "Require Typed Browser Capture Validator")
-    verify.update({
-        "name": "Verify Browser Archive Receipt",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "parameters": {"jsCode": r"""
+    verify.update(
+        {
+            "name": "Verify Browser Archive Receipt",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "parameters": {
+                "jsCode": r"""
 const request = $('Resolve Capture Hash Contract').first().json;
 const input = $('SHA-256 Browser Capture Input').first().json;
 const receipt = $('Read Back Durable Browser Archive Receipt').first().json;
@@ -2155,54 +2633,70 @@ if (!/^[a-f0-9]{64}$/.test(observed) || observed !== receipt.output_sha256) {
   throw new Error('BROWSER_ARCHIVE_HASH_INVALID');
 }
 return [{ json: { receipt, source_content_sha256: request.expected_source_sha256, capture_binary_sha256: observed }, binary: $binary }];
-""".strip()},
-    })
-    handoff["nodes"].extend([
-        {
-            "id": "11010-mode-if",
-            "name": "MCP Reviewed Artifact?",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 2.2,
-            "position": [-500, -180],
-            "parameters": {"conditions": {
-                "options": {"caseSensitive": True, "typeValidation": "strict"},
-                "combinator": "and",
-                "conditions": [{
-                    "leftValue": "={{ $json.handoff_mode }}",
-                    "rightValue": "MCP_REVIEWED",
-                    "operator": {"type": "string", "operation": "equals"},
-                }],
-            }},
-        },
-        {
-            "id": "11010-mcp-load",
-            "name": "Load MCP Reviewed Document Record",
-            "type": "n8n-nodes-base.dataTable",
-            "typeVersion": 1.1,
-            "alwaysOutputData": True,
-            "position": [-250, -180],
-            "parameters": {
-                "resource": "row",
-                "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
-                "returnAll": False,
-                "limit": 1,
-                "matchType": "allConditions",
-                "filters": {"conditions": [{
-                    "keyName": "document_id",
-                    "condition": "eq",
-                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                }]},
-                "options": {},
+""".strip()
             },
-        },
-        {
-            "id": "11010-mcp-validate",
-            "name": "Validate MCP Durable Document Reference",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [0, -180],
-            "parameters": {"jsCode": r"""
+        }
+    )
+    handoff["nodes"].extend(
+        [
+            {
+                "id": "11010-mode-if",
+                "name": "MCP Reviewed Artifact?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [-500, -180],
+                "parameters": {
+                    "conditions": {
+                        "options": {"caseSensitive": True, "typeValidation": "strict"},
+                        "combinator": "and",
+                        "conditions": [
+                            {
+                                "leftValue": "={{ $json.handoff_mode }}",
+                                "rightValue": "MCP_REVIEWED",
+                                "operator": {"type": "string", "operation": "equals"},
+                            }
+                        ],
+                    }
+                },
+            },
+            {
+                "id": "11010-mcp-load",
+                "name": "Load MCP Reviewed Document Record",
+                "type": "n8n-nodes-base.dataTable",
+                "typeVersion": 1.1,
+                "alwaysOutputData": True,
+                "position": [-250, -180],
+                "parameters": {
+                    "resource": "row",
+                    "operation": "get",
+                    "dataTableId": {
+                        "__rl": True,
+                        "value": "finance_document_operations",
+                        "mode": "name",
+                    },
+                    "returnAll": False,
+                    "limit": 1,
+                    "matchType": "allConditions",
+                    "filters": {
+                        "conditions": [
+                            {
+                                "keyName": "document_id",
+                                "condition": "eq",
+                                "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                            }
+                        ]
+                    },
+                    "options": {},
+                },
+            },
+            {
+                "id": "11010-mcp-validate",
+                "name": "Validate MCP Durable Document Reference",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [0, -180],
+                "parameters": {
+                    "jsCode": r"""
 const request = $('Validate Reviewed Artifact Reference').first().json;
 const record = $json;
 if (!record.document_id || String(record.document_id) !== request.artifact_id) {
@@ -2224,31 +2718,36 @@ return [{ json: {
   server_source_sha256: String(record.source_sha256).toLowerCase(),
   durable_state: String(record.state || ''),
 } }];
-""".strip()},
-        },
-        {
-            "id": "11010-mcp-download",
-            "name": "Download MCP Reviewed Capture",
-            "type": "n8n-nodes-base.microsoftOneDrive",
-            "typeVersion": 1.1,
-            "position": [250, -180],
-            "parameters": {
-                "resource": "file",
-                "operation": "download",
-                "fileId": "={{ $json.onedrive_item_id }}",
-                "binaryPropertyName": "data",
+""".strip()
+                },
             },
-            "credentials": {
-                "microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
+            {
+                "id": "11010-mcp-download",
+                "name": "Download MCP Reviewed Capture",
+                "type": "n8n-nodes-base.microsoftOneDrive",
+                "typeVersion": 1.1,
+                "position": [250, -180],
+                "parameters": {
+                    "resource": "file",
+                    "operation": "download",
+                    "fileId": "={{ $json.onedrive_item_id }}",
+                    "binaryPropertyName": "data",
+                },
+                "credentials": {
+                    "microsoftOneDriveOAuth2Api": {
+                        "id": "BIND_ONEDRIVE",
+                        "name": "Finance OneDrive",
+                    }
+                },
             },
-        },
-        {
-            "id": "11010-hash-contract",
-            "name": "Resolve Capture Hash Contract",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [250, 180],
-            "parameters": {"jsCode": r"""
+            {
+                "id": "11010-hash-contract",
+                "name": "Resolve Capture Hash Contract",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [250, 180],
+                "parameters": {
+                    "jsCode": r"""
 const request = $('Validate Reviewed Artifact Reference').first().json;
 const inputHash = String($json.input_sha256 || '').toLowerCase();
 if (!/^[a-f0-9]{64}$/.test(inputHash)) throw new Error('BROWSER_CAPTURE_BINARY_HASH_MISSING');
@@ -2257,15 +2756,17 @@ if (request.handoff_mode === 'MCP_REVIEWED') {
   return [{ json: { ...$json, expected_source_sha256: durable.server_source_sha256, expected_capture_sha256: inputHash }, binary: $binary }];
 }
 return [{ json: { ...$json, expected_source_sha256: request.expected_source_sha256, expected_capture_sha256: request.expected_capture_sha256 }, binary: $binary }];
-""".strip()},
-        },
-        {
-            "id": "11010-preparse",
-            "name": "Parse Browser Capture JSON Before Archive",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [250, 0],
-            "parameters": {"jsCode": r"""
+""".strip()
+                },
+            },
+            {
+                "id": "11010-preparse",
+                "name": "Parse Browser Capture JSON Before Archive",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [250, 0],
+                "parameters": {
+                    "jsCode": r"""
 const encoded = $binary?.data?.data;
 if (typeof encoded !== 'string' || !encoded) throw new Error('BROWSER_CAPTURE_BINARY_REQUIRED');
 let capture;
@@ -2280,37 +2781,47 @@ if (!capture || typeof capture !== 'object' || Array.isArray(capture)) {
   throw new Error('BROWSER_CAPTURE_JSON_OBJECT_REQUIRED');
 }
 return [{ json: capture, binary: $binary }];
-""".strip()},
-        },
-        {
-            "id": "11010-existing",
-            "name": "Load Existing Browser Archive Receipt",
-            "type": "n8n-nodes-base.dataTable",
-            "typeVersion": 1.1,
-            "alwaysOutputData": True,
-            "position": [700, 0],
-            "parameters": {
-                "resource": "row",
-                "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
-                "returnAll": False,
-                "limit": 1,
-                "matchType": "allConditions",
-                "filters": {"conditions": [{
-                    "keyName": "document_id",
-                    "condition": "eq",
-                    "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
-                }]},
-                "options": {},
+""".strip()
+                },
             },
-        },
-        {
-            "id": "11010-idempotency",
-            "name": "Check Existing Browser Artifact",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [950, 0],
-            "parameters": {"jsCode": r"""
+            {
+                "id": "11010-existing",
+                "name": "Load Existing Browser Archive Receipt",
+                "type": "n8n-nodes-base.dataTable",
+                "typeVersion": 1.1,
+                "alwaysOutputData": True,
+                "position": [700, 0],
+                "parameters": {
+                    "resource": "row",
+                    "operation": "get",
+                    "dataTableId": {
+                        "__rl": True,
+                        "value": "finance_document_operations",
+                        "mode": "name",
+                    },
+                    "returnAll": False,
+                    "limit": 1,
+                    "matchType": "allConditions",
+                    "filters": {
+                        "conditions": [
+                            {
+                                "keyName": "document_id",
+                                "condition": "eq",
+                                "keyValue": "={{ $('Validate Reviewed Artifact Reference').first().json.artifact_id }}",
+                            }
+                        ]
+                    },
+                    "options": {},
+                },
+            },
+            {
+                "id": "11010-idempotency",
+                "name": "Check Existing Browser Artifact",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [950, 0],
+                "parameters": {
+                    "jsCode": r"""
 const existing = $json;
 const request = $('Resolve Capture Hash Contract').first().json;
 const captureBinary = $('Validate Browser Capture Schema').first().binary;
@@ -2327,39 +2838,50 @@ if (!existing.onedrive_item_id || existing.document_profile !== 'BROWSER_CAPTURE
   throw new Error('BROWSER_ARTIFACT_IDEMPOTENCY_RECORD_INVALID');
 }
 return [{ json: { ...existing, idempotency_action: 'NOOP', artifact_id: request.artifact_id, expected_source_sha256: request.expected_source_sha256, capture_binary_sha256: captureBinarySha256 }, binary: captureBinary }];
-""".strip()},
-        },
-        {
-            "id": "11010-idempotency-if",
-            "name": "New Browser Artifact?",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 2.2,
-            "position": [1200, 0],
-            "parameters": {"conditions": {
-                "options": {"caseSensitive": True, "typeValidation": "strict"},
-                "combinator": "and",
-                "conditions": [{
-                    "leftValue": "={{ $json.idempotency_action }}",
-                    "rightValue": "CREATE",
-                    "operator": {"type": "string", "operation": "equals"},
-                }],
-            }},
-        },
-        {
-            "id": "11010",
-            "name": "Extract Browser Capture JSON",
-            "type": "n8n-nodes-base.extractFromFile",
-            "typeVersion": 1,
-            "position": [1250, 0],
-            "parameters": {"operation": "fromJson", "binaryPropertyName": "data", "options": {}},
-        },
-        {
-            "id": "11011",
-            "name": "Validate Browser Capture Schema",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [1500, 0],
-            "parameters": {"jsCode": (r"""
+""".strip()
+                },
+            },
+            {
+                "id": "11010-idempotency-if",
+                "name": "New Browser Artifact?",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [1200, 0],
+                "parameters": {
+                    "conditions": {
+                        "options": {"caseSensitive": True, "typeValidation": "strict"},
+                        "combinator": "and",
+                        "conditions": [
+                            {
+                                "leftValue": "={{ $json.idempotency_action }}",
+                                "rightValue": "CREATE",
+                                "operator": {"type": "string", "operation": "equals"},
+                            }
+                        ],
+                    }
+                },
+            },
+            {
+                "id": "11010",
+                "name": "Extract Browser Capture JSON",
+                "type": "n8n-nodes-base.extractFromFile",
+                "typeVersion": 1,
+                "position": [1250, 0],
+                "parameters": {
+                    "operation": "fromJson",
+                    "binaryPropertyName": "data",
+                    "options": {},
+                },
+            },
+            {
+                "id": "11011",
+                "name": "Validate Browser Capture Schema",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1500, 0],
+                "parameters": {
+                    "jsCode": (
+                        r"""
 const schema = __BROWSER_CAPTURE_SCHEMA_JSON__; /*
   type: 'object',
   additionalProperties: false,
@@ -2511,18 +3033,23 @@ if (capture.capture_id !== capture.provenance.capture_id
   throw new Error('BROWSER_CAPTURE_PROVENANCE_MISMATCH');
 }
 return [{ json: { ...capture, handoff_status: 'SCHEMA_VALIDATED', headless_owner: 'N8N', actual_mutation: false, cashback_mutation: false }, binary: $binary }];
-""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal).replace(
-                "__BROWSER_CAPTURE_PRECOMPILED_VALIDATOR__",
-                BROWSER_CAPTURE_VALIDATOR,
-            ).strip())},
-        },
-        {
-            "id": "11012",
-            "name": "Build Browser Headless Handoff",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [1750, 0],
-            "parameters": {"jsCode": r"""
+""".replace("__BROWSER_CAPTURE_SCHEMA_JSON__", browser_schema_literal)
+                        .replace(
+                            "__BROWSER_CAPTURE_PRECOMPILED_VALIDATOR__",
+                            BROWSER_CAPTURE_VALIDATOR,
+                        )
+                        .strip()
+                    )
+                },
+            },
+            {
+                "id": "11012",
+                "name": "Build Browser Headless Handoff",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1750, 0],
+                "parameters": {
+                    "jsCode": r"""
 const capture = $json;
 const archive = $('Verify Browser Archive Receipt').first().json;
 const provider = String(capture.source.provider || '').replaceAll(/[^A-Za-z0-9]+/g, '_').toUpperCase();
@@ -2555,48 +3082,214 @@ return [{
   },
   binary: $binary,
 }];
-""".strip()},
-        },
-        {
-            "id": "11013",
-            "name": "Dispatch Browser Capture to Headless Pipeline",
-            "type": "n8n-nodes-base.executeWorkflow",
-            "typeVersion": 1.2,
-            "position": [2000, 0],
-            "parameters": {
-                "workflowId": {"__rl": True, "value": "10000000-0000-4000-8000-000000000003", "mode": "id"},
-                "options": {"waitForSubWorkflow": True},
+""".strip()
+                },
             },
-        },
-    ])
+            {
+                "id": "11013",
+                "name": "Dispatch Browser Capture to Headless Pipeline",
+                "type": "n8n-nodes-base.executeWorkflow",
+                "typeVersion": 1.2,
+                "position": [2000, 0],
+                "parameters": {
+                    "workflowId": {
+                        "__rl": True,
+                        "value": "10000000-0000-4000-8000-000000000003",
+                        "mode": "id",
+                    },
+                    "options": {"waitForSubWorkflow": True},
+                },
+            },
+        ]
+    )
     handoff["connections"] = {
-        "Reviewed Artifact Reference": {"main": [[{"node": "Validate Reviewed Artifact Reference", "type": "main", "index": 0}]]},
-        "Validate Reviewed Artifact Reference": {"main": [[{"node": "MCP Reviewed Artifact?", "type": "main", "index": 0}]]},
-        "MCP Reviewed Artifact?": {"main": [
-            [{"node": "Load MCP Reviewed Document Record", "type": "main", "index": 0}],
-            [{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}],
-        ]},
-        "Load MCP Reviewed Document Record": {"main": [[{"node": "Validate MCP Durable Document Reference", "type": "main", "index": 0}]]},
-        "Validate MCP Durable Document Reference": {"main": [[{"node": "Download MCP Reviewed Capture", "type": "main", "index": 0}]]},
-        "Download MCP Reviewed Capture": {"main": [[{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]]},
-        "SHA-256 Browser Capture Input": {"main": [[{"node": "Resolve Capture Hash Contract", "type": "main", "index": 0}]]},
-        "Resolve Capture Hash Contract": {"main": [[{"node": "Parse Browser Capture JSON Before Archive", "type": "main", "index": 0}]]},
-        "Parse Browser Capture JSON Before Archive": {"main": [[{"node": "Validate Browser Capture Schema", "type": "main", "index": 0}]]},
-        "Validate Browser Capture Schema": {"main": [[{"node": "Load Existing Browser Archive Receipt", "type": "main", "index": 0}]]},
-        "Load Existing Browser Archive Receipt": {"main": [[{"node": "Check Existing Browser Artifact", "type": "main", "index": 0}]]},
-        "Check Existing Browser Artifact": {"main": [[{"node": "New Browser Artifact?", "type": "main", "index": 0}]]},
-        "New Browser Artifact?": {"main": [
-            [{"node": "Archive Browser Capture in OneDrive", "type": "main", "index": 0}],
-            [{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}],
-        ]},
-        "Archive Browser Capture in OneDrive": {"main": [[{"node": "Upsert Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
-        "Upsert Durable Browser Archive Receipt": {"main": [[{"node": "Read Back Durable Browser Archive Receipt", "type": "main", "index": 0}]]},
-        "Read Back Durable Browser Archive Receipt": {"main": [[{"node": "Download Archived Browser Capture", "type": "main", "index": 0}]]},
-        "Download Archived Browser Capture": {"main": [[{"node": "SHA-256 Archived Browser Capture", "type": "main", "index": 0}]]},
-        "SHA-256 Archived Browser Capture": {"main": [[{"node": "Verify Browser Archive Receipt", "type": "main", "index": 0}]]},
-        "Verify Browser Archive Receipt": {"main": [[{"node": "Extract Browser Capture JSON", "type": "main", "index": 0}]]},
-        "Extract Browser Capture JSON": {"main": [[{"node": "Build Browser Headless Handoff", "type": "main", "index": 0}]]},
-        "Build Browser Headless Handoff": {"main": [[{"node": "Dispatch Browser Capture to Headless Pipeline", "type": "main", "index": 0}]]},
+        "Reviewed Artifact Reference": {
+            "main": [
+                [
+                    {
+                        "node": "Validate Reviewed Artifact Reference",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Validate Reviewed Artifact Reference": {
+            "main": [[{"node": "MCP Reviewed Artifact?", "type": "main", "index": 0}]]
+        },
+        "MCP Reviewed Artifact?": {
+            "main": [
+                [
+                    {
+                        "node": "Load MCP Reviewed Document Record",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ],
+                [{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}],
+            ]
+        },
+        "Load MCP Reviewed Document Record": {
+            "main": [
+                [
+                    {
+                        "node": "Validate MCP Durable Document Reference",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Validate MCP Durable Document Reference": {
+            "main": [
+                [{"node": "Download MCP Reviewed Capture", "type": "main", "index": 0}]
+            ]
+        },
+        "Download MCP Reviewed Capture": {
+            "main": [
+                [{"node": "SHA-256 Browser Capture Input", "type": "main", "index": 0}]
+            ]
+        },
+        "SHA-256 Browser Capture Input": {
+            "main": [
+                [{"node": "Resolve Capture Hash Contract", "type": "main", "index": 0}]
+            ]
+        },
+        "Resolve Capture Hash Contract": {
+            "main": [
+                [
+                    {
+                        "node": "Parse Browser Capture JSON Before Archive",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Parse Browser Capture JSON Before Archive": {
+            "main": [
+                [
+                    {
+                        "node": "Validate Browser Capture Schema",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Validate Browser Capture Schema": {
+            "main": [
+                [
+                    {
+                        "node": "Load Existing Browser Archive Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Load Existing Browser Archive Receipt": {
+            "main": [
+                [
+                    {
+                        "node": "Check Existing Browser Artifact",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Check Existing Browser Artifact": {
+            "main": [[{"node": "New Browser Artifact?", "type": "main", "index": 0}]]
+        },
+        "New Browser Artifact?": {
+            "main": [
+                [
+                    {
+                        "node": "Archive Browser Capture in OneDrive",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ],
+                [
+                    {
+                        "node": "Read Back Durable Browser Archive Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ],
+            ]
+        },
+        "Archive Browser Capture in OneDrive": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert Durable Browser Archive Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Upsert Durable Browser Archive Receipt": {
+            "main": [
+                [
+                    {
+                        "node": "Read Back Durable Browser Archive Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Read Back Durable Browser Archive Receipt": {
+            "main": [
+                [
+                    {
+                        "node": "Download Archived Browser Capture",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Download Archived Browser Capture": {
+            "main": [
+                [
+                    {
+                        "node": "SHA-256 Archived Browser Capture",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "SHA-256 Archived Browser Capture": {
+            "main": [
+                [{"node": "Verify Browser Archive Receipt", "type": "main", "index": 0}]
+            ]
+        },
+        "Verify Browser Archive Receipt": {
+            "main": [
+                [{"node": "Extract Browser Capture JSON", "type": "main", "index": 0}]
+            ]
+        },
+        "Extract Browser Capture JSON": {
+            "main": [
+                [{"node": "Build Browser Headless Handoff", "type": "main", "index": 0}]
+            ]
+        },
+        "Build Browser Headless Handoff": {
+            "main": [
+                [
+                    {
+                        "node": "Dispatch Browser Capture to Headless Pipeline",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
     }
     handoff["meta"]["durableLookupRequired"] = True
     handoff["meta"]["reuploadForbidden"] = True
@@ -2620,7 +3313,12 @@ return [{
         "cashback_mutation_forbidden": True,
         "workflow_state": "INACTIVE",
         "handoff_modes": ["HEADED_CAPTURE", "MCP_REVIEWED"],
-        "headed_capture_contract": ["artifact_id", "expected_source_sha256", "expected_capture_sha256", "binary.data"],
+        "headed_capture_contract": [
+            "artifact_id",
+            "expected_source_sha256",
+            "expected_capture_sha256",
+            "binary.data",
+        ],
         "mcp_reviewed_contract": ["artifact_id"],
         "mcp_server_owned_reference": "finance_document_operations.document_id",
         "mcp_client_binary_forbidden": True,
@@ -2629,9 +3327,7 @@ return [{
 
     agent = by_code["AI_PROPOSAL"]
     agent["name"] = "Finance · Subscription Agent Proposal"
-    for old, new in (
-        ("Trusted AI Proposal Input", "Trusted Agent Proposal Input"),
-    ):
+    for old, new in (("Trusted AI Proposal Input", "Trusted Agent Proposal Input"),):
         if any(node["name"] == old for node in agent["nodes"]):
             rename_node(agent, old, new)
     build_agent = node_by_name(agent, "Build Authoritative Redacted Proposal Job")
@@ -2758,14 +3454,18 @@ return [{ json: {
 """.strip()
     agent["meta"].pop("activeProvider", None)
     agent["meta"].pop("providerBranchesEnabled", None)
-    agent["meta"].update({
-        "provider": "SUBSCRIPTION_AGENT_HANDOFF",
-        "supportedProviders": ["CODEX_SUBSCRIPTION"],
-        "providerSelection": "SERVER_AI_POLICY_CONTRACT",
-        "providerSelectionCallerControlled": False,
-        "protectedFieldPolicyIdenticalAcrossProviders": True,
-    })
-    validate_response = node_by_name(agent, "Validate Proposal Schema and Policy Boundary")
+    agent["meta"].update(
+        {
+            "provider": "SUBSCRIPTION_AGENT_HANDOFF",
+            "supportedProviders": ["CODEX_SUBSCRIPTION"],
+            "providerSelection": "SERVER_AI_POLICY_CONTRACT",
+            "providerSelectionCallerControlled": False,
+            "protectedFieldPolicyIdenticalAcrossProviders": True,
+        }
+    )
+    validate_response = node_by_name(
+        agent, "Validate Proposal Schema and Policy Boundary"
+    )
     validate_response["parameters"]["jsCode"] = r"""
 const request = $('Build Idempotent Agent Handoff').first().json;
 const response = $json;
@@ -2962,12 +3662,16 @@ return [{ json: response }];
         node["name"] == "Get Messages from Configured Folder"
         for node in acquisition["nodes"]
     ):
-        raise ValueError("W01 legacy Graph enumeration is forbidden; use the W12 immutable inventory")
+        raise ValueError(
+            "W01 legacy Graph enumeration is forbidden; use the W12 immutable inventory"
+        )
 
 
 def ensure_single_actual_writer(workflows: list[dict]) -> None:
     """Extract the existing recovery core into the sole Actual mutation boundary."""
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
     recovery = by_code["ACTUAL_OUTBOX_RECOVERY"]
     existing = by_code.get("ACTUAL_OUTBOX_APPLY")
@@ -2979,7 +3683,8 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         core_nodes = [
             json.loads(json.dumps(node))
             for node in recovery["nodes"]
-            if node["name"] not in excluded and node["type"] != "n8n-nodes-base.stickyNote"
+            if node["name"] not in excluded
+            and node["type"] != "n8n-nodes-base.stickyNote"
         ]
         trigger = {
             "id": "20001",
@@ -2993,7 +3698,15 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         connections.pop("Every 10 Minutes", None)
         connections.pop("Read Nonterminal Actual Outbox", None)
         connections["Prepared Outbox Input"] = {
-            "main": [[{"node": "Download Immutable Delta Artifact", "type": "main", "index": 0}]]
+            "main": [
+                [
+                    {
+                        "node": "Download Immutable Delta Artifact",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
         }
         existing = {
             "id": "10000000-0000-4000-8000-000000000020",
@@ -3015,11 +3728,15 @@ def ensure_single_actual_writer(workflows: list[dict]) -> None:
         workflows.append(existing)
 
     verify_recovery = node_by_name(existing, "Verify Recovery Contract")
-    verify_recovery["parameters"]["jsCode"] = verify_recovery["parameters"]["jsCode"].replace(
+    verify_recovery["parameters"]["jsCode"] = verify_recovery["parameters"][
+        "jsCode"
+    ].replace(
         "$('Read Nonterminal Actual Outbox').item.json",
         "$('Prepared Outbox Input').first().json",
     )
-    recovery_verification = node_by_name(existing, "Build Recovery Verification Contract")
+    recovery_verification = node_by_name(
+        existing, "Build Recovery Verification Contract"
+    )
     recovery_verification["parameters"]["jsCode"] = r"""
 // Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.
 const root = $('Verify Recovery Contract').first().json;
@@ -3066,11 +3783,21 @@ return [{ json: {
             "parameters": {
                 "resource": "row",
                 "operation": "upsert",
-                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_actual_batches",
+                    "mode": "name",
+                },
                 "matchType": "allConditions",
-                "filters": {"conditions": [
-                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
-                ]},
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "idempotency_key",
+                            "condition": "eq",
+                            "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                        },
+                    ]
+                },
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
@@ -3111,14 +3838,28 @@ return [{ json: {
             "parameters": {
                 "resource": "row",
                 "operation": "get",
-                "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_actual_batches",
+                    "mode": "name",
+                },
                 "returnAll": False,
                 "limit": 1,
                 "matchType": "allConditions",
-                "filters": {"conditions": [
-                    {"keyName": "idempotency_key", "condition": "eq", "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"},
-                    {"keyName": "invariants_passed", "condition": "eq", "keyValue": True},
-                ]},
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "idempotency_key",
+                            "condition": "eq",
+                            "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                        },
+                        {
+                            "keyName": "invariants_passed",
+                            "condition": "eq",
+                            "keyValue": True,
+                        },
+                    ]
+                },
                 "options": {},
             },
         },
@@ -3128,7 +3869,8 @@ return [{ json: {
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [1200, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const observed = $json;
 const result = $('Recovery Verify Actual').first().json.actual;
 if (
@@ -3156,32 +3898,45 @@ if (
   throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');
 }
 return [{ json: observed }];
-""".strip()},
+""".strip()
+            },
         },
     ]
     existing_names = {node["name"] for node in existing["nodes"]}
-    existing["nodes"].extend(node for node in verification_receipt_nodes if node["name"] not in existing_names)
+    existing["nodes"].extend(
+        node
+        for node in verification_receipt_nodes
+        if node["name"] not in existing_names
+    )
     by_name = {node["name"]: node for node in existing["nodes"]}
     for template in verification_receipt_nodes:
         current = by_name.get(template["name"])
         if current is not None:
             current["parameters"] = json.loads(json.dumps(template["parameters"]))
-    committed_values = by_name["Upsert COMMITTED Recovery"]["parameters"]["columns"]["value"]
-    committed_values.update({
-        "lease_owner": "={{ $('Acquire Recovery Writer Fence').first().json.lease_owner }}",
-        "lease_fence": "={{ $('Acquire Recovery Writer Fence').first().json.fencing_token }}",
-    })
+    committed_values = by_name["Upsert COMMITTED Recovery"]["parameters"]["columns"][
+        "value"
+    ]
+    committed_values.update(
+        {
+            "lease_owner": "={{ $('Acquire Recovery Writer Fence').first().json.lease_owner }}",
+            "lease_fence": "={{ $('Acquire Recovery Writer Fence').first().json.fencing_token }}",
+        }
+    )
     commit_receipt = by_name["Return Verified Commit Receipt"]
     commit_code = commit_receipt["parameters"]["jsCode"]
-    commit_code = commit_code.replace(
-        "const verification = $('Recovery Verify Actual').first().json.actual;\n",
-        "",
-    ).replace(
-        "const receipt = $('Compare Exact Actual Verification Receipt').first().json;",
-        "const receipt = $('Validate Stored Verification Receipt for Commit').first().json;",
-    ).replace(
-        "receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED'",
-        "receipt.invariants_passed !== true || committed.state !== 'COMMITTED'",
+    commit_code = (
+        commit_code.replace(
+            "const verification = $('Recovery Verify Actual').first().json.actual;\n",
+            "",
+        )
+        .replace(
+            "const receipt = $('Compare Exact Actual Verification Receipt').first().json;",
+            "const receipt = $('Validate Stored Verification Receipt for Commit').first().json;",
+        )
+        .replace(
+            "receipt.invariants_passed !== true || verification.status !== 'VERIFIED' || committed.state !== 'COMMITTED'",
+            "receipt.invariants_passed !== true || committed.state !== 'COMMITTED'",
+        )
     )
     if "ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK" not in commit_code:
         correlation_guard = """if (String(committed.lease_owner) !== String(lease.lease_owner)
@@ -3203,7 +3958,10 @@ return [{ json: observed }];
     replay_code = replay_receipt["parameters"]["jsCode"]
     for old, new in (
         ("const lease = $('Verify Recovery Contract').first().json.outbox_row;\n", ""),
-        ("`actual:${text(manifest.actual_file_id)}`", "`actual:${text(committed.actual_file_id)}`"),
+        (
+            "`actual:${text(manifest.actual_file_id)}`",
+            "`actual:${text(committed.actual_file_id)}`",
+        ),
         ("text(lease.lease_owner)", "text(committed.lease_owner)"),
         ("Number(lease.lease_fence)", "Number(committed.lease_fence)"),
         ("lease_owner: text(committed.lease_owner)", "lease_owner: expectedOwner"),
@@ -3231,34 +3989,54 @@ return [{ json: observed }];
     # capture its existing imported IDs before verification. The PREPARED
     # branch continues to use Recovery Actual Preflight before the import.
     if "Recovery Existing Actual Preflight" not in by_name:
-        existing["nodes"].append({
-            "id": "20007",
-            "name": "Recovery Existing Actual Preflight",
-            "type": "n8n-nodes-finance.actualBudget",
-            "typeVersion": 1,
-            "position": [-820, 520],
-            "parameters": {"operation": "preflight"},
-            "credentials": {
-                "actualBudgetApi": {"id": "BIND_ACTUAL", "name": "Finance Actual"},
-            },
-        })
-        existing["connections"]["Recovery State"]["main"][1] = [[{
-            "node": "Recovery Existing Actual Preflight", "type": "main", "index": 0,
-        }]]
+        existing["nodes"].append(
+            {
+                "id": "20007",
+                "name": "Recovery Existing Actual Preflight",
+                "type": "n8n-nodes-finance.actualBudget",
+                "typeVersion": 1,
+                "position": [-820, 520],
+                "parameters": {"operation": "preflight"},
+                "credentials": {
+                    "actualBudgetApi": {"id": "BIND_ACTUAL", "name": "Finance Actual"},
+                },
+            }
+        )
+        existing["connections"]["Recovery State"]["main"][1] = [
+            [
+                {
+                    "node": "Recovery Existing Actual Preflight",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
         existing["connections"]["Recovery Existing Actual Preflight"] = {
-            "main": [[{"node": "Read Back ACTUAL OBSERVED Recovery", "type": "main", "index": 0}]],
+            "main": [
+                [
+                    {
+                        "node": "Read Back ACTUAL OBSERVED Recovery",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ],
         }
     by_name = {node["name"]: node for node in existing["nodes"]}
 
     # Persist the balance-delta proof produced by the Actual import session.
     # This is deliberately independent of a historical statement's closing
     # balance because the account may already contain later transactions.
-    observed_values = by_name["Upsert ACTUAL OBSERVED Recovery"]["parameters"]["columns"]["value"]
-    observed_values.update({
-        "actual_transaction_id": "={{ $json.actual.actual_result.added?.[0] || $json.actual.actual_result.updated?.[0] || $('Verify Recovery Contract').first().json.outbox_row.actual_transaction_id || '' }}",
-        "expected_account_balance": "={{ $json.actual.expected_balance_after }}",
-        "observed_account_balance": "={{ $json.actual.balance_after }}",
-    })
+    observed_values = by_name["Upsert ACTUAL OBSERVED Recovery"]["parameters"][
+        "columns"
+    ]["value"]
+    observed_values.update(
+        {
+            "actual_transaction_id": "={{ $json.actual.actual_result.added?.[0] || $json.actual.actual_result.updated?.[0] || $('Verify Recovery Contract').first().json.outbox_row.actual_transaction_id || '' }}",
+            "expected_account_balance": "={{ $json.actual.expected_balance_after }}",
+            "observed_account_balance": "={{ $json.actual.balance_after }}",
+        }
+    )
 
     lease_workflow = {
         "workflowId": {
@@ -3271,33 +4049,57 @@ return [{ json: observed }];
     }
     extra_nodes = [
         {
-            "id": "20008", "name": "Build Post-Import Fence Assert",
-            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [880, 380],
-            "parameters": {"jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
-return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""},
+            "id": "20008",
+            "name": "Build Post-Import Fence Assert",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [880, 380],
+            "parameters": {
+                "jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
+return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""
+            },
         },
         {
-            "id": "20009", "name": "Assert Recovery Fence After Import",
-            "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [1080, 380],
+            "id": "20009",
+            "name": "Assert Recovery Fence After Import",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.2,
+            "position": [1080, 380],
             "parameters": lease_workflow,
         },
         {
-            "id": "20010", "name": "Restore Post-Import Result",
-            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1280, 380],
-            "parameters": {"jsCode": """if ($json.valid !== true)
+            "id": "20010",
+            "name": "Restore Post-Import Result",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1280, 380],
+            "parameters": {
+                "jsCode": """if ($json.valid !== true)
   throw new Error('RECOVERY_POST_IMPORT_FENCE_ASSERTION_FAILED');
-return [{ json: $('Recovery Import PREPARED').first().json }];"""},
+return [{ json: $('Recovery Import PREPARED').first().json }];"""
+            },
         },
         {
-            "id": "20011", "name": "Read Verification Receipt for Commit",
-            "type": "n8n-nodes-base.dataTable", "typeVersion": 1.1,
-            "alwaysOutputData": True, "position": [1180, 760],
-            "parameters": json.loads(json.dumps(by_name["Read Back Exact Actual Verification Receipt"]["parameters"])),
+            "id": "20011",
+            "name": "Read Verification Receipt for Commit",
+            "type": "n8n-nodes-base.dataTable",
+            "typeVersion": 1.1,
+            "alwaysOutputData": True,
+            "position": [1180, 760],
+            "parameters": json.loads(
+                json.dumps(
+                    by_name["Read Back Exact Actual Verification Receipt"]["parameters"]
+                )
+            ),
         },
         {
-            "id": "20012", "name": "Validate Stored Verification Receipt for Commit",
-            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1380, 760],
-            "parameters": {"jsCode": """const receipt = $json;
+            "id": "20012",
+            "name": "Validate Stored Verification Receipt for Commit",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1380, 760],
+            "parameters": {
+                "jsCode": """const receipt = $json;
 const root = $('Verify Recovery Contract').first().json;
 const text = value => String(value ?? '').trim();
 if (!receipt || receipt.invariants_passed !== true
@@ -3323,65 +4125,140 @@ if (!receipt || receipt.invariants_passed !== true
     || !Number.isSafeInteger(receipt.expected_account_balance)
     || receipt.expected_account_balance !== receipt.observed_account_balance)
   throw new Error('ACTUAL_STORED_VERIFICATION_RECEIPT_MISMATCH');
-return [{ json: receipt }];"""},
+return [{ json: receipt }];"""
+            },
         },
         {
-            "id": "20013", "name": "Build Pre-Commit Fence Assert",
-            "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1580, 760],
-            "parameters": {"jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
-return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""},
+            "id": "20013",
+            "name": "Build Pre-Commit Fence Assert",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1580, 760],
+            "parameters": {
+                "jsCode": """const lease = $('Acquire Recovery Writer Fence').first().json;
+return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];"""
+            },
         },
         {
-            "id": "20014", "name": "Assert Recovery Fence Before Commit",
-            "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [1780, 760],
+            "id": "20014",
+            "name": "Assert Recovery Fence Before Commit",
+            "type": "n8n-nodes-base.executeWorkflow",
+            "typeVersion": 1.2,
+            "position": [1780, 760],
             "parameters": lease_workflow,
         },
     ]
     existing_names = {node["name"] for node in existing["nodes"]}
-    existing["nodes"].extend(node for node in extra_nodes if node["name"] not in existing_names)
+    existing["nodes"].extend(
+        node for node in extra_nodes if node["name"] not in existing_names
+    )
     by_name = {node["name"]: node for node in existing["nodes"]}
     for template in extra_nodes:
         current = by_name[template["name"]]
         current["parameters"] = json.loads(json.dumps(template["parameters"]))
 
     existing["connections"]["Recovery Import PREPARED"] = {
-        "main": [[{"node": "Build Post-Import Fence Assert", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Build Post-Import Fence Assert", "type": "main", "index": 0}]
+        ],
     }
     existing["connections"]["Build Post-Import Fence Assert"] = {
-        "main": [[{"node": "Assert Recovery Fence After Import", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Assert Recovery Fence After Import", "type": "main", "index": 0}]
+        ],
     }
     existing["connections"]["Assert Recovery Fence After Import"] = {
         "main": [[{"node": "Restore Post-Import Result", "type": "main", "index": 0}]],
     }
     existing["connections"]["Restore Post-Import Result"] = {
-        "main": [[{"node": "Upsert ACTUAL OBSERVED Recovery", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Upsert ACTUAL OBSERVED Recovery", "type": "main", "index": 0}]
+        ],
     }
     existing["connections"]["Read Back VERIFIED Recovery"] = {
-        "main": [[{"node": "Read Verification Receipt for Commit", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Read Verification Receipt for Commit",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Read Verification Receipt for Commit"] = {
-        "main": [[{"node": "Validate Stored Verification Receipt for Commit", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Validate Stored Verification Receipt for Commit",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Validate Stored Verification Receipt for Commit"] = {
-        "main": [[{"node": "Build Pre-Commit Fence Assert", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Build Pre-Commit Fence Assert", "type": "main", "index": 0}]
+        ],
     }
     existing["connections"]["Build Pre-Commit Fence Assert"] = {
-        "main": [[{"node": "Assert Recovery Fence Before Commit", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Assert Recovery Fence Before Commit",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Assert Recovery Fence Before Commit"] = {
         "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
     }
     existing["connections"]["Read Committed Writer Fence Replay"] = {
-        "main": [[{"node": "Build Committed Replay Fence Release", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Build Committed Replay Fence Release",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Build Committed Replay Fence Release"] = {
-        "main": [[{"node": "Release Committed Replay Writer Fence", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Release Committed Replay Writer Fence",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Release Committed Replay Writer Fence"] = {
-        "main": [[{"node": "Read Back Released Recovery Writer Fence Replay", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Read Back Released Recovery Writer Fence Replay",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Read Back Released Recovery Writer Fence Replay"] = {
-        "main": [[{"node": "Return Verified Commit Receipt Replay", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Return Verified Commit Receipt Replay",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
 
     # The lease table keeps only the current row per Actual file, so an old
@@ -3395,31 +4272,51 @@ return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_i
         "Read Back Released Recovery Writer Fence Replay",
     }
     existing["nodes"] = [
-        node for node in existing["nodes"] if node["name"] not in obsolete_replay_release
+        node
+        for node in existing["nodes"]
+        if node["name"] not in obsolete_replay_release
     ]
     for name in obsolete_replay_release:
         existing["connections"].pop(name, None)
     existing["connections"]["Read Back Exact Actual Verification Receipt Replay"] = {
-        "main": [[{"node": "Return Verified Commit Receipt Replay", "type": "main", "index": 0}]],
+        "main": [
+            [
+                {
+                    "node": "Return Verified Commit Receipt Replay",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ],
     }
     existing["connections"]["Assert Recovery Fence Before Commit"] = {
-        "main": [[{"node": "Build Recovery Fence Release", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Build Recovery Fence Release", "type": "main", "index": 0}]
+        ],
     }
     existing["connections"]["Read Back Released Recovery Writer Fence"] = {
         "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
     }
     existing["connections"]["Read Back COMMITTED Recovery"] = {
-        "main": [[{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]],
+        "main": [
+            [{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]
+        ],
     }
-    node_by_name(existing, "Return Verified Commit Receipt Replay")["parameters"]["jsCode"] = r"""
+    node_by_name(existing, "Return Verified Commit Receipt Replay")["parameters"][
+        "jsCode"
+    ] = r"""
 // Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.
 const committed = $('Read Back COMMITTED Recovery Replay').first().json;
 const receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;
+const release = $('Read Back Released Recovery Writer Fence Replay').first().json;
 const manifest = $('Verify Recovery Contract').first().json.manifest;
 const text = value => String(value ?? '').trim();
 const expectedOwner = text(committed.lease_owner);
 const expectedFence = Number(committed.lease_fence);
 if (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true
+    || !release || release.released !== true
+    || text(release.lease_owner) !== expectedOwner
+    || Number(release.fencing_token) !== expectedFence
     || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)
   throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');
 if (text(receipt.batch_id) !== text(committed.batch_id)
@@ -3469,26 +4366,54 @@ return [{ json: {
 } }];
 """.strip()
     existing["connections"]["Recovery Verify Actual"] = {
-        "main": [[{"node": "Upsert Exact Actual Verification Receipt", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Upsert Exact Actual Verification Receipt",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     existing["connections"]["Upsert Exact Actual Verification Receipt"] = {
-        "main": [[{"node": "Read Back Exact Actual Verification Receipt", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Read Back Exact Actual Verification Receipt",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     existing["connections"]["Read Back Exact Actual Verification Receipt"] = {
-        "main": [[{"node": "Compare Exact Actual Verification Receipt", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Compare Exact Actual Verification Receipt",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     existing["connections"]["Compare Exact Actual Verification Receipt"] = {
         "main": [[{"node": "Upsert VERIFIED Recovery", "type": "main", "index": 0}]]
     }
 
-    if not any(node["name"] == "Return Verified Commit Receipt" for node in existing["nodes"]):
-        existing["nodes"].append({
-            "id": "20002",
-            "name": "Return Verified Commit Receipt",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [1200, 0],
-            "parameters": {"jsCode": r"""
+    if not any(
+        node["name"] == "Return Verified Commit Receipt" for node in existing["nodes"]
+    ):
+        existing["nodes"].append(
+            {
+                "id": "20002",
+                "name": "Return Verified Commit Receipt",
+                "type": "n8n-nodes-base.code",
+                "typeVersion": 2,
+                "position": [1200, 0],
+                "parameters": {
+                    "jsCode": r"""
 const committed = $('Read Back COMMITTED Recovery').first().json;
 const verification = $('Recovery Verify Actual').first().json;
 return [{
@@ -3502,10 +4427,14 @@ return [{
     writer_release_verified: true,
   },
 }];
-""".strip()},
-        })
+""".strip()
+                },
+            }
+        )
         existing["connections"]["Release Recovery Writer Fence"] = {
-            "main": [[{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]]
+            "main": [
+                [{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]
+            ]
         }
 
     # Recovery owns only polling and delegates every mutation to the writer.
@@ -3547,7 +4476,9 @@ return [{
         remove = set(names[first : last + 1])
     else:
         remove = set()
-    statement["nodes"] = [node for node in statement["nodes"] if node["name"] not in remove]
+    statement["nodes"] = [
+        node for node in statement["nodes"] if node["name"] not in remove
+    ]
     for name in remove:
         statement.get("connections", {}).pop(name, None)
     apply_prepared = {
@@ -3583,114 +4514,196 @@ return [{
     }
     statement["meta"]["delegatesActualWritesTo"] = "ACTUAL_OUTBOX_APPLY"
 
-    if not any(node["name"] == "Cashback Close Required" for node in statement["nodes"]):
-        statement["nodes"].extend([
-            {
-                "id": "3024",
-                "name": "Cashback Close Required",
-                "type": "n8n-nodes-base.if",
-                "typeVersion": 2.2,
-                "position": [3000, 0],
-                "parameters": {"conditions": {
-                    "options": {"caseSensitive": True, "typeValidation": "strict"},
-                    "combinator": "and",
-                    "conditions": [{
-                        "leftValue": "={{ $('Verify Archive and Execution Context').first().json.cashback_close_required === true }}",
-                        "rightValue": True,
-                        "operator": {"type": "boolean", "operation": "true", "singleValue": True},
-                    }],
-                }},
-            },
-            {
-                "id": "3025",
-                "name": "Finalize Eligible Cashback Period",
-                "type": "n8n-nodes-base.httpRequest",
-                "typeVersion": 4.2,
-                "position": [3250, -100],
-                "parameters": {
-                    "url": "http://cashback:5010/api/periods/finalize",
-                    "method": "POST",
-                    "authentication": "genericCredentialType",
-                    "genericAuthType": "httpHeaderAuth",
-                    "sendBody": True,
-                    "specifyBody": "json",
-                    "jsonBody": "={{ $('Validate Statement Reconciliation and IDs').first().json.cashback_finalization }}",
-                    "options": {"timeout": 30000},
-                },
-                "credentials": {"httpHeaderAuth": {"id": "BIND_CASHBACK_INGEST", "name": "Cashback Ingest Bearer"}},
-            },
-            {
-                "id": "3026",
-                "name": "Upsert Reconciliation Receipt",
-                "type": "n8n-nodes-base.dataTable",
-                "typeVersion": 1.1,
-                "position": [3500, 0],
-                "parameters": {
-                    "resource": "row",
-                    "operation": "upsert",
-                    "dataTableId": {"__rl": True, "value": "finance_reconciliations", "mode": "name"},
-                    "matchType": "allConditions",
-                    "filters": {"conditions": [
-                        {"keyName": "source_code", "condition": "eq", "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}"},
-                        {"keyName": "period_key", "condition": "eq", "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}"},
-                        {"keyName": "reconciliation_version", "condition": "eq", "keyValue": 1},
-                    ]},
-                    "columns": {
-                        "mappingMode": "defineBelow",
-                        "value": {
-                            "source_code": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
-                            "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
-                            "reconciliation_version": 1,
-                            "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
-                            "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
-                            "cashback_close_id": "={{ $json.close_id || '' }}",
-                            "state": "COMMITTED",
-                            "difference_minor": 0,
-                            "verified_at": "={{ $now.toISO() }}",
-                            "updated_at": "={{ $now.toISO() }}",
-                        },
-                        "matchingColumns": [],
-                        "schema": [],
-                        "attemptToConvertTypes": False,
-                        "convertFieldsToString": False,
+    if not any(
+        node["name"] == "Cashback Close Required" for node in statement["nodes"]
+    ):
+        statement["nodes"].extend(
+            [
+                {
+                    "id": "3024",
+                    "name": "Cashback Close Required",
+                    "type": "n8n-nodes-base.if",
+                    "typeVersion": 2.2,
+                    "position": [3000, 0],
+                    "parameters": {
+                        "conditions": {
+                            "options": {
+                                "caseSensitive": True,
+                                "typeValidation": "strict",
+                            },
+                            "combinator": "and",
+                            "conditions": [
+                                {
+                                    "leftValue": "={{ $('Verify Archive and Execution Context').first().json.cashback_close_required === true }}",
+                                    "rightValue": True,
+                                    "operator": {
+                                        "type": "boolean",
+                                        "operation": "true",
+                                        "singleValue": True,
+                                    },
+                                }
+                            ],
+                        }
                     },
-                    "options": {"dryRun": False},
                 },
-            },
-            {
-                "id": "3027",
-                "name": "Read Back Reconciliation Receipt",
-                "type": "n8n-nodes-base.dataTable",
-                "typeVersion": 1.1,
-                "position": [3750, 0],
-                "parameters": {
-                    "resource": "row",
-                    "operation": "get",
-                    "dataTableId": {"__rl": True, "value": "finance_reconciliations", "mode": "name"},
-                    "returnAll": False,
-                    "limit": 1,
-                    "matchType": "allConditions",
-                    "filters": {"conditions": [
-                        {"keyName": "source_code", "condition": "eq", "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}"},
-                        {"keyName": "period_key", "condition": "eq", "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}"},
-                        {"keyName": "state", "condition": "eq", "keyValue": "COMMITTED"},
-                    ]},
-                    "options": {},
+                {
+                    "id": "3025",
+                    "name": "Finalize Eligible Cashback Period",
+                    "type": "n8n-nodes-base.httpRequest",
+                    "typeVersion": 4.2,
+                    "position": [3250, -100],
+                    "parameters": {
+                        "url": "http://cashback:5010/api/periods/finalize",
+                        "method": "POST",
+                        "authentication": "genericCredentialType",
+                        "genericAuthType": "httpHeaderAuth",
+                        "sendBody": True,
+                        "specifyBody": "json",
+                        "jsonBody": "={{ $('Validate Statement Reconciliation and IDs').first().json.cashback_finalization }}",
+                        "options": {"timeout": 30000},
+                    },
+                    "credentials": {
+                        "httpHeaderAuth": {
+                            "id": "BIND_CASHBACK_INGEST",
+                            "name": "Cashback Ingest Bearer",
+                        }
+                    },
                 },
-            },
-        ])
-        statement["connections"]["Cashback Close Required"] = {"main": [
-            [{"node": "Finalize Eligible Cashback Period", "type": "main", "index": 0}],
-            [{"node": "Upsert Reconciliation Receipt", "type": "main", "index": 0}],
-        ]}
+                {
+                    "id": "3026",
+                    "name": "Upsert Reconciliation Receipt",
+                    "type": "n8n-nodes-base.dataTable",
+                    "typeVersion": 1.1,
+                    "position": [3500, 0],
+                    "parameters": {
+                        "resource": "row",
+                        "operation": "upsert",
+                        "dataTableId": {
+                            "__rl": True,
+                            "value": "finance_reconciliations",
+                            "mode": "name",
+                        },
+                        "matchType": "allConditions",
+                        "filters": {
+                            "conditions": [
+                                {
+                                    "keyName": "source_code",
+                                    "condition": "eq",
+                                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                                },
+                                {
+                                    "keyName": "period_key",
+                                    "condition": "eq",
+                                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                                },
+                                {
+                                    "keyName": "reconciliation_version",
+                                    "condition": "eq",
+                                    "keyValue": 1,
+                                },
+                            ]
+                        },
+                        "columns": {
+                            "mappingMode": "defineBelow",
+                            "value": {
+                                "source_code": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                                "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                                "reconciliation_version": 1,
+                                "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
+                                "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
+                                "cashback_close_id": "={{ $json.close_id || '' }}",
+                                "state": "COMMITTED",
+                                "difference_minor": 0,
+                                "verified_at": "={{ $now.toISO() }}",
+                                "updated_at": "={{ $now.toISO() }}",
+                            },
+                            "matchingColumns": [],
+                            "schema": [],
+                            "attemptToConvertTypes": False,
+                            "convertFieldsToString": False,
+                        },
+                        "options": {"dryRun": False},
+                    },
+                },
+                {
+                    "id": "3027",
+                    "name": "Read Back Reconciliation Receipt",
+                    "type": "n8n-nodes-base.dataTable",
+                    "typeVersion": 1.1,
+                    "position": [3750, 0],
+                    "parameters": {
+                        "resource": "row",
+                        "operation": "get",
+                        "dataTableId": {
+                            "__rl": True,
+                            "value": "finance_reconciliations",
+                            "mode": "name",
+                        },
+                        "returnAll": False,
+                        "limit": 1,
+                        "matchType": "allConditions",
+                        "filters": {
+                            "conditions": [
+                                {
+                                    "keyName": "source_code",
+                                    "condition": "eq",
+                                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                                },
+                                {
+                                    "keyName": "period_key",
+                                    "condition": "eq",
+                                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                                },
+                                {
+                                    "keyName": "state",
+                                    "condition": "eq",
+                                    "keyValue": "COMMITTED",
+                                },
+                            ]
+                        },
+                        "options": {},
+                    },
+                },
+            ]
+        )
+        statement["connections"]["Cashback Close Required"] = {
+            "main": [
+                [
+                    {
+                        "node": "Finalize Eligible Cashback Period",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ],
+                [{"node": "Upsert Reconciliation Receipt", "type": "main", "index": 0}],
+            ]
+        }
         statement["connections"]["Finalize Eligible Cashback Period"] = {
-            "main": [[{"node": "Upsert Reconciliation Receipt", "type": "main", "index": 0}]]
+            "main": [
+                [{"node": "Upsert Reconciliation Receipt", "type": "main", "index": 0}]
+            ]
         }
         statement["connections"]["Upsert Reconciliation Receipt"] = {
-            "main": [[{"node": "Read Back Reconciliation Receipt", "type": "main", "index": 0}]]
+            "main": [
+                [
+                    {
+                        "node": "Read Back Reconciliation Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
         }
         statement["connections"]["Read Back Reconciliation Receipt"] = {
-            "main": [[{"node": "Upsert Terminal Pipeline Receipt", "type": "main", "index": 0}]]
+            "main": [
+                [
+                    {
+                        "node": "Upsert Terminal Pipeline Receipt",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
         }
 
     def insert_config(
@@ -3702,14 +4715,16 @@ return [{
         caller_fields: list[tuple[str, str]],
     ) -> None:
         if not any(node["name"] == config_name for node in workflow["nodes"]):
-            workflow["nodes"].append({
-                "id": f"{workflow['id']}-config",
-                "name": config_name,
-                "type": "n8n-nodes-base.set",
-                "typeVersion": 3.4,
-                "position": [-900, 0],
-                "parameters": {},
-            })
+            workflow["nodes"].append(
+                {
+                    "id": f"{workflow['id']}-config",
+                    "name": config_name,
+                    "type": "n8n-nodes-base.set",
+                    "typeVersion": 3.4,
+                    "position": [-900, 0],
+                    "parameters": {},
+                }
+            )
         config = node_by_name(workflow, config_name)
         local_names = {name for name, _, _ in values}
         caller_assignments = [
@@ -3718,17 +4733,19 @@ return [{
             if name not in local_names
         ]
         config["parameters"] = {
-            "assignments": {"assignments": [
-                {
-                    "id": f"config-{index}",
-                    "name": name,
-                    "type": value_type,
-                    "value": value,
-                }
-                for index, (name, value_type, value) in enumerate(
-                    caller_assignments + values, start=1
-                )
-            ]},
+            "assignments": {
+                "assignments": [
+                    {
+                        "id": f"config-{index}",
+                        "name": name,
+                        "type": value_type,
+                        "value": value,
+                    }
+                    for index, (name, value_type, value) in enumerate(
+                        caller_assignments + values, start=1
+                    )
+                ]
+            },
             "includeOtherFields": False,
             "options": {},
         }
@@ -3748,7 +4765,25 @@ return [{
             ("subject_match", "string", "PARTIAL_CASE_INSENSITIVE"),
             ("archive_readback_required", "boolean", True),
         ],
-        [("run_id", "string"), ("source_code", "string"), ("folder_id", "string"), ("senders", "array"), ("subjects", "array"), ("window_start", "string"), ("run_upper_bound", "string"), ("onedrive_parent_id", "string"), ("max_messages", "number"), ("messages", "array"), ("immutable_inventory", "boolean"), ("attachment_ids_verified", "boolean"), ("attachment_identity_keys", "array"), ("empty_inventory", "boolean"), ("account_id", "string"), ("historical_import", "boolean"), ("historical_account_id", "string")],
+        [
+            ("run_id", "string"),
+            ("source_code", "string"),
+            ("folder_id", "string"),
+            ("senders", "array"),
+            ("subjects", "array"),
+            ("window_start", "string"),
+            ("run_upper_bound", "string"),
+            ("onedrive_parent_id", "string"),
+            ("max_messages", "number"),
+            ("messages", "array"),
+            ("immutable_inventory", "boolean"),
+            ("attachment_ids_verified", "boolean"),
+            ("attachment_identity_keys", "array"),
+            ("empty_inventory", "boolean"),
+            ("account_id", "string"),
+            ("historical_import", "boolean"),
+            ("historical_account_id", "string"),
+        ],
     )
     insert_config(
         statement,
@@ -3760,7 +4795,25 @@ return [{
             ("actual_writer_workflow", "string", "ACTUAL_OUTBOX_APPLY"),
             ("source_mutation_forbidden", "boolean", True),
         ],
-        [("run_id", "string"), ("source_code", "string"), ("message_id", "string"), ("document_sha256", "string"), ("onedrive_item_id", "string"), ("manifest_onedrive_parent_id", "string"), ("config_version", "string"), ("actual_file_id", "string"), ("account_id", "string"), ("card_code", "string"), ("cashback_close_required", "boolean"), ("period_key", "string"), ("trigger_kind", "string"), ("attachment_id", "string"), ("source_attachment_id", "string"), ("historical_import", "boolean"), ("historical_account_id", "string")],
+        [
+            ("run_id", "string"),
+            ("source_code", "string"),
+            ("message_id", "string"),
+            ("document_sha256", "string"),
+            ("onedrive_item_id", "string"),
+            ("manifest_onedrive_parent_id", "string"),
+            ("config_version", "string"),
+            ("actual_file_id", "string"),
+            ("account_id", "string"),
+            ("card_code", "string"),
+            ("cashback_close_required", "boolean"),
+            ("period_key", "string"),
+            ("trigger_kind", "string"),
+            ("attachment_id", "string"),
+            ("source_attachment_id", "string"),
+            ("historical_import", "boolean"),
+            ("historical_account_id", "string"),
+        ],
     )
     local_pdf = by_code["LOCAL_PDF_EXTRACTION"]
     insert_config(
@@ -3798,13 +4851,487 @@ return [{
             ("lease_required", "boolean", True),
             ("exact_readback_required", "boolean", True),
         ],
-        [("outbox_row", "object"), ("manifest", "object"), ("verification", "object"), ("delta_artifact_item_id", "string"), ("delta_artifact_etag", "string")],
+        [
+            ("outbox_row", "object"),
+            ("manifest", "object"),
+            ("verification", "object"),
+            ("delta_artifact_item_id", "string"),
+            ("delta_artifact_etag", "string"),
+        ],
     )
+
+
+def ensure_durable_actual_writer(workflows: list[dict]) -> None:
+    """Compose durable Actual writer recovery with the reviewed main fences."""
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
+    recovery = by_code["ACTUAL_OUTBOX_RECOVERY"]
+    lease = by_code["FINANCE_WRITER_LEASE"]
+    writer = by_code["ACTUAL_OUTBOX_APPLY"]
+
+    read = node_by_name(recovery, "Read Nonterminal Actual Outbox")
+    read["alwaysOutputData"] = True
+    recovery_by_name = {node["name"]: node for node in recovery["nodes"]}
+    if "Has Nonterminal Actual Outbox Rows" not in recovery_by_name:
+        recovery["nodes"].extend(
+            [
+                {
+                    "id": "17032",
+                    "name": "Has Nonterminal Actual Outbox Rows",
+                    "type": "n8n-nodes-base.if",
+                    "typeVersion": 2.2,
+                    "position": [-520, 0],
+                    "parameters": {
+                        "conditions": {
+                            "options": {
+                                "caseSensitive": True,
+                                "typeValidation": "strict",
+                            },
+                            "combinator": "and",
+                            "conditions": [
+                                {
+                                    "leftValue": "={{ !!$json.batch_id }}",
+                                    "rightValue": True,
+                                    "operator": {
+                                        "type": "boolean",
+                                        "operation": "true",
+                                        "singleValue": True,
+                                    },
+                                }
+                            ],
+                        }
+                    },
+                },
+                {
+                    "id": "17033",
+                    "name": "No Nonterminal Actual Outbox Rows",
+                    "type": "n8n-nodes-base.code",
+                    "typeVersion": 2,
+                    "position": [-220, 0],
+                    "parameters": {
+                        "jsCode": "// Purpose: No Nonterminal Actual Outbox Rows. Keep this deterministic and fail closed.\nreturn [{ json: { status: 'NOOP', reason: 'NO_NONTERMINAL_ACTUAL_OUTBOX_ROWS' } }];\n"
+                    },
+                },
+            ]
+        )
+    recovery["connections"]["Read Nonterminal Actual Outbox"] = {
+        "main": [
+            [{"node": "Has Nonterminal Actual Outbox Rows", "type": "main", "index": 0}]
+        ]
+    }
+    recovery["connections"]["Has Nonterminal Actual Outbox Rows"] = {
+        "main": [
+            [{"node": "Apply Nonterminal Outbox Safely", "type": "main", "index": 0}],
+            [{"node": "No Nonterminal Actual Outbox Rows", "type": "main", "index": 0}],
+        ]
+    }
+
+    validator = node_by_name(lease, "Validate Fixed Lease Operation")
+    validator["parameters"]["jsCode"] = r"""
+// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.
+const r = $json, op = String(r.operation || '');
+if (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))
+    throw new Error('INVALID_LEASE_OPERATION');
+if (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))
+    throw new Error('INVALID_LEASE_RESOURCE');
+if (op === 'ACQUIRE') {
+    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))
+        throw new Error('INVALID_LEASE_OWNER');
+    const ttl = Number(r.ttl_seconds || 120);
+    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)
+        throw new Error('INVALID_LEASE_TTL');
+    if (!/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.outbox_id || '')))
+        throw new Error('INVALID_WRITER_OUTBOX_ID');
+    if (!['PREPARED', 'VERIFIED', 'RECONCILED', 'COMMITTED'].includes(String(r.outbox_state || '')))
+        throw new Error('WRITER_STATE_NOT_ADMISSIBLE');
+    if (!Number.isSafeInteger(r.attempt_count) || Number(r.attempt_count) < 0)
+        throw new Error('INVALID_WRITER_ATTEMPT_COUNT');
+    if (!['INITIAL', 'SUCCESSOR'].includes(String(r.admission || '')))
+        throw new Error('INVALID_WRITER_ADMISSION');
+    if (!/^[a-f0-9]{64}$/i.test(String(r.payload_sha256 || '')))
+        throw new Error('INVALID_WRITER_PAYLOAD_DIGEST');
+    return [{ json: { ...r, ttl_seconds: ttl, attempt_count: Number(r.attempt_count), payload_sha256: String(r.payload_sha256).toLowerCase() } }];
+}
+if (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isSafeInteger(r.fencing_token) || Number(r.fencing_token) <= 0)
+    throw new Error('INVALID_LEASE_TOKEN');
+if (op === 'RELEASE') {
+    if (!/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.outbox_id || '')) || !/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.account_id || '')) || !/^[a-f0-9]{64}$/i.test(String(r.payload_sha256 || '')))
+        throw new Error('INVALID_RELEASE_CORRELATION');
+}
+return [{ json: { ...r, fencing_token: Number(r.fencing_token), payload_sha256: r.payload_sha256 ? String(r.payload_sha256).toLowerCase() : r.payload_sha256 } }];
+""".strip()
+    lease_nodes = {node["name"]: node for node in lease["nodes"]}
+    lease_nodes["Atomic Acquire Writer Lease"]["parameters"] = {
+        "operation": "executeQuery",
+        "query": "WITH blockers AS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND budget_id = $8::text AND state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') AND NOT (state = 'PREPARED' AND outbox_id = $4::text AND attempt_count = 0 AND $5::text = 'INITIAL')), acquired AS (SELECT lease.*, $4::text AS outbox_id FROM finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer) AS lease WHERE NOT EXISTS (SELECT 1 FROM blockers)), marked AS (INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, issued_at, updated_at) SELECT $1::text, $4::text, $6::text, $8::text, $7::text, $9::date, $10::date, 'ISSUED', 1, lease_id, lease_owner, fencing_token, clock_timestamp(), clock_timestamp() FROM acquired ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = 'ISSUED', account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, payload_sha256 = EXCLUDED.payload_sha256, period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, attempt_count = actual_writer_effects.attempt_count + 1, issued_at = clock_timestamp(), updated_at = clock_timestamp() WHERE actual_writer_effects.state = 'PREPARED' AND actual_writer_effects.attempt_count = 0 RETURNING resource_key, outbox_id), issued AS (SELECT resource_key, outbox_id FROM marked UNION ALL SELECT resource_key, outbox_id FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $6::text AND budget_id = $8::text AND payload_sha256 = $7::text AND period_start = $9::date AND period_end = $10::date AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) SELECT acquired.* FROM acquired JOIN issued USING (resource_key, outbox_id);",
+        "options": {
+            "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds, $json.outbox_id, $json.admission, $json.account_id, $json.payload_sha256, $json.budget_id, $json.period_start, $json.period_end] }}"
+        },
+    }
+    lease_nodes["Release Exact Writer Fence"]["parameters"] = {
+        "operation": "executeQuery",
+        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $5::text AND payload_sha256 = $6::text AND verified_payload_sha256 = $7::text AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) AS allowed) SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released FROM terminal WHERE allowed;",
+        "options": {
+            "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token, $json.outbox_id, $json.account_id, $json.payload_sha256, $json.verified_payload_sha256] }}"
+        },
+    }
+    lease["meta"].update(
+        {
+            "durableStateTable": "finance_ops.actual_writer_effects",
+            "admissionPolicy": "PREPARED attempt zero only; ISSUED/OUTCOME_UNKNOWN never reclaimed; terminal VERIFIED/RECONCILED/COMMITTED required for successors",
+            "fenceReleasePolicy": "W20 terminal verified readback only",
+        }
+    )
+
+    writer_by_name = {node["name"]: node for node in writer["nodes"]}
+    verify = writer_by_name["Verify Recovery Contract"]
+    verify["parameters"]["jsCode"] = r"""
+// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.
+const o = $('Prepared Outbox Input').first().json, m = $json, h = String($('SHA-256 Recovered Delta').item.json.recovered_sha256 || '').toLowerCase();
+const date = value => { const text = String(value || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false; const [year, month, day] = text.split('-').map(Number); const d = new Date(0); d.setUTCHours(0, 0, 0, 0); d.setUTCFullYear(year, month - 1, day); return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day; };
+if (h !== String(o.delta_sha256 || '').toLowerCase() || !/^[a-f0-9]{64}$/.test(h) || m.schema_version !== o.delta_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code || !m.account_id)
+    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');
+if (!Array.isArray(m.transactions) || !m.transactions.length)
+    throw new Error('OUTBOX_RECOVERY_EMPTY');
+const ids = new Set();
+for (const row of m.transactions) {
+    if (!row || typeof row !== 'object' || !date(row.date) || !Number.isSafeInteger(row.amount) || typeof row.imported_id !== 'string' || !row.imported_id || ids.has(row.imported_id) || typeof row.imported_payee !== 'string' || (row.payee !== undefined && typeof row.payee !== 'string') || (row.cleared !== undefined && typeof row.cleared !== 'boolean'))
+        throw new Error('OUTBOX_RECOVERY_TRANSACTION_INVALID');
+    ids.add(row.imported_id);
+}
+if (!date(m.period_start) || !date(m.period_end) || m.period_start > m.period_end || !Number.isSafeInteger(m.expected_statement_balance_minor))
+    throw new Error('OUTBOX_RECOVERY_PERIOD_INVALID');
+const historical = m.historical_import === true;
+if (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || String(m.historical_account_id || '') !== String(m.account_id)))
+    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');
+return [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor }, payload_sha256: h } }];
+""".strip()
+    writer_by_name["Build Fenced Recovery Envelope"]["parameters"]["jsCode"] = r"""
+// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.
+const r = $('Verify Recovery Contract').first().json, l = $json, o = r.outbox_row, m = r.manifest;
+const text = value => String(value ?? '').trim();
+if (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date() || !l.resource_key)
+    throw new Error('RECOVERY_WRITER_LEASE_INVALID');
+if (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())
+    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');
+const outboxId = text(o.outbox_id || o.batch_id);
+if (!outboxId)
+    throw new Error('OUTBOX_RECOVERY_ID_MISSING');
+const historical = m.historical_import === true;
+if (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))
+    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');
+return [{
+  json: {
+    original_state: o.state,
+    outbox: {
+      schema_version: 1,
+      outbox_id: outboxId,
+      state: 'PREPARED',
+      batch_id: outboxId,
+      actual_file_id: o.actual_file_id,
+      account_id: text(m.account_id),
+      card_code: text(m.card_code),
+      ...(historical ? {
+        historical_import: true,
+        historical_source: 'ADCB_CASHBACK',
+        historical_account_id: text(m.historical_account_id),
+      } : {}),
+      execution_context: { trigger: 'RECOVERY', manual: false, mcp: false },
+      transactions: m.transactions,
+      reimportDeleted: false,
+      writer_lease: {
+        resource_key: String(l.resource_key),
+        lease_id: String(l.lease_id),
+        fencing_token: Number(l.fencing_token),
+        expires_at: String(l.expires_at),
+      },
+    },
+    verification: r.verification,
+    payload_sha256: r.payload_sha256,
+  },
+}];
+""".strip()
+    writer_by_name["Build Recovery Fence Release"]["parameters"]["jsCode"] = r"""
+// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.
+const l = $('Acquire Recovery Writer Fence').first().json, r = $('Verify Recovery Contract').first().json, receipt = $('Compare Exact Actual Verification Receipt').first().json;
+if (!receipt || receipt.invariants_passed !== true || receipt.expected_payload_sha256 !== receipt.observed_payload_sha256 || !/^[a-f0-9]{64}$/i.test(String(receipt.expected_payload_sha256)) || receipt.account_id !== r.manifest.account_id || !r.payload_sha256)
+    throw new Error('ACTUAL_RELEASE_REQUIRES_EXACT_VERIFIED_READBACK');
+return [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, lease_owner: l.lease_owner, fencing_token: l.fencing_token, outbox_id: r.outbox_row.batch_id, account_id: r.manifest.account_id, payload_sha256: r.payload_sha256, verified_payload_sha256: receipt.expected_payload_sha256 } }];
+""".strip()
+    writer_by_name["Compare Exact Actual Verification Receipt"]["parameters"][
+        "jsCode"
+    ] = r"""
+// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.
+const observed = $json, result = $('Recovery Verify Actual').first().json.actual, recovery = $('Verify Recovery Contract').first().json, manifest = recovery.manifest;
+const transactions = Array.isArray(manifest.transactions) ? manifest.transactions : null;
+const expectedIds = transactions ? transactions.map(row => String(row.imported_id)).sort() : null;
+const observedIds = Array.isArray(result?.found_ids) ? result.found_ids.map(id => String(id)).sort() : null;
+const dateInUtc = value => {
+    const parsed = Date.parse(String(value ?? ''));
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString().slice(0, 10) : '';
+};
+const expectedActualFile = manifest.actual_file_id ?? recovery.outbox_row.actual_file_id;
+const identityMismatch = observed.idempotency_key !== recovery.outbox_row.idempotency_key
+    || !observed.idempotency_key
+    || observed.batch_id !== recovery.outbox_row.batch_id
+    || observed.actual_file_id !== expectedActualFile
+    || (manifest.account_id !== undefined && observed.account_id !== manifest.account_id)
+    || (manifest.card_code !== undefined && observed.card_code !== manifest.card_code)
+    || (manifest.period_start !== undefined && dateInUtc(observed.period_start) !== manifest.period_start)
+    || (manifest.period_end !== undefined && dateInUtc(observed.period_end) !== manifest.period_end);
+const countMismatch = result?.transaction_count !== undefined
+    && (Number(observed.expected_count) !== result.transaction_count
+        || Number(observed.observed_count) !== result.transaction_count);
+const amountMismatch = result?.amount_sum !== undefined
+    && (Number(observed.expected_amount_sum_minor) !== result.amount_sum
+        || Number(observed.observed_amount_sum_minor) !== result.amount_sum);
+const balanceMismatch = (manifest.expected_statement_balance_minor !== undefined
+    && Number(observed.expected_account_balance) !== Number(manifest.expected_statement_balance_minor))
+    || (result?.account_balance !== undefined
+        && Number(observed.observed_account_balance) !== Number(result.account_balance));
+const statusMismatch = result?.status !== undefined && result.status !== 'VERIFIED';
+const idsProofMismatch = expectedIds !== null
+    && (result?.imported_ids_verified !== true
+        || !observedIds || expectedIds.length !== observedIds.length
+        || expectedIds.some((id, index) => id !== observedIds[index]));
+if (!result || identityMismatch || statusMismatch || idsProofMismatch
+    || observed.expected_payload_sha256 !== result.expected_sha256
+    || observed.observed_payload_sha256 !== result.observed_sha256
+    || observed.expected_payload_sha256 !== observed.observed_payload_sha256
+    || !/^[a-f0-9]{64}$/i.test(String(observed.expected_payload_sha256))
+    || countMismatch || amountMismatch || balanceMismatch
+    || observed.invariants_passed !== true)
+    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');
+return [{ json: { ...observed, period_start: manifest.period_start ?? observed.period_start, period_end: manifest.period_end ?? observed.period_end } }];
+""".strip()
+
+    durable_nodes = [
+        {
+            "id": "20015",
+            "name": "Record ISSUED Before Actual Mutation",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [520, 380],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT resource_key, outbox_id, state, attempt_count, lease_id::text AS lease_id, lease_owner, fencing_token FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $4::text AND payload_sha256 = $5::text AND period_start = $6::date AND period_end = $7::date AND lease_id = $8::uuid AND lease_owner = $9::text AND fencing_token = $10::bigint AND state = 'ISSUED' AND attempt_count = 1;",
+                "options": {
+                    "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token ] }}"
+                },
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "BIND_FINANCE_OPS_DB",
+                    "name": "Finance Operations Postgres",
+                }
+            },
+        },
+        {
+            "id": "20016",
+            "name": "Preserve ISSUED Envelope for Actual Mutation",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [520, 560],
+            "parameters": {
+                "jsCode": "// Purpose: Preserve ISSUED envelope for Actual mutation. Keep this deterministic and fail closed.\nconst issued = $json, envelope = $('Build Fenced Recovery Envelope').first().json;\nif (issued.state !== 'ISSUED' || Number(issued.attempt_count) !== 1)\n    throw new Error('WRITER_ISSUANCE_READBACK_FAILED');\nreturn [{ json: envelope }];\n"
+            },
+        },
+        {
+            "id": "20017",
+            "name": "Persist OUTCOME_UNKNOWN on Apply Error",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [980, 160],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, lease_id, lease_owner, fencing_token, last_error_class, updated_at) VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::date, $7::date, 'OUTCOME_UNKNOWN', $8::uuid, $9::text, $10::bigint, $11::text, clock_timestamp()) ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = 'OUTCOME_UNKNOWN', lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, last_error_class = EXCLUDED.last_error_class, updated_at = clock_timestamp() WHERE actual_writer_effects.state IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') RETURNING resource_key, outbox_id, state;",
+                "options": {
+                    "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token, String($json.error?.message || $json.error || 'ACTUAL_APPLY_FAILED').slice(0, 512) ] }}"
+                },
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "BIND_FINANCE_OPS_DB",
+                    "name": "Finance Operations Postgres",
+                }
+            },
+        },
+        {
+            "id": "20018",
+            "name": "Record VERIFIED in Durable Writer State",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [560, 760],
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "UPDATE finance_ops.actual_writer_effects SET state = 'VERIFIED', verified_payload_sha256 = $5::text, account_id = $3::text, updated_at = clock_timestamp() WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $6::text AND payload_sha256 = $4::text AND period_start = $7::date AND period_end = $8::date AND ((state IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN')) OR (state = 'VERIFIED' AND verified_payload_sha256 = $5::text)) RETURNING resource_key, outbox_id, state, verified_payload_sha256;",
+                "options": {
+                    "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Recovery Verify Actual').first().json.actual.expected_sha256, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end ] }}"
+                },
+            },
+            "credentials": {
+                "postgres": {
+                    "id": "BIND_FINANCE_OPS_DB",
+                    "name": "Finance Operations Postgres",
+                }
+            },
+        },
+    ]
+    existing_names = {node["name"] for node in writer["nodes"]}
+    writer["nodes"].extend(
+        node for node in durable_nodes if node["name"] not in existing_names
+    )
+    writer_by_name = {node["name"]: node for node in writer["nodes"]}
+    writer_by_name["Build Recovery Lease Acquire Request"]["parameters"][
+        "jsCode"
+    ] = r"""
+// Purpose: Build Recovery Lease Acquire Request. Keep this deterministic and fail closed.
+const root = $('Verify Recovery Contract').first().json;
+const outbox = root.outbox_row;
+const manifest = root.manifest;
+const state = String(outbox.state || '').trim().toUpperCase();
+const attempt = Number(outbox.attempt_count ?? 0);
+if (!['PREPARED', 'ACTUAL_OBSERVED', 'VERIFIED'].includes(state)
+    || !Number.isSafeInteger(attempt) || attempt < 0)
+  throw new Error('WRITER_ADMISSION_INPUT_INVALID');
+const admission = state === 'PREPARED' && attempt === 0 ? 'INITIAL' : 'SUCCESSOR';
+return [{ json: {
+  operation: 'ACQUIRE',
+  resource_key: `actual:${outbox.actual_file_id}`,
+  lease_owner: `n8n:recovery:${outbox.batch_id}`,
+  ttl_seconds: 120,
+  outbox_id: String(outbox.outbox_id || outbox.batch_id),
+  outbox_state: state,
+  attempt_count: attempt,
+  admission,
+  account_id: String(manifest.account_id),
+  payload_sha256: String(root.payload_sha256 || '').toLowerCase(),
+  budget_id: String(outbox.actual_file_id),
+  period_start: manifest.period_start,
+  period_end: manifest.period_end,
+} }];
+""".strip()
+    replay_release = writer_by_name.get(
+        "Read Back Released Recovery Writer Fence Replay"
+    )
+    replay_release_parameters = {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.writer_leases WHERE resource_key = $1::text AND lease_owner = $2::text AND fencing_token = $3::bigint;",
+        "options": {
+            "queryReplacement": "={{ [`actual:${$('Read Back COMMITTED Recovery Replay').first().json.actual_file_id}`, $('Read Back COMMITTED Recovery Replay').first().json.lease_owner, $('Read Back COMMITTED Recovery Replay').first().json.lease_fence] }}"
+        },
+    }
+    if replay_release is None:
+        replay_release = {
+            "id": "20019",
+            "name": "Read Back Released Recovery Writer Fence Replay",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1580, -680],
+            "alwaysOutputData": True,
+            "parameters": replay_release_parameters,
+            "credentials": {
+                "postgres": {
+                    "id": "BIND_FINANCE_OPS_DB",
+                    "name": "Finance Operations Postgres",
+                }
+            },
+        }
+        writer["nodes"].append(replay_release)
+    else:
+        replay_release["alwaysOutputData"] = True
+        replay_release["parameters"] = replay_release_parameters
+    writer["meta"].update(
+        {
+            "durableStateTable": "finance_ops.actual_writer_effects",
+            "issuanceBoundary": "Record ISSUED Before Actual Mutation",
+            "unknownOutcomeState": "OUTCOME_UNKNOWN",
+            "successorAdmission": "Only PREPARED attempt zero or terminal VERIFIED/RECONCILED/COMMITTED; never ISSUED/OUTCOME_UNKNOWN",
+            "releaseBoundary": "After exact receipt and durable COMMITTED readback only",
+        }
+    )
+    writer["connections"]["Rebuild Asserted Recovery Envelope"] = {
+        "main": [
+            [
+                {
+                    "node": "Record ISSUED Before Actual Mutation",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
+    }
+    writer["connections"]["Record ISSUED Before Actual Mutation"] = {
+        "main": [
+            [
+                {
+                    "node": "Preserve ISSUED Envelope for Actual Mutation",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
+    }
+    writer["connections"]["Preserve ISSUED Envelope for Actual Mutation"] = {
+        "main": [[{"node": "Recovery Import PREPARED", "type": "main", "index": 0}]]
+    }
+    writer["connections"]["Recovery Import PREPARED"] = {
+        "main": [
+            [{"node": "Build Post-Import Fence Assert", "type": "main", "index": 0}],
+            [
+                {
+                    "node": "Persist OUTCOME_UNKNOWN on Apply Error",
+                    "type": "main",
+                    "index": 0,
+                }
+            ],
+        ]
+    }
+    writer_by_name["Recovery Import PREPARED"]["onError"] = "continueErrorOutput"
+    writer["connections"]["Compare Exact Actual Verification Receipt"] = {
+        "main": [
+            [
+                {
+                    "node": "Record VERIFIED in Durable Writer State",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
+    }
+    writer["connections"]["Record VERIFIED in Durable Writer State"] = {
+        "main": [[{"node": "Upsert VERIFIED Recovery", "type": "main", "index": 0}]]
+    }
+    writer["connections"]["Read Back Exact Actual Verification Receipt Replay"] = {
+        "main": [
+            [
+                {
+                    "node": "Read Back Released Recovery Writer Fence Replay",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
+    }
+    writer["connections"]["Read Back Released Recovery Writer Fence Replay"] = {
+        "main": [
+            [
+                {
+                    "node": "Return Verified Commit Receipt Replay",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
+    }
 
 
 def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
     """Keep provider execution swappable behind one schema-bound subworkflow."""
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     acquisition = by_code["OUTLOOK_FINANCE_ACQUISITION"]
     agent = by_code["AI_PROPOSAL"]
     adapter = by_code.get("SUBSCRIPTION_AGENT_ADAPTER")
@@ -3859,39 +5386,146 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "parameters": {
                 "mode": "manual",
                 "includeOtherFields": False,
-                "assignments": {"assignments": [
-                    {"id": "21002-caller-2", "name": "policy_class", "type": "string", "value": "={{ $json.policy_class }}"},
-                    {"id": "21002-caller-3", "name": "job_id", "type": "string", "value": "={{ $json.job_id }}"},
-                    {"id": "21002-caller-4", "name": "idempotency_key", "type": "string", "value": "={{ $json.idempotency_key }}"},
-                    {"id": "21002-caller-5", "name": "unresolved", "type": "array", "value": "={{ $json.unresolved }}"},
-                    {"id": "21002-caller-6", "name": "operation_code", "type": "string", "value": "={{ $json.operation_code }}"},
-                    {"id": "21002-policy-1", "name": "policy_id", "type": "string", "value": "={{ $json.policy_id }}"},
-                    {"id": "21002-policy-2", "name": "policy_sha256", "type": "string", "value": "={{ $json.policy_sha256 }}"},
-                    {"id": "21002-policy-3", "name": "config_sha256", "type": "string", "value": "={{ $json.config_sha256 }}"},
-                    {"id": "21002-policy-4", "name": "output_schema_sha256", "type": "string", "value": "={{ $json.output_schema_sha256 }}"},
-                    {"id": "21002-caller-7", "name": "email_evidence", "type": "boolean", "value": "={{ $json.email_evidence }}"},
-                    {"id": "21002-caller-8", "name": "archive_sha256", "type": "string", "value": "={{ $json.archive_sha256 }}"},
-                    {"id": "21002-caller-9", "name": "evidence_replay_keys", "type": "array", "value": "={{ $json.evidence_replay_keys }}"},
-                    {"id": "21002-caller-10", "name": "archive_identity_keys", "type": "array", "value": "={{ $json.archive_identity_keys }}"},
-                    {"id": "21002-caller-11", "name": "archive_item_ids", "type": "array", "value": "={{ $json.archive_item_ids }}"},
-                    {"id": "21002-a", "name": "adapter_contract", "type": "string", "value": "SUBSCRIPTION_AGENT_ADAPTER_V1"},
-                    {"id": "21002-b", "name": "codex_package", "type": "string", "value": "n8n-nodes-prodex@0.5.1"},
-                    {"id": "21002-d", "name": "codex_normal_model", "type": "string", "value": "gpt-5.6-luna"},
-                    {"id": "21002-e", "name": "codex_normal_reasoning_effort", "type": "string", "value": "max"},
-                    {"id": "21002-f", "name": "codex_exception_model", "type": "string", "value": "gpt-5.6-sol"},
-                    {"id": "21002-g", "name": "codex_exception_reasoning_effort", "type": "string", "value": "medium"},
-                    {"id": "21002-h", "name": "codex_auth_mode", "type": "string", "value": "CHATGPT_SUBSCRIPTION"},
-                    {
-                        "id": "21002-n",
-                        "name": "proposal_output_schema",
-                        "type": "string",
-                        "value": json.dumps(
-                            AI_PROPOSAL_SCHEMA,
-                            ensure_ascii=False,
-                            separators=(",", ":"),
-                        ),
-                    },
-                ]},
+                "assignments": {
+                    "assignments": [
+                        {
+                            "id": "21002-caller-2",
+                            "name": "policy_class",
+                            "type": "string",
+                            "value": "={{ $json.policy_class }}",
+                        },
+                        {
+                            "id": "21002-caller-3",
+                            "name": "job_id",
+                            "type": "string",
+                            "value": "={{ $json.job_id }}",
+                        },
+                        {
+                            "id": "21002-caller-4",
+                            "name": "idempotency_key",
+                            "type": "string",
+                            "value": "={{ $json.idempotency_key }}",
+                        },
+                        {
+                            "id": "21002-caller-5",
+                            "name": "unresolved",
+                            "type": "array",
+                            "value": "={{ $json.unresolved }}",
+                        },
+                        {
+                            "id": "21002-caller-6",
+                            "name": "operation_code",
+                            "type": "string",
+                            "value": "={{ $json.operation_code }}",
+                        },
+                        {
+                            "id": "21002-policy-1",
+                            "name": "policy_id",
+                            "type": "string",
+                            "value": "={{ $json.policy_id }}",
+                        },
+                        {
+                            "id": "21002-policy-2",
+                            "name": "policy_sha256",
+                            "type": "string",
+                            "value": "={{ $json.policy_sha256 }}",
+                        },
+                        {
+                            "id": "21002-policy-3",
+                            "name": "config_sha256",
+                            "type": "string",
+                            "value": "={{ $json.config_sha256 }}",
+                        },
+                        {
+                            "id": "21002-policy-4",
+                            "name": "output_schema_sha256",
+                            "type": "string",
+                            "value": "={{ $json.output_schema_sha256 }}",
+                        },
+                        {
+                            "id": "21002-caller-7",
+                            "name": "email_evidence",
+                            "type": "boolean",
+                            "value": "={{ $json.email_evidence }}",
+                        },
+                        {
+                            "id": "21002-caller-8",
+                            "name": "archive_sha256",
+                            "type": "string",
+                            "value": "={{ $json.archive_sha256 }}",
+                        },
+                        {
+                            "id": "21002-caller-9",
+                            "name": "evidence_replay_keys",
+                            "type": "array",
+                            "value": "={{ $json.evidence_replay_keys }}",
+                        },
+                        {
+                            "id": "21002-caller-10",
+                            "name": "archive_identity_keys",
+                            "type": "array",
+                            "value": "={{ $json.archive_identity_keys }}",
+                        },
+                        {
+                            "id": "21002-caller-11",
+                            "name": "archive_item_ids",
+                            "type": "array",
+                            "value": "={{ $json.archive_item_ids }}",
+                        },
+                        {
+                            "id": "21002-a",
+                            "name": "adapter_contract",
+                            "type": "string",
+                            "value": "SUBSCRIPTION_AGENT_ADAPTER_V1",
+                        },
+                        {
+                            "id": "21002-b",
+                            "name": "codex_package",
+                            "type": "string",
+                            "value": "n8n-nodes-prodex@0.5.1",
+                        },
+                        {
+                            "id": "21002-d",
+                            "name": "codex_normal_model",
+                            "type": "string",
+                            "value": "gpt-5.6-luna",
+                        },
+                        {
+                            "id": "21002-e",
+                            "name": "codex_normal_reasoning_effort",
+                            "type": "string",
+                            "value": "max",
+                        },
+                        {
+                            "id": "21002-f",
+                            "name": "codex_exception_model",
+                            "type": "string",
+                            "value": "gpt-5.6-sol",
+                        },
+                        {
+                            "id": "21002-g",
+                            "name": "codex_exception_reasoning_effort",
+                            "type": "string",
+                            "value": "medium",
+                        },
+                        {
+                            "id": "21002-h",
+                            "name": "codex_auth_mode",
+                            "type": "string",
+                            "value": "CHATGPT_SUBSCRIPTION",
+                        },
+                        {
+                            "id": "21002-n",
+                            "name": "proposal_output_schema",
+                            "type": "string",
+                            "value": json.dumps(
+                                AI_PROPOSAL_SCHEMA,
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                            ),
+                        },
+                    ]
+                },
                 "options": {},
             },
         },
@@ -3901,7 +5535,8 @@ def ensure_subscription_agent_adapter(workflows: list[dict]) -> None:
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [-400, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const job = $json;
 const agent_provider = 'CODEX_SUBSCRIPTION';
 const forbidden = [
@@ -3963,7 +5598,8 @@ return [{ json: {
   provider_reasoning_effort: runnerPolicy.reasoning_effort,
   provider_auth_mode: runnerPolicy.auth_mode,
 } }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "21005",
@@ -3984,7 +5620,9 @@ return [{ json: {
                 "sandbox": "read_only",
                 "workingDirectory": "/tmp/finance-ai",
                 "options": {
-                    "outputSchema": json.dumps(AI_PROPOSAL_SCHEMA, ensure_ascii=False, separators=(",", ":")),
+                    "outputSchema": json.dumps(
+                        AI_PROPOSAL_SCHEMA, ensure_ascii=False, separators=(",", ":")
+                    ),
                     "streamProgress": False,
                     "timeoutSeconds": 180,
                 },
@@ -3996,7 +5634,8 @@ return [{ json: {
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [350, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const invocation = $('Validate and Build Fixed Provider Invocation').item.json;
 const provider = invocation.agent_provider;
 const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
@@ -4043,25 +5682,68 @@ if (Object.keys(normalized).some(field => !FINANCE_AI_SCHEMA_V1.has(field))
   throw new Error('FINANCE_AI_SCHEMA_V1_INVALID');
 }
 return [{ json: normalized }];
-""".strip()},
+""".strip()
+            },
         },
     ]
     adapter["connections"] = {
-        "Schema-Bound Proposal Job": {"main": [[{"node": "Subscription Provider Parameters", "type": "main", "index": 0}]]},
-        "Subscription Provider Parameters": {"main": [[{"node": "Validate and Build Fixed Provider Invocation", "type": "main", "index": 0}]]},
-        "Validate and Build Fixed Provider Invocation": {"main": [[{"node": "Run Codex Subscription Provider", "type": "main", "index": 0}]]},
-        "Run Codex Subscription Provider": {"main": [[{"node": "Validate ProDex Proposal Schema and Normalize Provider Output", "type": "main", "index": 0}]]},
+        "Schema-Bound Proposal Job": {
+            "main": [
+                [
+                    {
+                        "node": "Subscription Provider Parameters",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Subscription Provider Parameters": {
+            "main": [
+                [
+                    {
+                        "node": "Validate and Build Fixed Provider Invocation",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Validate and Build Fixed Provider Invocation": {
+            "main": [
+                [
+                    {
+                        "node": "Run Codex Subscription Provider",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
+        "Run Codex Subscription Provider": {
+            "main": [
+                [
+                    {
+                        "node": "Validate ProDex Proposal Schema and Normalize Provider Output",
+                        "type": "main",
+                        "index": 0,
+                    }
+                ]
+            ]
+        },
     }
-    adapter["meta"].update({
-        "supportedProviders": ["CODEX_SUBSCRIPTION"],
-        "communityNodeInstallationDeferred": False,
-        "communityNodeRuntimeProofRequired": True,
-        "credentialBindings": [],
-        "providerLockFile": "integrations/n8n/community-node-lock.json",
-        "providerSelection": "SERVER_AI_POLICY_CONTRACT",
-        "providerRuntimePolicyCallerControlled": False,
-        "outputSchemaSource": "contracts/ai-proposal-v1.schema.json",
-    })
+    adapter["meta"].update(
+        {
+            "supportedProviders": ["CODEX_SUBSCRIPTION"],
+            "communityNodeInstallationDeferred": False,
+            "communityNodeRuntimeProofRequired": True,
+            "credentialBindings": [],
+            "providerLockFile": "integrations/n8n/community-node-lock.json",
+            "providerSelection": "SERVER_AI_POLICY_CONTRACT",
+            "providerRuntimePolicyCallerControlled": False,
+            "outputSchemaSource": "contracts/ai-proposal-v1.schema.json",
+        }
+    )
     adapter["meta"].pop("providerBranchesEnabled", None)
 
     invoke = next(
@@ -4083,8 +5765,12 @@ return [{ json: normalized }];
     # The current acquisition workflow receives an immutable message and
     # attachment inventory from W12.  The legacy attachment rewrite below is
     # coupled to the removed W01 Graph listing and must not run on this shape.
-    if not any(node["name"] == "Preserve Every Attachment" for node in acquisition["nodes"]):
-        workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
+    if not any(
+        node["name"] == "Preserve Every Attachment" for node in acquisition["nodes"]
+    ):
+        workflow_names_by_id = {
+            workflow["id"]: workflow["name"] for workflow in workflows
+        }
         for workflow in workflows:
             for node in workflow["nodes"]:
                 if node["type"] not in {
@@ -4093,7 +5779,10 @@ return [{ json: normalized }];
                 }:
                     continue
                 reference = node.get("parameters", {}).get("workflowId")
-                if not isinstance(reference, dict) or reference.get("value") not in workflow_names_by_id:
+                if (
+                    not isinstance(reference, dict)
+                    or reference.get("value") not in workflow_names_by_id
+                ):
                     continue
                 target_id = reference["value"]
                 node["parameters"]["workflowId"] = {
@@ -4200,10 +5889,14 @@ return [{
   },
 }];
 """.strip()
-        workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
+        workflow_names_by_id = {
+            workflow["id"]: workflow["name"] for workflow in workflows
+        }
         for workflow in workflows:
             workflow["name"] = normalize_workflow_name(workflow["name"])
-        workflow_names_by_id = {workflow["id"]: workflow["name"] for workflow in workflows}
+        workflow_names_by_id = {
+            workflow["id"]: workflow["name"] for workflow in workflows
+        }
         for workflow in workflows:
             for node in workflow["nodes"]:
                 if node["type"] not in {
@@ -4212,10 +5905,15 @@ return [{
                 }:
                     continue
                 reference = node.get("parameters", {}).get("workflowId")
-                if isinstance(reference, dict) and reference.get("value") in workflow_names_by_id:
+                if (
+                    isinstance(reference, dict)
+                    and reference.get("value") in workflow_names_by_id
+                ):
                     reference["__rl"] = True
                     reference["mode"] = "list"
-                    reference["cachedResultName"] = workflow_names_by_id[reference["value"]]
+                    reference["cachedResultName"] = workflow_names_by_id[
+                        reference["value"]
+                    ]
         return
 
     if any(node["name"] == "PDF Attachments Only" for node in acquisition["nodes"]):
@@ -4244,7 +5942,9 @@ return $input.all().map(item => {
 """.strip()
     }
     download = node_by_name(acquisition, "Download Original Attachment")
-    download["parameters"]["messageId"] = "={{ $('Preserve Every Attachment').item.json.message_id }}"
+    download["parameters"]["messageId"] = (
+        "={{ $('Preserve Every Attachment').item.json.message_id }}"
+    )
     archive = node_by_name(acquisition, "Archive Original in OneDrive")
     archive["typeVersion"] = 1.1
     archive["parameters"]["binaryData"] = True
@@ -4257,7 +5957,9 @@ return $input.all().map(item => {
 
     receipt = node_by_name(acquisition, "Upsert Durable Archive Receipt")
     raw_receipt = json.dumps(receipt["parameters"])
-    raw_receipt = raw_receipt.replace("PDF Attachments Only", "Preserve Every Attachment")
+    raw_receipt = raw_receipt.replace(
+        "PDF Attachments Only", "Preserve Every Attachment"
+    )
     receipt["parameters"] = json.loads(raw_receipt)
     receipt["parameters"]["columns"]["value"]["onedrive_item_id"] = (
         "={{ $('Archive Original in OneDrive').item.json.id }}"
@@ -4273,7 +5975,8 @@ return $input.all().map(item => {
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [1000, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const rawSize = String($binary?.data?.fileSize || '').trim().toLowerCase();
 const match = rawSize.match(/^([0-9]+(?:\.[0-9]+)?)\s*(b|kb|mb)?$/);
 let bytes = null;
@@ -4285,7 +5988,8 @@ if (bytes !== null && bytes > 4 * 1024 * 1024) {
   throw new Error('LARGE_EVIDENCE_UPLOAD_SESSION_REQUIRED');
 }
 return [{ json: { ...$json, observed_binary_bytes: bytes }, binary: $binary }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "10118",
@@ -4299,7 +6003,12 @@ return [{ json: { ...$json, observed_binary_bytes: bytes }, binary: $binary }];
                 "fileId": "={{ $('Archive Original in OneDrive').item.json.id }}",
                 "binaryPropertyName": "data",
             },
-            "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {
+                    "id": "BIND_ONEDRIVE",
+                    "name": "Finance OneDrive",
+                }
+            },
         },
         {
             "id": "10119",
@@ -4321,18 +6030,22 @@ return [{ json: { ...$json, observed_binary_bytes: bytes }, binary: $binary }];
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [1800, 0],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const expected = String($('SHA-256 Original').item.json.document_sha256 || '').toLowerCase();
 const observed = String($json.archive_readback_sha256 || '').toLowerCase();
 if (!expected || observed !== expected) {
   throw new Error('ARCHIVE_ORIGINAL_READBACK_HASH_MISMATCH');
 }
 return [{ json: { ...$json, archive_readback_verified: true } }];
-""".strip()},
+""".strip()
+            },
         },
     ]
     existing_names = {node["name"] for node in acquisition["nodes"]}
-    acquisition["nodes"].extend(node for node in archive_readback_nodes if node["name"] not in existing_names)
+    acquisition["nodes"].extend(
+        node for node in archive_readback_nodes if node["name"] not in existing_names
+    )
     acquisition["connections"]["SHA-256 Original"] = {
         "main": [[{"node": "Enforce Native Upload Size", "type": "main", "index": 0}]]
     }
@@ -4340,16 +6053,30 @@ return [{ json: { ...$json, archive_readback_verified: true } }];
         "main": [[{"node": "Archive Original in OneDrive", "type": "main", "index": 0}]]
     }
     acquisition["connections"]["Archive Original in OneDrive"] = {
-        "main": [[{"node": "Download Archived Original Readback", "type": "main", "index": 0}]]
+        "main": [
+            [
+                {
+                    "node": "Download Archived Original Readback",
+                    "type": "main",
+                    "index": 0,
+                }
+            ]
+        ]
     }
     acquisition["connections"]["Download Archived Original Readback"] = {
-        "main": [[{"node": "SHA-256 Archived Original Readback", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "SHA-256 Archived Original Readback", "type": "main", "index": 0}]
+        ]
     }
     acquisition["connections"]["SHA-256 Archived Original Readback"] = {
-        "main": [[{"node": "Verify Archived Original Readback", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "Verify Archived Original Readback", "type": "main", "index": 0}]
+        ]
     }
     acquisition["connections"]["Verify Archived Original Readback"] = {
-        "main": [[{"node": "Upsert Durable Archive Receipt", "type": "main", "index": 0}]]
+        "main": [
+            [{"node": "Upsert Durable Archive Receipt", "type": "main", "index": 0}]
+        ]
     }
 
     inline_nodes = [
@@ -4359,7 +6086,8 @@ return [{ json: { ...$json, archive_readback_verified: true } }];
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [250, 300],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const message = $json;
 const archivePayload = {
   schema_version: 1,
@@ -4378,7 +6106,8 @@ return [{
     onedrive_parent_id: message.onedrive_parent_id,
   },
 }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "10122",
@@ -4420,7 +6149,12 @@ return [{
                 "fileName": "={{ $json.email_evidence_sha256 + '.email-evidence-v1.json' }}",
                 "parentId": "={{ $('Build Original Email Evidence').item.json.onedrive_parent_id }}",
             },
-            "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {
+                    "id": "BIND_ONEDRIVE",
+                    "name": "Finance OneDrive",
+                }
+            },
         },
         {
             "id": "10125",
@@ -4434,7 +6168,12 @@ return [{
                 "fileId": "={{ $('Archive Email Evidence in OneDrive').item.json.id }}",
                 "binaryPropertyName": "data",
             },
-            "credentials": {"microsoftOneDriveOAuth2Api": {"id": "BIND_ONEDRIVE", "name": "Finance OneDrive"}},
+            "credentials": {
+                "microsoftOneDriveOAuth2Api": {
+                    "id": "BIND_ONEDRIVE",
+                    "name": "Finance OneDrive",
+                }
+            },
         },
         {
             "id": "10126",
@@ -4456,14 +6195,16 @@ return [{
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [1750, 300],
-            "parameters": {"jsCode": r"""
+            "parameters": {
+                "jsCode": r"""
 const expected = String($('SHA-256 Email Evidence').item.json.email_evidence_sha256 || '').toLowerCase();
 const observed = String($json.email_readback_sha256 || '').toLowerCase();
 if (!expected || observed !== expected) {
   throw new Error('EMAIL_EVIDENCE_READBACK_HASH_MISMATCH');
 }
 return [{ json: { email_evidence_sha256: observed, archive_readback_verified: true } }];
-""".strip()},
+""".strip()
+            },
         },
         {
             "id": "10128",
@@ -4474,13 +6215,31 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
             "parameters": {
                 "resource": "row",
                 "operation": "upsert",
-                "dataTableId": {"__rl": True, "value": "finance_document_operations", "mode": "name"},
+                "dataTableId": {
+                    "__rl": True,
+                    "value": "finance_document_operations",
+                    "mode": "name",
+                },
                 "matchType": "allConditions",
-                "filters": {"conditions": [
-                    {"keyName": "source_sha256", "condition": "eq", "keyValue": "={{ $json.email_evidence_sha256 }}"},
-                    {"keyName": "document_profile", "condition": "eq", "keyValue": "EMAIL_BODY_JSON_TO_PDF_V1"},
-                    {"keyName": "requested_schema_version", "condition": "eq", "keyValue": "1"},
-                ]},
+                "filters": {
+                    "conditions": [
+                        {
+                            "keyName": "source_sha256",
+                            "condition": "eq",
+                            "keyValue": "={{ $json.email_evidence_sha256 }}",
+                        },
+                        {
+                            "keyName": "document_profile",
+                            "condition": "eq",
+                            "keyValue": "EMAIL_BODY_JSON_TO_PDF_V1",
+                        },
+                        {
+                            "keyName": "requested_schema_version",
+                            "condition": "eq",
+                            "keyValue": "1",
+                        },
+                    ]
+                },
                 "columns": {
                     "mappingMode": "defineBelow",
                     "value": {
@@ -4507,10 +6266,18 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
         },
     ]
     existing_names = {node["name"] for node in acquisition["nodes"]}
-    acquisition["nodes"].extend(node for node in inline_nodes if node["name"] not in existing_names)
-    exact_outputs = acquisition["connections"]["Exact Sender Subject and Window Filter"]["main"][0]
-    if not any(edge["node"] == "Build Original Email Evidence" for edge in exact_outputs):
-        exact_outputs.append({"node": "Build Original Email Evidence", "type": "main", "index": 0})
+    acquisition["nodes"].extend(
+        node for node in inline_nodes if node["name"] not in existing_names
+    )
+    exact_outputs = acquisition["connections"][
+        "Exact Sender Subject and Window Filter"
+    ]["main"][0]
+    if not any(
+        edge["node"] == "Build Original Email Evidence" for edge in exact_outputs
+    ):
+        exact_outputs.append(
+            {"node": "Build Original Email Evidence", "type": "main", "index": 0}
+        )
     inline_chain = [
         "Build Original Email Evidence",
         "Convert Email Evidence to File",
@@ -4562,12 +6329,14 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
                 "cachedResultName": workflow_names_by_id[target_id],
             }
 
-        credential_ids = sorted({
-            credential["id"]
-            for node in workflow["nodes"]
-            for credential in node.get("credentials", {}).values()
-            if str(credential.get("id", "")).startswith("BIND_")
-        })
+        credential_ids = sorted(
+            {
+                credential["id"]
+                for node in workflow["nodes"]
+                for credential in node.get("credentials", {}).values()
+                if str(credential.get("id", "")).startswith("BIND_")
+            }
+        )
         workflow["meta"]["credentialBindings"] = [
             {"placeholder": credential_id, "configured": False, "action_required": True}
             for credential_id in credential_ids
@@ -4577,22 +6346,34 @@ return [{ json: { email_evidence_sha256: observed, archive_readback_verified: tr
 
 def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     """Keep the generic W12-to-W21 handoff owned by the canonical renderer."""
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     sweep = by_code["OUTLOOK_MESSAGE_SWEEP"]
     adapter = by_code["SUBSCRIPTION_AGENT_ADAPTER"]
     w09 = by_code["AI_PROPOSAL"]
     sweep_names = {node["name"] for node in sweep["nodes"]}
     required_sweep = {
-        "Evidence Request", "Validate Evidence Request", "Search Outlook Evidence",
-        "Match Outlook Evidence to Transactions", "Archive Matched Email Evidence in W01",
-        "Build Evidence Handoff", "SHA-256 Archive Proof", "SHA-256 Evidence Handoff",
-        "Prepare W21 Email Request", "Send Evidence to W21", "Validate Email Proposal Result",
+        "Evidence Request",
+        "Validate Evidence Request",
+        "Search Outlook Evidence",
+        "Match Outlook Evidence to Transactions",
+        "Archive Matched Email Evidence in W01",
+        "Build Evidence Handoff",
+        "SHA-256 Archive Proof",
+        "SHA-256 Evidence Handoff",
+        "Prepare W21 Email Request",
+        "Send Evidence to W21",
+        "Validate Email Proposal Result",
     }
     missing = sorted(required_sweep - sweep_names)
     if missing:
-        raise RuntimeError("generic email enrichment nodes missing: " + ", ".join(missing))
+        raise RuntimeError(
+            "generic email enrichment nodes missing: " + ", ".join(missing)
+        )
     required_adapter = {
-        "Schema-Bound Proposal Job", "Subscription Provider Parameters",
+        "Schema-Bound Proposal Job",
+        "Subscription Provider Parameters",
         "Validate and Build Fixed Provider Invocation",
         "Run Codex Subscription Provider",
         "Validate ProDex Proposal Schema and Normalize Provider Output",
@@ -4600,19 +6381,23 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     missing = sorted(required_adapter - {node["name"] for node in adapter["nodes"]})
     if missing:
         raise RuntimeError("W21 provider contract missing: " + ", ".join(missing))
-    sweep["meta"].update({
-        "evidenceHandoffSchemaVersion": 1,
-        "evidenceJobIdPattern": "^finance-ai:[a-f0-9]{64}$",
-        "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
-        "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
-        "evidenceNoModelControlledWrites": True,
-        "evidencePolicyOwner": "W09_ACTIVE_SERVER_AI_POLICY_CONTRACT",
-    })
-    adapter["meta"].update({
-        "emailEvidenceInputContract": "FINANCE_AI_PROPOSAL",
-        "emailEvidenceArchiveProofRequired": True,
-        "emailEvidenceAuthFailure": "PRODEX_AUTH_REQUIRED",
-    })
+    sweep["meta"].update(
+        {
+            "evidenceHandoffSchemaVersion": 1,
+            "evidenceJobIdPattern": "^finance-ai:[a-f0-9]{64}$",
+            "evidenceArchiveProof": "W01_PER_MESSAGE_ONEDRIVE_READBACK",
+            "evidenceDispatchContract": "FINANCE_AI_PROPOSAL",
+            "evidenceNoModelControlledWrites": True,
+            "evidencePolicyOwner": "W09_ACTIVE_SERVER_AI_POLICY_CONTRACT",
+        }
+    )
+    adapter["meta"].update(
+        {
+            "emailEvidenceInputContract": "FINANCE_AI_PROPOSAL",
+            "emailEvidenceArchiveProofRequired": True,
+            "emailEvidenceAuthFailure": "PRODEX_AUTH_REQUIRED",
+        }
+    )
 
     # Keep the deterministic matcher and handoff rules in the canonical
     # renderer.  The exported W12 JSON is a generated surface, so these
@@ -4620,7 +6405,10 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     # reproducible without introducing a second workflow implementation.
     matcher = node_by_name(sweep, "Match Outlook Evidence to Transactions")
     matcher_code = matcher["parameters"]["jsCode"]
-    if "splitMessage = new Map()" not in matcher_code and "messageOwners = new Map()" not in matcher_code:
+    if (
+        "splitMessage = new Map()" not in matcher_code
+        and "messageOwners = new Map()" not in matcher_code
+    ):
         raise RuntimeError("W12 matcher source drifted before canonical rewrite")
     if "splitMessage = new Map()" in matcher_code:
         matcher_code = matcher_code.replace(
@@ -4670,18 +6458,25 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     build_handoff = node_by_name(sweep, "Build Evidence Handoff")
     handoff_code = build_handoff["parameters"]["jsCode"]
     archive_marker = "            archive_proof: archiveProof,\n"
-    if archive_marker not in handoff_code and "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
+    if (
+        archive_marker not in handoff_code
+        and "archive_identity_keys: archiveIdentityKeys" not in handoff_code
+    ):
         raise RuntimeError("W12 handoff source drifted before canonical rewrite")
     if "archive_identity_keys: archiveIdentityKeys" not in handoff_code:
         handoff_code = handoff_code.replace(
             archive_marker,
-            "            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n" + archive_marker,
+            "            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n"
+            + archive_marker,
         )
     build_handoff["parameters"]["jsCode"] = handoff_code
 
     prepare = node_by_name(sweep, "Prepare W21 Email Request")
     prepare_code = prepare["parameters"]["jsCode"]
-    if "unresolved: [...proposalInputs, ...unresolved]" not in prepare_code and "unresolved: proposalInputs" not in prepare_code:
+    if (
+        "unresolved: [...proposalInputs, ...unresolved]" not in prepare_code
+        and "unresolved: proposalInputs" not in prepare_code
+    ):
         raise RuntimeError("W12 request source drifted before canonical rewrite")
     prepare_code = prepare_code.replace(
         "unresolved: [...proposalInputs, ...unresolved]",
@@ -4736,7 +6531,9 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     policy_read["name"] = "Read Active W09 Email Policy Contract"
     policy_read["position"] = [-240, 2860]
     if policy_read["type"] == "n8n-nodes-base.dataTable":
-        policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+        policy_read["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+            "={{ $('Prepare W21 Email Request').item.json.policy_id }}"
+        )
     elif policy_read["type"] == "n8n-nodes-base.code":
         policy_code = policy_read["parameters"].get("jsCode", "")
         policy_code = policy_code.replace(
@@ -4745,9 +6542,13 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         )
         policy_read["parameters"]["jsCode"] = policy_code
     else:
-        raise RuntimeError("W09 policy resolver must be a Data Table or generated Code node")
+        raise RuntimeError(
+            "W09 policy resolver must be a Data Table or generated Code node"
+        )
 
-    policy_builder = json.loads(json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job")))
+    policy_builder = json.loads(
+        json.dumps(node_by_name(w09, "Build Authoritative Redacted Proposal Job"))
+    )
     policy_builder["id"] = "12083"
     policy_builder["name"] = "Build Authoritative W09 Email Job"
     policy_builder["position"] = [40, 2860]
@@ -4756,7 +6557,9 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         "const request = $('Validate Untrusted Proposal Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
         "const request = $('Prepare W21 Email Request').first().json, rows = $input.all().map(i => i.json).filter(r => r.policy_id === request.policy_id && r.state === 'ACTIVE');",
     )
-    policy_builder_code = policy_builder_code.replace("x.requested_fields", "x.allowed_fields")
+    policy_builder_code = policy_builder_code.replace(
+        "x.requested_fields", "x.allowed_fields"
+    )
     policy_builder_code = policy_builder_code.replace(
         "return [{ json: { ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
         "return [{ json: { ...request, ...body, request_canonical: JSON.stringify(canonical(body)) } }];",
@@ -4769,7 +6572,9 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
     request_hash["id"] = "12084"
     request_hash["name"] = "SHA-256 W09 Email Request"
     request_hash["position"] = [320, 2860]
-    handoff = json.loads(json.dumps(node_by_name(w09, "Build Idempotent Agent Handoff")))
+    handoff = json.loads(
+        json.dumps(node_by_name(w09, "Build Idempotent Agent Handoff"))
+    )
     handoff["id"] = "12085"
     handoff["name"] = "Build Idempotent W09 Email Handoff"
     handoff["position"] = [600, 2860]
@@ -4783,9 +6588,12 @@ def ensure_email_enrichment_contract(workflows: list[dict]) -> None:
         raise RuntimeError("W09 handoff source drifted before W12 composition")
     handoff["parameters"]["jsCode"] = handoff_code
     policy_names = {policy_read["name"], policy_builder["name"]}
-    sweep["nodes"] = [node for node in sweep["nodes"] if node["name"] not in policy_names]
     sweep["nodes"] = [
-        node for node in sweep["nodes"]
+        node for node in sweep["nodes"] if node["name"] not in policy_names
+    ]
+    sweep["nodes"] = [
+        node
+        for node in sweep["nodes"]
         if node["name"] not in {request_hash["name"], handoff["name"]}
     ]
     sweep["nodes"].extend([policy_read, policy_builder, request_hash, handoff])
@@ -4876,6 +6684,7 @@ const response = normalized;
         "const input = $('Build Idempotent W09 Email Handoff').first().json;",
     )
 
+
 def apply_blocker_metadata(workflows: list[dict]) -> None:
     """Project objective blocker evidence from the registry into four exports.
 
@@ -4900,7 +6709,9 @@ def apply_blocker_metadata(workflows: list[dict]) -> None:
         missing = sorted(BLOCKER_WORKFLOW_CODES - set(rows))
         raise ValueError(f"BLOCKER_WORKFLOW_REGISTRY_MISSING: {','.join(missing)}")
 
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     for code in sorted(BLOCKER_WORKFLOW_CODES):
         workflow = by_code.get(code)
         row = rows[code]
@@ -4908,7 +6719,11 @@ def apply_blocker_metadata(workflows: list[dict]) -> None:
             raise ValueError(f"BLOCKER_WORKFLOW_EXPORT_MISSING: {code}")
         policy = row.get("blocker_policy")
         blocker_codes = row.get("blockers")
-        if not isinstance(policy, dict) or not isinstance(blocker_codes, list) or not blocker_codes:
+        if (
+            not isinstance(policy, dict)
+            or not isinstance(blocker_codes, list)
+            or not blocker_codes
+        ):
             raise ValueError(f"BLOCKER_WORKFLOW_POLICY_MISSING: {code}")
         if policy.get("evaluation") != catalog.get("evaluation"):
             raise ValueError(f"BLOCKER_EVALUATION_MISMATCH: {code}")
@@ -4921,10 +6736,16 @@ def apply_blocker_metadata(workflows: list[dict]) -> None:
             if not isinstance(definition, dict):
                 raise TypeError(f"BLOCKER_DEFINITION_MISSING: {code}:{blocker_code}")
             evidence = definition.get("evidence")
-            if not isinstance(evidence, dict) or not evidence.get("required_fields") or not evidence.get("assertions"):
+            if (
+                not isinstance(evidence, dict)
+                or not evidence.get("required_fields")
+                or not evidence.get("assertions")
+            ):
                 raise ValueError(f"BLOCKER_EVIDENCE_CONTRACT_MISSING: {blocker_code}")
             projected = json.loads(json.dumps(definition))
-            projected.update({"code": blocker_code, "required": True, "state": policy["state"]})
+            projected.update(
+                {"code": blocker_code, "required": True, "state": policy["state"]}
+            )
             required.append(projected)
 
         sticky_notes = [
@@ -4937,7 +6758,8 @@ def apply_blocker_metadata(workflows: list[dict]) -> None:
         guard_nodes = [
             node["name"]
             for node in workflow["nodes"]
-            if node.get("type") in {
+            if node.get("type")
+            in {
                 "n8n-nodes-base.stopAndError",
                 "@n8n/n8n-nodes-langchain.mcpTrigger",
             }
@@ -5007,7 +6829,8 @@ def remove_generated_stage_notes(workflow: dict) -> None:
         and node.get("id") in OPERATOR_WARNING_NOTE_IDS
     ]
     workflow["nodes"] = [
-        node for node in workflow["nodes"]
+        node
+        for node in workflow["nodes"]
         if node.get("type") != "n8n-nodes-base.stickyNote"
     ]
     workflow["nodes"].extend(retained_warning_notes)
@@ -5056,9 +6879,12 @@ def layout(workflow: dict) -> None:
             node["name"] for node in section if node["type"] not in trigger_types
         }
         while candidates:
-            first = min(candidates, key=lambda name: next(
-                index for index, node in enumerate(section) if node["name"] == name
-            ))
+            first = min(
+                candidates,
+                key=lambda name: next(
+                    index for index, node in enumerate(section) if node["name"] == name
+                ),
+            )
             stack = [first]
             component = []
             candidates.remove(first)
@@ -5070,17 +6896,21 @@ def layout(workflow: dict) -> None:
                     stack.append(neighbor)
             if len(component) < 2:
                 continue
-            component.sort(key=lambda name: next(
-                index for index, node in enumerate(section) if node["name"] == name
-            ))
-            groups.append({
-                "name": f"Stage {row + 1}: {component[0]} to {component[-1]}",
-                "nodeIds": [by_name[name]["id"] for name in component],
-                "description": (
-                    f"Finance stage {row + 1}. Input starts at {component[0]}; "
-                    f"verified output leaves through {component[-1]}."
-                ),
-            })
+            component.sort(
+                key=lambda name: next(
+                    index for index, node in enumerate(section) if node["name"] == name
+                )
+            )
+            groups.append(
+                {
+                    "name": f"Stage {row + 1}: {component[0]} to {component[-1]}",
+                    "nodeIds": [by_name[name]["id"] for name in component],
+                    "description": (
+                        f"Finance stage {row + 1}. Input starts at {component[0]}; "
+                        f"verified output leaves through {component[-1]}."
+                    ),
+                }
+            )
     workflow["nodeGroups"] = groups
     folder = FOLDER_BY_ID[FOLDER_BY_CODE[workflow["meta"]["financeWorkflowCode"]]]
     workflow["meta"]["workflowFolder"] = {
@@ -5090,45 +6920,296 @@ def layout(workflow: dict) -> None:
     }
     workflow["meta"]["workflowTags"] = DEFAULT_WORKFLOW_TAGS
     workflow["tags"] = [
-        {"id": TAG_BY_NAME[name], "name": name}
-        for name in DEFAULT_WORKFLOW_TAGS
+        {"id": TAG_BY_NAME[name], "name": name} for name in DEFAULT_WORKFLOW_TAGS
     ]
 
 
 def ensure_statement_projection_contract(workflows: list[dict]) -> None:
-    statement = next(workflow for workflow in workflows if workflow["meta"]["financeWorkflowCode"] == "SHARED_STATEMENT_PIPELINE")
+    statement = next(
+        workflow
+        for workflow in workflows
+        if workflow["meta"]["financeWorkflowCode"] == "SHARED_STATEMENT_PIPELINE"
+    )
     bindings = statement["meta"].setdefault("credentialBindings", [])
     if not any(binding["placeholder"] == "BIND_ACTUAL" for binding in bindings):
-        bindings.append({"placeholder": "BIND_ACTUAL", "configured": False, "action_required": True})
-    if not any(node["name"] == 'Read Trusted Actual Classification IDs' for node in statement["nodes"]):
-        statement["nodes"].append({'id': 'w03-read-trusted-actual-classification', 'name': 'Read Trusted Actual Classification IDs', 'type': 'n8n-nodes-finance.actualBudget', 'typeVersion': 1, 'position': [2200, 300], 'parameters': {'operation': 'read', 'readShape': 'categories'}, 'credentials': {'actualBudgetApi': {'id': 'BIND_ACTUAL', 'name': 'Finance Actual'}}})
-    if not any(node["name"] == 'Statement Cashback Required' for node in statement["nodes"]):
-        statement["nodes"].append({'id': 'w03-statement-cashback-required', 'name': 'Statement Cashback Required', 'type': 'n8n-nodes-base.if', 'typeVersion': 2.2, 'position': [4000, 300], 'parameters': {'conditions': {'options': {'caseSensitive': True, 'typeValidation': 'strict'}, 'combinator': 'and', 'conditions': [{'leftValue': "={{ $('Verify Archive and Execution Context').first().json.cashback_close_required === true }}", 'rightValue': True, 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}]}}})
-    node_by_name(statement, 'Build Canonical Delta Artifact')["parameters"] = {'jsCode': "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst closing = String(r.closing_balance_aed ?? '');\nif (!/^-?\\d+\\.\\d{2}$/.test(closing) || r.balance_tied !== true)\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nconst expectedBalanceMinor = -Math.round(Number(closing) * 100);\nif (!Number.isSafeInteger(expectedBalanceMinor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_INVALID');\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(r.period_start || '')) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(r.period_end || '')) || r.period_start > r.period_end)\n    throw new Error('STATEMENT_PERIOD_REQUIRED');\nconst manifest = {\n    schema_version: 'actual-delta-v1',\n    source_code: s.source_code,\n    document_sha256: s.document_sha256,\n    config_version: s.config_version,\n    parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0',\n    actual_file_id: s.actual_file_id,\n    account_id: s.account_id,\n    card_code: s.card_code,\n    historical_import: s.historical_import === true,\n    ...(s.historical_import === true\n        ? { historical_source: s.historical_source, historical_account_id: s.historical_account_id }\n        : {}),\n    period_start: r.period_start,\n    period_end: r.period_end,\n    expected_statement_balance_minor: expectedBalanceMinor,\n    transactions: r.actual_transactions,\n};\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"}
-    node_by_name(statement, 'Validate Reconciliation Readback')["parameters"] = {'jsCode': "// Purpose: Validate Reconciliation Readback. Keep this deterministic and fail closed.\nconst row = $json || {};\nconst source = $('Verify Archive and Execution Context').first().json;\nconst actual = $('Apply Prepared Outbox Safely').first().json;\nconst request = { statement_sha256: source.document_sha256 };\nconst text = value => String(value ?? '').trim();\nlet closeId = '';\ntry {\n    closeId = text($('Validate Cashback Finalization Response').first().json.close_id);\n}\ncatch (_) {\n    closeId = '';\n}\nif (text(row.source_code) !== text(source.source_code)\n    || text(row.period_key) !== text(source.period_key)\n    || Number(row.reconciliation_version) !== 1\n    || row.state !== 'COMMITTED'\n    || text(row.statement_sha256).toLowerCase() !== text(request.statement_sha256).toLowerCase()\n    || text(row.actual_verification_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('RECONCILIATION_READBACK_BINDING_MISMATCH');\nif (source.cashback_close_required === true && (!closeId || text(row.cashback_close_id) !== closeId))\n    throw new Error('RECONCILIATION_READBACK_CLOSE_MISMATCH');\nif (source.cashback_close_required !== true && text(row.cashback_close_id))\n    throw new Error('RECONCILIATION_READBACK_UNEXPECTED_CLOSE');\nreturn [{ json: { ...row, reconciliation_readback_verified: true } }];\n"}
-    node_by_name(statement, 'Upsert Reconciliation Receipt')["parameters"] = {'resource': 'row', 'operation': 'upsert', 'dataTableId': {'__rl': True, 'value': 'finance_reconciliations', 'mode': 'name'}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'source_code', 'condition': 'eq', 'keyValue': "={{ $('Verify Archive and Execution Context').first().json.source_code }}"}, {'keyName': 'period_key', 'condition': 'eq', 'keyValue': "={{ $('Verify Archive and Execution Context').first().json.period_key }}"}, {'keyName': 'reconciliation_version', 'condition': 'eq', 'keyValue': 1}]}, 'columns': {'mappingMode': 'defineBelow', 'value': {'source_code': "={{ $('Verify Archive and Execution Context').first().json.source_code }}", 'period_key': "={{ $('Verify Archive and Execution Context').first().json.period_key }}", 'reconciliation_version': 1, 'statement_sha256': "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}", 'actual_verification_sha256': "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}", 'cashback_close_id': "={{ $json.close_id || '' }}", 'state': 'COMMITTED', 'difference_minor': 0, 'verified_at': '={{ $now.toISO() }}', 'updated_at': '={{ $now.toISO() }}'}, 'matchingColumns': [], 'schema': [], 'attemptToConvertTypes': False, 'convertFieldsToString': False}, 'options': {'dryRun': False}}
-    node_by_name(statement, 'Read Back Reconciliation Receipt')["parameters"] = {'resource': 'row', 'operation': 'get', 'dataTableId': {'__rl': True, 'value': 'finance_reconciliations', 'mode': 'name'}, 'returnAll': False, 'limit': 1, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'source_code', 'condition': 'eq', 'keyValue': "={{ $('Verify Archive and Execution Context').first().json.source_code }}"}, {'keyName': 'period_key', 'condition': 'eq', 'keyValue': "={{ $('Verify Archive and Execution Context').first().json.period_key }}"}, {'keyName': 'state', 'condition': 'eq', 'keyValue': 'COMMITTED'}, {'keyName': 'reconciliation_version', 'condition': 'eq', 'keyValue': 1}, {'keyName': 'statement_sha256', 'condition': 'eq', 'keyValue': "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}"}, {'keyName': 'actual_verification_sha256', 'condition': 'eq', 'keyValue': "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}"}]}, 'options': {}}
-    statement["connections"]['Browser Capture Write?'] = {'main': [[{'node': 'Complete Browser Capture Headless Receipt', 'type': 'main', 'index': 0}], [{'node': 'Read Trusted Actual Classification IDs', 'type': 'main', 'index': 0}]]}
-    statement["connections"]['Read Trusted Actual Classification IDs'] = {'main': [[{'node': 'Project Actual Import Rows', 'type': 'main', 'index': 0}]]}
-    statement["connections"]['Finalize Trusted Cashback Payload'] = {'main': [[{'node': 'Statement Cashback Required', 'type': 'main', 'index': 0}]]}
-    statement["connections"]['Statement Cashback Required'] = {'main': [[{'node': 'Build Cashback Reconciliation Request', 'type': 'main', 'index': 0}], [{'node': 'Upsert Reconciliation Receipt', 'type': 'main', 'index': 0}]]}
+        bindings.append(
+            {"placeholder": "BIND_ACTUAL", "configured": False, "action_required": True}
+        )
+    if not any(
+        node["name"] == "Read Trusted Actual Classification IDs"
+        for node in statement["nodes"]
+    ):
+        statement["nodes"].append(
+            {
+                "id": "w03-read-trusted-actual-classification",
+                "name": "Read Trusted Actual Classification IDs",
+                "type": "n8n-nodes-finance.actualBudget",
+                "typeVersion": 1,
+                "position": [2200, 300],
+                "parameters": {"operation": "read", "readShape": "categories"},
+                "credentials": {
+                    "actualBudgetApi": {"id": "BIND_ACTUAL", "name": "Finance Actual"}
+                },
+            }
+        )
+    if not any(
+        node["name"] == "Statement Cashback Required" for node in statement["nodes"]
+    ):
+        statement["nodes"].append(
+            {
+                "id": "w03-statement-cashback-required",
+                "name": "Statement Cashback Required",
+                "type": "n8n-nodes-base.if",
+                "typeVersion": 2.2,
+                "position": [4000, 300],
+                "parameters": {
+                    "conditions": {
+                        "options": {"caseSensitive": True, "typeValidation": "strict"},
+                        "combinator": "and",
+                        "conditions": [
+                            {
+                                "leftValue": "={{ $('Verify Archive and Execution Context').first().json.cashback_close_required === true }}",
+                                "rightValue": True,
+                                "operator": {
+                                    "type": "boolean",
+                                    "operation": "true",
+                                    "singleValue": True,
+                                },
+                            }
+                        ],
+                    }
+                },
+            }
+        )
+    node_by_name(statement, "Build Canonical Delta Artifact")["parameters"] = {
+        "jsCode": "// Purpose: Build Canonical Delta Artifact. Keep this deterministic and fail closed.\nconst r = $json, s = $('Verify Archive and Execution Context').first().json;\nif (!Array.isArray(r.actual_transactions) || !r.actual_transactions.length)\n    throw new Error('EMPTY_ACTUAL_PROJECTION');\nconst closing = String(r.closing_balance_aed ?? '');\nif (!/^-?\\d+\\.\\d{2}$/.test(closing) || r.balance_tied !== true)\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nconst expectedBalanceMinor = -Math.round(Number(closing) * 100);\nif (!Number.isSafeInteger(expectedBalanceMinor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_INVALID');\nif (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(r.period_start || '')) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(r.period_end || '')) || r.period_start > r.period_end)\n    throw new Error('STATEMENT_PERIOD_REQUIRED');\nconst manifest = {\n    schema_version: 'actual-delta-v1',\n    source_code: s.source_code,\n    document_sha256: s.document_sha256,\n    config_version: s.config_version,\n    parser_version: r.parser_version || 'n8n-nodes-finance@0.1.0',\n    actual_file_id: s.actual_file_id,\n    account_id: s.account_id,\n    card_code: s.card_code,\n    historical_import: s.historical_import === true,\n    ...(s.historical_import === true\n        ? { historical_source: s.historical_source, historical_account_id: s.historical_account_id }\n        : {}),\n    period_start: r.period_start,\n    period_end: r.period_end,\n    expected_statement_balance_minor: expectedBalanceMinor,\n    transactions: r.actual_transactions,\n};\nreturn [{ json: { manifest, file_name: `${s.document_sha256}.actual-delta-v1.json` } }];\n"
+    }
+    node_by_name(statement, "Validate Reconciliation Readback")["parameters"] = {
+        "jsCode": "// Purpose: Validate Reconciliation Readback. Keep this deterministic and fail closed.\nconst row = $json || {};\nconst source = $('Verify Archive and Execution Context').first().json;\nconst actual = $('Apply Prepared Outbox Safely').first().json;\nconst request = { statement_sha256: source.document_sha256 };\nconst text = value => String(value ?? '').trim();\nlet closeId = '';\ntry {\n    closeId = text($('Validate Cashback Finalization Response').first().json.close_id);\n}\ncatch (_) {\n    closeId = '';\n}\nif (text(row.source_code) !== text(source.source_code)\n    || text(row.period_key) !== text(source.period_key)\n    || Number(row.reconciliation_version) !== 1\n    || row.state !== 'COMMITTED'\n    || text(row.statement_sha256).toLowerCase() !== text(request.statement_sha256).toLowerCase()\n    || text(row.actual_verification_sha256).toLowerCase() !== text(actual.observed_payload_sha256).toLowerCase())\n    throw new Error('RECONCILIATION_READBACK_BINDING_MISMATCH');\nif (source.cashback_close_required === true && (!closeId || text(row.cashback_close_id) !== closeId))\n    throw new Error('RECONCILIATION_READBACK_CLOSE_MISMATCH');\nif (source.cashback_close_required !== true && text(row.cashback_close_id))\n    throw new Error('RECONCILIATION_READBACK_UNEXPECTED_CLOSE');\nreturn [{ json: { ...row, reconciliation_readback_verified: true } }];\n"
+    }
+    node_by_name(statement, "Upsert Reconciliation Receipt")["parameters"] = {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+            "__rl": True,
+            "value": "finance_reconciliations",
+            "mode": "name",
+        },
+        "matchType": "allConditions",
+        "filters": {
+            "conditions": [
+                {
+                    "keyName": "source_code",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                },
+                {
+                    "keyName": "period_key",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                },
+                {"keyName": "reconciliation_version", "condition": "eq", "keyValue": 1},
+            ]
+        },
+        "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+                "source_code": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                "period_key": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                "reconciliation_version": 1,
+                "statement_sha256": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
+                "actual_verification_sha256": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
+                "cashback_close_id": "={{ $json.close_id || '' }}",
+                "state": "COMMITTED",
+                "difference_minor": 0,
+                "verified_at": "={{ $now.toISO() }}",
+                "updated_at": "={{ $now.toISO() }}",
+            },
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": False,
+            "convertFieldsToString": False,
+        },
+        "options": {"dryRun": False},
+    }
+    node_by_name(statement, "Read Back Reconciliation Receipt")["parameters"] = {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+            "__rl": True,
+            "value": "finance_reconciliations",
+            "mode": "name",
+        },
+        "returnAll": False,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+            "conditions": [
+                {
+                    "keyName": "source_code",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.source_code }}",
+                },
+                {
+                    "keyName": "period_key",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.period_key }}",
+                },
+                {"keyName": "state", "condition": "eq", "keyValue": "COMMITTED"},
+                {"keyName": "reconciliation_version", "condition": "eq", "keyValue": 1},
+                {
+                    "keyName": "statement_sha256",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Archive and Execution Context').first().json.document_sha256 }}",
+                },
+                {
+                    "keyName": "actual_verification_sha256",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Apply Prepared Outbox Safely').first().json.observed_payload_sha256 }}",
+                },
+            ]
+        },
+        "options": {},
+    }
+    statement["connections"]["Browser Capture Write?"] = {
+        "main": [
+            [
+                {
+                    "node": "Complete Browser Capture Headless Receipt",
+                    "type": "main",
+                    "index": 0,
+                }
+            ],
+            [
+                {
+                    "node": "Read Trusted Actual Classification IDs",
+                    "type": "main",
+                    "index": 0,
+                }
+            ],
+        ]
+    }
+    statement["connections"]["Read Trusted Actual Classification IDs"] = {
+        "main": [[{"node": "Project Actual Import Rows", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Finalize Trusted Cashback Payload"] = {
+        "main": [[{"node": "Statement Cashback Required", "type": "main", "index": 0}]]
+    }
+    statement["connections"]["Statement Cashback Required"] = {
+        "main": [
+            [
+                {
+                    "node": "Build Cashback Reconciliation Request",
+                    "type": "main",
+                    "index": 0,
+                }
+            ],
+            [{"node": "Upsert Reconciliation Receipt", "type": "main", "index": 0}],
+        ]
+    }
     for node in statement["nodes"]:
-        if node["type"] == "n8n-nodes-base.dataTable" and node["parameters"].get("operation") == "get":
+        if (
+            node["type"] == "n8n-nodes-base.dataTable"
+            and node["parameters"].get("operation") == "get"
+        ):
             node["alwaysOutputData"] = True
 
-    writer = next(workflow for workflow in workflows if workflow["meta"]["financeWorkflowCode"] == "ACTUAL_OUTBOX_APPLY")
-    node_by_name(writer, 'Build Recovery Verification Contract')["parameters"] = {'jsCode': "// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.\nconst root = $('Verify Recovery Contract').first().json;\nconst manifest = root.manifest;\nconst verification = root.verification;\nif (!Number.isSafeInteger(verification.expected_account_balance))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nconst expectedVerification = verification;\nconst actualFrom = name => {\n    try {\n        return $(name).first().json.actual || {};\n    }\n    catch {\n        return {};\n    }\n};\nconst preflight = actualFrom('Recovery Actual Preflight');\nconst resumedPreflight = actualFrom('Recovery Existing Actual Preflight');\nconst importObserved = actualFrom('Recovery Import PREPARED');\nconst observedState = $('Read Back ACTUAL OBSERVED Recovery').first().json;\nconst existingIds = [\n    ...(Array.isArray(preflight.already_observed) ? preflight.already_observed : []),\n    ...(Array.isArray(resumedPreflight.already_observed) ? resumedPreflight.already_observed : []),\n    ...(Array.isArray(importObserved.reconciled_imported_ids) ? importObserved.reconciled_imported_ids : []),\n];\nif (!verification.card_code)\n    throw new Error('RECOVERY_CARD_CODE_MISSING');\nif (!Array.isArray(existingIds) || existingIds.some(id => typeof id !== 'string'))\n    throw new Error('RECOVERY_PREFLIGHT_EXISTING_IDS_MISSING');\nconst expectedBalance = observedState.expected_account_balance;\nconst observedBalance = observedState.observed_account_balance;\nif (typeof expectedBalance !== 'number' || typeof observedBalance !== 'number'\n    || !Number.isSafeInteger(expectedBalance) || !Number.isSafeInteger(observedBalance)\n    || expectedBalance !== observedBalance)\n    throw new Error('RECOVERY_IMPORT_BALANCE_DELTA_EVIDENCE_MISSING');\nreturn [{ json: {\n            verification: { ...expectedVerification, preserve_manual_fields_for_ids: [...new Set(existingIds)].sort() },\n            balance_evidence: { expected: expectedBalance, observed: observedBalance },\n        } }];\n"}
-    node_by_name(writer, 'Upsert Exact Actual Verification Receipt')["parameters"] = {'resource': 'row', 'operation': 'upsert', 'dataTableId': {'__rl': True, 'value': 'finance_actual_batches', 'mode': 'name'}, 'matchType': 'allConditions', 'filters': {'conditions': [{'keyName': 'idempotency_key', 'condition': 'eq', 'keyValue': "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}"}]}, 'columns': {'mappingMode': 'defineBelow', 'value': {'idempotency_key': "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}", 'batch_id': "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}", 'verification_version': 1, 'actual_file_id': "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}", 'account_id': "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}", 'card_code': "={{ $('Verify Recovery Contract').first().json.manifest.card_code }}", 'period_start': "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}", 'period_end': "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}", 'expected_payload_sha256': '={{ $json.actual.expected_sha256 }}', 'observed_payload_sha256': '={{ $json.actual.observed_sha256 }}', 'expected_count': '={{ $json.actual.transaction_count }}', 'observed_count': '={{ $json.actual.transaction_count }}', 'expected_amount_sum_minor': '={{ $json.actual.amount_sum }}', 'observed_amount_sum_minor': '={{ $json.actual.amount_sum }}', 'expected_account_balance': "={{ $('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor }}", 'observed_account_balance': '={{ $json.actual.account_balance }}', 'invariants_passed': True, 'verified_at': '={{ $now.toISO() }}'}, 'matchingColumns': [], 'schema': [], 'attemptToConvertTypes': False, 'convertFieldsToString': False}, 'options': {'dryRun': False}}
-    node_by_name(writer, 'Compare Exact Actual Verification Receipt')["parameters"] = {'jsCode': "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json.actual;\nif (Number($json.expected_account_balance) !== Number($('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor))\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (observed.idempotency_key !== $('Verify Recovery Contract').first().json.outbox_row.idempotency_key\n    || !observed.idempotency_key\n    || observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || typeof observed.expected_count !== 'number'\n    || typeof observed.observed_count !== 'number'\n    || !Number.isSafeInteger(observed.expected_count) || observed.expected_count < 0\n    || observed.expected_count !== observed.observed_count\n    || observed.expected_count !== result.transaction_count\n    || typeof observed.expected_amount_sum_minor !== 'number'\n    || typeof observed.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(observed.expected_amount_sum_minor)\n    || observed.expected_amount_sum_minor !== observed.observed_amount_sum_minor\n    || observed.expected_amount_sum_minor !== result.amount_sum\n    || typeof observed.expected_account_balance !== 'number'\n    || typeof observed.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(observed.expected_account_balance)\n    || observed.observed_account_balance !== observed.expected_account_balance\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"}
+    writer = next(
+        workflow
+        for workflow in workflows
+        if workflow["meta"]["financeWorkflowCode"] == "ACTUAL_OUTBOX_APPLY"
+    )
+    node_by_name(writer, "Build Recovery Verification Contract")["parameters"] = {
+        "jsCode": "// Purpose: Build Recovery Verification Contract. Keep this deterministic and fail closed.\nconst root = $('Verify Recovery Contract').first().json;\nconst manifest = root.manifest;\nconst verification = root.verification;\nif (!Number.isSafeInteger(verification.expected_account_balance))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nconst expectedVerification = verification;\nconst actualFrom = name => {\n    try {\n        return $(name).first().json.actual || {};\n    }\n    catch {\n        return {};\n    }\n};\nconst preflight = actualFrom('Recovery Actual Preflight');\nconst resumedPreflight = actualFrom('Recovery Existing Actual Preflight');\nconst importObserved = actualFrom('Recovery Import PREPARED');\nconst observedState = $('Read Back ACTUAL OBSERVED Recovery').first().json;\nconst existingIds = [\n    ...(Array.isArray(preflight.already_observed) ? preflight.already_observed : []),\n    ...(Array.isArray(resumedPreflight.already_observed) ? resumedPreflight.already_observed : []),\n    ...(Array.isArray(importObserved.reconciled_imported_ids) ? importObserved.reconciled_imported_ids : []),\n];\nif (!verification.card_code)\n    throw new Error('RECOVERY_CARD_CODE_MISSING');\nif (!Array.isArray(existingIds) || existingIds.some(id => typeof id !== 'string'))\n    throw new Error('RECOVERY_PREFLIGHT_EXISTING_IDS_MISSING');\nconst expectedBalance = observedState.expected_account_balance;\nconst observedBalance = observedState.observed_account_balance;\nif (typeof expectedBalance !== 'number' || typeof observedBalance !== 'number'\n    || !Number.isSafeInteger(expectedBalance) || !Number.isSafeInteger(observedBalance)\n    || expectedBalance !== observedBalance)\n    throw new Error('RECOVERY_IMPORT_BALANCE_DELTA_EVIDENCE_MISSING');\nreturn [{ json: {\n            verification: { ...expectedVerification, preserve_manual_fields_for_ids: [...new Set(existingIds)].sort() },\n            balance_evidence: { expected: expectedBalance, observed: observedBalance },\n        } }];\n"
+    }
+    node_by_name(writer, "Upsert Exact Actual Verification Receipt")["parameters"] = {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+            "__rl": True,
+            "value": "finance_actual_batches",
+            "mode": "name",
+        },
+        "matchType": "allConditions",
+        "filters": {
+            "conditions": [
+                {
+                    "keyName": "idempotency_key",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                }
+            ]
+        },
+        "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+                "idempotency_key": "={{ $('Verify Recovery Contract').first().json.outbox_row.idempotency_key }}",
+                "batch_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.batch_id }}",
+                "verification_version": 1,
+                "actual_file_id": "={{ $('Verify Recovery Contract').first().json.outbox_row.actual_file_id }}",
+                "account_id": "={{ $('Verify Recovery Contract').first().json.manifest.account_id }}",
+                "card_code": "={{ $('Verify Recovery Contract').first().json.manifest.card_code }}",
+                "period_start": "={{ $('Verify Recovery Contract').first().json.manifest.period_start }}",
+                "period_end": "={{ $('Verify Recovery Contract').first().json.manifest.period_end }}",
+                "expected_payload_sha256": "={{ $json.actual.expected_sha256 }}",
+                "observed_payload_sha256": "={{ $json.actual.observed_sha256 }}",
+                "expected_count": "={{ $json.actual.transaction_count }}",
+                "observed_count": "={{ $json.actual.transaction_count }}",
+                "expected_amount_sum_minor": "={{ $json.actual.amount_sum }}",
+                "observed_amount_sum_minor": "={{ $json.actual.amount_sum }}",
+                "expected_account_balance": "={{ $('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor }}",
+                "observed_account_balance": "={{ $json.actual.account_balance }}",
+                "invariants_passed": True,
+                "verified_at": "={{ $now.toISO() }}",
+            },
+            "matchingColumns": [],
+            "schema": [],
+            "attemptToConvertTypes": False,
+            "convertFieldsToString": False,
+        },
+        "options": {"dryRun": False},
+    }
+    node_by_name(writer, "Compare Exact Actual Verification Receipt")["parameters"] = {
+        "jsCode": "// Purpose: Compare Exact Actual Verification Receipt. Keep this deterministic and fail closed.\nconst observed = $json;\nconst result = $('Recovery Verify Actual').first().json.actual;\nif (Number($json.expected_account_balance) !== Number($('Verify Recovery Contract').first().json.manifest.expected_statement_balance_minor))\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (observed.idempotency_key !== $('Verify Recovery Contract').first().json.outbox_row.idempotency_key\n    || !observed.idempotency_key\n    || observed.expected_payload_sha256 !== result.expected_sha256\n    || observed.observed_payload_sha256 !== result.observed_sha256\n    || observed.expected_payload_sha256 !== observed.observed_payload_sha256\n    || typeof observed.expected_count !== 'number'\n    || typeof observed.observed_count !== 'number'\n    || !Number.isSafeInteger(observed.expected_count) || observed.expected_count < 0\n    || observed.expected_count !== observed.observed_count\n    || observed.expected_count !== result.transaction_count\n    || typeof observed.expected_amount_sum_minor !== 'number'\n    || typeof observed.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(observed.expected_amount_sum_minor)\n    || observed.expected_amount_sum_minor !== observed.observed_amount_sum_minor\n    || observed.expected_amount_sum_minor !== result.amount_sum\n    || typeof observed.expected_account_balance !== 'number'\n    || typeof observed.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(observed.expected_account_balance)\n    || observed.observed_account_balance !== observed.expected_account_balance\n    || observed.invariants_passed !== true) {\n    throw new Error('ACTUAL_VERIFICATION_RECEIPT_MISMATCH');\n}\nreturn [{ json: observed }];\n"
+    }
     for node in writer["nodes"]:
-        if node["type"] == "n8n-nodes-base.dataTable" and node["parameters"].get("operation") == "get":
+        if (
+            node["type"] == "n8n-nodes-base.dataTable"
+            and node["parameters"].get("operation") == "get"
+        ):
             node["alwaysOutputData"] = True
 
-    node_by_name(writer, 'Verify Recovery Contract')["parameters"] = {'jsCode': "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nconst text = value => String(value ?? '').trim();\nif (!Number.isSafeInteger(m.expected_statement_balance_minor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nif (h !== o.delta_sha256 || m.schema_version !== o.delta_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"}
-    node_by_name(writer, 'Validate Stored Verification Receipt for Commit')["parameters"] = {'jsCode': "// Purpose: Validate Stored Verification Receipt for Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nconst root = $('Verify Recovery Contract').first().json;\nconst text = value => String(value ?? '').trim();\nif (receipt.expected_account_balance !== root.manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (!receipt || receipt.invariants_passed !== true\n    || text(receipt.idempotency_key) !== text(root.outbox_row.idempotency_key)\n    || text(receipt.batch_id) !== text(root.outbox_row.batch_id)\n    || text(receipt.actual_file_id) !== text(root.manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(root.manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(root.manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(root.manifest.period_start)\n    || text(receipt.period_end) !== text(root.manifest.period_end)\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256))\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.expected_account_balance !== receipt.observed_account_balance)\n    throw new Error('ACTUAL_STORED_VERIFICATION_RECEIPT_MISMATCH');\nreturn [{ json: receipt }];\n"}
-    node_by_name(writer, 'Return Verified Commit Receipt Replay')["parameters"] = {'jsCode': "// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nconst expectedOwner = text(committed.lease_owner);\nconst expectedFence = Number(committed.lease_fence);\nif (receipt.expected_account_balance !== manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true\n    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)\n    throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');\nif (text(receipt.batch_id) !== text(committed.batch_id)\n    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(manifest.period_start)\n    || text(receipt.period_end) !== text(manifest.period_end)\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.observed_account_balance !== receipt.expected_account_balance\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))\n    throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            lease_owner: expectedOwner,\n            lease_fence: expectedFence,\n            writer_release_verified: true,\n            replay_readback_only: true,\n        } }];\n"}
+    node_by_name(writer, "Verify Recovery Contract")["parameters"] = {
+        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nconst text = value => String(value ?? '').trim();\nif (!Number.isSafeInteger(m.expected_statement_balance_minor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nif (h !== o.delta_sha256 || m.schema_version !== o.delta_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
+    }
+    node_by_name(writer, "Validate Stored Verification Receipt for Commit")[
+        "parameters"
+    ] = {
+        "jsCode": "// Purpose: Validate Stored Verification Receipt for Commit. Keep this deterministic and fail closed.\nconst receipt = $json;\nconst root = $('Verify Recovery Contract').first().json;\nconst text = value => String(value ?? '').trim();\nif (receipt.expected_account_balance !== root.manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (!receipt || receipt.invariants_passed !== true\n    || text(receipt.idempotency_key) !== text(root.outbox_row.idempotency_key)\n    || text(receipt.batch_id) !== text(root.outbox_row.batch_id)\n    || text(receipt.actual_file_id) !== text(root.manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(root.manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(root.manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(root.manifest.period_start)\n    || text(receipt.period_end) !== text(root.manifest.period_end)\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256))\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.expected_account_balance !== receipt.observed_account_balance)\n    throw new Error('ACTUAL_STORED_VERIFICATION_RECEIPT_MISMATCH');\nreturn [{ json: receipt }];\n"
+    }
+    node_by_name(writer, "Return Verified Commit Receipt Replay")["parameters"] = {
+        "jsCode": "// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nconst expectedOwner = text(committed.lease_owner);\nconst expectedFence = Number(committed.lease_fence);\nif (receipt.expected_account_balance !== manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true\n    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)\n    throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');\nif (text(receipt.batch_id) !== text(committed.batch_id)\n    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(manifest.period_start)\n    || text(receipt.period_end) !== text(manifest.period_end)\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.observed_account_balance !== receipt.expected_account_balance\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))\n    throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            lease_owner: expectedOwner,\n            lease_fence: expectedFence,\n            writer_release_verified: true,\n            replay_readback_only: true,\n        } }];\n"
+    }
+    replay_receipt = node_by_name(writer, "Return Verified Commit Receipt Replay")
+    replay_code = replay_receipt["parameters"]["jsCode"]
+    replay_code = replay_code.replace(
+        "const receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\n",
+        "const receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\n"
+        "const release = $('Read Back Released Recovery Writer Fence Replay').first().json;\n",
+    ).replace(
+        "if (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true\n"
+        "    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)",
+        "if (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true\n"
+        "    || !release || release.released !== true\n"
+        "    || text(release.lease_owner) !== expectedOwner\n"
+        "    || Number(release.fencing_token) !== expectedFence\n"
+        "    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)",
+    )
+    replay_receipt["parameters"]["jsCode"] = replay_code
 
-    node_by_name(statement, "Build Cashback Reconciliation Request")["parameters"] = {'jsCode': "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nif (!rows.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY_STATEMENT');\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.event_type || row.transaction_type || '').trim().toUpperCase();\n    const purchaseType = row.purchase_type ? String(row.purchase_type).trim().toUpperCase() : undefined;\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: 'AED',\n        post_date: row.post_date || null,\n        ledger_category: String(row.subcategory || row.category || ''),\n        bucket_code: row.reward_bucket || null,\n        channel: row.channel || 'UNKNOWN',\n        tags: row.tags || [],\n        decision_trace: [...(Array.isArray(row.decision_trace) ? row.decision_trace : []), {\n            stage: 'STATEMENT_SETTLEMENT', amount_aed: String(row.amount_aed ?? row.amount), settlement_currency: 'AED',\n            original_currency: String(row.currency_original || 'AED'), original_amount: row.amount_original ?? null,\n            exchange_rate: row.exchange_rate ?? null, transaction_date: row.transaction_date, post_date: row.post_date ?? null,\n        }],\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: purchaseType,\n        event_type: eventType,\n    };\n});\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"}
+    node_by_name(statement, "Build Cashback Reconciliation Request")["parameters"] = {
+        "jsCode": "// Purpose: Build Cashback Reconciliation Request. Keep this deterministic and fail closed.\nconst draft = $json;\nconst statement = $('Validate Statement Reconciliation and IDs').first().json;\nconst source = $('Verify Archive and Execution Context').first().json;\nconst manifest = $('Build Canonical Delta Artifact').first().json.manifest;\nconst allowed = new Set(['PURCHASE', 'REFUND', 'REVERSAL']);\nconst rows = Array.isArray(statement.transactions) ? statement.transactions : [];\nif (!rows.length)\n    throw new Error('CASHBACK_RECONCILE_EMPTY_STATEMENT');\nconst transactions = rows.filter(row => allowed.has(String(row.transaction_type || row.event_type || '').toUpperCase())).map(row => {\n    const eventType = String(row.event_type || row.transaction_type || '').trim().toUpperCase();\n    const purchaseType = row.purchase_type ? String(row.purchase_type).trim().toUpperCase() : undefined;\n    const transactionId = String(row.transaction_id || row.statement_transaction_id || '').trim();\n    if (!transactionId || (!row.transaction_date && !row.occurred_at) || (row.amount_aed === undefined && row.amount === undefined))\n        throw new Error('CASHBACK_RECONCILE_ROW_INVALID');\n    return {\n        statement_transaction_id: transactionId,\n        occurred_at: String(row.occurred_at || String(row.transaction_date) + 'T00:00:00+04:00'),\n        amount_aed: String(row.amount_aed ?? row.amount),\n        currency: 'AED',\n        post_date: row.post_date || null,\n        ledger_category: String(row.subcategory || row.category || ''),\n        bucket_code: row.reward_bucket || null,\n        channel: row.channel || 'UNKNOWN',\n        tags: row.tags || [],\n        decision_trace: [...(Array.isArray(row.decision_trace) ? row.decision_trace : []), {\n            stage: 'STATEMENT_SETTLEMENT', amount_aed: String(row.amount_aed ?? row.amount), settlement_currency: 'AED',\n            original_currency: String(row.currency_original || 'AED'), original_amount: row.amount_original ?? null,\n            exchange_rate: row.exchange_rate ?? null, transaction_date: row.transaction_date, post_date: row.post_date ?? null,\n        }],\n        merchant: String(row.description || row.merchant || '').trim(),\n        purchase_type: purchaseType,\n        event_type: eventType,\n    };\n});\nconst cardCode = String(source.card_code || '').trim().toUpperCase();\nif (!cardCode)\n    throw new Error('CASHBACK_RECONCILE_CARD_MISSING');\nconst cashback_reconcile = {\n    statement_reference: String(draft.cashback_finalization.statement_reference),\n    statement_sha256: String(draft.cashback_finalization.statement_sha256),\n    card_code: cardCode,\n    period_start: String(manifest.period_start),\n    period_end: String(manifest.period_end),\n    transactions,\n};\nreturn [{ json: { ...draft, cashback_reconcile } }];\n"
+    }
 
 
 def ensure_operations_execution_filters(workflows: list[dict]) -> None:
@@ -5136,9 +7217,11 @@ def ensure_operations_execution_filters(workflows: list[dict]) -> None:
     for workflow in workflows:
         for node in workflow.get("nodes", []):
             parameters = node.get("parameters", {})
-            if (node.get("type") == "n8n-nodes-base.n8n"
-                    and parameters.get("resource") == "execution"
-                    and parameters.get("operation") == "getAll"):
+            if (
+                node.get("type") == "n8n-nodes-base.n8n"
+                and parameters.get("resource") == "execution"
+                and parameters.get("operation") == "getAll"
+            ):
                 filters = parameters.get("filters", {})
                 if filters.get("status") == "all":
                     del filters["status"]
@@ -5146,7 +7229,9 @@ def ensure_operations_execution_filters(workflows: list[dict]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="fail if exports are not current")
+    parser.add_argument(
+        "--check", action="store_true", help="fail if exports are not current"
+    )
     args = parser.parse_args()
     paths = sorted(WORKFLOWS.glob("*.json"))
     workflows = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
@@ -5156,17 +7241,21 @@ def main() -> int:
     ensure_operations_execution_filters(workflows)
     apply_blocker_metadata(workflows)
     ensure_single_actual_writer(workflows)
+    ensure_durable_actual_writer(workflows)
     ensure_subscription_agent_adapter(workflows)
     ensure_email_enrichment_contract(workflows)
     ensure_statement_projection_contract(workflows)
     from monthly_archive_contract import ensure_monthly_archive_contract
+
     ensure_monthly_archive_contract(workflows)
     assert_monthly_cycle_commit_graph(workflows)
     assert_archive_readback_contract(workflows)
     assert_four_table_bootstrap(workflows)
     paths = sorted({*paths, ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH})
     workflows.sort(key=lambda workflow: workflow["meta"]["financeWorkflowCode"])
-    by_code = {workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows}
+    by_code = {
+        workflow["meta"]["financeWorkflowCode"]: workflow for workflow in workflows
+    }
     path_to_code = {
         path: (
             "ACTUAL_OUTBOX_APPLY"
@@ -5175,10 +7264,13 @@ def main() -> int:
             if path == AGENT_ADAPTER_PATH
             else MONTHLY_SHARED_WORKFLOW_CODE
             if path == MONTHLY_SHARED_PATH
-            else json.loads(path.read_text(encoding="utf-8"))["meta"]["financeWorkflowCode"]
+            else json.loads(path.read_text(encoding="utf-8"))["meta"][
+                "financeWorkflowCode"
+            ]
         )
         for path in paths
-        if path.exists() or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
+        if path.exists()
+        or path in {ACTUAL_APPLY_PATH, AGENT_ADAPTER_PATH, MONTHLY_SHARED_PATH}
     }
     workflows = [by_code[path_to_code[path]] for path in paths]
     format_code_nodes(workflows)
@@ -5196,7 +7288,10 @@ def main() -> int:
             # existing positions/groups, but stage labels are still
             # presentation-only and must obey the same cleanup policy.
             remove_generated_stage_notes(workflow)
-    rendered = [json.dumps(workflow, indent=2, ensure_ascii=False) + "\n" for workflow in workflows]
+    rendered = [
+        json.dumps(workflow, indent=2, ensure_ascii=False) + "\n"
+        for workflow in workflows
+    ]
     if args.check:
         stale = [
             path.name
