@@ -8,7 +8,7 @@
     "CARD_STATEMENT_SOURCES",
     "MORTGAGE_PROFILES"
   ],
-  "bootstrap_static_sha256": "fa9fcb99329ec44f16125aa0dae77bc8dc5faab917e2ff05d22d0f76a6d2bf16",
+  "bootstrap_static_sha256": "82d6a4d1980aa65165cfbc5c97fc0d220ec3d98746259c1aa355e8b76b06f8db",
   "providers": [
     {
       "provider_id": "adcb",
