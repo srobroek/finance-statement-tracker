@@ -37,7 +37,9 @@ from .rule_analysis_validation import (
 )
 
 _AGENT_TARGET_FIELDS: Final[frozenset[str]] = frozenset(SUGGESTION_ONLY_FIELDS)
-_AMBIGUOUS_OUTCOMES: Final[frozenset[str]] = frozenset({"AMBIGUOUS"})
+_REVIEW_ONLY_OUTCOMES: Final[frozenset[str]] = frozenset(
+    {"AMBIGUOUS", "CONFLICTING", "MISSING"}
+)
 
 ObservationInput = LedgerObservation | Mapping[str, Any]
 CandidateInput = CandidateEnvelope | Mapping[str, Any]
@@ -125,6 +127,13 @@ def _agent_targets(candidate: CandidateEnvelope) -> None:
         )
 
 
+def _is_review_only(outcome: str, reason_codes: tuple[str, ...]) -> bool:
+    return outcome in _REVIEW_ONLY_OUTCOMES or any(
+        reason_definition(reason_code).outcome == "review_only"
+        for reason_code in reason_codes
+    )
+
+
 def _artifact_pair(
     value: object,
 ) -> tuple[CandidateEnvelope, FixedAgentArtifact | None, FixedAgentArtifact | None]:
@@ -189,8 +198,10 @@ class EvaluationResult:
     evaluation_hash: str = field(init=False)
 
     def __post_init__(self) -> None:
-        if self.review_only != (self.outcome in _AMBIGUOUS_OUTCOMES):
-            raise ValueError("evaluation review_only state does not match its outcome")
+        if self.review_only != _is_review_only(self.outcome, self.reason_codes):
+            raise ValueError(
+                "evaluation review_only state does not match its reason outcomes"
+            )
         if self.review_only and self.relation is not None:
             raise ValueError("review-only evaluations cannot select a relation")
         object.__setattr__(
@@ -286,7 +297,7 @@ class RuleAnalysisWorkbench:
             outcome=trace.outcome,
             relation=trace.selected_edge,
             reason_codes=trace.reason_codes,
-            review_only=trace.outcome in _AMBIGUOUS_OUTCOMES,
+            review_only=_is_review_only(trace.outcome, trace.reason_codes),
         )
 
     def propose(

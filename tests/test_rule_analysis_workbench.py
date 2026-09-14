@@ -173,6 +173,13 @@ class RuleAnalysisWorkbenchTests(unittest.TestCase):
                 serialized["unexpected"] = True
                 with self.assertRaisesRegex(ValueError, "unknown fields"):
                     factory.from_mapping(serialized)
+        with self.assertRaisesRegex(ValueError, "missing target fields"):
+            self._candidate(
+                workbench,
+                observation,
+                target_fields=("category", "tags"),
+                payload={"category": "Groceries"},
+            )
 
     def test_unknown_reasons_fail_closed_before_lifecycle_registration(self) -> None:
         with self.assertRaises(UnknownReasonCode):
@@ -247,17 +254,15 @@ class RuleAnalysisWorkbenchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "only while.*unresolved"):
             workbench.propose(resolved_candidate, resolved)
 
-        illegal_agent_candidate = self._candidate(
-            workbench,
-            observation,
-            candidate_id="candidate-illegal-agent-target",
-            candidate_kind="AGENT_POLICY",
-            target_fields=("category",),
-            reason_code_value="UNRESOLVED",
-        )
-        with self.assertRaises(RuleAnalysisValidationError) as caught:
-            workbench.propose(illegal_agent_candidate, observation)
-        self.assertIs(caught.exception.reason_code, ReasonCode.PROTECTED_FIELD_PROPOSAL)
+        with self.assertRaisesRegex(ValueError, "only suggestion-only fields"):
+            self._candidate(
+                workbench,
+                observation,
+                candidate_id="candidate-illegal-agent-target",
+                candidate_kind="AGENT_POLICY",
+                target_fields=("category",),
+                reason_code_value="UNRESOLVED",
+            )
 
     def test_manual_field_relation_and_all_protected_classes_are_guarded(self) -> None:
         lifecycle = RuleAnalysisLifecycle().with_field_locked("category")
@@ -312,6 +317,7 @@ class RuleAnalysisWorkbenchTests(unittest.TestCase):
         missing = workbench.evaluate(source, (source,))
         self.assertEqual(missing.outcome, "MISSING")
         self.assertIsNone(missing.relation)
+        self.assertTrue(missing.review_only)
 
         locked_source = self._observation(
             "locked-source",
@@ -325,6 +331,7 @@ class RuleAnalysisWorkbenchTests(unittest.TestCase):
         self.assertEqual(conflicting.outcome, "CONFLICTING")
         self.assertIsNone(conflicting.relation)
         self.assertIn(ReasonCode.MANUAL_LOCK_CONFLICT.value, conflicting.reason_codes)
+        self.assertTrue(conflicting.review_only)
 
         ambiguous = workbench.evaluate(
             source,

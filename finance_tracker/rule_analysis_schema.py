@@ -737,6 +737,13 @@ class CandidateEnvelope:
         if unknown:
             raise ValueError(f"illegal target fields: {', '.join(sorted(unknown))}")
         _reject_protected_fields(fields, "CandidateEnvelope")
+        if self.candidate_kind == "AGENT_POLICY":
+            deterministic_targets = set(fields) - set(SUGGESTION_ONLY_FIELDS)
+            if deterministic_targets:
+                raise ValueError(
+                    "AGENT_POLICY candidates may target only suggestion-only fields: "
+                    + ", ".join(sorted(deterministic_targets))
+                )
         object.__setattr__(self, "target_fields", tuple(sorted(fields)))
         object.__setattr__(self, "reason_code", _reason(self.reason_code))
         object.__setattr__(self, "confidence", _confidence(self.confidence))
@@ -749,6 +756,12 @@ class CandidateEnvelope:
             raise ValueError(
                 "payload contains fields not listed in target_fields: "
                 + ", ".join(sorted(unknown_payload))
+            )
+        missing_payload = set(fields) - set(payload)
+        if missing_payload:
+            raise ValueError(
+                "payload is missing target fields: "
+                + ", ".join(sorted(missing_payload))
             )
         object.__setattr__(self, "payload", payload)
         object.__setattr__(
