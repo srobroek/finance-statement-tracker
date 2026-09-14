@@ -40,6 +40,69 @@ def load_runner():
     return module
 
 
+def cjs_validation_harness() -> str:
+    source = CJS_RUNNER.read_text(encoding="utf-8")
+    declarations = source[
+        source.index("const TARGET_NAMES") : source.index("const LIVE_EXPORT_FIELDS")
+    ]
+    helpers = source[
+        source.index("function selectorId") : source.index(
+            "function transactionTimeouts"
+        )
+    ]
+    validator = source[
+        source.index("function validateCanonicalGraph") : source.index(
+            "function workflowReadback"
+        )
+    ]
+    return f"""
+{declarations}
+{helpers}
+{validator}
+const fs = require('node:fs');
+const workflows = JSON.parse(fs.readFileSync(0, 'utf8'));
+const targetIds = new Map([
+  ['finance_ingestion_state', 'target-ingestion'],
+  ['finance_documents', 'target-documents'],
+  ['finance_actual_batches', 'target-batches'],
+  ['finance_ai_reviews', 'target-reviews'],
+]);
+for (const workflow of workflows) validateCanonicalGraph(workflow, targetIds);
+process.stdout.write('validated');
+"""
+
+
+def write_runtime_receipt(runner, path: Path, schema: str) -> dict[str, object]:
+    unsigned: dict[str, object] = {
+        "schema_version": schema,
+        "operation": "FORWARD",
+        "durable_journal": True,
+        "commit_protocol": "postgresql_synchronous_wal",
+        "readback_verified": True,
+        "action_count": len(runner.EXPECTED_REFERENCE_ACTIONS),
+        "actions": [{} for _ in runner.EXPECTED_REFERENCE_ACTIONS],
+    }
+    unsigned["runtime_plan_receipt_sha256"] = hashlib.sha256(
+        runner._canonical_bytes(unsigned)
+    ).hexdigest()
+    path.write_text(json.dumps(unsigned) + "\n", encoding="utf-8")
+    path.chmod(0o600)
+    return unsigned
+
+
+def run_cjs_validation(
+    workflows: list[dict[str, object]],
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["node", "-e", cjs_validation_harness()],
+        input=json.dumps(workflows),
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+    )
+
+
 class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_python_runner_preserves_four_targets_and_source_contract(self) -> None:
         runner = load_runner()
