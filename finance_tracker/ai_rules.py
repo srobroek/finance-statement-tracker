@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterable
 from .models import Transaction
 from .properties import load_property_registry
 from .rules import RuleCondition, condition_matches
+from .transaction_semantics import PENDING_CATEGORY_VALUES, UNKNOWN_PAYEE_VALUES
 
 
 AI_WRITABLE_FIELDS = frozenset(
@@ -94,7 +95,10 @@ def _scope_matches(transaction: Transaction, policy: AIPolicy) -> bool:
     groups: dict[int, list[RuleCondition]] = {}
     for condition in policy.conditions:
         groups.setdefault(condition.group, []).append(condition)
-    return any(all(condition_matches(transaction, condition) for condition in group) for group in groups.values())
+    return any(
+        all(condition_matches(transaction, condition) for condition in group)
+        for group in groups.values()
+    )
 
 
 def _unresolved(transaction: Transaction, field: str) -> bool:
@@ -103,7 +107,45 @@ def _unresolved(transaction: Transaction, field: str) -> bool:
         return not bool(value)
     if field == "channel":
         return value in (None, "", "UNKNOWN")
+    if field == "category":
+        return str(value or "").strip().casefold() in PENDING_CATEGORY_VALUES
+    if field in {"vendor", "payee"}:
+        return str(value or "").strip().casefold() in UNKNOWN_PAYEE_VALUES
     return value in (None, "", [], set())
+
+
+def _apply_resolution_cleanup(transaction: Transaction, field: str) -> None:
+    """Clear derived review state without overriding manual locks."""
+
+    locked = set(transaction.metadata.get("locked_fields", []))
+    resolution_field = (
+        "category_resolution"
+        if field == "category"
+        else "payee_resolution"
+        if field in {"vendor", "payee"}
+        else None
+    )
+    resolution_locked = resolution_field in locked if resolution_field else False
+    if field == "category":
+        if not resolution_locked:
+            transaction.metadata["category_resolution"] = "RESOLVED"
+            transaction.metadata.pop("category_recommendations", None)
+    elif field in {"vendor", "payee"}:
+        if not resolution_locked:
+            transaction.metadata["payee_resolution"] = "RESOLVED"
+            transaction.metadata.pop("payee_recommendations", None)
+            transaction.metadata.pop("vendor_recommendations", None)
+    queue_locked = resolution_locked or bool(
+        {"tags", "review_required", "classification_review_reasons"} & locked
+    )
+    if not queue_locked:
+        transaction.tags.discard("category-review")
+        transaction.tags.discard("needs-review")
+        transaction.review_required = False
+        transaction.metadata.pop("classification_review_reasons", None)
+        from .classification_audit import enforce_transaction_invariants
+
+        enforce_transaction_invariants(transaction)
 
 
 def validate_policy(policy: AIPolicy) -> None:
@@ -118,7 +160,9 @@ def validate_policy(policy: AIPolicy) -> None:
         errors.append("agent_profile must be LUNA_MAX or SOL_MEDIUM")
     invalid_targets = set(policy.target_fields) - (AI_WRITABLE_FIELDS | {"tags"})
     if invalid_targets:
-        errors.append("unsupported target fields: " + ", ".join(sorted(invalid_targets)))
+        errors.append(
+            "unsupported target fields: " + ", ".join(sorted(invalid_targets))
+        )
     if set(policy.target_fields) & PROTECTED_FIELDS:
         errors.append("protected fields cannot be AI targets")
     invalid_triggers = set(policy.trigger_fields) - set(policy.target_fields)
@@ -135,7 +179,12 @@ class AIEnrichmentEngine:
     """Validate model proposals and apply only scoped, unresolved derived fields."""
 
     def __init__(self, policies: Iterable[AIPolicy]):
-        self.policies = tuple(sorted((policy for policy in policies if policy.enabled), key=lambda item: (item.priority, item.policy_id)))
+        self.policies = tuple(
+            sorted(
+                (policy for policy in policies if policy.enabled),
+                key=lambda item: (item.priority, item.policy_id),
+            )
+        )
         for policy in self.policies:
             validate_policy(policy)
 
@@ -152,7 +201,8 @@ class AIEnrichmentEngine:
             unresolved = [
                 field
                 for field in policy.target_fields
-                if field not in locked and (field == "tags" or _unresolved(transaction, field))
+                if field not in locked
+                and (field == "tags" or _unresolved(transaction, field))
             ]
             if not unresolved:
                 continue
@@ -165,11 +215,18 @@ class AIEnrichmentEngine:
             # output of earlier policies, so stop this transaction's ordered
             # AI pass and expose only the first unresolved decision. A replay
             # with that response continues from the new fixed point.
-            if isinstance(response, dict) and str(response.get("model") or "") == "pending":
+            if (
+                isinstance(response, dict)
+                and str(response.get("model") or "") == "pending"
+            ):
                 break
-            proposals = response.get("proposals", []) if isinstance(response, dict) else []
+            proposals = (
+                response.get("proposals", []) if isinstance(response, dict) else []
+            )
             if not isinstance(proposals, list):
-                raise ValueError(f"AI response for {policy.policy_id} must contain a proposals list")
+                raise ValueError(
+                    f"AI response for {policy.policy_id} must contain a proposals list"
+                )
             for raw in proposals:
                 trace = self._apply_proposal(
                     transaction,
@@ -208,7 +265,9 @@ class AIEnrichmentEngine:
         return traces
 
     @staticmethod
-    def _request(transaction: Transaction, policy: AIPolicy, unresolved: list[str]) -> dict[str, Any]:
+    def _request(
+        transaction: Transaction, policy: AIPolicy, unresolved: list[str]
+    ) -> dict[str, Any]:
         return {
             "schema_version": 1,
             "policy_id": policy.policy_id,
@@ -286,11 +345,20 @@ class AIEnrichmentEngine:
             accepted, reason = False, "protected_or_unsupported_field"
         elif not 0 <= confidence <= 1 or confidence < policy.minimum_confidence:
             accepted, reason = False, "below_confidence_threshold"
-        elif policy.allowed_values and field in policy.allowed_values and value not in policy.allowed_values[field]:
+        elif (
+            policy.allowed_values
+            and field in policy.allowed_values
+            and value not in policy.allowed_values[field]
+        ):
             accepted, reason = False, "value_not_allowed"
         elif field == "is_subscription" and not isinstance(value, bool):
             accepted, reason = False, "boolean_value_required"
-        elif field not in {"is_subscription", "tags", "category_recommendation", "rule_recommendation"} and value in (None, ""):
+        elif field not in {
+            "is_subscription",
+            "tags",
+            "category_recommendation",
+            "rule_recommendation",
+        } and value in (None, ""):
             accepted, reason = False, "empty_value"
         elif field == "tags":
             values = value if isinstance(value, list) else [value]
@@ -306,7 +374,9 @@ class AIEnrichmentEngine:
             if not isinstance(value, dict):
                 accepted, reason = False, "rule_recommendation_must_be_object"
             else:
-                transaction.metadata.setdefault("static_rule_recommendations", []).append(value)
+                transaction.metadata.setdefault(
+                    "static_rule_recommendations", []
+                ).append(value)
         elif field == "category_recommendation":
             if not isinstance(value, dict) or not str(value.get("name") or "").strip():
                 accepted, reason = False, "category_recommendation_must_name_category"
@@ -316,12 +386,16 @@ class AIEnrichmentEngine:
                     "group": str(value.get("group") or "Needs Review").strip(),
                     "reason": str(value.get("reason") or rationale).strip(),
                 }
-                transaction.metadata.setdefault("category_recommendations", []).append(recommendation)
+                transaction.metadata.setdefault("category_recommendations", []).append(
+                    recommendation
+                )
                 if "tags" not in set(transaction.metadata.get("locked_fields", [])):
                     transaction.tags.add("category-review")
                 transaction.set_value("review_required", True)
         else:
             transaction.set_value(field, value)
+            if field in {"category", "vendor", "payee"}:
+                _apply_resolution_cleanup(transaction, field)
         return AITrace(
             transaction.transaction_id,
             policy.policy_id,
@@ -364,7 +438,11 @@ def _configured_allowed_values(
     """Resolve reusable allowlists from the deployment's authoritative config."""
     if source_name == "cashback.buckets":
         configured = os.environ.get("CASHBACK_PROGRAM_CONFIG_PATH")
-        config_path = Path(configured) if configured else policy_path.parent / "cashback-programs.json"
+        config_path = (
+            Path(configured)
+            if configured
+            else policy_path.parent / "cashback-programs.json"
+        )
         source = json.loads(config_path.read_text(encoding="utf-8"))
         return tuple(
             str(bucket["code"])
@@ -373,7 +451,11 @@ def _configured_allowed_values(
         )
     if source_name == "actual.categories":
         configured = os.environ.get("ACTUAL_BOOTSTRAP_CONFIG_PATH")
-        config_path = Path(configured) if configured else policy_path.parent / "actual-bootstrap.json"
+        config_path = (
+            Path(configured)
+            if configured
+            else policy_path.parent / "actual-bootstrap.json"
+        )
         source = json.loads(config_path.read_text(encoding="utf-8"))
         return tuple(
             str(category)
@@ -382,7 +464,9 @@ def _configured_allowed_values(
         )
     if source_name in {"properties.codes", "properties.rental_units"}:
         configured = os.environ.get("PROPERTY_CONFIG_PATH")
-        config_path = Path(configured) if configured else policy_path.parent / "properties.json"
+        config_path = (
+            Path(configured) if configured else policy_path.parent / "properties.json"
+        )
         registry = load_property_registry(config_path)
         if source_name == "properties.codes":
             return tuple(item.property_code for item in registry.properties)
@@ -412,7 +496,8 @@ def load_ai_policies(path: str | Path) -> list[AIPolicy]:
             for condition in row.get("conditions", [])
         )
         allowed_values: dict[str, tuple[Any, ...]] = {
-            field: tuple(values) for field, values in row.get("allowed_values", {}).items()
+            field: tuple(values)
+            for field, values in row.get("allowed_values", {}).items()
         }
         for field, source_name in row.get("allowed_value_sources", {}).items():
             if field in allowed_values:
@@ -429,9 +514,13 @@ def load_ai_policies(path: str | Path) -> list[AIPolicy]:
                 name=str(row["name"]),
                 priority=int(row.get("priority", 100)),
                 instruction=str(row["instruction"]),
-                target_fields=tuple(str(field) for field in row.get("target_fields", [])),
+                target_fields=tuple(
+                    str(field) for field in row.get("target_fields", [])
+                ),
                 agent_profile=str(row.get("agent_profile", "LUNA_MAX")),
-                trigger_fields=tuple(str(field) for field in row.get("trigger_fields", [])),
+                trigger_fields=tuple(
+                    str(field) for field in row.get("trigger_fields", [])
+                ),
                 conditions=conditions,
                 minimum_confidence=float(row.get("minimum_confidence", 0.82)),
                 allowed_values=allowed_values,
@@ -453,7 +542,10 @@ def record_ai_review(
     reason: str,
 ) -> dict[str, Any]:
     """Record a human correction and lock the reviewed derived field."""
-    if field not in AI_WRITABLE_FIELDS | {"tags"} or field in {"category_recommendation", "rule_recommendation"}:
+    if field not in AI_WRITABLE_FIELDS | {"tags"} or field in {
+        "category_recommendation",
+        "rule_recommendation",
+    }:
         raise ValueError(f"Unsupported AI review field: {field}")
     if field == "tags":
         if not isinstance(final_value, list):
@@ -494,14 +586,23 @@ class OpenAICompatibleResolver:
     ) -> None:
         self.provider = str(config.get("provider") or "openai-compatible")
         model_env = str(config.get("model_env") or "").strip()
-        self.model = str(config.get("model") or (os.environ.get(model_env) if model_env else "") or "").strip()
+        self.model = str(
+            config.get("model")
+            or (os.environ.get(model_env) if model_env else "")
+            or ""
+        ).strip()
         base_url = str(config.get("base_url") or "").rstrip("/")
-        self.endpoint = str(config.get("endpoint") or (f"{base_url}/chat/completions" if base_url else "")).strip()
+        self.endpoint = str(
+            config.get("endpoint")
+            or (f"{base_url}/chat/completions" if base_url else "")
+        ).strip()
         self.api_key_env = str(config.get("api_key_env") or "").strip()
         self.timeout_seconds = float(config.get("timeout_seconds", 30))
         self.max_tokens = int(config.get("max_tokens", 800))
         if not self.model or not self.endpoint or not self.api_key_env:
-            raise ValueError("AI provider config requires model, endpoint, and api_key_env")
+            raise ValueError(
+                "AI provider config requires model, endpoint, and api_key_env"
+            )
         self.transport = transport or self._default_transport
 
     @staticmethod
@@ -512,22 +613,29 @@ class OpenAICompatibleResolver:
     def __call__(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         api_key = os.environ.get(self.api_key_env)
         if not api_key:
-            raise ValueError(f"Missing AI provider secret environment variable {self.api_key_env}")
+            raise ValueError(
+                f"Missing AI provider secret environment variable {self.api_key_env}"
+            )
         prompt = (
             "Return only JSON matching the response_contract. Do not propose fields outside allowed_fields.\n"
             + json.dumps(request_payload, separators=(",", ":"))
         )
-        body = json.dumps({
-            "model": self.model,
-            "temperature": 0,
-            "max_tokens": self.max_tokens,
-            "response_format": {"type": "json_object"},
-            "messages": [{"role": "user", "content": prompt}],
-        }).encode("utf-8")
+        body = json.dumps(
+            {
+                "model": self.model,
+                "temperature": 0,
+                "max_tokens": self.max_tokens,
+                "response_format": {"type": "json_object"},
+                "messages": [{"role": "user", "content": prompt}],
+            }
+        ).encode("utf-8")
         request = urllib.request.Request(
             self.endpoint,
             data=body,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
             method="POST",
         )
         raw = json.loads(self.transport(request, self.timeout_seconds).decode("utf-8"))
@@ -535,7 +643,9 @@ class OpenAICompatibleResolver:
             content = raw["choices"][0]["message"]["content"]
             result = json.loads(content) if isinstance(content, str) else content
         except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
-            raise ValueError("AI provider returned an invalid chat-completions response") from error
+            raise ValueError(
+                "AI provider returned an invalid chat-completions response"
+            ) from error
         if not isinstance(result, dict):
             raise ValueError("AI provider response content must be a JSON object")
         return {**result, "provider": self.provider, "model": self.model}

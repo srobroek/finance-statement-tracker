@@ -37,10 +37,44 @@ class ReportTests(TestCase):
 
     def test_month_close_contains_static_mermaid_and_table(self) -> None:
         transactions = [
-            Transaction("1", datetime(2026, 8, 1), "RAK_WORLD", "Market", "100", category="Groceries"),
-            Transaction("2", datetime(2026, 8, 2), "RAK_WORLD", "Cafe", "50", category="Dining"),
+            Transaction(
+                "1",
+                datetime(2026, 8, 1),
+                "RAK_WORLD",
+                "Market",
+                "100",
+                category="Groceries",
+            ),
+            Transaction(
+                "2", datetime(2026, 8, 2), "RAK_WORLD", "Cafe", "50", category="Dining"
+            ),
         ]
         output = month_close_markdown(transactions, "2026-08")
         self.assertIn("```mermaid", output)
         self.assertIn('"Groceries" : 100.00', output)
         self.assertIn("| Dining | 50.00 |", output)
+
+    def test_month_close_excludes_unfinalized_rows(self) -> None:
+        transactions = [
+            Transaction(
+                "resolved",
+                datetime(2026, 8, 1),
+                "CARD",
+                "SHOP",
+                "100",
+                category="Groceries",
+            ),
+            Transaction(
+                "pending",
+                datetime(2026, 8, 2),
+                "CARD",
+                "PENDING",
+                "900",
+                category="Needs Review",
+            ),
+        ]
+
+        output = month_close_markdown(transactions, "2026-08")
+
+        self.assertIn('"Groceries" : 100.00', output)
+        self.assertNotIn('"Needs Review" : 900.00', output)
