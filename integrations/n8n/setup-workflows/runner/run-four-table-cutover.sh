@@ -176,11 +176,11 @@ validate_inputs() {
     --operation-kind "${3^^}" >/dev/null
 }
 
-recover_forward_runtime_receipt() {
+recover_runtime_receipt() {
   local -a recovery_env=("$@")
   recovery_env+=(
     -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1"
-    -e "FINANCE_FOUR_TABLE_RECOVERY_REASON=FORWARD_RUNTIME_FAILURE"
+    -e "FINANCE_FOUR_TABLE_RECOVERY_REASON=${operation^^}_RUNTIME_FAILURE"
   )
   local recovery_status
   if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
@@ -193,15 +193,18 @@ recover_forward_runtime_receipt() {
   if ((recovery_status != 0)); then
     return "$recovery_status"
   fi
-  local recovered_json="$receipt_dir/finance-four-table-runtime-forward-recovered.json"
+  local recovered_json="$receipt_dir/finance-four-table-runtime-${operation}-recovered.json"
   grep '^finance four-table runtime verified:' "$recovery_stdout" |
     tail -n 1 |
     sed 's/^finance four-table runtime verified://' \
       >"$recovered_json"
   test -s "$recovered_json"
   chmod 0600 "$recovered_json"
-  cp -- "$recovered_json" "$forward_runtime_receipt"
-  chmod 0600 "$forward_runtime_receipt"
+  cp -- "$recovery_stdout" "$runtime_stdout"
+  if [[ "$operation" = forward ]]; then
+    cp -- "$recovered_json" "$forward_runtime_receipt"
+    chmod 0600 "$forward_runtime_receipt"
+  fi
 }
 
 run_runtime() {
@@ -259,12 +262,10 @@ run_runtime() {
   else
     runtime_status=$?
     chmod 0600 "$runtime_stdout" "$runtime_stderr"
-    if [[ "$operation" = forward ]]; then
-      if ! recover_forward_runtime_receipt "${runtime_env[@]}"; then
-        echo "Unable to recover the committed forward runtime journal" >&2
-      fi
+    if ! recover_runtime_receipt "${runtime_env[@]}"; then
+      echo "Unable to recover the committed ${operation} runtime journal" >&2
+      return "$runtime_status"
     fi
-    return "$runtime_status"
   fi
   chmod 0600 "$runtime_stdout" "$runtime_stderr"
   runtime_json="$receipt_dir/finance-four-table-runtime-${operation}.json"

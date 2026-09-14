@@ -22,42 +22,190 @@
     "secret_values_recorded"
   ],
   "properties": {
-    "schema_version": {"const": 1},
-    "receipt_contract": {"const": "finance-data-table-readback-receipt-v1"},
-    "status": {"const": "VERIFIED"},
-    "scope": {"const": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"},
-    "finance_tables": {"const": 4},
-    "tables": {
-      "type": "array",
-      "minItems": 4,
-      "maxItems": 4,
-      "items": {"$ref": "#/$defs/table"},
-      "allOf": [
-        {"contains": {"properties": {"name": {"const": "finance_ingestion_state"}}, "required": ["name"]}},
-        {"contains": {"properties": {"name": {"const": "finance_documents"}}, "required": ["name"]}},
-        {"contains": {"properties": {"name": {"const": "finance_actual_batches"}}, "required": ["name"]}},
-        {"contains": {"properties": {"name": {"const": "finance_ai_reviews"}}, "required": ["name"]}}
+    "schema_version": {
+      "const": 1
+    },
+    "receipt_contract": {
+      "const": "finance-data-table-readback-receipt-v1"
+    },
+    "status": {
+      "enum": [
+        "VERIFIED",
+        "FORWARD_PRE_READBACK"
       ]
     },
-    "total_rows": {"type": "integer", "minimum": 0, "maximum": 400000},
-    "digest_sha256": {"$ref": "#/$defs/sha256"},
-    "migration_receipt": {"$ref": "#/$defs/migration_receipt"},
-    "forward_gate": {"$ref": "#/$defs/forward_gate"},
-    "rollback_gate": {"$ref": "#/$defs/rollback_gate"},
-    "writes_performed": {"const": false},
-    "provider_calls": {"const": false},
-    "row_values_recorded": {"const": false},
-    "secret_values_recorded": {"const": false}
+    "phase": {
+      "enum": [
+        "FORWARD_PRE",
+        "FORWARD_POST",
+        "ROLLBACK_PRE",
+        "ROLLBACK_POST"
+      ]
+    },
+    "scope": {
+      "const": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
+    },
+    "finance_tables": {
+      "enum": [
+        0,
+        4
+      ]
+    },
+    "tables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/table"
+      }
+    },
+    "total_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 400000
+    },
+    "digest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "migration_receipt": {
+      "$ref": "#/$defs/migration_receipt"
+    },
+    "forward_gate": {
+      "$ref": "#/$defs/forward_gate"
+    },
+    "rollback_gate": {
+      "$ref": "#/$defs/rollback_gate"
+    },
+    "writes_performed": {
+      "const": false
+    },
+    "provider_calls": {
+      "const": false
+    },
+    "row_values_recorded": {
+      "const": false
+    },
+    "secret_values_recorded": {
+      "const": false
+    }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "phase"
+        ],
+        "properties": {
+          "phase": {
+            "const": "FORWARD_PRE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "FORWARD_PRE_READBACK"
+          },
+          "finance_tables": {
+            "const": 0
+          },
+          "tables": {
+            "maxItems": 0
+          },
+          "total_rows": {
+            "const": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "status": {
+            "const": "VERIFIED"
+          },
+          "finance_tables": {
+            "const": 4
+          },
+          "tables": {
+            "minItems": 4,
+            "maxItems": 4,
+            "allOf": [
+              {
+                "contains": {
+                  "properties": {
+                    "name": {
+                      "const": "finance_ingestion_state"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "name": {
+                      "const": "finance_documents"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "name": {
+                      "const": "finance_actual_batches"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "properties": {
+                    "name": {
+                      "const": "finance_ai_reviews"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "column": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "type"],
+      "required": [
+        "name",
+        "type"
+      ],
       "properties": {
-        "name": {"type": "string", "minLength": 1},
-        "type": {"enum": ["string", "number", "boolean", "date"]}
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": [
+            "string",
+            "number",
+            "boolean",
+            "date"
+          ]
+        }
       }
     },
     "table": {
@@ -81,54 +229,152 @@
             "finance_ai_reviews"
           ]
         },
-        "table_id_sha256": {"$ref": "#/$defs/sha256"},
-        "schema": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/column"}},
-        "schema_sha256": {"$ref": "#/$defs/sha256"},
-        "row_count": {"type": "integer", "minimum": 0, "maximum": 100000},
-        "rows_sha256": {"$ref": "#/$defs/sha256"},
-        "digest_sha256": {"$ref": "#/$defs/sha256"}
+        "table_id_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schema": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/column"
+          }
+        },
+        "schema_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "row_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "rows_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "digest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
       }
     },
     "migration_receipt": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "required", "bound", "sha256"],
+      "required": [
+        "schema_version",
+        "required",
+        "bound",
+        "sha256"
+      ],
       "properties": {
-        "schema_version": {"const": "data-table-migration-receipt-v1"},
-        "required": {"const": true},
-        "bound": {"type": "boolean"},
-        "sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+        "schema_version": {
+          "const": "data-table-migration-receipt-v1"
+        },
+        "required": {
+          "const": true
+        },
+        "bound": {
+          "type": "boolean"
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
       },
       "allOf": [
         {
-          "if": {"properties": {"bound": {"const": true}}},
-          "then": {"properties": {"sha256": {"$ref": "#/$defs/sha256"}}},
-          "else": {"properties": {"sha256": {"type": "null"}}}
+          "if": {
+            "properties": {
+              "bound": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "sha256": {
+                "type": "null"
+              }
+            }
+          }
         }
       ]
     },
     "gate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["gate", "status", "required_ack", "migration_receipt_required", "command_executed"],
+      "required": [
+        "gate",
+        "status",
+        "required_ack",
+        "migration_receipt_required",
+        "command_executed"
+      ],
       "properties": {
-        "gate": {"enum": ["FORWARD", "ROLLBACK"]},
-        "status": {"const": "BLOCKED"},
-        "required_ack": {"type": "string", "minLength": 1},
-        "migration_receipt_required": {"const": true},
-        "command_executed": {"const": false}
+        "gate": {
+          "enum": [
+            "FORWARD",
+            "ROLLBACK"
+          ]
+        },
+        "status": {
+          "const": "BLOCKED"
+        },
+        "required_ack": {
+          "type": "string",
+          "minLength": 1
+        },
+        "migration_receipt_required": {
+          "const": true
+        },
+        "command_executed": {
+          "const": false
+        }
       }
     },
     "forward_gate": {
       "allOf": [
-        {"$ref": "#/$defs/gate"},
-        {"properties": {"gate": {"const": "FORWARD"}, "required_ack": {"const": "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"}}}
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "gate": {
+              "const": "FORWARD"
+            },
+            "required_ack": {
+              "const": "FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE"
+            }
+          }
+        }
       ]
     },
     "rollback_gate": {
       "allOf": [
-        {"$ref": "#/$defs/gate"},
-        {"properties": {"gate": {"const": "ROLLBACK"}, "required_ack": {"const": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"}}}
+        {
+          "$ref": "#/$defs/gate"
+        },
+        {
+          "properties": {
+            "gate": {
+              "const": "ROLLBACK"
+            },
+            "required_ack": {
+              "const": "FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE"
+            }
+          }
+        }
       ]
     }
   }

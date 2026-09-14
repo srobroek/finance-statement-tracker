@@ -44,6 +44,12 @@ const ALLOWED_PROJECT_TABLES = new Set([
   ...CANONICAL_TABLE_NAMES,
   ...PRESERVED_TABLE_NAMES,
 ]);
+const TARGET_SCHEMA_DIGESTS = new Map([
+  ['finance_actual_batches', 'e85b91693673a2cc19a3cf7cd27be7886a8f41dea38f4c8b818f73431a750511'],
+  ['finance_ai_reviews', '30add9a2089cd56bff376b97388f7b7208bf29fb360032f649ec38cb84c1566f'],
+  ['finance_documents', '6a8d8d48855e1f77f09f596a86cdb46a44b75aa118ca0b60bed32ac5de1e2412'],
+  ['finance_ingestion_state', '0ac33f034857541d217c25ab4f61ff017dfbf0ccf69685c1d02419b4b475f49f'],
+]);
 const migrationReceiptSha256 = process.env.FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256 || null;
 if (migrationReceiptSha256 !== null && !/^[0-9a-f]{64}$/.test(migrationReceiptSha256)) {
   throw new Error('FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256_INVALID');
@@ -81,6 +87,14 @@ function canonical(value) {
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
+function assertTargetSchemaDigest(tableName, schema) {
+  const observed = sha256(JSON.stringify(canonical(schema)));
+  if (observed !== TARGET_SCHEMA_DIGESTS.get(tableName)) {
+    throw new Error(`TARGET_SCHEMA_DIGEST_MISMATCH:${tableName}`);
+  }
+  return observed;
+}
+
 
 function blockedGate(gate, requiredAck) {
   return {
@@ -172,6 +186,7 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
       if (new Set(schema.map((column) => column.name)).size !== schema.length) {
         throw new Error(`DATA_TABLE_SCHEMA_DUPLICATE:${table.name}`);
       }
+      const schemaSha256 = assertTargetSchemaDigest(table.name, schema);
       stage = `rows-${table.name}`;
       const rows = [];
       let skip = 0;
@@ -194,7 +209,7 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
         name: table.name,
         table_id_sha256: sha256(table.id),
         schema,
-        schema_sha256: sha256(JSON.stringify(canonical(schema))),
+        schema_sha256: schemaSha256,
         row_count: rows.length,
         rows_sha256: sha256(JSON.stringify(rows)),
       };

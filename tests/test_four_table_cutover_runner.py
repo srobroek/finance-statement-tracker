@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from jsonschema import Draft202012Validator
+
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_DIR = ROOT / "integrations" / "n8n" / "setup-workflows" / "runner"
 PYTHON_RUNNER = RUNNER_DIR / "four_table_cutover.py"
@@ -224,7 +226,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "await persistRecoveryJournal",
             "await lock.client.query('COMMIT')",
             "await lock.client.end()",
-            "FORWARD_JOURNAL_RECOVERY_ONLY",
+            "ROLLBACK_RECOVERY_REASON",
         ):
             self.assertIn(marker, source)
         self.assertNotRegex(
@@ -244,7 +246,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         self.assertIn(
             "if (process.env.FINANCE_FOUR_TABLE_RECOVER_JOURNAL === '1')", cjs_source
         )
-        self.assertIn("recover_forward_runtime_receipt", shell_source)
+        self.assertIn("recover_runtime_receipt", shell_source)
 
     def test_shell_operator_and_runtime_gates_are_pinned(self) -> None:
         source = SHELL_RUNNER.read_text(encoding="utf-8")
@@ -479,6 +481,12 @@ try {{
   if (error.message !== 'FORWARD_PRE_READBACK_MUST_BE_OBSERVED_EMPTY') throw error;
 }}
 try {{
+  assertTargetSchemaDigest('finance_documents', [{{ name: 'wrong', type: 'string' }}]);
+  process.exit(6);
+}} catch (error) {{
+  if (error.message !== 'TARGET_SCHEMA_DIGEST_MISMATCH:finance_documents') throw error;
+}}
+try {{
   assertAllowedProjectTables({{ count: tables.length + 1, data: [...tables, {{ name: 'unexpected' }}] }});
   process.exit(4);
 }} catch (error) {{
@@ -521,6 +529,16 @@ try {{
                 "digest_sha256": hashlib.sha256(b"[]").hexdigest(),
             }
         )
+        schema = json.loads(
+            (
+                ROOT
+                / "integrations"
+                / "n8n"
+                / "schemas"
+                / "finance-data-table-readback-receipt-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        Draft202012Validator(schema).validate(payload)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "pre.raw"
             path.write_text(prefix + json.dumps(payload, separators=(",", ":")) + "\n")
@@ -580,9 +598,25 @@ try {{
                 "verification_artifact_sha256",
                 "reconciliation_state",
                 "reconciliation_difference_minor",
+                "idempotency_key",
                 "reconciliation_verified_at",
                 "updated_at",
             },
+        )
+        upsert_parameters = nodes["Upsert Reconciliation Receipt"]["parameters"]
+        self.assertEqual(
+            upsert_parameters["filters"]["conditions"],
+            [
+                {
+                    "keyName": "idempotency_key",
+                    "condition": "eq",
+                    "keyValue": "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}",
+                }
+            ],
+        )
+        self.assertEqual(
+            upsert_parameters["columns"]["value"]["idempotency_key"],
+            "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}",
         )
         consumer_code = nodes["Validate Reconciliation Readback"]["parameters"][
             "jsCode"
@@ -599,7 +633,7 @@ try {{
         source = CJS_RUNNER.read_text(encoding="utf-8")
         replay_helpers = source[
             source.index("function replayValidationExport") : source.index(
-                "async function recoverForwardJournal"
+                "async function recoverRuntimeJournal"
             )
         ]
         execute = source[
@@ -679,7 +713,11 @@ function workflowRevisionDigest() {{ return 'workflow-revisions'; }}
 function workflowOpaqueCredentialObjectsDigest() {{ return 'opaque'; }}
 async function loadWorkflows() {{ return current; }}
 function findReferences(_graph, workflows) {{
-  return [{{ oldMatches: workflows.get('wf').marker === 'legacy', targetMatches: workflows.get('wf').marker === 'canonical' }}];
+  return [{{
+    reference: {{ canonical_table_id: 'target' }},
+    oldMatches: workflows.get('wf').marker === 'legacy',
+    targetMatches: workflows.get('wf').marker === 'canonical',
+  }}];
 }}
 function applyForward() {{ return {{ alreadyApplied: true, expected: canonical, changed: new Map() }}; }}
 function workflowReadback() {{ return originalReadback; }}

@@ -1494,6 +1494,28 @@ def _canonical_source_bundle(
                     )
                 node["parameters"] = parameters
                 selector = parameters.get("dataTableId")
+            if (
+                item["source_table"] == "finance_reconciliations"
+                and target == "finance_actual_batches"
+                and parameters.get("operation") == "upsert"
+            ):
+                idempotency_value = (
+                    "={{ $('Prepare Outbox Intent').first().json.idempotency_key }}"
+                )
+                columns = parameters.get("columns")
+                values = columns.get("value") if isinstance(columns, dict) else None
+                if not isinstance(values, dict):
+                    raise CutoverError("RECONCILIATION_COLUMNS_INVALID")
+                values["idempotency_key"] = idempotency_value
+                parameters["filters"] = {
+                    "conditions": [
+                        {
+                            "keyName": "idempotency_key",
+                            "condition": "eq",
+                            "keyValue": idempotency_value,
+                        }
+                    ]
+                }
             if fields and parameters.get("operation") == "get":
                 connections = workflow.get("connections", {})
                 outputs = (

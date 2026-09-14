@@ -25,6 +25,7 @@ const JOURNAL_TABLE = 'finance_four_table_cutover_journal';
 const APPROVED_LOCK_TIMEOUT_MS = 5_000;
 const APPROVED_STATEMENT_TIMEOUT_MS = 30_000;
 const FORWARD_RECOVERY_REASON = 'FORWARD_RUNTIME_FAILURE';
+const ROLLBACK_RECOVERY_REASON = 'ROLLBACK_RUNTIME_FAILURE';
 const APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 = 'e414e2ee0e2a31aa9f7aec8bce03498b9f9e1d2c8598a9c193150f339248a6a3';
 const TARGET_NAMES = new Set([
   'finance_ingestion_state',
@@ -1107,10 +1108,29 @@ async function loadForwardReplayJournal(client, graph, lock, canonicalSource, ex
 }
 
 
-async function recoverForwardJournal() {
+function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
+  if (!receipt || receipt.operation !== 'ROLLBACK' ||
+      ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) ||
+      receipt.project_id !== projectId || receipt.lock_resource !== resource ||
+      receipt.export_sha256 !== exported.export_sha256 ||
+      receipt.durable_journal !== true ||
+      receipt.commit_protocol !== 'postgresql_synchronous_wal') {
+    throw new Error('ROLLBACK_RUNTIME_JOURNAL_INTEGRITY_INVALID');
+  }
+  validateBinding(receipt, binding, 'ROLLBACK_RUNTIME_JOURNAL');
+  const unsigned = { ...receipt };
+  delete unsigned.runtime_plan_receipt_sha256;
+  if (digest(unsigned) !== receipt.runtime_plan_receipt_sha256) {
+    throw new Error('ROLLBACK_RUNTIME_JOURNAL_INTEGRITY_INVALID');
+  }
+  return receipt;
+}
+
+
+async function recoverRuntimeJournal() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const graph = validateExport(exported);
-  const canonicalSource = canonicalSourceFromInput(graph);
+  const canonicalSource = operation === 'FORWARD' ? canonicalSourceFromInput(graph) : null;
   const binding = bindingFromEnvironment();
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
@@ -1130,14 +1150,17 @@ async function recoverForwardJournal() {
           AND receipt->>'required_live_export_digest' = $7
           AND receipt->>'contract_bijection_digest' = $8
         ORDER BY created_at DESC`,
-      [projectId, resource, 'FORWARD', exported.export_sha256, binding.operation_nonce, binding.protected_quiescence_receipt_digest, binding.required_live_export_digest, binding.contract_bijection_digest],
+      [projectId, resource, operation, exported.export_sha256, binding.operation_nonce, binding.protected_quiescence_receipt_digest, binding.required_live_export_digest, binding.contract_bijection_digest],
     );
     const rows = result.rows || [];
-    if (rows.length === 0) throw new Error('FORWARD_RUNTIME_JOURNAL_NOT_FOUND');
-    if (rows.length !== 1) throw new Error('FORWARD_RUNTIME_JOURNAL_AMBIGUOUS');
+    if (rows.length === 0) throw new Error(`${operation}_RUNTIME_JOURNAL_NOT_FOUND`);
+    if (rows.length !== 1) throw new Error(`${operation}_RUNTIME_JOURNAL_AMBIGUOUS`);
     const row = rows[0];
     const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
-    await writeRuntimeReceipt(validateForwardReceipt(receipt, exported, resource, binding, canonicalSource.sha256));
+    const validated = operation === 'FORWARD'
+      ? validateForwardReceipt(receipt, exported, resource, binding, canonicalSource.sha256)
+      : validateRollbackJournalReceipt(receipt, exported, resource, binding);
+    await writeRuntimeReceipt(validated);
   } finally {
     await client.end();
   }
@@ -1200,7 +1223,7 @@ async function execute() {
     await verifyTargets(lock.client, graph.targetIds);
     const credentialsBefore = await credentialState(lock.client);
     const credentialsByBinding = new Map(credentialsBefore.values.map((value) => [value.placeholder, value]));
-    const workflows = await loadWorkflows(lock.client, graph, operation === 'FORWARD');
+    const workflows = await loadWorkflows(lock.client, graph, false);
     const credentialOriginsBefore = validateCredentialBindings(workflows, credentialsByBinding);
     const credentialOriginBitsetBefore = credentialOriginBitset(credentialOriginsBefore);
     const workflowCredentialsBefore = workflowCredentialObjectsDigest(workflows);
@@ -1209,6 +1232,20 @@ async function execute() {
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
       if (prestate.some((item) => !item.oldMatches && !item.targetMatches)) throw new Error('LIVE_REFERENCE_SELECTOR_DRIFT');
+      const rebound = prestate.filter((item) => item.reference.canonical_table_id !== null);
+      const firstRun = rebound.every((item) => item.oldMatches);
+      const replay = rebound.every((item) => item.targetMatches);
+      if (!firstRun && !replay) throw new Error('LIVE_REFERENCE_SELECTOR_MIXED_STATE');
+      if (firstRun) {
+        for (const [workflowId, revision] of graph.workflows) {
+          assertWorkflow(
+            workflows.get(workflowId),
+            revision,
+            graph.workflowBodyDigests.get(workflowId),
+            workflowId,
+          );
+        }
+      }
       const plan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows);
       if (plan.alreadyApplied) {
         const readback = workflowReadback(workflows);
@@ -1350,11 +1387,13 @@ async function writeRuntimeReceipt(receipt) {
 
 async function main() {
   if (process.env.FINANCE_FOUR_TABLE_RECOVER_JOURNAL === '1') {
-    if (operation !== 'FORWARD') throw new Error('FORWARD_JOURNAL_RECOVERY_ONLY');
-    if (process.env.FINANCE_FOUR_TABLE_RECOVERY_REASON !== FORWARD_RECOVERY_REASON) {
-      throw new Error('FORWARD_JOURNAL_RECOVERY_REASON_REQUIRED');
+    const expectedReason = operation === 'FORWARD'
+      ? FORWARD_RECOVERY_REASON
+      : ROLLBACK_RECOVERY_REASON;
+    if (process.env.FINANCE_FOUR_TABLE_RECOVERY_REASON !== expectedReason) {
+      throw new Error(`${operation}_JOURNAL_RECOVERY_REASON_REQUIRED`);
     }
-    await recoverForwardJournal();
+    await recoverRuntimeJournal();
   } else {
     await execute();
   }
