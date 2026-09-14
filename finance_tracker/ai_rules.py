@@ -139,12 +139,15 @@ def _apply_resolution_cleanup(transaction: Transaction, field: str) -> None:
         {"tags", "review_required", "classification_review_reasons"} & locked
     )
     if not queue_locked:
-        transaction.tags.discard("category-review")
-        transaction.tags.discard("needs-review")
-        transaction.review_required = False
-        transaction.metadata.pop("classification_review_reasons", None)
         from .classification_audit import enforce_transaction_invariants
 
+        if _unresolved(transaction, "category"):
+            transaction.review_required = True
+        else:
+            transaction.tags.discard("category-review")
+            transaction.tags.discard("needs-review")
+            transaction.review_required = False
+            transaction.metadata.pop("classification_review_reasons", None)
         enforce_transaction_invariants(transaction)
 
 
