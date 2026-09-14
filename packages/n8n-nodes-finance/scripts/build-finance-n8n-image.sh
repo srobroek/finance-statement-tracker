@@ -79,11 +79,11 @@ nodemailer_smoke_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.sm
   echo "FINANCE_BASE_IMAGE_SOURCE_COMMIT_INVALID" >&2
   exit 1
 }
-[[ "${nodemailer_package}" = "nodemailer@9.0.1" \
-   && "${nodemailer_tarball_sha256}" = "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3" \
+[[ "${nodemailer_package}" = "nodemailer@9.1.0" \
+   && "${nodemailer_tarball_sha256}" = "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db" \
    && "${nodemailer_recipe_commit}" = "9bd6b55e88deade27591080e14f1a7c4bdc9808b" \
    && "${nodemailer_dockerfile_blob}" = "02cfd924119874c03aa1b94367bf8eefdf166d90" \
-   && "${nodemailer_smoke_blob}" = "cdb2c9c08500e798ab7881818707fdf710709213" \
+   && "${nodemailer_smoke_blob}" = "296c57da94232a974428c59cf531e68a3b09a556" \
    && "$(git hash-object "${package_dir}/scripts/nodemailer-smoke.cjs")" = "${nodemailer_smoke_blob}" ]] || {
   echo "FINANCE_NODEMAILER_OVERLAY_PROVENANCE_INVALID" >&2
   exit 1

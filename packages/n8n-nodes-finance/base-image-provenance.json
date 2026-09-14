@@ -33,8 +33,8 @@
     }
   },
   "nodemailer_overlay": {
-    "package": "nodemailer@9.0.1",
-    "tarball_sha256": "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3",
+    "package": "nodemailer@9.1.0",
+    "tarball_sha256": "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db",
     "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer",
     "source_repository": "https://github.com/srobroek/n8n-orchestrator",
     "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
@@ -52,6 +52,41 @@
         "version": "4.2.0",
         "integrity": "sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==",
         "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/toml@3.0.0/node_modules/toml"
+      },
+      "@tiptap/core": {
+        "version": "3.30.5",
+        "integrity": "sha512-3O7N0FyKIfuLV+xrdWyDM3V5eUY/q2CgLjhhMwOAbM1Pu7VPp9VP+TpEYOdH8aRyB+h1vj5hX5A747D8ZrPfHA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@tiptap+core@3.27.0_@tiptap+pm@3.27.0/node_modules/@tiptap/core"
+      },
+      "@tiptap/pm": {
+        "version": "3.30.5",
+        "integrity": "sha512-gufkLkW2tA6PZPjivYxDiGzTIIftwqhmYI6lvvKu2S4FbhcysJgMAe/GXVSywzCRVVex9SrvCe6RFYrqnwRitQ==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@tiptap+pm@3.27.0/node_modules/@tiptap/pm"
+      },
+      "prosemirror-model": {
+        "version": "1.25.11",
+        "integrity": "sha512-QWg9RhnpLlogAmp3p96uEFrE5txQpFynd4vhBAELkwgOCWQs/X0yCzB3/hrHqiPwf91RG5KyWq6553zs9JqIOQ==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/prosemirror-model@1.25.10/node_modules/prosemirror-model"
+      },
+      "prosemirror-view": {
+        "version": "1.41.9",
+        "integrity": "sha512-clTunTX+eaLbr87L1V1QPheRlEQJyTlL3gXe9x3jQIk3rL0RVWxviDGz8tFaydwIVm+hKhYCyr+R/zBtWr9s6A==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/prosemirror-view@1.41.8/node_modules/prosemirror-view"
+      },
+      "@xmldom/xmldom": {
+        "version": "0.8.15",
+        "integrity": "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/@xmldom+xmldom@0.8.14/node_modules/@xmldom/xmldom"
+      },
+      "js-yaml": {
+        "version": "4.3.2",
+        "integrity": "sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/js-yaml@4.3.1/node_modules/js-yaml"
+      },
+      "multer": {
+        "version": "2.3.0",
+        "integrity": "sha512-cjNbm3sttszgZeGfJR124D+jFEfkXCVAsoPBmFn9X7UxmDSFHWqE2CoEj0vrmSpuAFnqWR1Szcm9QTsiHr60Xw==",
+        "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/multer@2.2.0/node_modules/multer"
       }
     },
     "runtime_proof": "package identity, URI parse/normalize, AJV compile, Snowflake connection-profile TOML parse, prototype isolation, and nesting limit"

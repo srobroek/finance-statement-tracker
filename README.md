@@ -132,9 +132,11 @@ The finance checkout does not own the n8n platform scripts. Use [`srobroek/n8n-o
 
 The finance n8n image builds directly from the official immutable n8n 2.37.10
 digest. Its Dockerfile applies exact Alpine 3.24 security package updates,
-integrity-pinned fast-uri 3.1.6 and TOML 4.2.0 replacements, the reviewed
-Nodemailer 9.0.1 replacement, and finance/community extensions in the
-same build, so CI needs no separate private platform-image package permission.
+integrity-pinned fast-uri 3.1.6, TOML 4.2.0, and @tiptap/core 3.30.5,
+@tiptap/pm 3.30.5, prosemirror-model 1.25.11, and prosemirror-view 1.41.9,
+@xmldom/xmldom 0.8.15, js-yaml 4.3.2, multer 2.3.0, and Nodemailer 9.1.0
+replacements, plus finance/community extensions, in the same build. CI needs no
+separate private platform-image package permission.
 The signed Alpine package versions, Nodemailer tarball hash, exact replaced pnpm
 path, historical reviewed recipe, and executable SMTP/security smoke test are
 recorded in `packages/n8n-nodes-finance/base-image-provenance.json`. A temporary

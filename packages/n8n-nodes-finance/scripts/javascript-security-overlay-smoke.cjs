@@ -4,9 +4,16 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const [fastUriRoot, tomlRoot, ajvRoot, n8nNodeModulesRoot] = process.argv.slice(2);
-if (!fastUriRoot || !tomlRoot) {
-  throw new Error('usage: node javascript-security-overlay-smoke.cjs <fast-uri-root> <toml-root> [ajv-root]');
+const args = process.argv.slice(2);
+const [fastUriRoot, tomlRoot, ...rest] = args;
+let ajvRoot = null;
+let n8nNodeModulesRoot = null;
+let securityRoots = rest;
+if (rest.length === 9) {
+  [ajvRoot, n8nNodeModulesRoot, ...securityRoots] = rest;
+}
+if (!fastUriRoot || !tomlRoot || ![0, 7].includes(securityRoots.length)) {
+  throw new Error('usage: node javascript-security-overlay-smoke.cjs <fast-uri-root> <toml-root> [ajv-root n8n-node-modules-root] [tiptap-core-root tiptap-pm-root prosemirror-model-root prosemirror-view-root xmldom-root js-yaml-root multer-root]');
 }
 
 const fastUriPackage = require(`${fastUriRoot}/package.json`);
@@ -15,6 +22,66 @@ assert.equal(fastUriPackage.name, 'fast-uri');
 assert.equal(fastUriPackage.version, '3.1.6');
 assert.equal(tomlPackage.name, 'toml');
 assert.equal(tomlPackage.version, '4.2.0');
+if (securityRoots.length === 7) {
+  const expectedSecurityPackages = [
+    [securityRoots[0], '@tiptap/core', '3.30.5'],
+    [securityRoots[1], '@tiptap/pm', '3.30.5'],
+    [securityRoots[2], 'prosemirror-model', '1.25.11'],
+    [securityRoots[3], 'prosemirror-view', '1.41.9'],
+    [securityRoots[4], '@xmldom/xmldom', '0.8.15'],
+    [securityRoots[5], 'js-yaml', '4.3.2'],
+    [securityRoots[6], 'multer', '2.3.0'],
+  ];
+  for (const [root, name, version] of expectedSecurityPackages) {
+    const packageJson = require(`${root}/package.json`);
+    assert.equal(packageJson.name, name);
+    assert.equal(packageJson.version, version);
+  }
+  const tiptapJsx = require(path.join(securityRoots[0], 'jsx-runtime'));
+  assert.equal(typeof tiptapJsx.jsx, 'function');
+  assert.deepEqual(tiptapJsx.jsx('p', { children: 'finance' }), ['p', {}, 'finance']);
+  const xmldom = require(securityRoots[4]);
+  const document = new xmldom.DOMParser().parseFromString('<finance/>', 'text/xml');
+  assert.equal(document.documentElement.nodeName, 'finance');
+  assert.equal(typeof new xmldom.XMLSerializer().serializeToString(document), 'string');
+  const yaml = require(securityRoots[5]);
+  const parsedYaml = yaml.load('amount: 12.5');
+  assert.deepEqual(parsedYaml, { amount: 12.5 });
+  assert.equal(typeof yaml.dump(parsedYaml), 'string');
+  const multerError = require(path.join(securityRoots[6], 'lib/multer-error.js'));
+  assert.equal(typeof multerError, 'function');
+  if (n8nNodeModulesRoot) {
+    const runtimePackages = [
+      ['@tiptap/core', securityRoots[0], securityRoots[0]],
+      ['@tiptap/pm/transform', securityRoots[1], path.join(securityRoots[1], 'transform')],
+      ['prosemirror-model', securityRoots[2], securityRoots[2]],
+      ['prosemirror-view', securityRoots[3], securityRoots[3]],
+      ['@xmldom/xmldom', securityRoots[4], securityRoots[4]],
+      ['js-yaml', securityRoots[5], securityRoots[5]],
+      ['multer', securityRoots[6], securityRoots[6]],
+    ];
+    const resolvedRuntimePackages = runtimePackages.map(([name, root, expected]) => {
+      const resolved = require.resolve(name, { paths: [n8nNodeModulesRoot] });
+      assert.equal(fs.realpathSync(resolved), fs.realpathSync(require.resolve(expected)));
+      return require(resolved);
+    });
+    const tiptap = resolvedRuntimePackages[0];
+    assert.equal(typeof tiptap.Editor, 'function');
+    const tiptapTransform = resolvedRuntimePackages[1];
+    assert.equal(typeof tiptapTransform.Transform, 'function');
+    const prosemirrorModel = resolvedRuntimePackages[2];
+    assert.equal(typeof prosemirrorModel.Schema, 'function');
+    const prosemirrorView = resolvedRuntimePackages[3];
+    assert.equal(typeof prosemirrorView.EditorView, 'function');
+    const xmldomRuntime = resolvedRuntimePackages[4];
+    assert.equal(typeof xmldomRuntime.DOMParser, 'function');
+    const yamlRuntime = resolvedRuntimePackages[5];
+    assert.equal(typeof yamlRuntime.load, 'function');
+    const multer = resolvedRuntimePackages[6];
+    assert.equal(typeof multer, 'function');
+    assert.equal(typeof multer.memoryStorage, 'function');
+  }
+}
 
 const fastUri = require(fastUriRoot);
 assert.equal(typeof fastUri.parse, 'function');
@@ -92,4 +159,4 @@ if (n8nNodeModulesRoot) {
   assert.equal(fs.realpathSync(path.dirname(snowflakeTomlPackage)), fs.realpathSync(tomlRoot));
 }
 
-process.stdout.write('JavaScript security overlays verified: fast-uri 3.1.6, toml 4.2.0\n');
+process.stdout.write('JavaScript security overlays verified: fast-uri 3.1.6, toml 4.2.0, @tiptap/core 3.30.5, @tiptap/pm 3.30.5, prosemirror-model 1.25.11, prosemirror-view 1.41.9, @xmldom/xmldom 0.8.15, js-yaml 4.3.2, multer 2.3.0\n');
