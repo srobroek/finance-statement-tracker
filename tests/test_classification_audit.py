@@ -41,6 +41,10 @@ class ClassificationAuditRegressionTests(TestCase):
         self.assertIn("UNCATEGORIZED", reasons)
         self.assertEqual(transaction.tags, {"Manual"})
         self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "UNCATEGORIZED",
+            transaction.metadata["classification_review_reasons"],
+        )
 
     def test_locked_tags_do_not_suppress_unresolved_review_queue(self) -> None:
         transaction = self.transaction()
@@ -52,6 +56,37 @@ class ClassificationAuditRegressionTests(TestCase):
         self.assertTrue(transaction.review_required)
         self.assertEqual(transaction.tags, {"Manual"})
         self.assertIn("UNCATEGORIZED", reasons)
+
+    def test_resolution_locks_do_not_suppress_source_review_queue(self) -> None:
+        transaction = self.transaction()
+        transaction.vendor = "Merchant"
+        transaction.category = "Shopping"
+        transaction.metadata.update(
+            {
+                "browser_review_reasons": ["SOURCE_REVIEW_REQUIRED"],
+                "category_resolution": "MANUAL_CATEGORY_STATE",
+                "payee_resolution": "MANUAL_PAYEE_STATE",
+                "locked_fields": ["category_resolution", "payee_resolution"],
+            }
+        )
+
+        reasons = enforce_transaction_invariants(transaction)
+
+        self.assertEqual(
+            transaction.metadata["category_resolution"],
+            "MANUAL_CATEGORY_STATE",
+        )
+        self.assertEqual(
+            transaction.metadata["payee_resolution"],
+            "MANUAL_PAYEE_STATE",
+        )
+        self.assertTrue(transaction.review_required)
+        self.assertIn("needs-review", transaction.tags)
+        self.assertEqual(reasons, ("SOURCE_REVIEW_REQUIRED",))
+        self.assertEqual(
+            transaction.metadata["classification_review_reasons"],
+            ["SOURCE_REVIEW_REQUIRED"],
+        )
 
     def test_ai_resolution_preserves_independent_source_review_reasons(self) -> None:
         transaction = Transaction(

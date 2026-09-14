@@ -144,3 +144,17 @@ class ReportingTests(TestCase):
         self.assertEqual(
             [(row.key, row.spend_aed) for row in report], [("Shopping", Decimal("100"))]
         )
+
+    def test_breakdown_excludes_resolved_notification_evidence(self) -> None:
+        notification = Transaction(
+            "notification",
+            datetime(2026, 8, 2),
+            "CARD",
+            "SHOP",
+            Decimal("900"),
+            vendor="Shop",
+            category="Shopping",
+            source_type="outlook",
+        )
+
+        self.assertEqual(breakdown([notification], dimension="category"), [])

@@ -85,6 +85,11 @@ TOPIC_BY_TAG = {
 
 def is_finalized_for_consumption(transaction: Transaction) -> bool:
     """Return whether a row is safe for spend and reward aggregates."""
+    if str(transaction.source_type or "").strip().casefold() in {
+        "outlook",
+        "outlook_card_notification",
+    }:
+        return False
 
     category = str(transaction.category or "").strip().casefold()
     tags = {str(tag).strip().casefold() for tag in transaction.tags}
@@ -279,7 +284,8 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     ):
         topic = "TRANSFER"
         reason = "EXPLICIT_CARD_PAYMENT"
-        transaction.tags.update({"transfer", "card-payment"})
+        if "tags" not in locked:
+            transaction.tags.update({"transfer", "card-payment"})
     elif (
         not topic_locked
         and topic == "PURCHASE"
@@ -355,26 +361,27 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     transaction.transaction_type = topic
     if "is_refund" not in locked:
         transaction.is_refund = topic in REFUND_TOPICS
-    if topic == "REIMBURSEMENT":
-        transaction.tags.add("reimbursement")
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reversal")
-        transaction.tags.discard("reward")
-    elif transaction.is_refund:
-        transaction.tags.add(semantics.topic_tag or "refund")
-        if topic == "REVERSAL":
-            transaction.tags.add("refund")
-        if not unmatched_reimbursement:
+    if "tags" not in locked:
+        if topic == "REIMBURSEMENT":
+            transaction.tags.add("reimbursement")
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reversal")
+            transaction.tags.discard("reward")
+        elif transaction.is_refund:
+            transaction.tags.add(semantics.topic_tag or "refund")
+            if topic == "REVERSAL":
+                transaction.tags.add("refund")
+            if not unmatched_reimbursement:
+                transaction.tags.discard("reimbursement")
+            transaction.tags.discard("reward")
+        elif topic == "REWARD_CREDIT":
+            transaction.tags.add("reward")
+            transaction.tags.discard("refund")
             transaction.tags.discard("reimbursement")
-        transaction.tags.discard("reward")
-    elif topic == "REWARD_CREDIT":
-        transaction.tags.add("reward")
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reimbursement")
-    elif semantics.topic_tag:
-        transaction.tags.add(semantics.topic_tag)
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reimbursement")
+        elif semantics.topic_tag:
+            transaction.tags.add(semantics.topic_tag)
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reimbursement")
 
     if unmatched_reimbursement:
         if "reimbursement_match_status" not in locked:
