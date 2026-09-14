@@ -36,10 +36,10 @@
     "package": "nodemailer@9.1.0",
     "tarball_sha256": "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db",
     "replaced_path": "/usr/local/lib/node_modules/n8n/node_modules/.pnpm/nodemailer@8.0.10/node_modules/nodemailer",
-    "source_repository": "https://github.com/srobroek/n8n-orchestrator",
-    "source_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b",
-    "dockerfile_blob": "02cfd924119874c03aa1b94367bf8eefdf166d90",
-    "smoke_blob": "cdb2c9c08500e798ab7881818707fdf710709213"
+    "source_repository": "https://github.com/srobroek/finance-statement-tracker",
+    "source_commit": "c0e5253515c052c57d4198e0fa2fe074adab70cb",
+    "dockerfile_blob": "bad0e94d0b70e541c726d37e441daea706514efe",
+    "smoke_blob": "296c57da94232a974428c59cf531e68a3b09a556"
   },
   "javascript_security_overlay": {
     "packages": {

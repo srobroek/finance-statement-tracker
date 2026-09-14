@@ -118,7 +118,7 @@ LABEL org.opencontainers.image.source="https://github.com/srobroek/finance-state
       io.finance.n8n.base-image="${N8N_BASE_IMAGE}" \
       io.finance.n8n.base-source="https://github.com/n8n-io/n8n@5542b8b6419cb6925cca8f11b270c9bfbe09d85e" \
       io.finance.n8n.os-security-overlay="alpine-v3.24:openssl-3.5.8-r0,expat-2.8.4-r0,openssh-10.3_p1-r1" \
-      io.finance.n8n.nodemailer-recipe="https://github.com/srobroek/n8n-orchestrator@9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+      io.finance.n8n.nodemailer-recipe="https://github.com/srobroek/finance-statement-tracker@c0e5253515c052c57d4198e0fa2fe074adab70cb"
 
 USER root
 COPY --from=alpine-security-overlay /tmp/security-apks /tmp/security-apks

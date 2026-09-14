@@ -8,7 +8,7 @@
   "finance_commit": null,
   "image_lock": {
     "path": "integrations/n8n/application-images.lock.json",
-    "sha256": "f4164c3f8cd30763d61a2e6d14f74c0d2b75ccf9753ce698e34d4d402b4a4a09"
+    "sha256": "7724adfdeb039a8e014e14e911cfea9149fb2ce5cd760a08f86182d0281a6cfc"
   },
   "base_image": {
     "path": "packages/n8n-nodes-finance/base-image.txt",
@@ -21,7 +21,7 @@
     "base_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "0ec49cb161ab3037bc8e8fbaae1835ed675f353495b4ed4dd0363c033a4268f7"
+      "sha256": "c96e8d6093c3b86a1693cc673f5ebc3b4773d13b63e01fd9fbaaac950feeab6b"
     }
   },
   "workflow_manifest": {

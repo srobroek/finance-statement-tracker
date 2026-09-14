@@ -53,15 +53,18 @@ if (securityRoots.length === 7) {
   if (n8nNodeModulesRoot) {
     const runtimePackages = [
       ['@tiptap/core', securityRoots[0], securityRoots[0]],
-      ['@tiptap/pm/transform', securityRoots[1], path.join(securityRoots[1], 'transform')],
+      ['@tiptap/pm/transform', securityRoots[1], path.join(securityRoots[1], 'dist/transform/index.cjs')],
       ['prosemirror-model', securityRoots[2], securityRoots[2]],
       ['prosemirror-view', securityRoots[3], securityRoots[3]],
       ['@xmldom/xmldom', securityRoots[4], securityRoots[4]],
       ['js-yaml', securityRoots[5], securityRoots[5]],
       ['multer', securityRoots[6], securityRoots[6]],
     ];
+    const consumerNodeModulesRoot = path.join(n8nNodeModulesRoot, '.pnpm', 'node_modules');
     const resolvedRuntimePackages = runtimePackages.map(([name, root, expected]) => {
-      const resolved = require.resolve(name, { paths: [n8nNodeModulesRoot] });
+      // Resolve through n8n's actual pnpm consumer symlinks, then prove the
+      // consumer lands on the reviewed immutable replacement root.
+      const resolved = require.resolve(name, { paths: [consumerNodeModulesRoot] });
       assert.equal(fs.realpathSync(resolved), fs.realpathSync(require.resolve(expected)));
       return require(resolved);
     });

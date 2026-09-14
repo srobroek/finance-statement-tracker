@@ -10,7 +10,10 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 OFFICIAL_BASE_DIGEST = "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec"
 OFFICIAL_SOURCE_COMMIT = "5542b8b6419cb6925cca8f11b270c9bfbe09d85e"
-OVERLAY_SOURCE_COMMIT = "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+OVERLAY_SOURCE_REPOSITORY = "https://github.com/srobroek/finance-statement-tracker"
+OVERLAY_SOURCE_COMMIT = "c0e5253515c052c57d4198e0fa2fe074adab70cb"
+OVERLAY_DOCKERFILE_BLOB = "bad0e94d0b70e541c726d37e441daea706514efe"
+OVERLAY_SMOKE_BLOB = "296c57da94232a974428c59cf531e68a3b09a556"
 NODEMAILER_TARBALL_SHA256 = "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db"
 ALPINE_SECURITY_PACKAGES = {
     "libcrypto3": "3.5.8-r0",
@@ -101,10 +104,13 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FROM ${N8N_BASE_IMAGE}", dockerfile)
         self.assertIn('org.opencontainers.image.source="https://github.com/srobroek/finance-statement-tracker"', dockerfile)
         self.assertIn('io.finance.n8n.base-source="https://github.com/n8n-io/n8n@' + OFFICIAL_SOURCE_COMMIT, dockerfile)
+        self.assertIn('io.finance.n8n.nodemailer-recipe="' + OVERLAY_SOURCE_REPOSITORY + "@" + OVERLAY_SOURCE_COMMIT, dockerfile)
         overlay = provenance["nodemailer_overlay"]
+        self.assertEqual(overlay["source_repository"], OVERLAY_SOURCE_REPOSITORY)
         self.assertEqual(overlay["source_commit"], OVERLAY_SOURCE_COMMIT)
+        self.assertEqual(overlay["dockerfile_blob"], OVERLAY_DOCKERFILE_BLOB)
+        self.assertEqual(overlay["smoke_blob"], OVERLAY_SMOKE_BLOB)
         self.assertEqual(overlay["tarball_sha256"], NODEMAILER_TARBALL_SHA256)
-        self.assertEqual(overlay["smoke_blob"], "cdb2c9c08500e798ab7881818707fdf710709213")
         self.assertIn("npm pack nodemailer@9.1.0", dockerfile)
         self.assertIn(NODEMAILER_TARBALL_SHA256, dockerfile)
         self.assertIn(".pnpm/nodemailer@8.0.10/node_modules/nodemailer", dockerfile)
@@ -202,6 +208,8 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISSING", builder)
         self.assertIn("FINANCE_BASE_IMAGE_PROVENANCE_MISMATCH", builder)
         self.assertIn("FINANCE_BASE_SOURCE_COMMIT", builder)
+        self.assertIn("FINANCE_NODEMAILER_DOCKERFILE_BLOB_INVALID", builder)
+        self.assertIn("FINANCE_NODEMAILER_SMOKE_BLOB_INVALID", builder)
         self.assertIn("FINANCE_RUNTIME_RECEIPT_MUST_BE_EXTERNAL", builder)
         self.assertIn("FINANCE_SOURCE_TREE_MUST_BE_CLEAN", builder)
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
@@ -218,6 +226,11 @@ class N8nCustomImageTests(unittest.TestCase):
             receipt["base_image"]["source_repository"],
             "https://github.com/n8n-io/n8n",
         )
+        self.assertEqual(receipt["base_image"]["nodemailer_overlay"], {
+            "package": "nodemailer@9.1.0",
+            "tarball_sha256": NODEMAILER_TARBALL_SHA256,
+            "recipe_commit": OVERLAY_SOURCE_COMMIT,
+        })
         self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
         self.assertEqual(
             receipt["blockers"],

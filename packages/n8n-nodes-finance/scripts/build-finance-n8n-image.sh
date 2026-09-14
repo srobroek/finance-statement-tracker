@@ -64,6 +64,7 @@ base_source_repository="$(node -p "require(process.argv[1]).source_repository" "
 base_source_commit="$(node -p "require(process.argv[1]).source_commit" "${base_provenance_file}")"
 nodemailer_package="$(node -p "require(process.argv[1]).nodemailer_overlay.package" "${base_provenance_file}")"
 nodemailer_tarball_sha256="$(node -p "require(process.argv[1]).nodemailer_overlay.tarball_sha256" "${base_provenance_file}")"
+nodemailer_source_repository="$(node -p "require(process.argv[1]).nodemailer_overlay.source_repository" "${base_provenance_file}")"
 nodemailer_recipe_commit="$(node -p "require(process.argv[1]).nodemailer_overlay.source_commit" "${base_provenance_file}")"
 nodemailer_dockerfile_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.dockerfile_blob" "${base_provenance_file}")"
 nodemailer_smoke_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.smoke_blob" "${base_provenance_file}")"
@@ -81,11 +82,25 @@ nodemailer_smoke_blob="$(node -p "require(process.argv[1]).nodemailer_overlay.sm
 }
 [[ "${nodemailer_package}" = "nodemailer@9.1.0" \
    && "${nodemailer_tarball_sha256}" = "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db" \
-   && "${nodemailer_recipe_commit}" = "9bd6b55e88deade27591080e14f1a7c4bdc9808b" \
-   && "${nodemailer_dockerfile_blob}" = "02cfd924119874c03aa1b94367bf8eefdf166d90" \
-   && "${nodemailer_smoke_blob}" = "296c57da94232a974428c59cf531e68a3b09a556" \
-   && "$(git hash-object "${package_dir}/scripts/nodemailer-smoke.cjs")" = "${nodemailer_smoke_blob}" ]] || {
+   && "${nodemailer_source_repository}" = "https://github.com/srobroek/finance-statement-tracker" \
+   && "${nodemailer_recipe_commit}" = "c0e5253515c052c57d4198e0fa2fe074adab70cb" \
+   && "${nodemailer_dockerfile_blob}" = "bad0e94d0b70e541c726d37e441daea706514efe" \
+   && "${nodemailer_smoke_blob}" = "296c57da94232a974428c59cf531e68a3b09a556" ]] || {
   echo "FINANCE_NODEMAILER_OVERLAY_PROVENANCE_INVALID" >&2
+  exit 1
+}
+reviewed_dockerfile_blob="$(git -C "${repo_root}" rev-parse "${nodemailer_recipe_commit}:packages/n8n-nodes-finance/Dockerfile.n8n" 2>/dev/null || true)"
+[[ "${reviewed_dockerfile_blob}" = "${nodemailer_dockerfile_blob}" ]] || {
+  echo "FINANCE_NODEMAILER_DOCKERFILE_BLOB_INVALID" >&2
+  exit 1
+}
+reviewed_smoke_blob="$(git -C "${repo_root}" rev-parse "${nodemailer_recipe_commit}:packages/n8n-nodes-finance/scripts/nodemailer-smoke.cjs" 2>/dev/null || true)"
+[[ "${reviewed_smoke_blob}" = "${nodemailer_smoke_blob}" ]] || {
+  echo "FINANCE_NODEMAILER_SMOKE_BLOB_INVALID" >&2
+  exit 1
+}
+[[ "$(git hash-object "${package_dir}/scripts/nodemailer-smoke.cjs")" = "${nodemailer_smoke_blob}" ]] || {
+  echo "FINANCE_NODEMAILER_SMOKE_WORKTREE_BLOB_INVALID" >&2
   exit 1
 }
 
@@ -107,6 +122,10 @@ if ((dry_run == 0)); then
     --tag "${tag}" \
     "${repo_root}"
   image_id="$(docker image inspect "${tag}" --format '{{.Id}}')"
+  # Docker prefixes image IDs with sha256; podman-backed Docker shims may not.
+  if [[ "${image_id}" =~ ^[0-9a-f]{64}$ ]]; then
+    image_id="sha256:${image_id}"
+  fi
   [[ "${image_id}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
     echo "FINANCE_LOCAL_IMAGE_ID_INVALID" >&2
     exit 1

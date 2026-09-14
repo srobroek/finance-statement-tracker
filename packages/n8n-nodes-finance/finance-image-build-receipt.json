@@ -14,9 +14,9 @@
     "source_commit": "5542b8b6419cb6925cca8f11b270c9bfbe09d85e",
     "provenance_path": "packages/n8n-nodes-finance/base-image-provenance.json",
     "nodemailer_overlay": {
-      "package": "nodemailer@9.0.1",
-      "tarball_sha256": "ab8bdd84372cb54955930722db668f878865b86aa3520117ad92c4febe1af2a3",
-      "recipe_commit": "9bd6b55e88deade27591080e14f1a7c4bdc9808b"
+      "package": "nodemailer@9.1.0",
+      "tarball_sha256": "fa0d4044a699101fff3706651423c4174ac41d59414a4cc039acebd348f102db",
+      "recipe_commit": "c0e5253515c052c57d4198e0fa2fe074adab70cb"
     }
   },
   "source_commit": null,
