@@ -86,7 +86,8 @@ def _mark_ownership_conflict(transaction: Transaction) -> None:
         reasons.append("LOCKED_OWNERSHIP_CONFLICT")
     if "tags" not in set(transaction.metadata.get("locked_fields", [])):
         transaction.tags.discard("shared")
-    transaction.review_required = True
+    if "review_required" not in set(transaction.metadata.get("locked_fields", [])):
+        transaction.review_required = True
 
 
 def _history_tag_lock_reason(transaction: Transaction, tag: object) -> str | None:
@@ -151,7 +152,8 @@ def apply_history_match(
         if allowed_tags:
             transaction.tags.update(allowed_tags)
             applied.append("tags")
-    transaction.metadata["history_count"] = decision.sample_count
+    if "history_count" not in locked:
+        transaction.metadata["history_count"] = decision.sample_count
     trace = HistoryTrace(
         transaction.transaction_id,
         fingerprint,

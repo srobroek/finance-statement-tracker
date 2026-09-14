@@ -34,3 +34,13 @@ class ClassificationAuditRegressionTests(TestCase):
         self.assertEqual(transaction.tags, {"Manual"})
         self.assertFalse(transaction.review_required)
 
+    def test_locked_tags_do_not_suppress_unresolved_review_queue(self) -> None:
+        transaction = self.transaction()
+        transaction.tags = {"Manual"}
+        transaction.metadata["locked_fields"] = ["tags"]
+
+        reasons = enforce_transaction_invariants(transaction)
+
+        self.assertTrue(transaction.review_required)
+        self.assertEqual(transaction.tags, {"Manual"})
+        self.assertIn("UNCATEGORIZED", reasons)
