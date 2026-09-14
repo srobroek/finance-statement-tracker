@@ -149,6 +149,35 @@ function readbackReceipt(phase, tables, totalRows) {
 }
 
 
+async function readCanonicalRows(service, table, schema) {
+  const rows = [];
+  let skip = 0;
+  let expectedCount = null;
+  while (true) {
+    const page = await service.getManyRowsAndCount(table.id, projectId, { skip, take: 1000 });
+    if (!Number.isInteger(page.count) || page.count < 0 || page.count > 100000) {
+      throw new Error('DATA_TABLE_ROW_BOUND_INVALID');
+    }
+    if (!Array.isArray(page.data) || page.data.length > 1000) {
+      throw new Error('DATA_TABLE_ROW_PAGE_INVALID');
+    }
+    if (expectedCount === null) expectedCount = page.count;
+    if (page.count !== expectedCount) throw new Error(`DATA_TABLE_ROW_COUNT_DRIFT:${table.name}`);
+    for (const row of page.data) {
+      rows.push(JSON.stringify(canonical(Object.fromEntries(
+        schema.map((column) => [column.name, row[column.name] ?? null]),
+      ))));
+    }
+    skip += page.data.length;
+    if (skip >= expectedCount) break;
+    if (page.data.length === 0) throw new Error('DATA_TABLE_PAGINATION_STALLED');
+  }
+  rows.sort();
+  if (rows.length !== expectedCount) throw new Error(`DATA_TABLE_ROW_COUNT_MISMATCH:${table.name}`);
+  return rows;
+}
+
+
 const originalInit = BaseCommand.prototype.init;
 let completed = false;
 BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
@@ -186,24 +215,7 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
       }
       const schemaSha256 = assertTargetSchemaDigest(table.name, schema);
       stage = `rows-${table.name}`;
-      const rows = [];
-      let skip = 0;
-      let expectedCount = null;
-      while (true) {
-        const page = await service.getManyRowsAndCount(table.id, projectId, { skip, take: 1000 });
-        if (!Number.isInteger(page.count) || page.count < 0 || page.count > 100000) throw new Error('DATA_TABLE_ROW_BOUND_INVALID');
-        if (!Array.isArray(page.data) || page.data.length > 1000) throw new Error('DATA_TABLE_ROW_PAGE_INVALID');
-        if (expectedCount === null) expectedCount = page.count;
-        if (page.count !== expectedCount) throw new Error(`DATA_TABLE_ROW_COUNT_DRIFT:${table.name}`);
-        rows.push(JSON.stringify(canonical(Object.fromEntries(
-          schema.map((column) => [column.name, row[column.name] ?? null]),
-        ))));
-        skip += page.data.length;
-        if (skip >= page.count) break;
-        if (page.data.length === 0) throw new Error('DATA_TABLE_PAGINATION_STALLED');
-      }
-      rows.sort();
-      if (rows.length !== expectedCount) throw new Error(`DATA_TABLE_ROW_COUNT_MISMATCH:${table.name}`);
+      const rows = await readCanonicalRows(service, table, schema);
       totalRows += rows.length;
       const tableReceipt = {
         name: table.name,

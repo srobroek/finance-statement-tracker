@@ -16,12 +16,14 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import re
 import stat
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -1118,6 +1120,121 @@ def _read_forward_runtime_receipt(
     return receipt, hashlib.sha256(raw).hexdigest()
 
 
+def _read_rollback_runtime_receipt(
+    args: argparse.Namespace,
+) -> tuple[dict[str, Any] | None, str | None]:
+    path = getattr(args, "rollback_runtime_receipt", None)
+    if path is None:
+        return None, None
+    raw = _protected_bytes(path, "ROLLBACK_RUNTIME_RECEIPT", limit=4 * 1024 * 1024)
+    try:
+        receipt = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (ValueError, UnicodeError) as error:
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_JSON_INVALID") from error
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema_version") != "finance-four-table-runtime-plan-v3"
+        or receipt.get("operation") != "ROLLBACK"
+        or receipt.get("durable_journal") is not True
+        or receipt.get("commit_protocol") != "postgresql_synchronous_wal"
+        or receipt.get("readback_verified") is not True
+        or receipt.get("action_count") != len(EXPECTED_REFERENCE_ACTIONS)
+        or not isinstance(receipt.get("actions"), list)
+        or len(receipt["actions"]) != len(EXPECTED_REFERENCE_ACTIONS)
+        or receipt.get("target_rows_restored") is not True
+        or receipt.get("preserved_table_writes") is not False
+    ):
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_SCHEMA_INVALID")
+    for field in (
+        "canonical_source_sha256",
+        "target_digest",
+        "target_projection_sha256",
+        "target_readback_sha256",
+        "rollback_targets_sha256",
+        "forward_runtime_receipt_sha256",
+        "credential_state_digest_after",
+        "workflow_credential_objects_digest_after",
+        "workflow_revision_digest_after",
+    ):
+        _require_digest(receipt.get(field), field.upper())
+    unsigned = dict(receipt)
+    digest = _require_digest(
+        unsigned.pop("runtime_plan_receipt_sha256", None),
+        "ROLLBACK_RUNTIME_RECEIPT_SHA256",
+    )
+    if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != digest:
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_INTEGRITY_INVALID")
+    return receipt, hashlib.sha256(raw).hexdigest()
+
+
+def _validate_rollback_runtime_binding(
+    receipt: Mapping[str, Any],
+    *,
+    export: Mapping[str, Any],
+    binding: Mapping[str, str],
+    forward_receipt: Mapping[str, Any],
+    forward_receipt_sha256: str,
+) -> None:
+    if (
+        receipt.get("project_id") != export["project_id"]
+        or receipt.get("export_sha256") != export["export_sha256"]
+        or receipt.get("lock_resource")
+        != f"{LOCK_RESOURCE_PREFIX}:{export['project_id']}"
+        or receipt.get("forward_runtime_receipt_sha256") != forward_receipt_sha256
+        or receipt.get("canonical_source_sha256")
+        != forward_receipt.get("canonical_source_sha256")
+        or receipt.get("target_digest") != forward_receipt.get("target_digest")
+        or receipt.get("target_projection_sha256")
+        != forward_receipt.get("target_projection_sha256")
+        or receipt.get("rollback_targets_sha256")
+        != forward_receipt.get("rollback_targets_sha256")
+        or receipt.get("actions") != forward_receipt.get("actions")
+    ):
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_BINDING_INVALID")
+    _validate_binding(receipt, binding, "ROLLBACK_RUNTIME_RECEIPT")
+
+
+def _read_forward_cutover_receipt(
+    args: argparse.Namespace,
+    *,
+    receipt_sha: str,
+    source_head: str,
+    generator_head: str,
+    source_backup_sha256: str,
+    binding: Mapping[str, str],
+    runtime_receipt: Mapping[str, Any],
+    runtime_receipt_sha256: str,
+) -> dict[str, Any]:
+    path = getattr(args, "forward_receipt", None)
+    if path is None:
+        raise CutoverError("FORWARD_RECEIPT_REQUIRED")
+    _require_protected(path)
+    receipt, _ = _read_json(path)
+    if (
+        receipt.get("schema_version") != "finance-four-table-cutover-receipt-v1"
+        or receipt.get("operation") != "FORWARD"
+        or receipt.get("migration_receipt_sha256") != receipt_sha
+        or receipt.get("source_head") != source_head
+        or receipt.get("generator_head") != generator_head
+        or receipt.get("source_backup_sha256") != source_backup_sha256
+        or receipt.get("old_tables_preserved") is not True
+        or receipt.get("runtime_cutover") is not False
+        or receipt.get("deletion_authorized") is not False
+        or receipt.get("workflow_export_sha256") != runtime_receipt.get("export_sha256")
+        or receipt.get("forward_runtime_receipt_sha256") != runtime_receipt_sha256
+    ):
+        raise CutoverError("FORWARD_RECEIPT_BINDING_MISMATCH")
+    _validate_binding(receipt, binding, "FORWARD_RECEIPT")
+    integrity = _require_digest(
+        receipt.get("cutover_receipt_sha256"), "CUTOVER_RECEIPT_SHA256"
+    )
+    unsigned = dict(receipt)
+    unsigned.pop("cutover_receipt_sha256", None)
+    if hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != integrity:
+        raise CutoverError("FORWARD_RECEIPT_INTEGRITY_MISMATCH")
+    return receipt
+
+
 def _validate_forward_runtime_binding(
     receipt: Mapping[str, Any] | None,
     export: Mapping[str, Any],
@@ -1601,6 +1718,46 @@ def _canonical_source_bundle(
     }
 
 
+def _canonical_target_value(
+    value: Any, column_type: str, *, table: str, column: str
+) -> Any:
+    if value is None:
+        return None
+    if column_type == "string":
+        if not isinstance(value, str):
+            raise CutoverError(f"TARGET_ROW_TYPE_INVALID:{table}:{column}")
+        return value
+    if column_type == "number":
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise CutoverError(f"TARGET_ROW_TYPE_INVALID:{table}:{column}")
+        return value
+    if column_type == "boolean":
+        if not isinstance(value, bool):
+            raise CutoverError(f"TARGET_ROW_TYPE_INVALID:{table}:{column}")
+        return value
+    if column_type == "date":
+        if not isinstance(value, str):
+            raise CutoverError(f"TARGET_ROW_TYPE_INVALID:{table}:{column}")
+        try:
+            parsed = datetime.fromisoformat(
+                value[:-1] + "+00:00" if value.endswith("Z") else value
+            )
+        except ValueError as error:
+            raise CutoverError(f"TARGET_ROW_TYPE_INVALID:{table}:{column}") from error
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return (
+            parsed.astimezone(UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
+    raise CutoverError(f"TARGET_COLUMN_TYPE_INVALID:{table}:{column}")
+
+
 def _normalized_target_rows(
     runner: Any, matrix: Mapping[str, Any], name: str
 ) -> list[dict[str, Any]]:
@@ -1615,7 +1772,18 @@ def _normalized_target_rows(
         raise CutoverError(f"TARGET_ROWS_INVALID:{name}")
     column_names = sorted(columns)
     normalized = [
-        {column: _canonical(row.get(column)) for column in column_names} for row in rows
+        {
+            column: _canonical_target_value(
+                row.get(column),
+                str(columns[column].get("type", "")).lower()
+                if isinstance(columns[column], Mapping)
+                else "",
+                table=name,
+                column=column,
+            )
+            for column in column_names
+        }
+        for row in rows
     ]
     return sorted(
         normalized,
@@ -1881,6 +2049,7 @@ def _validate_runtime_state(
     source_backup_sha256: str,
     workflow_export_sha256: str | None = None,
     lock_receipt_sha256: str | None = None,
+    rollback_runtime_receipt_sha256: str | None = None,
     binding: Mapping[str, str] | None = None,
 ) -> None:
     if (
@@ -1907,6 +2076,12 @@ def _validate_runtime_state(
         and state.get("lock_receipt_sha256") != lock_receipt_sha256
     ):
         raise CutoverError("RUNTIME_STATE_LOCK_BINDING_MISMATCH")
+    if (
+        rollback_runtime_receipt_sha256 is not None
+        and state.get("rollback_runtime_receipt_sha256")
+        != rollback_runtime_receipt_sha256
+    ):
+        raise CutoverError("RUNTIME_STATE_ROLLBACK_RECEIPT_BINDING_MISMATCH")
     if binding is not None:
         _validate_binding(state, binding, "RUNTIME_STATE")
 
@@ -1949,7 +2124,16 @@ def _parse_readback(
             "digest_sha256": payload["digest_sha256"],
             "finance_tables": payload["finance_tables"],
             "total_rows": payload["total_rows"],
-            "tables": payload["tables"],
+            "tables": [
+                {
+                    "name": table["name"],
+                    "schema_sha256": table["schema_sha256"],
+                    "row_count": table["row_count"],
+                    "rows_sha256": table["rows_sha256"],
+                    "digest_sha256": table["digest_sha256"],
+                }
+                for table in payload["tables"]
+            ],
         }
     if payload.get("status") != "VERIFIED":
         raise CutoverError("READBACK_STATUS_INVALID")
@@ -2247,6 +2431,7 @@ def _assert_currentness(
     identity_digest: str,
     export_sha: str | None,
     runtime_receipt_sha: str | None = None,
+    rollback_runtime_receipt_sha: str | None = None,
     verify_resolvers: bool = True,
 ) -> None:
     """Reject a source, receipt, or export changed after preflight."""
@@ -2315,6 +2500,10 @@ def _assert_currentness(
         _, observed_runtime_sha = _read_forward_runtime_receipt(args)
         if observed_runtime_sha != runtime_receipt_sha:
             raise CutoverError("FORWARD_RUNTIME_RECEIPT_CURRENTNESS_DRIFT")
+    if rollback_runtime_receipt_sha is not None:
+        _, observed_rollback_runtime_sha = _read_rollback_runtime_receipt(args)
+        if observed_rollback_runtime_sha != rollback_runtime_receipt_sha:
+            raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_CURRENTNESS_DRIFT")
 
 
 def run_forward(args: argparse.Namespace) -> dict[str, Any]:
@@ -2520,47 +2709,41 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         or migration_receipt.get("deletion_authorized") is not False
     ):
         raise CutoverError("ROLLBACK_ONLY_BEFORE_LEGACY_DELETION")
-    _require_protected(args.forward_receipt)
-    forward, _ = _read_json(args.forward_receipt)
+    runtime_receipt, runtime_receipt_sha = _read_forward_runtime_receipt(args)
     if (
-        forward.get("schema_version") != "finance-four-table-cutover-receipt-v1"
-        or forward.get("operation") != "FORWARD"
-        or forward.get("migration_receipt_sha256") != receipt_sha
-        or forward.get("source_head") != source_head
-        or forward.get("generator_head") != generator_head
-        or forward.get("source_backup_sha256") != observed_source_backup_sha
-        or forward.get("old_tables_preserved") is not True
-        or forward.get("runtime_cutover") is not False
-        or forward.get("deletion_authorized") is not False
-        or (
-            export is not None
-            and forward.get("workflow_export_sha256") != export["export_sha256"]
-        )
+        runtime_receipt is None
+        or runtime_receipt_sha is None
+        or runtime_receipt.get("schema_version") != "finance-four-table-runtime-plan-v3"
     ):
-        raise CutoverError("FORWARD_RECEIPT_BINDING_MISMATCH")
-    _validate_binding(forward, binding, "FORWARD_RECEIPT")
-    forward_integrity = _require_digest(
-        forward.get("cutover_receipt_sha256"), "CUTOVER_RECEIPT_SHA256"
+        raise CutoverError("FORWARD_RUNTIME_TARGET_RECEIPT_REQUIRED")
+    _read_forward_cutover_receipt(
+        args,
+        receipt_sha=receipt_sha,
+        source_head=source_head,
+        generator_head=generator_head,
+        source_backup_sha256=observed_source_backup_sha,
+        binding=binding,
+        runtime_receipt=runtime_receipt,
+        runtime_receipt_sha256=runtime_receipt_sha,
     )
-    unsigned_forward = dict(forward)
-    unsigned_forward.pop("cutover_receipt_sha256", None)
-    if (
-        hashlib.sha256(_canonical_bytes(unsigned_forward)).hexdigest()
-        != forward_integrity
-    ):
-        raise CutoverError("FORWARD_RECEIPT_INTEGRITY_MISMATCH")
+    rollback_runtime_receipt, rollback_runtime_receipt_sha = (
+        _read_rollback_runtime_receipt(args)
+    )
+    if rollback_runtime_receipt is None or rollback_runtime_receipt_sha is None:
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_REQUIRED")
+    _validate_rollback_runtime_binding(
+        rollback_runtime_receipt,
+        export=export,
+        binding=binding,
+        forward_receipt=runtime_receipt,
+        forward_receipt_sha256=runtime_receipt_sha,
+    )
     module = _load_migration_module()
     matrix = _load_matrix()
     runner = _migration_runner(args, module, source, source_head, source_backup_sha)
     if runner.run() != migration_receipt:
         raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
     expected_tables = _target_table_receipts(runner, matrix)
-    runtime_receipt, runtime_receipt_sha = _read_forward_runtime_receipt(args)
-    if (
-        runtime_receipt is None
-        or runtime_receipt.get("schema_version") != "finance-four-table-runtime-plan-v3"
-    ):
-        raise CutoverError("FORWARD_RUNTIME_TARGET_RECEIPT_REQUIRED")
     before = _parse_readback(args.pre_readback_raw, receipt_sha, "ROLLBACK_PRE")
     after = _parse_readback(args.post_readback_raw, receipt_sha, "ROLLBACK_POST")
     readback = _compare_rollback_readbacks(
@@ -2583,6 +2766,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         workflow_export_sha256=export["export_sha256"] if export else None,
         lock_receipt_sha256=lock_sha,
         binding=binding,
+        rollback_runtime_receipt_sha256=rollback_runtime_receipt_sha,
     )
     if (
         runtime_state.get("status") != "RESTORED"
@@ -2603,6 +2787,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         source,
         observed_source_backup_sha,
         runtime_state_sha,
+        rollback_runtime_receipt_sha256=rollback_runtime_receipt_sha,
         workflow_export_sha256=export["export_sha256"] if export else None,
         lock_receipt_sha256=lock_sha,
         binding=binding,
@@ -2642,6 +2827,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
             "target_tables_untouched": False,
             "target_rows_restored": True,
             "forward_runtime_receipt_sha256": runtime_receipt_sha,
+            "rollback_runtime_receipt_sha256": rollback_runtime_receipt_sha,
             "target_projection_sha256": runtime_receipt["target_projection_sha256"],
             "rollback_targets_sha256": runtime_receipt["rollback_targets_sha256"],
             "old_tables_preserved": True,
@@ -2685,6 +2871,7 @@ def run_rollback(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         export_sha=export["export_sha256"] if export else None,
         runtime_receipt_sha=runtime_receipt_sha,
+        rollback_runtime_receipt_sha=rollback_runtime_receipt_sha,
     )
     _validate_output_path(args, args.output, "CUTOVER_RECEIPT_OUTPUT")
     _write_json(args.output, result)
@@ -2700,6 +2887,7 @@ def _verify_runtime_proof(
     source: Mapping[str, Any],
     source_backup_sha256: str,
     runtime_state_sha: str,
+    rollback_runtime_receipt_sha256: str,
     workflow_export_sha256: str | None = None,
     lock_receipt_sha256: str | None = None,
     binding: Mapping[str, str] | None = None,
@@ -2721,6 +2909,8 @@ def _verify_runtime_proof(
         or proof.get("restore_roundtrip") is not True
         or proof.get("target_tables_untouched") is not False
         or proof.get("target_rows_restored") is not True
+        or proof.get("rollback_runtime_receipt_sha256")
+        != rollback_runtime_receipt_sha256
     ):
         raise CutoverError("ROLLBACK_RUNTIME_PROOF_BINDING_MISMATCH")
     if (
@@ -2765,15 +2955,6 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         identity_digest=identity_digest,
         operation="ROLLBACK",
     )
-    _assert_currentness(
-        args,
-        source_head=source_head,
-        generator_head=generator_head,
-        receipt_sha=receipt_sha,
-        source_backup_sha=source_backup_sha,
-        identity_digest=identity_digest,
-        export_sha=export["export_sha256"] if export else None,
-    )
     source, migration_receipt, _, observed_source_backup_sha = _source_and_receipt(
         args.source_backup, args.migration_receipt, receipt_sha, source_backup_sha
     )
@@ -2786,47 +2967,107 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
     runner = _migration_runner(args, module, source, source_head, source_backup_sha)
     if runner.run() != migration_receipt:
         raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
-    runtime_receipt, runtime_receipt_sha = _read_forward_runtime_receipt(args)
+    forward_receipt, forward_receipt_sha = _read_forward_runtime_receipt(args)
     if (
-        runtime_receipt is None
-        or runtime_receipt.get("schema_version") != "finance-four-table-runtime-plan-v3"
-        or runtime_receipt.get("target_digest")
+        forward_receipt is None
+        or forward_receipt_sha is None
+        or forward_receipt.get("schema_version") != "finance-four-table-runtime-plan-v3"
+        or forward_receipt.get("target_digest")
         != migration_receipt.get("target_digest")
     ):
         raise CutoverError("FORWARD_RUNTIME_TARGET_RECEIPT_REQUIRED")
-    source_digest = _require_digest(
-        migration_receipt.get("source_digest"), "SOURCE_DIGEST"
-    )
-    runtime_state, previous_state_sha = _read_runtime_state(args.runtime_state)
-    _validate_runtime_state(
-        runtime_state,
-        operation="FORWARD",
+    forward_cutover_receipt = _read_forward_cutover_receipt(
+        args,
         receipt_sha=receipt_sha,
         source_head=source_head,
         generator_head=generator_head,
-        identity_digest=identity_digest,
-        source_digest=source_digest,
         source_backup_sha256=observed_source_backup_sha,
-        workflow_export_sha256=export["export_sha256"] if export else None,
-        lock_receipt_sha256=lock_sha,
         binding=binding,
+        runtime_receipt=forward_receipt,
+        runtime_receipt_sha256=forward_receipt_sha,
     )
-    if (
-        runtime_state.get("status") != "MIGRATED"
-        or runtime_state.get("target_tables_created") is not True
-        or runtime_state.get("target_tables_untouched") is not False
-        or runtime_state.get("target_rows_applied") is not True
-        or runtime_state.get("forward_runtime_receipt_sha256") != runtime_receipt_sha
-    ):
-        raise CutoverError("FORWARD_RUNTIME_STATE_REQUIRED")
-    restored = runner.restore_backup()
-    source_digest = migration_receipt.get("source_digest")
-    if (
-        restored.get("restore_roundtrip") is not True
-        or runner.backup_digest() != source_digest
-        or restored.get("source_digest") != source_digest
-    ):
-        raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
+    rollback_receipt, rollback_receipt_sha = _read_rollback_runtime_receipt(args)
+    if rollback_receipt is None or rollback_receipt_sha is None:
+        raise CutoverError("ROLLBACK_RUNTIME_RECEIPT_REQUIRED")
+    _validate_rollback_runtime_binding(
+        rollback_receipt,
+        export=export,
+        binding=binding,
+        forward_receipt=forward_receipt,
+        forward_receipt_sha256=forward_receipt_sha,
+    )
+    source_digest = _require_digest(
+        migration_receipt.get("source_digest"), "SOURCE_DIGEST"
+    )
+    runtime_state, current_state_sha = _read_runtime_state(args.runtime_state)
+    if runtime_state.get("operation") == "FORWARD":
+        _validate_runtime_state(
+            runtime_state,
+            operation="FORWARD",
+            receipt_sha=receipt_sha,
+            source_head=source_head,
+            generator_head=generator_head,
+            identity_digest=identity_digest,
+            source_digest=source_digest,
+            source_backup_sha256=observed_source_backup_sha,
+            workflow_export_sha256=forward_receipt["export_sha256"],
+            binding=binding,
+        )
+        if (
+            runtime_state.get("status") != "MIGRATED"
+            or runtime_state.get("target_tables_created") is not True
+            or runtime_state.get("target_tables_untouched") is not False
+            or runtime_state.get("target_rows_applied") is not True
+            or runtime_state.get("forward_runtime_receipt_sha256")
+            != forward_receipt_sha
+            or forward_cutover_receipt.get("runtime_state_sha256") != current_state_sha
+        ):
+            raise CutoverError("FORWARD_RUNTIME_STATE_REQUIRED")
+        restored = runner.restore_backup()
+        if (
+            restored.get("restore_roundtrip") is not True
+            or runner.backup_digest() != source_digest
+            or restored.get("source_digest") != source_digest
+        ):
+            raise CutoverError("EXACT_ROLLBACK_DIGEST_RESTORATION_REQUIRED")
+        previous_state_sha = current_state_sha
+        restored_state_sha: str | None = None
+    elif runtime_state.get("operation") == "ROLLBACK":
+        _validate_runtime_state(
+            runtime_state,
+            operation="ROLLBACK",
+            receipt_sha=receipt_sha,
+            source_head=source_head,
+            generator_head=generator_head,
+            identity_digest=identity_digest,
+            source_digest=source_digest,
+            source_backup_sha256=observed_source_backup_sha,
+            workflow_export_sha256=export["export_sha256"],
+            lock_receipt_sha256=lock_sha,
+            rollback_runtime_receipt_sha256=rollback_receipt_sha,
+            binding=binding,
+        )
+        if (
+            runtime_state.get("status") != "RESTORED"
+            or runtime_state.get("target_tables_created") is not True
+            or runtime_state.get("target_tables_untouched") is not False
+            or runtime_state.get("target_rows_restored") is not True
+            or runtime_state.get("forward_runtime_receipt_sha256")
+            != forward_receipt_sha
+            or runtime_state.get("restored_source_digest") != source_digest
+            or runtime_state.get("restore_roundtrip") is not True
+        ):
+            raise CutoverError("RUNTIME_STATE_RESTORATION_REQUIRED")
+        previous_state_sha = _require_digest(
+            runtime_state.get("runtime_state_before_sha256"),
+            "RUNTIME_STATE_BEFORE_SHA256",
+        )
+        if previous_state_sha != forward_cutover_receipt.get("runtime_state_sha256"):
+            raise CutoverError("RUNTIME_STATE_FORWARD_CHAIN_MISMATCH")
+        restored_state_sha = current_state_sha
+        restored = {"source_digest": source_digest, "restore_roundtrip": True}
+    else:
+        raise CutoverError("RUNTIME_STATE_OPERATION_INVALID")
     _require_protected(args.source_backup, "PROTECTED_SOURCE_BACKUP")
     try:
         current_source_backup_sha = hashlib.sha256(
@@ -2836,39 +3077,53 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         raise CutoverError("SOURCE_BACKUP_UNAVAILABLE_AFTER_ROLLBACK") from error
     if current_source_backup_sha != observed_source_backup_sha:
         raise CutoverError("SOURCE_BACKUP_CHANGED_DURING_ROLLBACK")
-    _validate_output_path(args, args.runtime_state, "RUNTIME_STATE_OUTPUT")
-    restored_state_sha = _write_runtime_state(
-        args.runtime_state,
-        {
-            "schema_version": RUNTIME_STATE_SCHEMA,
-            "operation": "ROLLBACK",
-            "status": "RESTORED",
-            "migration_receipt_sha256": receipt_sha,
-            "source_head": source_head,
-            "generator_head": generator_head,
-            "accepted_identity_sha256": identity_digest,
-            "source_backup_sha256": observed_source_backup_sha,
-            "source_digest": source_digest,
-            "target_digest": migration_receipt["target_digest"],
-            "target_tables_created": True,
-            "old_tables_preserved": True,
-            "runtime_cutover": False,
-            "deletion_authorized": False,
-            "target_tables_untouched": False,
-            "target_rows_restored": True,
-            "forward_runtime_receipt_sha256": runtime_receipt_sha,
-            "target_projection_sha256": runtime_receipt["target_projection_sha256"],
-            "rollback_targets_sha256": runtime_receipt["rollback_targets_sha256"],
-            "restored_source_digest": restored["source_digest"],
-            "restore_roundtrip": restored["restore_roundtrip"],
-            "runtime_state_before_sha256": previous_state_sha,
-            "runtime_action": ROLLBACK_RUNTIME_ACTION,
-            "operator_ack": REQUIRED_ROLLBACK_ACK,
-            "workflow_export_sha256": export["export_sha256"] if export else None,
-            "lock_receipt_sha256": lock_sha,
-            **binding,
-        },
+    _assert_currentness(
+        args,
+        source_head=source_head,
+        generator_head=generator_head,
+        receipt_sha=receipt_sha,
+        source_backup_sha=source_backup_sha,
+        identity_digest=identity_digest,
+        export_sha=export["export_sha256"],
+        runtime_receipt_sha=forward_receipt_sha,
+        rollback_runtime_receipt_sha=rollback_receipt_sha,
     )
+    _validate_output_path(args, args.runtime_state, "RUNTIME_STATE_OUTPUT")
+    _validate_output_path(args, args.output, "RUNTIME_PROOF_OUTPUT")
+    if restored_state_sha is None:
+        restored_state_sha = _write_runtime_state(
+            args.runtime_state,
+            {
+                "schema_version": RUNTIME_STATE_SCHEMA,
+                "operation": "ROLLBACK",
+                "status": "RESTORED",
+                "migration_receipt_sha256": receipt_sha,
+                "source_head": source_head,
+                "generator_head": generator_head,
+                "accepted_identity_sha256": identity_digest,
+                "source_backup_sha256": observed_source_backup_sha,
+                "source_digest": source_digest,
+                "target_digest": migration_receipt["target_digest"],
+                "target_tables_created": True,
+                "old_tables_preserved": True,
+                "runtime_cutover": False,
+                "deletion_authorized": False,
+                "target_tables_untouched": False,
+                "target_rows_restored": True,
+                "forward_runtime_receipt_sha256": forward_receipt_sha,
+                "rollback_runtime_receipt_sha256": rollback_receipt_sha,
+                "target_projection_sha256": forward_receipt["target_projection_sha256"],
+                "rollback_targets_sha256": forward_receipt["rollback_targets_sha256"],
+                "restored_source_digest": restored["source_digest"],
+                "restore_roundtrip": restored["restore_roundtrip"],
+                "runtime_state_before_sha256": previous_state_sha,
+                "runtime_action": ROLLBACK_RUNTIME_ACTION,
+                "operator_ack": REQUIRED_ROLLBACK_ACK,
+                "workflow_export_sha256": export["export_sha256"],
+                "lock_receipt_sha256": lock_sha,
+                **binding,
+            },
+        )
     result = _seal(
         {
             "schema_version": "data-table-reverse-runtime-proof-v1",
@@ -2882,7 +3137,8 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "restore_roundtrip": restored["restore_roundtrip"],
             "target_tables_untouched": False,
             "target_rows_restored": True,
-            "forward_runtime_receipt_sha256": runtime_receipt_sha,
+            "forward_runtime_receipt_sha256": forward_receipt_sha,
+            "rollback_runtime_receipt_sha256": rollback_receipt_sha,
             "pre_delete": True,
             "runtime_execution": True,
             "runtime_action": ROLLBACK_RUNTIME_ACTION,
@@ -2890,12 +3146,11 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
             "runtime_state_sha256": restored_state_sha,
             "runtime_state_before_sha256": previous_state_sha,
             "runtime_command": "rollback-runtime",
-            "workflow_export_sha256": export["export_sha256"] if export else None,
+            "workflow_export_sha256": export["export_sha256"],
             "lock_receipt_sha256": lock_sha,
             **binding,
         }
     )
-    # _seal uses the cutover key; this runtime proof has its own schema/key.
     result["runtime_proof_sha256"] = result.pop("cutover_receipt_sha256")
     _assert_currentness(
         args,
@@ -2904,9 +3159,10 @@ def run_rollback_runtime(args: argparse.Namespace) -> dict[str, Any]:
         receipt_sha=receipt_sha,
         source_backup_sha=source_backup_sha,
         identity_digest=identity_digest,
-        export_sha=export["export_sha256"] if export else None,
+        export_sha=export["export_sha256"],
+        runtime_receipt_sha=forward_receipt_sha,
+        rollback_runtime_receipt_sha=rollback_receipt_sha,
     )
-    _validate_output_path(args, args.output, "RUNTIME_PROOF_OUTPUT")
     _write_json(args.output, result)
     return result
 
@@ -2941,6 +3197,19 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         validate_target_schema=not legacy_rollback,
     )
     _validate_forward_runtime_binding(runtime_receipt, export, binding)
+    if args.operation_kind == "ROLLBACK":
+        if runtime_receipt is None or runtime_receipt_sha is None:
+            raise CutoverError("FORWARD_RUNTIME_RECEIPT_REQUIRED")
+        _read_forward_cutover_receipt(
+            args,
+            receipt_sha=receipt_sha,
+            source_head=source_head,
+            generator_head=generator_head,
+            source_backup_sha256=observed_source_backup_sha,
+            binding=binding,
+            runtime_receipt=runtime_receipt,
+            runtime_receipt_sha256=runtime_receipt_sha,
+        )
     if not legacy_rollback:
         module = _load_migration_module()
         if (
@@ -3015,6 +3284,19 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
         validate_target_schema=not legacy_rollback,
     )
     _validate_forward_runtime_binding(runtime_receipt, export, binding)
+    if args.operation_kind == "ROLLBACK":
+        if runtime_receipt is None or runtime_receipt_sha is None:
+            raise CutoverError("FORWARD_RUNTIME_RECEIPT_REQUIRED")
+        _read_forward_cutover_receipt(
+            args,
+            receipt_sha=receipt_sha,
+            source_head=source_head,
+            generator_head=generator_head,
+            source_backup_sha256=source_backup_sha,
+            binding=binding,
+            runtime_receipt=runtime_receipt,
+            runtime_receipt_sha256=runtime_receipt_sha,
+        )
     canonical_source = None
     if not legacy_rollback:
         module = _load_migration_module()
@@ -3037,6 +3319,7 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
                 getattr(args, "alias_bundle", None),
                 getattr(args, "verification_artifacts", None),
                 getattr(args, "forward_runtime_receipt", None),
+                getattr(args, "forward_receipt", None),
             ]
             if (
                 args.canonical_source_output.is_symlink()
@@ -3055,6 +3338,13 @@ def validate_preconditions(args: argparse.Namespace) -> dict[str, Any]:
                 runner=migration_runner,
                 matrix=_load_matrix(),
             )
+            if (
+                args.operation_kind == "ROLLBACK"
+                and runtime_receipt is not None
+                and runtime_receipt.get("canonical_source_sha256")
+                != canonical_source["source_corpus_sha256"]
+            ):
+                raise CutoverError("FORWARD_RUNTIME_CANONICAL_SOURCE_MISMATCH")
     lock = _lock_receipt(
         export=export,
         migration_receipt_sha=receipt_sha,
@@ -3157,9 +3447,21 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--post-readback-raw", type=Path, required=True)
         if operation == "forward":
             command.add_argument("--second-post-readback-raw", type=Path, required=True)
+        if operation in {
+            "rollback",
+            "rollback-runtime",
+            "validate-inputs",
+            "preflight",
+        }:
+            command.add_argument(
+                "--forward-receipt",
+                type=Path,
+                required=operation in {"rollback", "rollback-runtime"},
+            )
         if operation == "rollback":
-            command.add_argument("--forward-receipt", type=Path, required=True)
             command.add_argument("--runtime-proof", type=Path, required=True)
+        if operation in {"rollback", "rollback-runtime"}:
+            command.add_argument("--rollback-runtime-receipt", type=Path, required=True)
         if operation in {"forward", "rollback", "rollback-runtime"}:
             command.add_argument("--runtime-state", type=Path, required=True)
     return parser

@@ -244,6 +244,7 @@ function decode(name) {
   if (name === 'FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') return forwardReceipt;
   return { export_sha256: 'export', references: [] };
 }
+function decodedSha256() { return digest(forwardReceipt); }
 function validateExport() { return graph; }
 function canonicalSourceFromInput() {
   return {
@@ -713,6 +714,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                     return_value=export,
                 ),
                 mock.patch.object(runner, "_validate_forward_runtime_binding"),
+                mock.patch.object(runner, "_read_forward_cutover_receipt"),
                 mock.patch.object(runner, "_lock_receipt", return_value=lock),
                 mock.patch.object(runner, "_assert_currentness"),
                 mock.patch.object(runner, "_validate_output_path"),
@@ -734,10 +736,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "resolver_args=()", 1
         )[0]
         self.assertIn(
-            "rollback_receipt_args+=(--forward-runtime-receipt "
-            '"$forward_runtime_receipt")',
+            '--forward-runtime-receipt "$forward_runtime_receipt"',
             rollback_args,
         )
+        self.assertIn('--forward-receipt "$forward_receipt"', rollback_args)
         self.assertNotIn("PRODUCTION_ONLY", rollback_args)
         self.assertGreaterEqual(source.count('"${rollback_receipt_args[@]}"'), 2)
 
@@ -927,7 +929,7 @@ try {{
 const crypto = require('node:crypto');
 const projectId = 'project-1';
 const JOURNAL_TABLE = 'journal';
-const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
+const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v3';
 const LEGACY_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
 const WORKFLOW_BODY_FIELDS = ['marker'];
 const operation = 'FORWARD';
@@ -938,6 +940,7 @@ const original = {{
   schema_version: RUNTIME_SCHEMA,
   operation: 'FORWARD',
   export_sha256: 'original-export',
+  canonical_source_sha256: 'canonical-source',
   readback_digest_sha256: digest(originalReadback),
   rollback_workflows_sha256: digest(originalRollback),
   target_readback_sha256: 'target-state',
@@ -945,10 +948,15 @@ const original = {{
   target_digest: 'target-digest',
   credential_state_digest_after: 'credential-state',
   workflow_credential_objects_digest_after: 'workflow-credentials',
-  workflow_revision_digest_after: 'workflow-revisions',
+  workflow_revision_digest_after: 'old-workflow-revisions',
   actions: [{{ reference_id: 'ref', revision_id: 'legacy-revision' }}],
 }};
-const replacement = {{ ...original, export_sha256: 'replay-export', runtime_plan_receipt_sha256: 'replacement' }};
+const replacement = {{
+  ...original,
+  export_sha256: 'replay-export',
+  workflow_revision_digest_after: 'workflow-revisions',
+  runtime_plan_receipt_sha256: 'replacement',
+}};
 const graph = {{
   workflows: new Map([['wf', 'revision']]),
   references: new Map(),
@@ -972,7 +980,7 @@ const lock = {{
       if (String(sql).startsWith('SELECT receipt')) return {{
         rows: [
           {{ receipt: original, rollback_workflows: originalRollback, rollback_targets: [] }},
-          {{ receipt: replacement, rollback_workflows: [{{ id: 'wf', marker: 'canonical' }}], rollback_targets: [] }},
+          {{ receipt: replacement, rollback_workflows: originalRollback, rollback_targets: [] }},
         ],
       }};
       return {{ rows: [] }};
@@ -1021,7 +1029,7 @@ async function writeRuntimeReceipt(receipt) {{ emitted = receipt; }}
 {execute}
 (async () => {{
   const receipt = await execute();
-  if (receipt !== original || emitted !== original || persisted !== 0) process.exit(2);
+  if (receipt !== replacement || emitted !== replacement || persisted !== 0) process.exit(2);
   if (lock.client.queries.filter((query) => String(query).startsWith('SELECT receipt')).length !== 1) process.exit(3);
   if (!lock.client.queries.includes('COMMIT')) process.exit(4);
 }})().catch((error) => {{ console.error(error); process.exit(1); }});
@@ -1079,14 +1087,19 @@ live_export=/receipts/export.json
 lock_receipt=/receipts/lock.json
 runtime_state=/receipts/state.json
 runtime_proof=/receipts/proof.json
-log="$PWD/rollback-runtime.log"
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+forward_receipt=/receipts/forward.json
 forward_runtime_receipt=/receipts/runtime-forward.json
+rollback_runtime_receipt=/receipts/runtime-rollback.json
 python3() {{ printf '%s\\n' "$*" >"$log"; }}
 chmod() {{ :; }}
 run_rollback_restore
 grep -F 'rollback-runtime' "$log" >/dev/null
 grep -F -- '--runtime-state /receipts/state.json' "$log" >/dev/null
 grep -F -- '--output /receipts/proof.json' "$log" >/dev/null
+grep -F -- '--forward-receipt /receipts/forward.json' "$log" >/dev/null
+grep -F -- '--rollback-runtime-receipt /receipts/runtime-rollback.json' "$log" >/dev/null
 """
         result = subprocess.run(
             ["bash", "-c", harness],
@@ -1162,6 +1175,403 @@ grep -F -- '--output /receipts/proof.json' "$log" >/dev/null
         self.assertEqual(targets["finance_ingestion_state"]["row_count"], 1)
         self.assertEqual(
             targets["finance_ingestion_state"]["rows"][0]["source_code"], "MAIL"
+        )
+        self.assertEqual(
+            targets["finance_ingestion_state"]["rows"][0]["cursor_value"],
+            "2026-08-01T00:00:00.000Z",
+        )
+
+    def test_digest_adapter_paginates_zero_and_many_rows(self) -> None:
+        source = DIGEST_ADAPTER.read_text(encoding="utf-8")
+        helpers = source[
+            source.index("function canonical") : source.index("const originalInit")
+        ]
+        harness = f"""
+const crypto = require('node:crypto');
+const projectId = 'project-1';
+const TARGET_SCHEMA_DIGESTS = new Map();
+const CANONICAL_TABLES = new Set(['finance_documents']);
+{helpers}
+const schema = [
+  {{ name: 'document_id', type: 'string' }},
+  {{ name: 'posted_at', type: 'date' }},
+];
+const table = {{ id: 'documents', name: 'finance_documents' }};
+const values = Array.from({{ length: 1501 }}, (_, index) => ({{
+  document_id: `doc-${{String(index).padStart(4, '0')}}`,
+  posted_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+}}));
+const calls = [];
+const service = {{
+  async getManyRowsAndCount(_id, _project, page) {{
+    calls.push(page.skip);
+    return {{ count: values.length, data: values.slice(page.skip, page.skip + page.take) }};
+  }},
+}};
+(async () => {{
+  const empty = await readCanonicalRows(
+    {{ async getManyRowsAndCount() {{ return {{ count: 0, data: [] }}; }} }},
+    table,
+    schema,
+  );
+  if (empty.length !== 0) process.exit(2);
+  const rows = await readCanonicalRows(service, table, schema);
+  if (rows.length !== values.length || JSON.stringify(calls) !== '[0,1000]') process.exit(3);
+  if (!rows[0].includes('T00:00:00.000Z') || !rows.at(-1).includes('document_id')) process.exit(4);
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_typed_date_canonicalization_is_timezone_stable(self) -> None:
+        source = CJS_RUNNER.read_text(encoding="utf-8")
+        helper = source[
+            source.index("function canonicalTargetValue") : source.index(
+                "function digest"
+            )
+        ]
+        harness = f"""
+{helper}
+const values = [
+  canonicalTargetValue('2026-08-01', 'date', 'INVALID'),
+  canonicalTargetValue('2026-08-01T04:00:00+04:00', 'date', 'INVALID'),
+  canonicalTargetValue('2026-08-01T00:00:00', 'date', 'INVALID'),
+];
+if (values.some((value) => value !== '2026-08-01T00:00:00.000Z')) process.exit(2);
+try {{
+  canonicalTargetValue('not-a-date', 'date', 'INVALID');
+  process.exit(3);
+}} catch (error) {{
+  if (error.message !== 'INVALID') throw error;
+}}
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_recovery_state_match_rejects_every_drift_axis(self) -> None:
+        source = CJS_RUNNER.read_text(encoding="utf-8")
+        helper = source[
+            source.index("function receiptMatchesCommittedState") : source.index(
+                "function selectForwardReplayJournal"
+            )
+        ]
+        harness = f"""
+const crypto = require('node:crypto');
+const canonical = (value) => value;
+const digest = (value) => crypto.createHash('sha256').update(`${{JSON.stringify(value)}}\\n`).digest('hex');
+{helper}
+const readback = [{{ workflow_id: 'wf' }}];
+const state = {{
+  credentialStateDigest: 'credentials',
+  workflowCredentialObjectsDigest: 'credential-objects',
+  workflowRevisionDigest: 'revisions',
+  credentialOriginBitset: '0',
+  targetReadbackDigest: 'targets',
+}};
+const canonicalSource = {{
+  sha256: 'source',
+  targetProjectionSha256: 'projection',
+  targetDigest: 'target-digest',
+}};
+const receipt = {{
+  readback_digest_sha256: digest(readback),
+  credential_state_digest_after: state.credentialStateDigest,
+  workflow_credential_objects_digest_after: state.workflowCredentialObjectsDigest,
+  workflow_revision_digest_after: state.workflowRevisionDigest,
+  credential_origin_post_bitset: state.credentialOriginBitset,
+  canonical_source_sha256: canonicalSource.sha256,
+  target_projection_sha256: canonicalSource.targetProjectionSha256,
+  target_digest: canonicalSource.targetDigest,
+  target_readback_sha256: state.targetReadbackDigest,
+}};
+if (!receiptMatchesCommittedState(receipt, readback, state, canonicalSource)) process.exit(2);
+for (const field of [
+  'credentialStateDigest',
+  'workflowCredentialObjectsDigest',
+  'workflowRevisionDigest',
+  'credentialOriginBitset',
+  'targetReadbackDigest',
+]) {{
+  if (receiptMatchesCommittedState(
+    receipt,
+    readback,
+    {{ ...state, [field]: 'drift' }},
+    canonicalSource,
+  )) process.exit(3);
+}}
+if (receiptMatchesCommittedState(receipt, [{{ workflow_id: 'drift' }}], state, canonicalSource)) process.exit(4);
+if (receiptMatchesCommittedState(receipt, readback, state, {{ ...canonicalSource, targetDigest: 'drift' }})) process.exit(5);
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_rollback_runtime_resumes_restored_state_without_rewriting_it(
+        self,
+    ) -> None:
+        runner = load_runner()
+        digest = "a" * 64
+        binding = {
+            "operation_nonce": "nonce",
+            "protected_quiescence_receipt_digest": "b" * 64,
+            "required_live_export_digest": "c" * 64,
+            "contract_bijection_digest": "d" * 64,
+        }
+        actions = [{} for _ in runner.EXPECTED_REFERENCE_ACTIONS]
+        forward_receipt = {
+            "schema_version": "finance-four-table-runtime-plan-v3",
+            "operation": "FORWARD",
+            "export_sha256": "e" * 64,
+            "canonical_source_sha256": "f" * 64,
+            "target_digest": "1" * 64,
+            "target_projection_sha256": "2" * 64,
+            "rollback_targets_sha256": "3" * 64,
+            "actions": actions,
+        }
+        rollback_receipt = {
+            **binding,
+            "project_id": "project-1",
+            "lock_resource": "finance_four_table_cutover:project-1",
+            "export_sha256": "4" * 64,
+            "forward_runtime_receipt_sha256": "5" * 64,
+            "canonical_source_sha256": forward_receipt["canonical_source_sha256"],
+            "target_digest": forward_receipt["target_digest"],
+            "target_projection_sha256": forward_receipt["target_projection_sha256"],
+            "rollback_targets_sha256": forward_receipt["rollback_targets_sha256"],
+            "actions": actions,
+        }
+        migration_receipt = {
+            "old_tables_preserved": True,
+            "deletion_authorized": False,
+            "target_digest": "1" * 64,
+            "source_digest": "6" * 64,
+        }
+        runtime_state = {
+            **binding,
+            "schema_version": runner.RUNTIME_STATE_SCHEMA,
+            "operation": "ROLLBACK",
+            "status": "RESTORED",
+            "migration_receipt_sha256": digest,
+            "source_head": "0" * 40,
+            "generator_head": "1" * 40,
+            "accepted_identity_sha256": "7" * 64,
+            "source_backup_sha256": digest,
+            "source_digest": "6" * 64,
+            "old_tables_preserved": True,
+            "runtime_cutover": False,
+            "deletion_authorized": False,
+            "workflow_export_sha256": "4" * 64,
+            "lock_receipt_sha256": "8" * 64,
+            "rollback_runtime_receipt_sha256": "9" * 64,
+            "target_tables_created": True,
+            "target_tables_untouched": False,
+            "target_rows_restored": True,
+            "forward_runtime_receipt_sha256": "5" * 64,
+            "restored_source_digest": "6" * 64,
+            "restore_roundtrip": True,
+            "runtime_state_before_sha256": "a" * 64,
+        }
+        fake_runner = mock.Mock()
+        fake_runner.run.return_value = migration_receipt
+        fake_runner.restore_backup.side_effect = AssertionError(
+            "restore must not run on resume"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source_backup = root / "source.json"
+            source_backup.write_bytes(b"source")
+            source_backup.chmod(0o600)
+            observed_backup_sha = hashlib.sha256(b"source").hexdigest()
+            args = SimpleNamespace(
+                source_backup=source_backup,
+                migration_receipt=root / "migration.json",
+                runtime_state=root / "state.json",
+                output=root / "proof.json",
+                rollback_runtime_receipt=root / "rollback.json",
+                forward_runtime_receipt=root / "forward.json",
+                accepted_identity=None,
+            )
+            runtime_state["source_backup_sha256"] = observed_backup_sha
+            with (
+                mock.patch.object(
+                    runner,
+                    "_heads",
+                    return_value=(
+                        "0" * 40,
+                        "1" * 40,
+                        digest,
+                        observed_backup_sha,
+                        "7" * 64,
+                    ),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_bound_live_inputs",
+                    return_value=(
+                        {"project_id": "project-1", "export_sha256": "4" * 64},
+                        {},
+                        "8" * 64,
+                        binding,
+                    ),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_source_and_receipt",
+                    return_value=(
+                        {},
+                        migration_receipt,
+                        digest,
+                        observed_backup_sha,
+                    ),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_read_forward_cutover_receipt",
+                    return_value={"runtime_state_sha256": "a" * 64},
+                ),
+                mock.patch.object(runner, "_load_migration_module"),
+                mock.patch.object(
+                    runner, "_migration_runner", return_value=fake_runner
+                ),
+                mock.patch.object(
+                    runner,
+                    "_read_forward_runtime_receipt",
+                    return_value=(forward_receipt, "5" * 64),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_read_rollback_runtime_receipt",
+                    return_value=(rollback_receipt, "9" * 64),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_read_runtime_state",
+                    return_value=(runtime_state, "b" * 64),
+                ),
+                mock.patch.object(runner, "_assert_currentness"),
+                mock.patch.object(runner, "_validate_output_path"),
+                mock.patch.object(runner, "_require_protected"),
+                mock.patch.object(runner, "_write_runtime_state") as write_state,
+                mock.patch.object(runner, "_write_json") as write_json,
+            ):
+                result = runner.run_rollback_runtime(args)
+        fake_runner.restore_backup.assert_not_called()
+        write_state.assert_not_called()
+        write_json.assert_called_once()
+        self.assertEqual(result["runtime_state_sha256"], "b" * 64)
+        self.assertEqual(result["rollback_runtime_receipt_sha256"], "9" * 64)
+
+    def test_incompatible_export_fails_rollback_preflight_before_lock_receipt(
+        self,
+    ) -> None:
+        runner = load_runner()
+        binding = {"required_live_export_digest": "b" * 64}
+        export = {
+            "project_id": "project-1",
+            "export_sha256": "c" * 64,
+            "actions": [
+                {
+                    "reference_id": reference_id,
+                    "workflow_id": f"workflow-{index}",
+                    "node_id": f"node-{index}",
+                    "canonical_table_id": f"table-{index}",
+                    "revision_id": f"revision-{index}",
+                }
+                for index, reference_id in enumerate(runner.EXPECTED_REFERENCE_ACTIONS)
+            ],
+        }
+        runtime_receipt = {
+            **binding,
+            "schema_version": "finance-four-table-runtime-plan-v3",
+            "project_id": "project-1",
+            "export_sha256": "d" * 64,
+            "canonical_source_sha256": "e" * 64,
+            "lock_resource": "finance_four_table_cutover:project-1",
+            "actions": [dict(action) for action in export["actions"]],
+        }
+        runtime_receipt["actions"][0]["canonical_table_id"] = "incompatible"
+        args = SimpleNamespace(
+            operation_kind="ROLLBACK",
+            live_export=Path("/live-export.json"),
+            source_backup=Path("/source.json"),
+            migration_receipt=Path("/migration.json"),
+            forward_runtime_receipt=Path("/forward-runtime.json"),
+            forward_receipt=Path("/forward.json"),
+            output=Path("/precondition.json"),
+        )
+        with (
+            mock.patch.object(
+                runner,
+                "_heads",
+                return_value=("0" * 40, "1" * 40, "a" * 64, "b" * 64, "2" * 64),
+            ),
+            mock.patch.object(
+                runner,
+                "_source_and_receipt",
+                return_value=({}, {"source_digest": "f" * 64}, "a" * 64, "b" * 64),
+            ),
+            mock.patch.object(
+                runner,
+                "_read_forward_runtime_receipt",
+                return_value=(runtime_receipt, "3" * 64),
+            ),
+            mock.patch.object(runner, "_binding_inputs", return_value=binding),
+            mock.patch.object(runner, "_validate_live_export", return_value=export),
+            mock.patch.object(runner, "_lock_receipt") as lock_receipt,
+            self.assertRaisesRegex(
+                runner.CutoverError, "FORWARD_RUNTIME_ACTION_MISMATCH"
+            ),
+        ):
+            runner.validate_preconditions(args)
+        lock_receipt.assert_not_called()
+
+    def test_cutover_readback_and_rollback_receipt_binding_match_schema(
+        self,
+    ) -> None:
+        runner = load_runner()
+        raw = json.loads(READBACK_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
+        raw = raw.replace(
+            '"bound":false,"sha256":null',
+            '"bound":true,"sha256":"' + "a" * 64 + '"',
+            1,
+        )
+        raw = raw.replace('"scope":', '"phase":"FORWARD_PRE","scope":', 1)
+        raw = raw.replace('"status":"VERIFIED"', '"status":"FORWARD_PRE_READBACK"', 1)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "pre.raw"
+            path.write_text(raw, encoding="utf-8")
+            readback = runner._parse_readback(path, "a" * 64, "FORWARD_PRE")
+        schema = json.loads(
+            (
+                ROOT
+                / "integrations"
+                / "n8n"
+                / "schemas"
+                / "finance-four-table-cutover-receipt-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        readback_schema = {"$ref": "#/$defs/readback", "$defs": schema["$defs"]}
+        Draft202012Validator(readback_schema).validate(readback)
+        self.assertTrue(
+            {"rollback_runtime_receipt_sha256", "forward_runtime_receipt_sha256"}
+            <= set(schema["oneOf"][1]["required"])
         )
 
 

@@ -62,6 +62,7 @@ lock_receipt="$receipt_dir/finance-four-table-lock-receipt.json"
 cutover_receipt="$receipt_dir/finance-four-table-cutover-receipt.json"
 forward_receipt="$receipt_dir/finance-four-table-forward-receipt.json"
 forward_runtime_receipt="$receipt_dir/finance-four-table-runtime-forward.json"
+rollback_runtime_receipt="$receipt_dir/finance-four-table-runtime-rollback.json"
 runtime_stdout="$receipt_dir/finance-four-table-runtime-${operation}.stdout.raw"
 runtime_stderr="$receipt_dir/finance-four-table-runtime-${operation}.stderr.raw"
 recovery_stdout="$receipt_dir/finance-four-table-runtime-forward-recovery.stdout.raw"
@@ -79,7 +80,10 @@ workflow_root="$repo_dir/integrations/n8n/workflows"
 canonical_source="$receipt_dir/finance-four-table-canonical-source.json"
 rollback_receipt_args=()
 if [[ "$operation" = rollback ]]; then
-  rollback_receipt_args+=(--forward-runtime-receipt "$forward_runtime_receipt")
+  rollback_receipt_args+=(
+    --forward-runtime-receipt "$forward_runtime_receipt"
+    --forward-receipt "$forward_receipt"
+  )
 fi
 resolver_args=()
 if [[ -n "${FINANCE_FOUR_TABLE_ALIAS_BUNDLE:-}${FINANCE_FOUR_TABLE_ALIAS_BUNDLE_SHA256:-}" ]]; then
@@ -98,6 +102,13 @@ for path in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_ex
   test -f "$path"
   test ! -L "$path"
 done
+if [[ "$operation" = rollback ]]; then
+  for path in "$forward_receipt" "$forward_runtime_receipt"; do
+    test -f "$path"
+    test ! -L "$path"
+    test "$(stat -c '%a' "$path")" = 600
+  done
+fi
 if [[ "$FINANCE_N8N_RUNTIME_MODE" = DISPOSABLE_ONLY ]]; then
   test -f "$adapter"
   test -f "$readback_parser"
@@ -330,6 +341,8 @@ run_rollback_restore() {
     --live-export "$live_export" \
     --lock-receipt "$lock_receipt" \
     --forward-runtime-receipt "$forward_runtime_receipt" \
+    --forward-receipt "$forward_receipt" \
+    --rollback-runtime-receipt "$rollback_runtime_receipt" \
     --runtime-state "$runtime_state" \
     --output "$runtime_proof" >/dev/null
   chmod 0600 "$runtime_state" "$runtime_proof"
@@ -410,6 +423,7 @@ args=(
   --post-readback-raw "$post_readback"
   --runtime-state "$runtime_state"
   --forward-runtime-receipt "$forward_runtime_receipt"
+  --rollback-runtime-receipt "$rollback_runtime_receipt"
   --output "$cutover_receipt"
 )
 if [[ "$operation" = forward ]]; then

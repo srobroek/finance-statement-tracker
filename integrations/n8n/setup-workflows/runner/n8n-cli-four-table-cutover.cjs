@@ -119,6 +119,25 @@ function canonical(value) {
   }
   return value;
 }
+function canonicalTargetValue(value, type, code) {
+  if (value === null) return null;
+  if (type === 'string' && typeof value === 'string') return value;
+  if (type === 'number' && typeof value === 'number' && Number.isFinite(value)) return value;
+  if (type === 'boolean' && typeof value === 'boolean') return value;
+  if (type === 'date' && typeof value === 'string') {
+    const explicit = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T00:00:00.000Z`
+      : value;
+    const zoned = /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(explicit)
+      ? explicit
+      : `${explicit}Z`;
+    const parsed = new Date(zoned);
+    if (Number.isFinite(parsed.valueOf())) return parsed.toISOString();
+  }
+  throw new Error(code);
+}
+
+
 
 function digest(value) {
   return crypto.createHash('sha256').update(`${JSON.stringify(canonical(value))}\n`).digest('hex');
@@ -126,12 +145,19 @@ function digest(value) {
 
 function decode(name) {
   const encoded = process.env[name];
+
+
   if (typeof encoded !== 'string' || encoded.length === 0) throw new Error(`${name}_REQUIRED`);
   try {
     return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
   } catch {
     throw new Error(`${name}_INVALID`);
   }
+}
+function decodedSha256(name) {
+  const encoded = process.env[name];
+  if (typeof encoded !== 'string' || encoded.length === 0) throw new Error(`${name}_REQUIRED`);
+  return crypto.createHash('sha256').update(Buffer.from(encoded, 'base64')).digest('hex');
 }
 
 function text(value, code) {
@@ -603,31 +629,34 @@ function validateTargetProjection(source, graph) {
       throw new Error(`CANONICAL_TARGET_LOGICAL_KEY_INVALID:${name}`);
     }
     const rowStrings = [];
+    const normalizedRows = [];
     const logicalKeys = new Set();
     for (const row of target.rows) {
       exactKeys(row, columnTypes.keys(), `CANONICAL_TARGET_ROW_FIELDS_INVALID:${name}`);
-      for (const [field, type] of columnTypes) {
-        const value = row[field];
-        if (value === null) continue;
-        if ((type === 'string' && typeof value !== 'string') ||
-            (type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) ||
-            (type === 'boolean' && typeof value !== 'boolean') ||
-            (type === 'date' && (typeof value !== 'string' || !Number.isFinite(Date.parse(value))))) {
-          throw new Error(`CANONICAL_TARGET_ROW_TYPE_INVALID:${name}:${field}`);
-        }
-      }
-      const logicalKey = JSON.stringify(target.logical_key.map((field) => row[field]));
-      if (target.logical_key.some((field) => row[field] === null) || logicalKeys.has(logicalKey)) {
+      const normalized = Object.fromEntries(
+        [...columnTypes].map(([field, type]) => [
+          field,
+          canonicalTargetValue(
+            row[field],
+            type,
+            `CANONICAL_TARGET_ROW_TYPE_INVALID:${name}:${field}`,
+          ),
+        ]),
+      );
+      const logicalKey = JSON.stringify(target.logical_key.map((field) => normalized[field]));
+      if (target.logical_key.some((field) => normalized[field] === null) || logicalKeys.has(logicalKey)) {
         throw new Error(`CANONICAL_TARGET_LOGICAL_KEY_INVALID:${name}`);
       }
       logicalKeys.add(logicalKey);
-      rowStrings.push(JSON.stringify(canonical(row)));
+      normalizedRows.push(normalized);
+      rowStrings.push(JSON.stringify(canonical(normalized)));
     }
     if (digestWithoutNewline(rowStrings) !== target.rows_sha256) {
       throw new Error(`CANONICAL_TARGET_ROWS_DIGEST_MISMATCH:${name}`);
     }
     targets.set(name, {
       ...target,
+      rows: normalizedRows,
       tableId: graph.targetIds.get(name),
       columnTypes,
     });
@@ -1415,52 +1444,44 @@ function replayValidationExport(exported, receipt) {
   };
 }
 
-async function loadForwardReplayJournal(client, graph, lock, canonicalSource, exported, readback, state) {
-  const result = await client.query(
-    `SELECT receipt, rollback_workflows, rollback_targets
-       FROM ${JOURNAL_TABLE}
-      WHERE project_id = $1
-        AND operation = 'FORWARD'
-        AND lock_resource = $2
-        AND receipt->>'schema_version' = $3
-        AND receipt->>'canonical_source_sha256' = $4
-        AND receipt->>'operation_nonce' = $5
-        AND receipt->>'protected_quiescence_receipt_digest' = $6
-        AND receipt->>'required_live_export_digest' = $7
-        AND receipt->>'contract_bijection_digest' = $8
-      ORDER BY created_at ASC`,
-    [
-      projectId,
-      lock.resource,
-      RUNTIME_SCHEMA,
-      canonicalSource.sha256,
-      lock.binding.operation_nonce,
-      lock.binding.protected_quiescence_receipt_digest,
-      lock.binding.required_live_export_digest,
-      lock.binding.contract_bijection_digest,
-    ],
-  );
-  if (!Array.isArray(result.rows) || result.rows.length === 0) {
+function receiptMatchesCommittedState(receipt, readback, state, canonicalSource = null) {
+  return receipt.readback_digest_sha256 === digest(readback) &&
+    receipt.credential_state_digest_after === state.credentialStateDigest &&
+    receipt.workflow_credential_objects_digest_after === state.workflowCredentialObjectsDigest &&
+    receipt.workflow_revision_digest_after === state.workflowRevisionDigest &&
+    (state.credentialOriginBitset === undefined ||
+      receipt.credential_origin_post_bitset === state.credentialOriginBitset) &&
+    (canonicalSource === null ||
+      (receipt.canonical_source_sha256 === canonicalSource.sha256 &&
+       receipt.target_projection_sha256 === canonicalSource.targetProjectionSha256 &&
+       receipt.target_digest === canonicalSource.targetDigest &&
+       receipt.target_readback_sha256 === state.targetReadbackDigest));
+}
+
+
+function selectForwardReplayJournal(rows, graph, lock, canonicalSource, exported, readback, state) {
+  if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_NOT_FOUND');
   }
-  const row = result.rows[0];
-  const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
-  validateForwardReceipt(
-    receipt,
-    replayValidationExport(exported, receipt),
-    lock.resource,
-    lock.binding,
-    canonicalSource.sha256,
-  );
-  if (receipt.readback_digest_sha256 !== digest(readback) ||
-      receipt.credential_state_digest_after !== state.credentialStateDigest ||
-      receipt.workflow_credential_objects_digest_after !== state.workflowCredentialObjectsDigest ||
-      receipt.workflow_revision_digest_after !== state.workflowRevisionDigest ||
-      receipt.target_readback_sha256 !== state.targetReadbackDigest ||
-      receipt.target_projection_sha256 !== canonicalSource.targetProjectionSha256 ||
-      receipt.target_digest !== canonicalSource.targetDigest) {
+  const matching = rows.map((row) => {
+    const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
+    validateForwardReceipt(
+      receipt,
+      replayValidationExport(exported, receipt),
+      lock.resource,
+      lock.binding,
+      canonicalSource.sha256,
+    );
+    return { row, receipt };
+  }).filter(({ receipt }) =>
+    receiptMatchesCommittedState(receipt, readback, state, canonicalSource));
+  if (matching.length === 0) {
     throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_STATE_MISMATCH');
   }
+  if (matching.length !== 1) {
+    throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_AMBIGUOUS');
+  }
+  const { row, receipt } = matching[0];
   const bodies = row.rollback_workflows;
   if (!Array.isArray(bodies) || bodies.length !== graph.workflows.size ||
       digest(bodies) !== receipt.rollback_workflows_sha256) {
@@ -1481,13 +1502,59 @@ async function loadForwardReplayJournal(client, graph, lock, canonicalSource, ex
 }
 
 
+async function loadForwardReplayJournal(client, graph, lock, canonicalSource, exported, readback, state) {
+  const result = await client.query(
+    `SELECT receipt, rollback_workflows, rollback_targets
+       FROM ${JOURNAL_TABLE}
+      WHERE project_id = $1
+        AND operation = 'FORWARD'
+        AND lock_resource = $2
+        AND receipt->>'schema_version' = $3
+        AND receipt->>'canonical_source_sha256' = $4
+        AND receipt->>'operation_nonce' = $5
+        AND receipt->>'protected_quiescence_receipt_digest' = $6
+        AND receipt->>'required_live_export_digest' = $7
+        AND receipt->>'contract_bijection_digest' = $8
+      ORDER BY created_at DESC`,
+    [
+      projectId,
+      lock.resource,
+      RUNTIME_SCHEMA,
+      canonicalSource.sha256,
+      lock.binding.operation_nonce,
+      lock.binding.protected_quiescence_receipt_digest,
+      lock.binding.required_live_export_digest,
+      lock.binding.contract_bijection_digest,
+    ],
+  );
+  return selectForwardReplayJournal(
+    result.rows,
+    graph,
+    lock,
+    canonicalSource,
+    exported,
+    readback,
+    state,
+  );
+}
+
+
 function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
   if (!receipt || receipt.operation !== 'ROLLBACK' ||
       ![LEGACY_RUNTIME_SCHEMA, PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
       receipt.export_sha256 !== exported.export_sha256 ||
       receipt.durable_journal !== true ||
-      receipt.commit_protocol !== 'postgresql_synchronous_wal') {
+      receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
+      receipt.readback_verified !== true || receipt.action_count !== 33 ||
+      !Array.isArray(receipt.actions) || receipt.actions.length !== 33 ||
+      !/^[0-9a-f]{64}$/.test(receipt.readback_digest_sha256) ||
+      !/^[0-9a-f]{64}$/.test(receipt.credential_state_digest_after) ||
+      !/^[0-9a-f]{64}$/.test(receipt.workflow_credential_objects_digest_after) ||
+      !/^[0-9a-f]{64}$/.test(receipt.workflow_revision_digest_after) ||
+      receipt.credential_contract_digest !== digest(credentialBindingsFromEnvironment()) ||
+      !new RegExp(`^[01]{${credentialLeafCount()}}$`).test(receipt.credential_origin_post_bitset) ||
+      receipt.credential_origin_post_digest !== credentialOriginDigest(receipt.credential_origin_post_bitset)) {
     throw new Error('ROLLBACK_RUNTIME_JOURNAL_INTEGRITY_INVALID');
   }
   if (receipt.schema_version === RUNTIME_SCHEMA &&
@@ -1496,6 +1563,7 @@ function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
        !/^[0-9a-f]{64}$/.test(receipt.target_projection_sha256) ||
        !/^[0-9a-f]{64}$/.test(receipt.target_readback_sha256) ||
        !/^[0-9a-f]{64}$/.test(receipt.rollback_targets_sha256) ||
+       !/^[0-9a-f]{64}$/.test(receipt.forward_runtime_receipt_sha256) ||
        receipt.target_rows_restored !== true ||
        receipt.preserved_table_writes !== false)) {
     throw new Error('ROLLBACK_RUNTIME_TARGET_JOURNAL_INTEGRITY_INVALID');
@@ -1520,51 +1588,102 @@ async function recoverRuntimeJournal() {
     recoveryForwardReceipt?.schema_version !== LEGACY_RUNTIME_SCHEMA
     ? canonicalSourceFromInput(graph)
     : null;
-  const binding = bindingFromEnvironment();
-  const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
-  const resource = `finance_four_table_cutover:${projectId}`;
-  validateLockReceipt(lockReceipt, exported, binding, resource);
-  const client = new pg.Client(databaseOptions(process.env));
+  const expectedForwardReceiptSha = recoveryForwardReceipt?.schema_version === RUNTIME_SCHEMA
+    ? decodedSha256('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64')
+    : null;
+  const lock = await acquireProjectLock();
+  let committed = false;
   try {
-    await client.connect();
-    const result = await client.query(
-      `SELECT receipt, rollback_targets
-         FROM ${JOURNAL_TABLE}
-        WHERE project_id = $1
-          AND lock_resource = $2
-          AND operation = $3
-          AND receipt->>'export_sha256' = $4
-          AND receipt->>'operation_nonce' = $5
-          AND receipt->>'protected_quiescence_receipt_digest' = $6
-          AND receipt->>'required_live_export_digest' = $7
-          AND receipt->>'contract_bijection_digest' = $8
-        ORDER BY created_at DESC`,
-      [projectId, resource, operation, exported.export_sha256, binding.operation_nonce, binding.protected_quiescence_receipt_digest, binding.required_live_export_digest, binding.contract_bijection_digest],
+    await verifyInFlight(lock.client);
+    const credentials = await credentialState(lock.client);
+    const credentialsByBinding = new Map(
+      credentials.values.map((value) => [value.placeholder, value]),
     );
-    const rows = result.rows || [];
-    if (rows.length === 0) throw new Error(`${operation}_RUNTIME_JOURNAL_NOT_FOUND`);
-    if (rows.length !== 1) throw new Error(`${operation}_RUNTIME_JOURNAL_AMBIGUOUS`);
-    const row = rows[0];
-    const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
-    const validated = operation === 'FORWARD'
-      ? validateForwardReceipt(receipt, exported, resource, binding, canonicalSource.sha256)
-      : validateRollbackJournalReceipt(receipt, exported, resource, binding);
-    if (validated.schema_version === RUNTIME_SCHEMA) {
-      if (!canonicalSource ||
-          validated.canonical_source_sha256 !== canonicalSource.sha256 ||
-          validated.target_projection_sha256 !== canonicalSource.targetProjectionSha256 ||
-          validated.target_digest !== canonicalSource.targetDigest) {
-        throw new Error(`${operation}_RUNTIME_TARGET_JOURNAL_BINDING_INVALID`);
-      }
-      const targetState = await loadTargetState(client, canonicalSource.targets);
-      if (targetStateDigest(targetState) !== validated.target_readback_sha256) {
-        throw new Error(`${operation}_RUNTIME_TARGET_JOURNAL_STATE_MISMATCH`);
-      }
-      validateRollbackTargets(row.rollback_targets, validated, canonicalSource.targets);
+    const workflows = await loadWorkflows(lock.client, graph, false);
+    const origins = validateCredentialBindings(workflows, credentialsByBinding);
+    const state = {
+      credentialStateDigest: credentials.digest,
+      workflowCredentialObjectsDigest: workflowCredentialObjectsDigest(workflows),
+      workflowRevisionDigest: workflowRevisionDigest(workflows),
+      credentialOriginBitset: credentialOriginBitset(origins),
+      targetReadbackDigest: null,
+    };
+    let targetState = null;
+    if (canonicalSource) {
+      targetState = await loadTargetState(lock.client, canonicalSource.targets);
+      state.targetReadbackDigest = targetStateDigest(targetState);
     }
+    let validated;
+    if (operation === 'FORWARD') {
+      if ([...targetState].some(([name, table]) =>
+        !sameJson(table.userRows, canonicalSource.targets.get(name).rows))) {
+        throw new Error('FORWARD_RUNTIME_JOURNAL_STATE_MISMATCH');
+      }
+      validated = await loadForwardReplayJournal(
+        lock.client,
+        graph,
+        lock,
+        canonicalSource,
+        exported,
+        workflowReadback(workflows),
+        state,
+      );
+    } else {
+      const result = await lock.client.query(
+        `SELECT receipt, rollback_targets
+           FROM ${JOURNAL_TABLE}
+          WHERE project_id = $1
+            AND lock_resource = $2
+            AND operation = 'ROLLBACK'
+            AND receipt->>'export_sha256' = $3
+            AND receipt->>'operation_nonce' = $4
+            AND receipt->>'protected_quiescence_receipt_digest' = $5
+            AND receipt->>'required_live_export_digest' = $6
+            AND receipt->>'contract_bijection_digest' = $7
+          ORDER BY created_at DESC`,
+        [
+          projectId,
+          lock.resource,
+          exported.export_sha256,
+          lock.binding.operation_nonce,
+          lock.binding.protected_quiescence_receipt_digest,
+          lock.binding.required_live_export_digest,
+          lock.binding.contract_bijection_digest,
+        ],
+      );
+      const matches = (result.rows || []).map((row) => {
+        const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
+        validateRollbackJournalReceipt(receipt, exported, lock.resource, lock.binding);
+        if (receipt.schema_version === RUNTIME_SCHEMA &&
+            receipt.forward_runtime_receipt_sha256 !== expectedForwardReceiptSha) {
+          throw new Error('ROLLBACK_RUNTIME_FORWARD_RECEIPT_BINDING_INVALID');
+        }
+        const readback = receipt.schema_version === LEGACY_RUNTIME_SCHEMA
+          ? selectorReadback(findReferences(graph, workflows))
+          : workflowReadback(workflows);
+        return { row, receipt, readback };
+      }).filter(({ receipt, readback }) =>
+        receiptMatchesCommittedState(receipt, readback, state, canonicalSource));
+      if (matches.length === 0) throw new Error('ROLLBACK_RUNTIME_JOURNAL_STATE_MISMATCH');
+      if (matches.length !== 1) throw new Error('ROLLBACK_RUNTIME_JOURNAL_AMBIGUOUS');
+      const { row: matchedRow, receipt: matchedReceipt } = matches[0];
+      validated = matchedReceipt;
+      if (validated.schema_version === RUNTIME_SCHEMA) {
+        validateRollbackTargets(
+          matchedRow.rollback_targets,
+          validated,
+          canonicalSource.targets,
+        );
+      }
+    }
+    await lock.client.query('COMMIT');
+    committed = true;
     await writeRuntimeReceipt(validated);
+  } catch (error) {
+    if (!committed) await lock.client.query('ROLLBACK').catch(() => {});
+    throw error;
   } finally {
-    await client.end();
+    await lock.client.end();
   }
 }
 
@@ -1808,6 +1927,7 @@ async function execute() {
         target_projection_sha256: forwardReceipt.target_projection_sha256,
         target_readback_sha256: targetStateDigest(restoredTargets),
         rollback_targets_sha256: forwardReceipt.rollback_targets_sha256,
+        forward_runtime_receipt_sha256: decodedSha256('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64'),
         target_rows_restored: true,
         preserved_table_writes: false,
       });
