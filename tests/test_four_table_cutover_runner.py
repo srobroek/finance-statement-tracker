@@ -15,6 +15,8 @@ RUNNER_DIR = ROOT / "integrations" / "n8n" / "setup-workflows" / "runner"
 PYTHON_RUNNER = RUNNER_DIR / "four_table_cutover.py"
 CJS_RUNNER = RUNNER_DIR / "n8n-cli-four-table-cutover.cjs"
 SHELL_RUNNER = RUNNER_DIR / "run-four-table-cutover.sh"
+DIGEST_ADAPTER = RUNNER_DIR / "n8n-cli-finance-data-table-digest.cjs"
+READBACK_PARSER = RUNNER_DIR / "parse_n8n_redacted_wrapper_output.py"
 READBACK_FIXTURE = (
     ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
 )
@@ -450,6 +452,323 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         )
         self.assertNotIn("PRODUCTION_ONLY", rollback_args)
         self.assertGreaterEqual(source.count('"${rollback_receipt_args[@]}"'), 2)
+
+    def test_digest_adapter_composes_phase_contract_with_closed_table_set(self) -> None:
+        source = DIGEST_ADAPTER.read_text(encoding="utf-8")
+        contract = source[
+            source.index("const CANONICAL_TABLE_NAMES") : source.index(
+                "const originalInit"
+            )
+        ]
+        harness = f"""
+const crypto = require('node:crypto');
+{contract}
+const tables = [...CANONICAL_TABLE_NAMES, ...PRESERVED_TABLE_NAMES]
+  .map((name) => ({{ name, id: `id-${{name}}` }}));
+assertAllowedProjectTables({{ count: tables.length, data: tables }});
+const observedTargets = CANONICAL_TABLE_NAMES.map((name) => ({{ name, row_count: 0 }}));
+const forwardPre = readbackReceipt('FORWARD_PRE', observedTargets, 0);
+if (forwardPre.status !== 'FORWARD_PRE_READBACK' ||
+    forwardPre.finance_tables !== 0 || forwardPre.tables.length !== 0) process.exit(2);
+const rollbackPre = readbackReceipt('ROLLBACK_PRE', observedTargets, 0);
+if (rollbackPre.status !== 'VERIFIED' || rollbackPre.finance_tables !== 4) process.exit(3);
+try {{
+  readbackReceipt('FORWARD_PRE', [{{ ...observedTargets[0], row_count: 1 }}, ...observedTargets.slice(1)], 1);
+  process.exit(5);
+}} catch (error) {{
+  if (error.message !== 'FORWARD_PRE_READBACK_MUST_BE_OBSERVED_EMPTY') throw error;
+}}
+try {{
+  assertAllowedProjectTables({{ count: tables.length + 1, data: [...tables, {{ name: 'unexpected' }}] }});
+  process.exit(4);
+}} catch (error) {{
+  if (error.message !== 'CLOSED_FINANCE_DATA_TABLE_SET_REQUIRED') throw error;
+}}
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_readback_parser_requires_explicit_forward_pre_phase(self) -> None:
+        runner = load_runner()
+        raw = json.loads(READBACK_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
+        prefix = "finance data table digest verified:"
+        payload = json.loads(
+            next(
+                line.removeprefix(prefix)
+                for line in raw.splitlines()
+                if line.startswith(prefix)
+            )
+        )
+        payload["migration_receipt"] = {
+            "schema_version": "data-table-migration-receipt-v1",
+            "required": True,
+            "bound": True,
+            "sha256": "a" * 64,
+        }
+        payload.update(
+            {
+                "status": "FORWARD_PRE_READBACK",
+                "phase": "FORWARD_PRE",
+                "finance_tables": 0,
+                "tables": [],
+                "total_rows": 0,
+                "digest_sha256": hashlib.sha256(b"[]").hexdigest(),
+            }
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "pre.raw"
+            path.write_text(prefix + json.dumps(payload, separators=(",", ":")) + "\n")
+            observed = runner._parse_readback(path, "a" * 64, "FORWARD_PRE")
+            self.assertEqual(observed["finance_tables"], 0)
+            with self.assertRaisesRegex(runner.CutoverError, "READBACK_PHASE_MISMATCH"):
+                runner._parse_readback(path, "a" * 64, "ROLLBACK_PRE")
+
+    def test_all_rebound_node_fields_conform_to_migration_matrix(self) -> None:
+        runner = load_runner()
+        matrix = json.loads(
+            (
+                ROOT / "integrations" / "n8n" / "data-table-migration-matrix.json"
+            ).read_text(encoding="utf-8")
+        )
+        bundle = runner._canonical_source_bundle(
+            SimpleNamespace(workflow_root=ROOT / "integrations" / "n8n" / "workflows"),
+            "0" * 40,
+            "1" * 40,
+            "2" * 64,
+        )
+        workflows = {
+            entry["path"]: json.loads(entry["content"]) for entry in bundle["files"]
+        }
+        for reference in runner._reference_inventory():
+            target = reference["canonical_table_name"]
+            if target is None:
+                continue
+            node = next(
+                item
+                for item in workflows[reference["workflow_path"]]["nodes"]
+                if item["name"] == reference["node_name"]
+            )
+            parameters = node["parameters"]
+            target_fields = set(matrix["target_schemas"][target]["columns"])
+            written = set(parameters.get("columns", {}).get("value", {}))
+            filtered = {
+                condition["keyName"]
+                for condition in parameters.get("filters", {}).get("conditions", [])
+            }
+            self.assertLessEqual(
+                written | filtered, target_fields, reference["reference_id"]
+            )
+        reconciliation = workflows[
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json"
+        ]
+        nodes = {node["name"]: node for node in reconciliation["nodes"]}
+        self.assertEqual(
+            set(
+                nodes["Upsert Reconciliation Receipt"]["parameters"]["columns"]["value"]
+            ),
+            {
+                "source_code",
+                "period_key",
+                "reconciliation_version",
+                "statement_sha256",
+                "verification_artifact_sha256",
+                "reconciliation_state",
+                "reconciliation_difference_minor",
+                "reconciliation_verified_at",
+                "updated_at",
+            },
+        )
+        consumer_code = nodes["Validate Reconciliation Readback"]["parameters"][
+            "jsCode"
+        ]
+        self.assertIn("row.reconciliation_state", consumer_code)
+        self.assertIn("row.verification_artifact_sha256", consumer_code)
+        self.assertNotRegex(consumer_code, r"\brow\.state\b")
+        self.assertNotIn("row.actual_verification_sha256", consumer_code)
+        self.assertNotIn("row.cashback_close_id", consumer_code)
+
+    def test_forward_replay_reuses_first_legacy_journal_without_persisting(
+        self,
+    ) -> None:
+        source = CJS_RUNNER.read_text(encoding="utf-8")
+        replay_helpers = source[
+            source.index("function replayValidationExport") : source.index(
+                "async function recoverForwardJournal"
+            )
+        ]
+        execute = source[
+            source.index("async function execute()") : source.index(
+                "async function writeRuntimeReceipt"
+            )
+        ]
+        harness = f"""
+const crypto = require('node:crypto');
+const projectId = 'project-1';
+const JOURNAL_TABLE = 'journal';
+const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
+const LEGACY_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
+const WORKFLOW_BODY_FIELDS = ['marker'];
+const operation = 'FORWARD';
+const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const originalReadback = [{{ workflow_id: 'wf', workflow_body_sha256: 'canonical' }}];
+const originalRollback = [{{ id: 'wf', marker: 'legacy' }}];
+const original = {{
+  schema_version: RUNTIME_SCHEMA,
+  operation: 'FORWARD',
+  export_sha256: 'original-export',
+  readback_digest_sha256: digest(originalReadback),
+  rollback_workflows_sha256: digest(originalRollback),
+  credential_state_digest_after: 'credential-state',
+  workflow_credential_objects_digest_after: 'workflow-credentials',
+  workflow_revision_digest_after: 'workflow-revisions',
+  actions: [{{ reference_id: 'ref', revision_id: 'legacy-revision' }}],
+}};
+const replacement = {{ ...original, export_sha256: 'replay-export', runtime_plan_receipt_sha256: 'replacement' }};
+const graph = {{
+  workflows: new Map([['wf', 'revision']]),
+  references: new Map(),
+}};
+const exported = {{
+  export_sha256: 'replay-export',
+  references: [{{ reference_id: 'ref', revision_id: 'replay-revision' }}],
+}};
+const lock = {{
+  resource: 'resource',
+  binding: {{
+    operation_nonce: 'nonce',
+    protected_quiescence_receipt_digest: 'q',
+    required_live_export_digest: 'e',
+    contract_bijection_digest: 'b',
+  }},
+  client: {{
+    queries: [],
+    async query(sql) {{
+      this.queries.push(sql);
+      if (String(sql).startsWith('SELECT receipt')) return {{
+        rows: [
+          {{ receipt: original, rollback_workflows: originalRollback }},
+          {{ receipt: replacement, rollback_workflows: [{{ id: 'wf', marker: 'canonical' }}] }},
+        ],
+      }};
+      return {{ rows: [] }};
+    }},
+    async end() {{}},
+  }},
+}};
+const canonical = new Map([['wf', {{ id: 'wf', marker: 'canonical' }}]]);
+const current = new Map([['wf', {{ id: 'wf', marker: 'canonical' }}]]);
+let persisted = 0;
+let emitted = null;
+function decode() {{ return exported; }}
+function validateExport() {{ return graph; }}
+function canonicalSourceFromInput() {{ return {{ workflows: canonical, sha256: 'canonical-source' }}; }}
+async function acquireProjectLock() {{ return lock; }}
+async function verifyInFlight() {{}}
+async function verifyTargets() {{}}
+async function credentialState() {{ return {{ values: [], digest: 'credential-state' }}; }}
+function validateCredentialBindings() {{ return new Map(); }}
+function credentialOriginBitset() {{ return ''; }}
+function workflowCredentialObjectsDigest() {{ return 'workflow-credentials'; }}
+function workflowRevisionDigest() {{ return 'workflow-revisions'; }}
+function workflowOpaqueCredentialObjectsDigest() {{ return 'opaque'; }}
+async function loadWorkflows() {{ return current; }}
+function findReferences(_graph, workflows) {{
+  return [{{ oldMatches: workflows.get('wf').marker === 'legacy', targetMatches: workflows.get('wf').marker === 'canonical' }}];
+}}
+function applyForward() {{ return {{ alreadyApplied: true, expected: canonical, changed: new Map() }}; }}
+function workflowReadback() {{ return originalReadback; }}
+function sameJson(left, right) {{ return JSON.stringify(left) === JSON.stringify(right); }}
+function allCredentialOrigins() {{ return true; }}
+async function persistRecoveryJournal() {{ persisted += 1; }}
+function validateBinding() {{}}
+function validateForwardReceipt(receipt, historicalExport) {{
+  if (historicalExport.export_sha256 !== receipt.export_sha256) throw new Error('historical export not rebound');
+}}
+async function writeRuntimeReceipt(receipt) {{ emitted = receipt; }}
+{replay_helpers}
+{execute}
+(async () => {{
+  const receipt = await execute();
+  if (receipt !== original || emitted !== original || persisted !== 0) process.exit(2);
+  if (lock.client.queries.filter((query) => String(query).startsWith('SELECT receipt')).length !== 1) process.exit(3);
+  if (!lock.client.queries.includes('COMMIT')) process.exit(4);
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_shell_rollback_restore_runs_between_runtime_and_post_readback(
+        self,
+    ) -> None:
+        source = SHELL_RUNNER.read_text(encoding="utf-8")
+        main_case = source.rsplit('case "$operation" in', 1)[1]
+        rollback_flow = main_case.split("\nrollback)\n", 1)[1].split("\n  ;;\nesac", 1)[
+            0
+        ]
+        self.assertLess(
+            rollback_flow.index("run_runtime"),
+            rollback_flow.index("run_rollback_restore"),
+        )
+        self.assertLess(
+            rollback_flow.index("run_rollback_restore"),
+            rollback_flow.index('run_readback "$post_readback" ROLLBACK_POST'),
+        )
+        function_body = source[
+            source.index("run_rollback_restore() {") : source.index(
+                "\n\nrun_readback()"
+            )
+        ]
+        harness = f"""
+set -euo pipefail
+{function_body}
+resolver_args=()
+runner_dir=/runner
+source_backup=/receipts/source.json
+migration_receipt=/receipts/migration.json
+migration_sha={"a" * 64}
+source_backup_sha={"b" * 64}
+FINANCE_FOUR_TABLE_OPERATION_NONCE=nonce
+FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST={"c" * 64}
+FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST={"d" * 64}
+FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST={"e" * 64}
+repo_dir=/repo
+N8N_FINANCE_PROJECT_ID=project-1
+accepted_identity=/receipts/identity.json
+operator_ack=rollback-ack
+runtime_action=rollback-action
+workflow_root=/repo/workflows
+live_export=/receipts/export.json
+lock_receipt=/receipts/lock.json
+runtime_state=/receipts/state.json
+runtime_proof=/receipts/proof.json
+log="$PWD/rollback-runtime.log"
+python3() {{ printf '%s\\n' "$*" >"$log"; }}
+chmod() {{ :; }}
+run_rollback_restore
+grep -F 'rollback-runtime' "$log" >/dev/null
+grep -F -- '--runtime-state /receipts/state.json' "$log" >/dev/null
+grep -F -- '--output /receipts/proof.json' "$log" >/dev/null
+"""
+        result = subprocess.run(
+            ["bash", "-c", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

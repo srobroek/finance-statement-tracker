@@ -1100,9 +1100,17 @@ def _validate_forward_runtime_binding(
 ) -> None:
     if receipt is None:
         return
+    replay_binding = receipt.get(
+        "schema_version"
+    ) == "finance-four-table-runtime-plan-v2" and isinstance(
+        receipt.get("canonical_source_sha256"), str
+    )
     if (
         receipt.get("project_id") != export["project_id"]
-        or receipt.get("export_sha256") != export["export_sha256"]
+        or (
+            receipt.get("export_sha256") != export["export_sha256"]
+            and not replay_binding
+        )
         or receipt.get("lock_resource")
         != f"{LOCK_RESOURCE_PREFIX}:{export['project_id']}"
     ):
@@ -1121,15 +1129,20 @@ def _validate_forward_runtime_binding(
         ):
             raise CutoverError("FORWARD_RUNTIME_ACTION_MISMATCH")
         seen.add(identifier)
+        compared_fields = (
+            "workflow_id",
+            "node_id",
+            "canonical_table_id",
+        )
+        if (
+            not replay_binding
+            or receipt.get("export_sha256") == export["export_sha256"]
+        ):
+            compared_fields = (*compared_fields, "revision_id")
         if (
             any(
                 action.get(field) != expected[identifier].get(field)
-                for field in (
-                    "workflow_id",
-                    "node_id",
-                    "revision_id",
-                    "canonical_table_id",
-                )
+                for field in compared_fields
             )
             or not isinstance(action.get("post_revision_id"), str)
             or not action["post_revision_id"]
@@ -1250,6 +1263,151 @@ def _migration_runner(
         raise CutoverError(str(error)) from error
 
 
+def _matrix_field_transforms(
+    matrix: Mapping[str, Any],
+) -> dict[tuple[str, str], dict[str, str | None]]:
+    transforms: dict[tuple[str, str], dict[str, str | None]] = {}
+    schemas = matrix.get("target_schemas")
+    if not isinstance(schemas, Mapping):
+        raise CutoverError("TARGET_SCHEMAS_INVALID")
+    for target in TARGETS:
+        schema = schemas.get(target)
+        if not isinstance(schema, Mapping):
+            raise CutoverError(f"TARGET_SCHEMA_INVALID:{target}")
+        columns = schema.get("columns")
+        if not isinstance(columns, Mapping):
+            raise CutoverError(f"TARGET_SCHEMA_INVALID:{target}")
+        identity_derivations = schema.get("identity_derivations", [])
+        if not isinstance(identity_derivations, list):
+            raise CutoverError(f"TARGET_SCHEMA_INVALID:{target}")
+        derived_fields = {
+            (derivation.get("source_table"), target_field)
+            for derivation in identity_derivations
+            if isinstance(derivation, Mapping)
+            and derivation.get("strategy") != "direct"
+            for target_field in derivation.get("target_key", [])
+            if isinstance(target_field, str)
+        }
+        for target_field, specification in columns.items():
+            bindings = (
+                specification.get("source_bindings")
+                if isinstance(specification, Mapping)
+                else None
+            )
+            if not isinstance(target_field, str) or not isinstance(bindings, list):
+                raise CutoverError(f"TARGET_SCHEMA_INVALID:{target}")
+            for binding in bindings:
+                if not isinstance(binding, str) or "." not in binding:
+                    continue
+                source, source_field = binding.split(".", 1)
+                if (
+                    source not in LEGACY_TABLE_IDS
+                    or source_field == target_field
+                    or (source, target_field) in derived_fields
+                ):
+                    continue
+                fields = transforms.setdefault((source, target), {})
+                previous = fields.setdefault(source_field, target_field)
+                if previous != target_field:
+                    raise CutoverError(
+                        f"MIGRATION_FIELD_TRANSFORM_AMBIGUOUS:{source}:{source_field}"
+                    )
+        table_mappings = matrix.get("tables")
+        if not isinstance(table_mappings, list):
+            raise CutoverError("SOURCE_TABLE_MAPPINGS_INVALID")
+        target_fields = set(columns)
+        for table_mapping in table_mappings:
+            if (
+                not isinstance(table_mapping, Mapping)
+                or table_mapping.get("target_table") != target
+                or not isinstance(table_mapping.get("source_table"), str)
+                or not isinstance(table_mapping.get("columns"), list)
+            ):
+                continue
+            source = table_mapping["source_table"]
+            fields = transforms.setdefault((source, target), {})
+            for column in table_mapping["columns"]:
+                if not isinstance(column, Mapping):
+                    raise CutoverError(f"SOURCE_COLUMN_MAPPING_INVALID:{source}")
+                source_field = column.get("source_column")
+                if (
+                    isinstance(source_field, str)
+                    and source_field not in target_fields
+                    and column.get("target_table") != target
+                ):
+                    fields[source_field] = None
+    return transforms
+
+
+def _rewrite_mapped_fields(value: Any, fields: Mapping[str, str | None]) -> Any:
+    if isinstance(value, dict):
+        mapped: dict[str, Any] = {}
+        for key, item in value.items():
+            mapped_key = fields.get(key, key)
+            if mapped_key is None:
+                continue
+            mapped_item = _rewrite_mapped_fields(item, fields)
+            if mapped_key in mapped:
+                if mapped[mapped_key] != mapped_item:
+                    raise CutoverError(f"MIGRATION_FIELD_COLLISION:{mapped_key}")
+                continue
+            mapped[mapped_key] = mapped_item
+        return mapped
+    if isinstance(value, list):
+        return [_rewrite_mapped_fields(item, fields) for item in value]
+    if not isinstance(value, str):
+        return value
+    rewritten: str = value
+    mapped_value = fields.get(value, value)
+    if mapped_value is not None:
+        rewritten = mapped_value
+    for source_field, target_field in fields.items():
+        if target_field is None:
+            continue
+        rewritten = re.sub(
+            rf"(?<![A-Za-z0-9_]){re.escape(source_field)}(?![A-Za-z0-9_])",
+            target_field,
+            rewritten,
+        )
+    return rewritten
+
+
+def _rewrite_consumer_fields(
+    parameters: Mapping[str, Any], fields: Mapping[str, str | None]
+) -> dict[str, Any]:
+    rewritten = _rewrite_mapped_fields(
+        dict(parameters),
+        {field: target for field, target in fields.items() if target is not None},
+    )
+    if not isinstance(rewritten, dict):
+        raise CutoverError("CANONICAL_CONSUMER_PARAMETERS_INVALID")
+    code = rewritten.get("jsCode")
+    if not isinstance(code, str):
+        return rewritten
+    removed = [field for field, target in fields.items() if target is None]
+    lines = code.splitlines(keepends=True)
+    for field in removed:
+        kept: list[str] = []
+        index = 0
+        token = f"row.{field}"
+        while index < len(lines):
+            line = lines[index]
+            if token in line and line.lstrip().startswith("if ("):
+                if index + 1 >= len(lines) or not lines[index + 1].lstrip().startswith(
+                    "throw new Error("
+                ):
+                    raise CutoverError(f"CANONICAL_CONSUMER_FIELD_UNMAPPED:{field}")
+                index += 2
+                continue
+            kept.append(line)
+            index += 1
+        lines = kept
+        if token in "".join(lines):
+            raise CutoverError(f"CANONICAL_CONSUMER_FIELD_UNMAPPED:{field}")
+    rewritten["jsCode"] = "".join(lines)
+    return rewritten
+
+
 def _canonical_source_bundle(
     args: argparse.Namespace,
     source_head: str,
@@ -1260,6 +1418,7 @@ def _canonical_source_bundle(
     references_by_path = {}
     for item in inventory:
         references_by_path.setdefault(item["workflow_path"], []).append(item)
+    field_transforms = _matrix_field_transforms(_load_matrix())
     paths = sorted(args.workflow_root.glob("*.json"))
     if len(paths) != 19:
         raise CutoverError("EXACT_19_CANONICAL_WORKFLOWS_REQUIRED")
@@ -1295,7 +1454,7 @@ def _canonical_source_bundle(
                 ),
                 None,
             )
-            if node is None:
+            if not isinstance(node, dict):
                 raise CutoverError(
                     f"CANONICAL_SOURCE_NODE_INVALID:{item['reference_id']}"
                 )
@@ -1326,6 +1485,53 @@ def _canonical_source_bundle(
                 node["type"] = "n8n-nodes-base.code"
                 parameters.pop("dataTableId", None)
                 continue
+            fields = field_transforms.get((item["source_table"], target), {})
+            if fields:
+                parameters = _rewrite_mapped_fields(parameters, fields)
+                if not isinstance(parameters, dict):
+                    raise CutoverError(
+                        f"CANONICAL_SOURCE_PARAMETERS_INVALID:{item['reference_id']}"
+                    )
+                node["parameters"] = parameters
+                selector = parameters.get("dataTableId")
+            if fields and parameters.get("operation") == "get":
+                connections = workflow.get("connections", {})
+                outputs = (
+                    connections.get(node["name"], {})
+                    if isinstance(connections, Mapping)
+                    else {}
+                )
+                for ports in outputs.values() if isinstance(outputs, Mapping) else ():
+                    if not isinstance(ports, list):
+                        continue
+                    for edges in ports:
+                        if not isinstance(edges, list):
+                            continue
+                        for edge in edges:
+                            consumer_name = (
+                                edge.get("node") if isinstance(edge, Mapping) else None
+                            )
+                            consumer = next(
+                                (
+                                    candidate
+                                    for candidate in workflow.get("nodes", [])
+                                    if isinstance(candidate, dict)
+                                    and candidate.get("name") == consumer_name
+                                ),
+                                None,
+                            )
+                            if not isinstance(consumer, dict):
+                                raise CutoverError(
+                                    f"CANONICAL_CONSUMER_NODE_INVALID:{item['reference_id']}"
+                                )
+                            consumer_parameters = consumer.get("parameters", {})
+                            if not isinstance(consumer_parameters, Mapping):
+                                raise CutoverError(
+                                    f"CANONICAL_CONSUMER_PARAMETERS_INVALID:{item['reference_id']}"
+                                )
+                            consumer["parameters"] = _rewrite_consumer_fields(
+                                consumer_parameters, fields
+                            )
             if isinstance(selector, Mapping) and selector.get("__rl") is True:
                 selector = dict(selector)
                 selector["mode"] = "name"
@@ -1563,9 +1769,7 @@ def _parse_readback(
     parser = importlib.util.module_from_spec(parser_spec)
     parser_spec.loader.exec_module(parser)
     raw = path.read_text(encoding="utf-8")
-    prefix = "finance data table digest verified:"
     try:
-        raw_payload = parser.extract_payload(raw, prefix)
         payload = parser.parse_data_table_receipt(raw)
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         raise CutoverError("READBACK_RECEIPT_INVALID") from error
@@ -1576,16 +1780,25 @@ def _parse_readback(
         or migration_receipt.get("sha256") != migration_sha256
     ):
         raise CutoverError("READBACK_MIGRATION_RECEIPT_MISMATCH")
-    if raw_payload.get("status") in {"FORWARD_PRE_READBACK", "ROLLBACK_PRE_READBACK"}:
+    observed_phase = payload.get("phase")
+    legacy_post = observed_phase is None and expected_phase in {
+        "FORWARD_POST",
+        "ROLLBACK_POST",
+    }
+    if observed_phase != expected_phase and not legacy_post:
+        raise CutoverError("READBACK_PHASE_MISMATCH")
+    if expected_phase == "FORWARD_PRE":
+        if payload.get("status") != "FORWARD_PRE_READBACK":
+            raise CutoverError("READBACK_STATUS_INVALID")
         return {
             "verified": True,
             "phase": expected_phase,
             "digest_sha256": payload["digest_sha256"],
-            "finance_tables": 0,
-            "total_rows": 0,
-            "tables": [],
+            "finance_tables": payload["finance_tables"],
+            "total_rows": payload["total_rows"],
+            "tables": payload["tables"],
         }
-    if raw_payload.get("status") != "VERIFIED":
+    if payload.get("status") != "VERIFIED":
         raise CutoverError("READBACK_STATUS_INVALID")
     return {
         "verified": True,

@@ -911,7 +911,7 @@ async function persistRecoveryJournal(client, receipt, rollbackWorkflows = null)
   );
 }
 
-async function loadRollbackWorkflows(client, receipt, graph) {
+async function loadRollbackWorkflows(client, receipt, graph, requireGraphBodies = true) {
   const result = await client.query(
     `SELECT rollback_workflows FROM ${JOURNAL_TABLE}
       WHERE receipt_sha256 = $1 AND project_id = $2 AND operation = 'FORWARD' AND lock_resource = $3`,
@@ -923,10 +923,14 @@ async function loadRollbackWorkflows(client, receipt, graph) {
   const restored = new Map();
   for (const workflow of bodies) {
     if (!workflow || !graph.workflows.has(workflow.id) || restored.has(workflow.id) ||
-        workflowBodyDigest(workflow) !== graph.workflowBodyDigests.get(workflow.id)) {
+        (requireGraphBodies && workflowBodyDigest(workflow) !== graph.workflowBodyDigests.get(workflow.id))) {
       throw new Error('ROLLBACK_WORKFLOW_BODY_MISMATCH');
     }
     restored.set(workflow.id, workflow);
+  }
+  if (!requireGraphBodies &&
+      findReferences(graph, restored).some((item) => !item.oldMatches)) {
+    throw new Error('ROLLBACK_WORKFLOW_SNAPSHOT_NOT_LEGACY');
   }
   return restored;
 }
@@ -1025,6 +1029,83 @@ function validateForwardReceipt(receipt, exported, resource, binding, canonicalS
   }
   return receipt;
 }
+function replayValidationExport(exported, receipt) {
+  const actions = new Map(receipt.actions.map((action) => [action.reference_id, action]));
+  if (actions.size !== exported.references.length) {
+    throw new Error('FORWARD_REPLAY_JOURNAL_ACTION_MISMATCH');
+  }
+  return {
+    ...exported,
+    export_sha256: receipt.export_sha256,
+    references: exported.references.map((reference) => {
+      const action = actions.get(reference.reference_id);
+      if (!action) throw new Error('FORWARD_REPLAY_JOURNAL_ACTION_MISMATCH');
+      return { ...reference, revision_id: action.revision_id };
+    }),
+  };
+}
+
+async function loadForwardReplayJournal(client, graph, lock, canonicalSource, exported, readback, state) {
+  const result = await client.query(
+    `SELECT receipt, rollback_workflows
+       FROM ${JOURNAL_TABLE}
+      WHERE project_id = $1
+        AND operation = 'FORWARD'
+        AND lock_resource = $2
+        AND receipt->>'schema_version' = $3
+        AND receipt->>'canonical_source_sha256' = $4
+        AND receipt->>'operation_nonce' = $5
+        AND receipt->>'protected_quiescence_receipt_digest' = $6
+        AND receipt->>'required_live_export_digest' = $7
+        AND receipt->>'contract_bijection_digest' = $8
+      ORDER BY created_at ASC`,
+    [
+      projectId,
+      lock.resource,
+      RUNTIME_SCHEMA,
+      canonicalSource.sha256,
+      lock.binding.operation_nonce,
+      lock.binding.protected_quiescence_receipt_digest,
+      lock.binding.required_live_export_digest,
+      lock.binding.contract_bijection_digest,
+    ],
+  );
+  if (!Array.isArray(result.rows) || result.rows.length === 0) {
+    throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_NOT_FOUND');
+  }
+  const row = result.rows[0];
+  const receipt = typeof row.receipt === 'string' ? JSON.parse(row.receipt) : row.receipt;
+  validateForwardReceipt(
+    receipt,
+    replayValidationExport(exported, receipt),
+    lock.resource,
+    lock.binding,
+    canonicalSource.sha256,
+  );
+  if (receipt.readback_digest_sha256 !== digest(readback) ||
+      receipt.credential_state_digest_after !== state.credentialStateDigest ||
+      receipt.workflow_credential_objects_digest_after !== state.workflowCredentialObjectsDigest ||
+      receipt.workflow_revision_digest_after !== state.workflowRevisionDigest) {
+    throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_STATE_MISMATCH');
+  }
+  const bodies = row.rollback_workflows;
+  if (!Array.isArray(bodies) || bodies.length !== graph.workflows.size ||
+      digest(bodies) !== receipt.rollback_workflows_sha256) {
+    throw new Error('FORWARD_REPLAY_ROLLBACK_SNAPSHOT_MISMATCH');
+  }
+  const rollbackWorkflows = new Map();
+  for (const workflow of bodies) {
+    if (!workflow || !graph.workflows.has(workflow.id) || rollbackWorkflows.has(workflow.id)) {
+      throw new Error('FORWARD_REPLAY_ROLLBACK_SNAPSHOT_MISMATCH');
+    }
+    rollbackWorkflows.set(workflow.id, workflow);
+  }
+  if (findReferences(graph, rollbackWorkflows).some((item) => !item.oldMatches)) {
+    throw new Error('FORWARD_REPLAY_ROLLBACK_SNAPSHOT_NOT_LEGACY');
+  }
+  return receipt;
+}
+
 
 async function recoverForwardJournal() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
@@ -1128,13 +1209,34 @@ async function execute() {
     if (operation === 'FORWARD') {
       const prestate = findReferences(graph, workflows);
       if (prestate.some((item) => !item.oldMatches && !item.targetMatches)) throw new Error('LIVE_REFERENCE_SELECTOR_DRIFT');
+      const plan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows);
+      if (plan.alreadyApplied) {
+        const readback = workflowReadback(workflows);
+        if (!sameJson(readback, workflowReadback(plan.expected)) ||
+            !allCredentialOrigins(credentialOriginsBefore, 'opaque')) {
+          throw new Error('FORWARD_REPLAY_CANONICAL_STATE_MISMATCH');
+        }
+        const original = await loadForwardReplayJournal(
+          lock.client,
+          graph,
+          lock,
+          canonicalSource,
+          exported,
+          readback,
+          {
+            credentialStateDigest: credentialsBefore.digest,
+            workflowCredentialObjectsDigest: workflowCredentialsBefore,
+            workflowRevisionDigest: workflowRevisionDigestBefore,
+          },
+        );
+        await lock.client.query('COMMIT');
+        await writeRuntimeReceipt(original);
+        return original;
+      }
       const rollbackWorkflows = [...workflows.values()].map((workflow) => ({
         id: workflow.id, ...Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field] ?? null])),
       })).sort((left, right) => left.id.localeCompare(right.id));
-      const plan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows);
-      if (!plan.alreadyApplied) {
-        await updateWorkflows(lock.client, plan.changed);
-      }
+      await updateWorkflows(lock.client, plan.changed);
       const updated = await loadWorkflows(lock.client, graph, false);
       if (!sameJson(workflowReadback(updated), workflowReadback(plan.expected))) throw new Error('CANONICAL_GRAPH_POST_READBACK_MISMATCH');
       const postCredentials = await loadWorkflows(lock.client, graph, false);
@@ -1165,7 +1267,19 @@ async function execute() {
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
     }
-    validateForwardReceipt(forwardReceipt, exported, lock.resource, lock.binding, canonicalSource?.sha256 || null);
+    const replayBoundRollback = (
+      forwardReceipt.schema_version === RUNTIME_SCHEMA
+      && forwardReceipt.export_sha256 !== exported.export_sha256
+    );
+    validateForwardReceipt(
+      forwardReceipt,
+      replayBoundRollback
+        ? replayValidationExport(exported, forwardReceipt)
+        : exported,
+      lock.resource,
+      lock.binding,
+      canonicalSource?.sha256 || null,
+    );
     if (forwardReceipt.credential_state_digest_before !== forwardReceipt.credential_state_digest_after) throw new Error('FORWARD_CREDENTIAL_STATE_CHANGED');
     if (forwardReceipt.credential_state_digest_after !== credentialsBefore.digest) throw new Error('FORWARD_CREDENTIAL_STATE_DRIFT');
     if (forwardReceipt.workflow_credential_objects_digest_after !== workflowCredentialsBefore) throw new Error('ROLLBACK_WORKFLOW_CREDENTIAL_STATE_DRIFT');
@@ -1183,7 +1297,12 @@ async function execute() {
       if (!canonicalPlan.alreadyApplied || digest(workflowReadback(workflows)) !== forwardReceipt.readback_digest_sha256) {
         throw new Error('ROLLBACK_CANONICAL_GRAPH_DRIFT');
       }
-      rollbackWorkflows = await loadRollbackWorkflows(lock.client, forwardReceipt, graph);
+      rollbackWorkflows = await loadRollbackWorkflows(
+        lock.client,
+        forwardReceipt,
+        graph,
+        !replayBoundRollback,
+      );
     }
     const changed = new Map([...rollbackWorkflows].map(([id, workflow]) => [
       id, Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field]])),

@@ -309,6 +309,29 @@ preflight() {
     --output "$lock_receipt" >"$receipt_dir/finance-four-table-precondition.json"
   chmod 0600 "$lock_receipt" "$receipt_dir/finance-four-table-precondition.json"
 }
+run_rollback_restore() {
+  python3 "$runner_dir/four_table_cutover.py" rollback-runtime \
+    "${resolver_args[@]}" \
+    --source-backup "$source_backup" \
+    --migration-receipt "$migration_receipt" \
+    --migration-receipt-sha256 "$migration_sha" \
+    --source-backup-sha256 "$source_backup_sha" \
+    --operation-nonce "$FINANCE_FOUR_TABLE_OPERATION_NONCE" \
+    --protected-quiescence-receipt-digest "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" \
+    --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
+    --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
+    --repository-root "$repo_dir" \
+    --project-id "$N8N_FINANCE_PROJECT_ID" \
+    --accepted-identity "$accepted_identity" \
+    --operator-ack "$operator_ack" \
+    --runtime-action "$runtime_action" \
+    --workflow-root "$workflow_root" \
+    --live-export "$live_export" \
+    --lock-receipt "$lock_receipt" \
+    --runtime-state "$runtime_state" \
+    --output "$runtime_proof" >/dev/null
+  chmod 0600 "$runtime_state" "$runtime_proof"
+}
 
 run_readback() {
   local destination="$1"
@@ -358,6 +381,7 @@ rollback)
   run_readback "$pre_readback" ROLLBACK_PRE
   validate_inputs "$operator_ack" "$runtime_action" rollback
   run_runtime
+  run_rollback_restore
   run_readback "$post_readback" ROLLBACK_POST
   ;;
 esac

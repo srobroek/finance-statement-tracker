@@ -30,6 +30,20 @@ const CANONICAL_TABLE_NAMES = [
   'finance_ai_reviews',
 ];
 const CANONICAL_TABLES = new Set(CANONICAL_TABLE_NAMES);
+const PRESERVED_TABLE_NAMES = [
+  'finance_archive_receipts',
+  'finance_document_operations',
+  'finance_mcp_requests',
+  'finance_pipeline_runs',
+  'finance_reconciliations',
+  'finance_source_contracts',
+  'finance_source_cursors',
+  'finance_execution_failures',
+];
+const ALLOWED_PROJECT_TABLES = new Set([
+  ...CANONICAL_TABLE_NAMES,
+  ...PRESERVED_TABLE_NAMES,
+]);
 const migrationReceiptSha256 = process.env.FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256 || null;
 if (migrationReceiptSha256 !== null && !/^[0-9a-f]{64}$/.test(migrationReceiptSha256)) {
   throw new Error('FINANCE_DATA_TABLE_MIGRATION_RECEIPT_SHA256_INVALID');
@@ -42,6 +56,18 @@ function assertCanonicalTableNames(tables) {
     throw new Error('EXACT_FINANCE_DATA_TABLE_NAMES_REQUIRED');
   }
 }
+function assertAllowedProjectTables(listed) {
+  if (!listed || !Number.isInteger(listed.count) || !Array.isArray(listed.data) ||
+      listed.count !== listed.data.length || listed.data.length > ALLOWED_PROJECT_TABLES.size) {
+    throw new Error('CLOSED_FINANCE_DATA_TABLE_SET_REQUIRED');
+  }
+  const observed = listed.data.map((table) => String(table.name || ''));
+  if (new Set(observed).size !== observed.length ||
+      observed.some((name) => !ALLOWED_PROJECT_TABLES.has(name))) {
+    throw new Error('CLOSED_FINANCE_DATA_TABLE_SET_REQUIRED');
+  }
+}
+
 
 function canonical(value) {
   if (value instanceof Date) return value.toISOString();
@@ -65,6 +91,51 @@ function blockedGate(gate, requiredAck) {
     command_executed: false,
   };
 }
+const READBACK_PHASES = new Set([
+  'FORWARD_PRE',
+  'FORWARD_POST',
+  'ROLLBACK_PRE',
+  'ROLLBACK_POST',
+]);
+
+function readbackReceipt(phase, tables, totalRows) {
+  if (!READBACK_PHASES.has(phase)) {
+    throw new Error(`DATA_TABLE_READBACK_PHASE_INVALID:${phase}`);
+  }
+  const forwardPre = phase === 'FORWARD_PRE';
+  if (forwardPre && (
+    tables.length !== CANONICAL_TABLES.size
+    || totalRows !== 0
+    || tables.some((table) => table.row_count !== 0)
+  )) {
+    throw new Error('FORWARD_PRE_READBACK_MUST_BE_OBSERVED_EMPTY');
+  }
+  const receiptTables = forwardPre ? [] : tables;
+  return {
+    schema_version: 1,
+    receipt_contract: 'finance-data-table-readback-receipt-v1',
+    status: forwardPre ? 'FORWARD_PRE_READBACK' : 'VERIFIED',
+    phase,
+    scope: 'READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST',
+    finance_tables: receiptTables.length,
+    tables: receiptTables,
+    total_rows: totalRows,
+    digest_sha256: sha256(JSON.stringify(canonical(receiptTables))),
+    migration_receipt: {
+      schema_version: 'data-table-migration-receipt-v1',
+      required: true,
+      bound: migrationReceiptSha256 !== null,
+      sha256: migrationReceiptSha256,
+    },
+    forward_gate: blockedGate('FORWARD', 'FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE'),
+    rollback_gate: blockedGate('ROLLBACK', 'FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE'),
+    writes_performed: false,
+    provider_calls: false,
+    row_values_recorded: false,
+    secret_values_recorded: false,
+  };
+}
+
 
 const originalInit = BaseCommand.prototype.init;
 let completed = false;
@@ -74,13 +145,18 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
     await originalInit.apply(this, args);
     const service = Container.get(DataTableService);
     stage = 'table-list';
-    const listed = await service.getManyAndCount({ filter: { projectId }, take: 100 });
-    if (listed.count !== CANONICAL_TABLES.size || listed.data.length !== CANONICAL_TABLES.size) {
-      throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${listed.count}`);
+    const readbackPhase = process.env.FINANCE_DATA_TABLE_READBACK_PHASE || 'FORWARD_POST';
+    if (!READBACK_PHASES.has(readbackPhase)) {
+      throw new Error(`DATA_TABLE_READBACK_PHASE_INVALID:${readbackPhase}`);
     }
+    const listed = await service.getManyAndCount({ filter: { projectId }, take: 100 });
+    assertAllowedProjectTables(listed);
     const tables = listed.data.filter((table) => CANONICAL_TABLES.has(String(table.name))).sort((a, b) => a.name.localeCompare(b.name));
     if (tables.length !== CANONICAL_TABLES.size) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
     assertCanonicalTableNames(tables);
+    if (tables.some((table) => typeof table.id !== 'string' || table.id.length === 0)) {
+      throw new Error('DATA_TABLE_ID_INVALID');
+    }
     const tableReceipts = [];
     let totalRows = 0;
     for (const table of tables) {
@@ -130,29 +206,9 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
     if (new Set(tableReceipts.map((table) => table.table_id_sha256)).size !== CANONICAL_TABLES.size) {
       throw new Error('DATA_TABLE_IDENTITY_DUPLICATE');
     }
-    const digestSha256 = sha256(JSON.stringify(canonical(tableReceipts)));
-    process.stdout.write(`finance data table digest verified:${JSON.stringify({
-      schema_version: 1,
-      receipt_contract: 'finance-data-table-readback-receipt-v1',
-      status: 'VERIFIED',
-      scope: 'READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST',
-      finance_tables: tables.length,
-      tables: tableReceipts,
-      total_rows: totalRows,
-      digest_sha256: digestSha256,
-      migration_receipt: {
-        schema_version: 'data-table-migration-receipt-v1',
-        required: true,
-        bound: migrationReceiptSha256 !== null,
-        sha256: migrationReceiptSha256,
-      },
-      forward_gate: blockedGate('FORWARD', 'FOUR_TABLE_FORWARD_REQUIRES_NAMED_OPERATOR_GATE'),
-      rollback_gate: blockedGate('ROLLBACK', 'FOUR_TABLE_ROLLBACK_REQUIRES_NAMED_OPERATOR_GATE'),
-      writes_performed: false,
-      provider_calls: false,
-      row_values_recorded: false,
-      secret_values_recorded: false,
-    })}\n`);
+    process.stdout.write(
+      `finance data table digest verified:${JSON.stringify(readbackReceipt(readbackPhase, tableReceipts, totalRows))}\n`,
+    );
     completed = true;
   } catch (error) {
     const detail = error && typeof error.message === 'string' && /^[A-Za-z0-9_:-]{1,256}$/.test(error.message)
