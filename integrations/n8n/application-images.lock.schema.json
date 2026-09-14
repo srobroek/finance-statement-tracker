@@ -71,9 +71,15 @@
         "required": ["source_commit", "support_images"],
         "properties": {
           "source_commit": {"$ref": "#/$defs/commit"},
-          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"},
           "support_images": {"$ref": "#/$defs/verifiedSupportImages"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"status": {"const": "LOCKED_DISPOSABLE"}}},
+            "then": {"properties": {"extension_image": {"$ref": "#/$defs/disposableExtensionImage"}}},
+            "else": {"properties": {"extension_image": {"$ref": "#/$defs/verifiedExtensionImage"}}}
+          }
+        ]
       }
     }
   ],
@@ -145,6 +151,38 @@
           ]
         }
       }
+    },
+    "disposableExtensionImage": {
+      "allOf": [
+        {"$ref": "#/$defs/extensionImage"},
+        {
+          "properties": {
+            "reference": {"pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+            "image_digest": {"$ref": "#/$defs/digest"},
+            "source_commit": {"$ref": "#/$defs/commit"},
+            "sbom_sha256": {"$ref": "#/$defs/sha256"},
+            "scan_sha256": {"$ref": "#/$defs/sha256"},
+            "scan": {
+              "properties": {
+                "tool": {"type": "string", "minLength": 1},
+                "result": {"const": "PASS"},
+                "high": {"const": 0},
+                "critical": {"const": 0}
+              }
+            },
+            "attestation": {
+              "properties": {
+                "type": {"type": "null"},
+                "predicate_type": {"type": "null"},
+                "subject_digest": {"type": "null"},
+                "source_commit": {"type": "null"},
+                "sha256": {"type": "null"},
+                "status": {"const": "NOT_AVAILABLE"}
+              }
+            }
+          }
+        }
+      ]
     },
     "verifiedExtensionImage": {
       "allOf": [

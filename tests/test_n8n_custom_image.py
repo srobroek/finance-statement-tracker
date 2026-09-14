@@ -215,27 +215,25 @@ class N8nCustomImageTests(unittest.TestCase):
         self.assertIn("${TMPDIR:-/tmp}/finance-n8n-image-build-receipt.json", builder)
         self.assertNotIn('receipt="${package_dir}/finance-image-build-receipt.json"', builder)
         self.assertNotIn("docker push", builder)
-        self.assertEqual(receipt["status"], "SPEC_ONLY")
-        self.assertIsNone(receipt["image"]["image_digest"])
-        self.assertIsNone(receipt["image"]["local_image_id"])
-        # SPEC_ONLY records the current build recipe without claiming runtime
-        # identity. CI writes the external receipt after it has pushed and scanned.
-        self.assertEqual(receipt["base_image"]["digest"], OFFICIAL_BASE_DIGEST)
-        self.assertEqual(receipt["base_image"]["source_commit"], OFFICIAL_SOURCE_COMMIT)
-        self.assertEqual(
-            receipt["base_image"]["source_repository"],
-            "https://github.com/n8n-io/n8n",
-        )
-        self.assertEqual(receipt["base_image"]["nodemailer_overlay"], {
-            "package": "nodemailer@9.1.0",
-            "tarball_sha256": NODEMAILER_TARBALL_SHA256,
-            "recipe_commit": OVERLAY_SOURCE_COMMIT,
+        self.assertEqual(receipt["status"], "TESTED_IN_DISPOSABLE")
+        self.assertEqual(receipt["image"]["requested_reference"], "ghcr.io/srobroek/finance-n8n@sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(receipt["image"]["image_digest"], "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(receipt["image"]["local_image_id"], "sha256:cc835d2eb8dff22a99c813c58332f7a2718cdfccf66e0182898e5d48294e5f4e")
+        self.assertEqual(receipt["source_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
+        self.assertEqual(receipt["base_image"]["reference"], "ghcr.io/n8n-io/n8n:2.37.10@" + OFFICIAL_BASE_DIGEST)
+        self.assertEqual(receipt["base_image"]["provenance_sha256"], "fcd628b0805ad628adb6cf5485af8e2860a36de109057c07e599278e66365e5a")
+        self.assertEqual(receipt["base_image"]["nodemailer_overlay"]["recipe_commit"], OVERLAY_SOURCE_COMMIT)
+        self.assertEqual(receipt["scan"], {
+            "tool": "Trivy 0.74.0 (local immutable-reference scan)",
+            "result": "PASS",
+            "high": 0,
+            "critical": 0,
+            "artifact_sha256": "1b773709e469ec277d4a3717c50c5fa0a7aad37cefe984325f518dad7ac1ce82",
         })
+        self.assertEqual(receipt["local_scan"]["artifact_sha256"], "ecb00b5e50040fc944b89b8aa174d167cc2ac6dfe0266542147ba8ce85876a4f")
+        self.assertEqual(receipt["build"]["tool"], "Podman 4.9.3 / Buildah")
         self.assertEqual(receipt["attestation"]["status"], "NOT_AVAILABLE")
-        self.assertEqual(
-            receipt["blockers"],
-            ["LIVE_REGISTRY_DIGEST_REQUIRED", "SBOM_SCAN_ATTESTATION_REQUIRED", "DISPOSABLE_IMAGE_IMPORT_REQUIRED"],
-        )
+        self.assertIn("GITHUB_ACTIONS_VERIFIED_CI_RECEIPT_REQUIRED", receipt["limitations"])
 
     def test_package_test_does_not_rebuild_production_output(self):
         package = json.loads((ROOT / "packages/n8n-nodes-finance/package.json").read_text(encoding="utf-8"))

@@ -1,26 +1,26 @@
 {
   "schema_version": 1,
-  "status": "SPEC_ONLY",
+  "status": "LOCKED_DISPOSABLE",
   "application": "finance-statement-tracker",
-  "generated_at_utc": null,
-  "source_commit": null,
+  "generated_at_utc": "2026-09-14T11:45:33Z",
+  "source_commit": "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0",
   "base_image": {
     "reference": "ghcr.io/n8n-io/n8n:2.37.10@sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
     "source_path": "packages/n8n-nodes-finance/base-image.txt"
   },
   "extension_image": {
-    "reference": "ghcr.io/srobroek/finance-n8n:spec-0.1.0",
-    "image_digest": null,
-    "source_commit": null,
+    "reference": "ghcr.io/srobroek/finance-n8n@sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b",
+    "image_digest": "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b",
+    "source_commit": "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0",
     "base_image_digest": "sha256:307d6065be25619aa24cfc63a7c2f04ca56d084a08c05c8e9f189a89f353b1ec",
-    "sbom_sha256": null,
-    "scan_sha256": null,
+    "sbom_sha256": "4e60555c3fa1616f0504b9aad4c5c2ed388f8dec621637116b9d32afa2faebb5",
+    "scan_sha256": "1b773709e469ec277d4a3717c50c5fa0a7aad37cefe984325f518dad7ac1ce82",
     "scan": {
-      "tool": null,
-      "result": "NOT_RUN",
-      "high": null,
-      "critical": null
+      "tool": "trivy",
+      "result": "PASS",
+      "high": 0,
+      "critical": 0
     },
     "attestation": {
       "type": null,
@@ -32,7 +32,7 @@
     },
     "receipt": {
       "path": "packages/n8n-nodes-finance/finance-image-build-receipt.json",
-      "sha256": "c96e8d6093c3b86a1693cc673f5ebc3b4773d13b63e01fd9fbaaac950feeab6b"
+      "sha256": "74baf24740c9c1b300d9a425610d341019862ccfd9dd1b8455e965e5c0575bbf"
     }
   },
   "support_images": {

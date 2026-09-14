@@ -63,10 +63,11 @@ def lock_cross_field_errors(document: dict) -> list[str]:
         if image.get("image_digest", image.get("digest")) != reference_digest:
             errors.append(f"{name}: reference digest mismatch")
         attestation = image["attestation"]
-        if attestation.get("subject_digest") != image.get("image_digest", image.get("digest")):
-            errors.append(f"{name}: attestation subject mismatch")
-        if attestation.get("source_commit") != image.get("source_commit"):
-            errors.append(f"{name}: attestation source mismatch")
+        if attestation.get("status") == "VERIFIED":
+            if attestation.get("subject_digest") != image.get("image_digest", image.get("digest")):
+                errors.append(f"{name}: attestation subject mismatch")
+            if attestation.get("source_commit") != image.get("source_commit"):
+                errors.append(f"{name}: attestation source mismatch")
     return errors
 
 
@@ -87,14 +88,18 @@ def verified_image_lock(document: dict, status: str) -> dict:
         sbom_sha256="c" * 64,
         scan_sha256="d" * 64,
         scan={"tool": "trivy", "result": "PASS", "high": 0, "critical": 0},
-        attestation={
-            "type": "https://in-toto.io/Statement/v1",
-            "predicate_type": "https://slsa.dev/provenance/v1",
-            "subject_digest": image_digest,
-            "source_commit": source_commit,
-            "sha256": "e" * 64,
-            "status": "VERIFIED",
-        },
+        attestation=(
+            {"type": None, "predicate_type": None, "subject_digest": None, "source_commit": None, "sha256": None, "status": "NOT_AVAILABLE"}
+            if status == "LOCKED_DISPOSABLE"
+            else {
+                "type": "https://in-toto.io/Statement/v1",
+                "predicate_type": "https://slsa.dev/provenance/v1",
+                "subject_digest": image_digest,
+                "source_commit": source_commit,
+                "sha256": "e" * 64,
+                "status": "VERIFIED",
+            }
+        ),
     )
     return verified
 
@@ -257,9 +262,9 @@ class N8nApplicationManifestTests(unittest.TestCase):
         self.assertEqual(self.manifest["extension_image"]["base_digest"], self.manifest["base_image"]["digest"])
         receipt = self.manifest["extension_image"]["receipt"]
         self.assertEqual(receipt["sha256"], sha256(ROOT / receipt["path"]))
-        self.assertIsNone(self.manifest["finance_commit"])
-        self.assertIsNone(self.manifest["extension_image"]["digest"])
-        self.assertEqual(self.manifest["contract_status"], "SPEC_ONLY")
+        self.assertEqual(self.manifest["finance_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
+        self.assertEqual(self.manifest["extension_image"]["digest"], "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(self.manifest["contract_status"], "DISPOSABLE_VERIFIED")
 
     def test_image_lock_binds_package_and_community_integrity(self) -> None:
         package = self.image_lock["finance_package"]
@@ -281,20 +286,23 @@ class N8nApplicationManifestTests(unittest.TestCase):
         )
 
     def test_changed_community_closure_invalidates_image_proof(self) -> None:
-        self.assertEqual(self.manifest["contract_status"], "SPEC_ONLY")
-        self.assertIsNone(self.manifest["finance_commit"])
-        self.assertIsNone(self.manifest["extension_image"]["digest"])
-        self.assertEqual(self.image_lock["status"], "SPEC_ONLY")
-        self.assertIsNone(self.image_lock["source_commit"])
+        self.assertEqual(self.manifest["contract_status"], "DISPOSABLE_VERIFIED")
+        self.assertEqual(self.manifest["finance_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
+        self.assertEqual(self.manifest["extension_image"]["digest"], "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(self.image_lock["status"], "LOCKED_DISPOSABLE")
+        self.assertEqual(self.image_lock["source_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
         extension = self.image_lock["extension_image"]
-        self.assertIsNone(extension["image_digest"])
-        self.assertIsNone(extension["source_commit"])
-        self.assertIsNone(extension["sbom_sha256"])
-        self.assertIsNone(extension["scan_sha256"])
-        self.assertEqual(extension["scan"]["result"], "NOT_RUN")
+        self.assertEqual(extension["image_digest"], "sha256:a3b39fe2c0a3a987d91c2b97fd2adfe21707134790223dc470ef76a57f1c0d4b")
+        self.assertEqual(extension["source_commit"], "d160aa0c29a1564c9e54ab4eec1ab4f28be89dd0")
+        self.assertEqual(extension["sbom_sha256"], "4e60555c3fa1616f0504b9aad4c5c2ed388f8dec621637116b9d32afa2faebb5")
+        self.assertEqual(extension["scan_sha256"], "1b773709e469ec277d4a3717c50c5fa0a7aad37cefe984325f518dad7ac1ce82")
+        self.assertEqual(extension["scan"]["result"], "PASS")
         self.assertEqual(extension["attestation"]["status"], "NOT_AVAILABLE")
-        self.assertIn("LIVE_FINANCE_IMAGE_BUILD_REQUIRED", self.manifest["blockers"])
-        self.assertIn("LIVE_REGISTRY_DIGEST_REQUIRED", self.manifest["blockers"])
+        self.assertEqual(self.manifest["blockers"], [
+            "GITHUB_ACTIONS_VERIFIED_CI_RECEIPT_REQUIRED",
+            "SLSA_IN_TOTO_ATTESTATION_REQUIRED",
+            "PRODUCTION_ACTIVATION_REVIEW_REQUIRED",
+        ])
 
     def test_support_image_receipts_are_bound_to_protected_artifacts(self) -> None:
         expected = {
