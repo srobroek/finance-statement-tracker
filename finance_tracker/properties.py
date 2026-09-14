@@ -58,7 +58,8 @@ def _mark_ownership_conflict(transaction: Transaction) -> None:
     _add_review_reason(transaction, "LOCKED_OWNERSHIP_CONFLICT")
     if not _locked(transaction, "tags"):
         transaction.tags.discard("shared")
-    transaction.review_required = True
+    if not _locked(transaction, "review_required"):
+        transaction.review_required = True
 
 
 @dataclass(frozen=True, slots=True)

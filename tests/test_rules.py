@@ -2,12 +2,21 @@ from datetime import datetime
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
-from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule, condition_matches, validate_rule
+from finance_tracker.rules import (
+    RuleAction,
+    RuleCondition,
+    RuleEngine,
+    StaticRule,
+    condition_matches,
+    validate_rule,
+)
 
 
 class RuleEngineTests(TestCase):
     def transaction(self) -> Transaction:
-        return Transaction("t1", datetime(2026, 8, 1), "SC_PLATINUM_X", "Carrefour Mirdif 123", "250")
+        return Transaction(
+            "t1", datetime(2026, 8, 1), "SC_PLATINUM_X", "Carrefour Mirdif 123", "250"
+        )
 
     def test_or_groups_of_and_conditions(self) -> None:
         rule = StaticRule(
@@ -20,7 +29,10 @@ class RuleEngineTests(TestCase):
                 RuleCondition("amount_aed", "between", "0", "500", group=1),
                 RuleCondition("merchant_raw", "contains", "Spinneys", group=2),
             ],
-            [RuleAction("set", "category", "GROCERY"), RuleAction("add_tag", value="Household")],
+            [
+                RuleAction("set", "category", "GROCERY"),
+                RuleAction("add_tag", value="Household"),
+            ],
         )
         transaction = self.transaction()
         traces = RuleEngine([rule]).apply(transaction)
@@ -30,9 +42,30 @@ class RuleEngineTests(TestCase):
 
     def test_stop_on_match_only_stops_same_stage(self) -> None:
         rules = [
-            StaticRule("r1", "Specific", "CLASSIFICATION", 10, [RuleCondition("merchant_raw", "contains", "Carrefour")], [RuleAction("set", "category", "GROCERY")]),
-            StaticRule("r2", "Broad", "CLASSIFICATION", 20, [RuleCondition("amount_aed", "gt", "0")], [RuleAction("set", "category", "GENERAL")]),
-            StaticRule("r3", "Evidence", "EVIDENCE", 10, [RuleCondition("category", "equals", "GROCERY")], [RuleAction("request_evidence", value="IF_MISSING")]),
+            StaticRule(
+                "r1",
+                "Specific",
+                "CLASSIFICATION",
+                10,
+                [RuleCondition("merchant_raw", "contains", "Carrefour")],
+                [RuleAction("set", "category", "GROCERY")],
+            ),
+            StaticRule(
+                "r2",
+                "Broad",
+                "CLASSIFICATION",
+                20,
+                [RuleCondition("amount_aed", "gt", "0")],
+                [RuleAction("set", "category", "GENERAL")],
+            ),
+            StaticRule(
+                "r3",
+                "Evidence",
+                "EVIDENCE",
+                10,
+                [RuleCondition("category", "equals", "GROCERY")],
+                [RuleAction("request_evidence", value="IF_MISSING")],
+            ),
         ]
         transaction = self.transaction()
         RuleEngine(rules).apply(transaction)
@@ -40,7 +73,14 @@ class RuleEngineTests(TestCase):
         self.assertEqual(transaction.evidence_status, "REQUESTED")
 
     def test_manual_locked_field_wins(self) -> None:
-        rule = StaticRule("r1", "Any", "CLASSIFICATION", 10, [RuleCondition("amount_aed", "gt", "0")], [RuleAction("set", "category", "GENERAL")])
+        rule = StaticRule(
+            "r1",
+            "Any",
+            "CLASSIFICATION",
+            10,
+            [RuleCondition("amount_aed", "gt", "0")],
+            [RuleAction("set", "category", "GENERAL")],
+        )
         transaction = self.transaction()
         transaction.category = "MANUAL"
         transaction.metadata["locked_fields"] = ["category"]
@@ -64,7 +104,10 @@ class RuleEngineTests(TestCase):
         transaction.tags = {"manual"}
         transaction.evidence_policy = "NEVER"
         transaction.metadata["locked_fields"] = [
-            "tags", "evidence_policy", "evidence_status", "review_required"
+            "tags",
+            "evidence_policy",
+            "evidence_status",
+            "review_required",
         ]
 
         RuleEngine([rule]).apply(transaction)
@@ -74,24 +117,70 @@ class RuleEngineTests(TestCase):
         self.assertEqual(transaction.evidence_status, "NOT_REQUESTED")
         self.assertFalse(transaction.review_required)
 
+    def test_ownership_conflict_preserves_locked_review_flag(self) -> None:
+        transaction = self.transaction()
+        transaction.owner = "Personal"
+        transaction.metadata.update(
+            {
+                "property_ownership": "JOINT",
+                "locked_fields": ["owner", "property_ownership", "review_required"],
+            }
+        )
+
+        RuleEngine([]).apply(transaction)
+
+        self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_ownership_conflict_queues_review_when_unlocked(self) -> None:
+        transaction = self.transaction()
+        transaction.owner = "Personal"
+        transaction.metadata.update(
+            {
+                "property_ownership": "JOINT",
+                "locked_fields": ["owner", "property_ownership"],
+            }
+        )
+
+        RuleEngine([]).apply(transaction)
+
+        self.assertTrue(transaction.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
     def test_missing_numeric_field_does_not_match_zero(self) -> None:
         transaction = self.transaction()
-        self.assertFalse(condition_matches(
-            transaction, RuleCondition("history_count", "numeric_equals", 0)
-        ))
-        self.assertFalse(condition_matches(
-            transaction, RuleCondition("history_count", "between", -1, 1)
-        ))
-        self.assertFalse(condition_matches(
-            transaction, RuleCondition("history_count", "polarity", "positive")
-        ))
+        self.assertFalse(
+            condition_matches(
+                transaction, RuleCondition("history_count", "numeric_equals", 0)
+            )
+        )
+        self.assertFalse(
+            condition_matches(
+                transaction, RuleCondition("history_count", "between", -1, 1)
+            )
+        )
+        self.assertFalse(
+            condition_matches(
+                transaction, RuleCondition("history_count", "polarity", "positive")
+            )
+        )
         transaction.metadata["history_count"] = 0
-        self.assertFalse(condition_matches(
-            transaction, RuleCondition("history_count", "polarity", "positive")
-        ))
-        self.assertTrue(condition_matches(
-            transaction, RuleCondition("history_count", "polarity", "zero")
-        ))
+        self.assertFalse(
+            condition_matches(
+                transaction, RuleCondition("history_count", "polarity", "positive")
+            )
+        )
+        self.assertTrue(
+            condition_matches(
+                transaction, RuleCondition("history_count", "polarity", "zero")
+            )
+        )
 
     def test_polarity_rejects_unknown_direction(self) -> None:
         rule = StaticRule(
@@ -163,7 +252,9 @@ class RuleEngineTests(TestCase):
 
         self.assertEqual(transaction.transaction_type, "TRANSFER")
 
-    def test_set_if_empty_and_multi_tag_actions_preserve_existing_classification(self) -> None:
+    def test_set_if_empty_and_multi_tag_actions_preserve_existing_classification(
+        self,
+    ) -> None:
         rule = StaticRule(
             "rental",
             "Rental unit",
