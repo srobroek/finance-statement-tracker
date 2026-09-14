@@ -10,7 +10,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_DIR = ROOT / "integrations" / "n8n" / "setup-workflows" / "runner"
 PYTHON_RUNNER = RUNNER_DIR / "four_table_cutover.py"
@@ -43,7 +42,7 @@ def load_runner():
 def cjs_validation_harness() -> str:
     source = CJS_RUNNER.read_text(encoding="utf-8")
     declarations = source[
-        source.index("const TARGET_NAMES") : source.index("const LIVE_EXPORT_FIELDS")
+        source.index("const TARGET_NAMES") : source.index("function clone")
     ]
     helpers = source[
         source.index("function selectorId") : source.index(
@@ -278,6 +277,179 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         )
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("preflight", help_result.stdout)
+
+    def test_cjs_consumer_allows_only_preserved_operational_selectors(self) -> None:
+        source = CJS_RUNNER.read_text(encoding="utf-8")
+        for marker in (
+            "PRESERVED_OPERATIONAL_SELECTOR_NAMES",
+            "'finance_pipeline_runs'",
+            "'finance_mcp_requests'",
+            "'finance_execution_failures'",
+            "PRESERVED_OPERATIONAL_SELECTOR_IDS",
+        ):
+            self.assertIn(marker, source)
+
+        def workflow(selector: object) -> dict[str, object]:
+            return {
+                "id": "preserved-selector",
+                "active": False,
+                "connections": {},
+                "nodes": [
+                    {
+                        "id": "node",
+                        "name": "node",
+                        "type": "n8n-nodes-base.dataTable",
+                        "parameters": {"resource": "row", "dataTableId": selector},
+                    }
+                ],
+            }
+
+        preserved = [
+            "finance_source_contracts",
+            "sha256:73b62207",
+            "finance_pipeline_runs",
+            "sha256:48eb19e5",
+            "finance_mcp_requests",
+            "sha256:3b9034f0",
+            "finance_execution_failures",
+            {
+                "__rl": True,
+                "mode": "name",
+                "value": "finance_mcp_requests",
+            },
+        ]
+        result = run_cjs_validation([workflow(selector) for selector in preserved])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        rejected = run_cjs_validation([workflow("finance_source_cursors")])
+        self.assertNotEqual(rejected.returncode, 0)
+        self.assertIn("CANONICAL_SOURCE_TABLE_SELECTOR_INVALID", rejected.stderr)
+
+    def test_python_generated_source_composes_with_cjs_consumer(self) -> None:
+        runner = load_runner()
+        bundle = runner._canonical_source_bundle(
+            SimpleNamespace(workflow_root=ROOT / "integrations" / "n8n" / "workflows"),
+            "0" * 40,
+            "1" * 40,
+            "2" * 64,
+        )
+        workflows = [json.loads(entry["content"]) for entry in bundle["files"]]
+        result = run_cjs_validation(workflows)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "validated")
+
+    def test_python_readback_uses_supported_transport_parser_call(self) -> None:
+        runner = load_runner()
+        raw = json.loads(READBACK_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
+        raw = raw.replace(
+            '"bound":false,"sha256":null',
+            '"bound":true,"sha256":"' + "a" * 64 + '"',
+            1,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "readback.raw"
+            path.write_text(raw, encoding="utf-8")
+            result = runner._parse_readback(path, "a" * 64, "FORWARD_POST")
+        self.assertTrue(result["verified"])
+        self.assertEqual(result["phase"], "FORWARD_POST")
+        self.assertEqual(result["finance_tables"], 4)
+
+    def test_forward_runtime_receipt_parser_accepts_bound_rollback_input(self) -> None:
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "forward-runtime.json"
+            expected = write_runtime_receipt(
+                runner, path, "finance-four-table-runtime-plan-v1"
+            )
+            receipt, observed_sha = runner._read_forward_runtime_receipt(
+                SimpleNamespace(
+                    operation_kind="ROLLBACK",
+                    forward_runtime_receipt=path,
+                )
+            )
+        self.assertEqual(receipt, expected)
+        self.assertEqual(len(observed_sha), 64)
+
+    def test_disposable_rollback_precondition_forwards_runtime_schema(self) -> None:
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime_path = root / "forward-runtime.json"
+            expected = write_runtime_receipt(
+                runner, runtime_path, "finance-four-table-runtime-plan-v1"
+            )
+            args = SimpleNamespace(
+                operation_kind="ROLLBACK",
+                live_export=root / "live-export.json",
+                source_backup=root / "source-backup.json",
+                migration_receipt=root / "migration-receipt.json",
+                forward_runtime_receipt=runtime_path,
+                output=root / "precondition.json",
+            )
+            export = {
+                "project_id": "synthetic-project",
+                "export_sha256": "c" * 64,
+                "reference_count": 33,
+                "unresolved": [],
+            }
+            binding = {"required_live_export_digest": "b" * 64}
+            migration_receipt = {"source_digest": "d" * 64}
+            lock = {"lock_receipt_sha256": "e" * 64}
+            with (
+                mock.patch.object(
+                    runner,
+                    "_heads",
+                    return_value=(
+                        "0" * 40,
+                        "1" * 40,
+                        "a" * 64,
+                        "b" * 64,
+                        "2" * 64,
+                    ),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_source_and_receipt",
+                    return_value=({}, migration_receipt, "a" * 64, "b" * 64),
+                ),
+                mock.patch.object(
+                    runner,
+                    "_binding_inputs",
+                    return_value=binding,
+                ),
+                mock.patch.object(
+                    runner,
+                    "_validate_live_export",
+                    return_value=export,
+                ),
+                mock.patch.object(runner, "_validate_forward_runtime_binding"),
+                mock.patch.object(runner, "_lock_receipt", return_value=lock),
+                mock.patch.object(runner, "_assert_currentness"),
+                mock.patch.object(runner, "_validate_output_path"),
+                mock.patch.object(runner, "_write_json"),
+            ):
+                result = runner.validate_preconditions(args)
+        self.assertEqual(
+            expected["schema_version"],
+            "finance-four-table-runtime-plan-v1",
+        )
+        self.assertEqual(
+            result["forward_runtime_receipt_schema"],
+            "finance-four-table-runtime-plan-v1",
+        )
+
+    def test_shell_forwards_runtime_receipt_for_disposable_rollback(self) -> None:
+        source = SHELL_RUNNER.read_text(encoding="utf-8")
+        rollback_args = source.split("rollback_receipt_args=()", 1)[1].split(
+            "resolver_args=()", 1
+        )[0]
+        self.assertIn(
+            "rollback_receipt_args+=(--forward-runtime-receipt "
+            '"$forward_runtime_receipt")',
+            rollback_args,
+        )
+        self.assertNotIn("PRODUCTION_ONLY", rollback_args)
+        self.assertGreaterEqual(source.count('"${rollback_receipt_args[@]}"'), 2)
 
 
 if __name__ == "__main__":
