@@ -144,6 +144,18 @@ CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease(
 DECLARE
     changed integer;
 BEGIN
+    -- Retry immutable release evidence before consulting the mutable effect
+    -- row, whose lease fields may already belong to a later successor.
+    IF EXISTS (
+        SELECT 1
+          FROM finance_ops.actual_writer_releases
+         WHERE resource_key = p_resource_key
+           AND lease_id = p_lease_id
+           AND fencing_token = p_fencing_token
+    ) THEN
+        RETURN true;
+    END IF;
+
     IF NOT EXISTS (
         SELECT 1
           FROM finance_ops.actual_writer_effects

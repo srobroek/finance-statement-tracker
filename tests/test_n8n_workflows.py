@@ -1278,6 +1278,15 @@ try {{
             "Assert Recovery Fence After Import",
             "Validate Stored Verification Receipt for Commit",
             "Assert Recovery Fence Before Commit",
+            "Record COMMITTED in Durable Writer State",
+            "Read Back COMMITTED Durable Writer State",
+            "Validate Durable COMMITTED Readback",
+            "Historical Recovery Release Exists",
+            "Read Back COMMITTED Durable Writer State Replay",
+            "Build COMMITTED Recovery Fence Release",
+            "Release COMMITTED Recovery Writer Fence",
+            "Read Back Recovered COMMITTED Writer Fence",
+            "Return Recovered COMMITTED Release Receipt",
         ):
             self.assertIn(name, writer)
         recovery_read = self.nodes("17-actual-outbox-recovery.json")[
@@ -1372,6 +1381,24 @@ try {{
         self.assertEqual(
             self.workflow("20-actual-outbox-apply.json")["connections"][
                 "Assert Recovery Fence Before Commit"
+            ]["main"][0][0]["node"],
+            "Record COMMITTED in Durable Writer State",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Record COMMITTED in Durable Writer State"
+            ]["main"][0][0]["node"],
+            "Read Back COMMITTED Durable Writer State",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Read Back COMMITTED Durable Writer State"
+            ]["main"][0][0]["node"],
+            "Validate Durable COMMITTED Readback",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Validate Durable COMMITTED Readback"
             ]["main"][0][0]["node"],
             "Upsert COMMITTED Recovery",
         )
@@ -1660,6 +1687,14 @@ try {{
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
+                "Validate Durable COMMITTED Readback": {
+                    "json": {
+                        "state": "COMMITTED",
+                        "lease_id": "11111111-1111-4111-8111-111111111111",
+                        "lease_owner": committed["lease_owner"],
+                        "fencing_token": 4,
+                    }
+                },
                 "Read Back Released Recovery Writer Fence": {
                     "json": {
                         "resource_key": "actual:actual-file",
@@ -1820,30 +1855,36 @@ try {{
             },
         }
         connections = self.workflow("20-actual-outbox-apply.json")["connections"]
-        replay_route = ["Verify Recovery Contract", "Route Recovery State"]
-        next_node = connections["Route Recovery State"]["main"][3][0]["node"]
-        while next_node in connections:
-            replay_route.append(next_node)
-            outputs = connections[next_node]["main"]
-            self.assertEqual(len(outputs), 1)
-            self.assertEqual(len(outputs[0]), 1)
-            next_node = outputs[0][0]["node"]
-        replay_route.append(next_node)
+        replay_route = [
+            "Verify Recovery Contract",
+            "Route Recovery State",
+            "Read Back COMMITTED Recovery Replay",
+            "Read Back Exact Actual Verification Receipt Replay",
+            "Read Back Released Recovery Writer Fence Replay",
+            "Historical Recovery Release Exists",
+            "Return Verified Commit Receipt Replay",
+        ]
         self.assertEqual(
-            replay_route,
-            [
-                "Verify Recovery Contract",
-                "Route Recovery State",
-                "Read Back COMMITTED Recovery Replay",
-                "Read Back Exact Actual Verification Receipt Replay",
-                "Read Back Released Recovery Writer Fence Replay",
-                "Return Verified Commit Receipt Replay",
-            ],
+            connections["Route Recovery State"]["main"][3][0]["node"],
+            replay_route[2],
+        )
+        for index in range(2, len(replay_route) - 1):
+            self.assertEqual(
+                connections[replay_route[index]]["main"][0][0]["node"],
+                replay_route[index + 1],
+            )
+        self.assertEqual(
+            connections["Historical Recovery Release Exists"]["main"][1][0]["node"],
+            "Read Back COMMITTED Durable Writer State Replay",
         )
         self.assertEqual(
             set(references),
             set(replay_route)
-            - {"Route Recovery State", "Return Verified Commit Receipt Replay"},
+            - {
+                "Route Recovery State",
+                "Historical Recovery Release Exists",
+                "Return Verified Commit Receipt Replay",
+            },
         )
         replay = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
@@ -1912,6 +1953,14 @@ try {{
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
+                "Validate Durable COMMITTED Readback": {
+                    "json": {
+                        "state": "COMMITTED",
+                        "lease_id": "00000000-0000-4000-8000-000000000007",
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                    }
+                },
                 "Build Recovery Fence Release": {
                     "json": {
                         "resource_key": "actual:actual-file:replay",
@@ -1940,6 +1989,14 @@ try {{
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
+                "Validate Durable COMMITTED Readback": {
+                    "json": {
+                        "state": "COMMITTED",
+                        "lease_id": "00000000-0000-4000-8000-000000000007",
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                    }
+                },
                 "Build Recovery Fence Release": {
                     "json": {
                         "resource_key": "actual:actual-file:replay",
@@ -2069,9 +2126,12 @@ try {{
             for node in postgres
             if "release_writer_lease" in node["parameters"]["query"]
         )
-        self.assertIn("state = 'COMMITTED'", release["parameters"]["query"])
+        self.assertEqual(
+            release["parameters"]["query"],
+            "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
+        )
         self.assertNotIn(
-            "state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')",
+            "actual_writer_effects",
             release["parameters"]["query"],
         )
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(
@@ -2114,6 +2174,10 @@ try {{
         self.assertIn("INSERT INTO finance_ops.actual_writer_releases", release_body)
         self.assertIn("AND released_at IS NOT NULL", release_body)
         self.assertEqual(release_body.count("AND state = 'COMMITTED'"), 2)
+        self.assertLess(
+            release_body.index("actual_writer_releases"),
+            release_body.index("actual_writer_effects"),
+        )
 
     def test_error_workflow_persists_only_redacted_receipts_with_real_readback(
         self,
@@ -3198,6 +3262,29 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertFalse(
             any(node["type"] == "n8n-nodes-base.postgres" for node in prepared["nodes"])
         )
+
+    def test_committed_before_release_fixture_seeds_exact_unreleased_lease(
+        self,
+    ) -> None:
+        generator = load_fixture_generator()
+        workflow = generator.build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000923", "COMMITTED"
+        )
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        terminal = nodes["Seed COMMITTED Unreleased Writer Evidence"]
+        query = terminal["parameters"]["query"]
+        replacements = terminal["parameters"]["options"]["queryReplacement"]
+        self.assertIn("finance_ops.writer_leases", query)
+        self.assertIn("finance_ops.actual_writer_effects", query)
+        self.assertIn("state = 'COMMITTED'", query)
+        self.assertIn("released_at = NULL", query)
+        self.assertIn("00000000-0000-4000-8000-000000000023", replacements)
+        outbox = nodes["Seed COMMITTED Outbox Crash Boundary"]["parameters"]["columns"][
+            "value"
+        ]
+        self.assertEqual(outbox["state"], "COMMITTED")
+        self.assertEqual(outbox["lease_owner"], "n8n:fixture:predecessor:committed")
+        self.assertEqual(outbox["lease_fence"], 1)
 
     def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(
         self,

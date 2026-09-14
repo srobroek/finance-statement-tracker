@@ -163,9 +163,9 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $5::text AND payload_sha256 = $6::text AND verified_payload_sha256 = $7::text AND state = 'COMMITTED') AS allowed) SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released FROM terminal WHERE allowed;",
+        "query": "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
         "options": {
-          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token, $json.outbox_id, $json.account_id, $json.payload_sha256, $json.verified_payload_sha256] }}"
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token] }}"
         }
       },
       "credentials": {

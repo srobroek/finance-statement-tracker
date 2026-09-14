@@ -58,6 +58,11 @@
               "keyName": "state",
               "condition": "eq",
               "keyValue": "VERIFIED"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "COMMITTED"
             }
           ]
         },
