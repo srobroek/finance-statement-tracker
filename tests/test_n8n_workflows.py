@@ -740,7 +740,14 @@ try {{
         )
         self.assertEqual(
             table["allowed_states"],
-            ["PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED", "FAILED"],
+            [
+                "PREPARED",
+                "ACTUAL_OBSERVED",
+                "VERIFIED",
+                "COMMITTED",
+                "RELEASED",
+                "FAILED",
+            ],
         )
 
     def test_document_state_machine_marks_plaintext_ephemeral(self) -> None:
@@ -2074,6 +2081,7 @@ try {{
             "finance_ops.acquire_writer_lease",
             "finance_ops.assert_writer_lease",
             "finance_ops.release_writer_lease",
+            "finance_ops.release_maintenance_lease",
         ):
             self.assertIn(function, queries)
         acquire = next(
@@ -2111,9 +2119,13 @@ try {{
             "fencing_token = EXCLUDED.fencing_token",
         ):
             self.assertIn(assignment, acquire_query)
+        self.assertIn("$5::text = 'SUCCESSOR' AND (", acquire_query)
         self.assertIn(
-            "$5::text = 'SUCCESSOR' AND actual_writer_effects.state IN "
-            "('VERIFIED', 'RECONCILED', 'COMMITTED')",
+            "actual_writer_effects.state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')",
+            acquire_query,
+        )
+        self.assertIn(
+            "actual_writer_effects.state = 'ISSUED' AND $11::text = 'ACTUAL_OBSERVED'",
             acquire_query,
         )
         self.assertNotIn(
@@ -2126,9 +2138,11 @@ try {{
             for node in postgres
             if "release_writer_lease" in node["parameters"]["query"]
         )
-        self.assertEqual(
-            release["parameters"]["query"],
-            "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
+        self.assertIn(
+            "CASE WHEN $4::text = 'MAINTENANCE'", release["parameters"]["query"]
+        )
+        self.assertIn(
+            "finance_ops.release_maintenance_lease", release["parameters"]["query"]
         )
         self.assertNotIn(
             "actual_writer_effects",
@@ -2168,11 +2182,13 @@ try {{
         release_body = migration[
             migration.index(
                 "CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease"
-            ) :
+            ) : migration.index(
+                "CREATE OR REPLACE FUNCTION finance_ops.release_maintenance_lease"
+            )
         ]
-        self.assertIn("IF changed = 1 OR EXISTS", release_body)
+        self.assertNotIn("IF changed", release_body)
         self.assertIn("INSERT INTO finance_ops.actual_writer_releases", release_body)
-        self.assertIn("AND released_at IS NOT NULL", release_body)
+        self.assertIn("UPDATE finance_ops.writer_leases", release_body)
         self.assertEqual(release_body.count("AND state = 'COMMITTED'"), 2)
         self.assertLess(
             release_body.index("actual_writer_releases"),
@@ -3200,7 +3216,7 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 19)
+        self.assertEqual(len(manifest["workflows"]), 20)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
@@ -3208,49 +3224,48 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                 hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"]
             )
 
-    def test_successor_recovery_fixtures_seed_exact_terminal_writer_evidence(
+    def test_successor_recovery_fixtures_seed_exact_durable_writer_evidence(
         self,
     ) -> None:
         generated = N8N / "disposable" / "generated"
-        for filename, state, artifact_digest, economic_digest in (
-            ("104-recover-actual-observed.json", "ACTUAL_OBSERVED", "b" * 64, "d" * 64),
-            ("105-recover-verified.json", "VERIFIED", "c" * 64, "e" * 64),
+        for filename, state, artifact_digest, effect_state in (
+            ("104-recover-actual-observed.json", "ACTUAL_OBSERVED", "b" * 64, "ISSUED"),
+            ("105-recover-verified.json", "VERIFIED", "c" * 64, "VERIFIED"),
         ):
             with self.subTest(filename=filename):
                 workflow = load_json(generated / filename)
                 nodes = {node["name"]: node for node in workflow["nodes"]}
-                terminal_name = f"Seed {state} Terminal Writer Evidence"
-                terminal = nodes[terminal_name]
-                self.assertEqual(terminal["type"], "n8n-nodes-base.postgres")
-                self.assertEqual(terminal["typeVersion"], 2.6)
-                query = terminal["parameters"]["query"]
-                replacements = terminal["parameters"]["options"]["queryReplacement"]
+                evidence_name = f"Seed {state} Durable Writer Evidence"
+                evidence = nodes[evidence_name]
+                self.assertEqual(evidence["type"], "n8n-nodes-base.postgres")
+                self.assertEqual(evidence["typeVersion"], 2.6)
+                self.assertTrue(evidence["alwaysOutputData"])
+                query = evidence["parameters"]["query"]
+                replacements = evidence["parameters"]["options"]["queryReplacement"]
                 self.assertIn("finance_ops.actual_writer_effects", query)
-                self.assertIn("verified_payload_sha256", query)
-                self.assertIn("'VERIFIED'", query)
+                self.assertIn("ON CONFLICT (resource_key, outbox_id) DO NOTHING", query)
+                self.assertIn(f"'{effect_state}'", query)
+                if state == "ACTUAL_OBSERVED":
+                    self.assertIn("NULL, $7::date", query)
+                else:
+                    self.assertIn("verified_payload_sha256", query)
                 self.assertIn(artifact_digest, replacements)
-                self.assertIn(economic_digest, replacements)
-                self.assertNotEqual(artifact_digest, economic_digest)
                 self.assertEqual(
                     workflow["connections"]["Run Disposable Fixture"]["main"][0][0][
                         "node"
                     ],
-                    terminal_name,
+                    evidence_name,
                 )
                 outbox_name = f"Seed {state} Outbox Crash Boundary"
                 outbox_values = nodes[outbox_name]["parameters"]["columns"]["value"]
                 self.assertEqual(outbox_values["account_id"], "fixture-account")
                 self.assertEqual(outbox_values["card_code"], "FIXTURE_CARD")
                 if state == "VERIFIED":
-                    self.assertEqual(
-                        outbox_values["expected_payload_sha256"], economic_digest
-                    )
-                    self.assertEqual(
-                        outbox_values["observed_payload_sha256"], economic_digest
-                    )
+                    self.assertEqual(outbox_values["expected_payload_sha256"], "e" * 64)
+                    self.assertEqual(outbox_values["observed_payload_sha256"], "e" * 64)
                     self.assertTrue(outbox_values["invariants_passed"])
                 self.assertEqual(
-                    workflow["connections"][terminal_name]["main"][0][0]["node"],
+                    workflow["connections"][evidence_name]["main"][0][0]["node"],
                     outbox_name,
                 )
                 self.assertEqual(
@@ -3266,18 +3281,19 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
     def test_committed_before_release_fixture_seeds_exact_unreleased_lease(
         self,
     ) -> None:
-        generator = load_fixture_generator()
-        workflow = generator.build_recovery_wrapper(
-            "90000000-0000-4000-8000-000000000923", "COMMITTED"
-        )
+        generated = N8N / "disposable" / "generated"
+        workflow = load_json(generated / "109-recover-committed-unreleased.json")
+        self.assertEqual(workflow["id"], "90000000-0000-4000-8000-000000000923")
         nodes = {node["name"]: node for node in workflow["nodes"]}
         terminal = nodes["Seed COMMITTED Unreleased Writer Evidence"]
         query = terminal["parameters"]["query"]
         replacements = terminal["parameters"]["options"]["queryReplacement"]
         self.assertIn("finance_ops.writer_leases", query)
         self.assertIn("finance_ops.actual_writer_effects", query)
-        self.assertIn("state = 'COMMITTED'", query)
+        self.assertIn("'COMMITTED'", query)
         self.assertIn("released_at = NULL", query)
+        self.assertIn("actual_writer_releases", query)
+        self.assertIn("ON CONFLICT (resource_key, outbox_id) DO NOTHING", query)
         self.assertIn("00000000-0000-4000-8000-000000000023", replacements)
         outbox = nodes["Seed COMMITTED Outbox Crash Boundary"]["parameters"]["columns"][
             "value"
@@ -3285,6 +3301,18 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(outbox["state"], "COMMITTED")
         self.assertEqual(outbox["lease_owner"], "n8n:fixture:predecessor:committed")
         self.assertEqual(outbox["lease_fence"], 1)
+        manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
+        scenario = manifest["scenario_contract"]["committed_unreleased_recovery"]
+        self.assertEqual(scenario["workflow_id"], workflow["id"])
+        self.assertEqual(scenario["expected_durable_outbox_state"], "RELEASED")
+        self.assertTrue(scenario["writer_release_verified"])
+        self.assertTrue(scenario["committed_release_recovered"])
+        self.assertEqual(
+            workflow["connections"]["Seed COMMITTED Outbox Crash Boundary"]["main"][0][
+                0
+            ]["node"],
+            "Run Derived Recovery Core",
+        )
 
     def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(
         self,
@@ -3532,6 +3560,12 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(
             scenarios["lease_stale"]["expected_error"], "WRITER_LEASE_STALE"
         )
+        committed = scenarios["committed_unreleased_recovery"]
+        self.assertEqual(
+            committed["workflow_id"], "90000000-0000-4000-8000-000000000923"
+        )
+        self.assertEqual(committed["expected_durable_outbox_state"], "RELEASED")
+        self.assertTrue(committed["writer_release_verified"])
         self.assertEqual(scenarios["ai_negative"]["runner_calls"], 0)
         self.assertEqual(
             scenarios["ai_positive_luna"],

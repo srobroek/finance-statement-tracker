@@ -60,6 +60,8 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertEqual(
             states, {"PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED"}
         )
+        self.assertEqual(document["meta"]["releasedStateExcluded"], "RELEASED")
+        self.assertNotIn("RELEASED", states)
         self.assertEqual(read["typeVersion"], 1.1)
         self.assertEqual(
             next_node(document, "Every 10 Minutes"), "Read Nonterminal Actual Outbox"
@@ -86,10 +88,8 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertEqual(
             metadata["durableStateTable"], "finance_ops.actual_writer_effects"
         )
-        self.assertIn("PREPARED attempt zero only", metadata["admissionPolicy"])
-        self.assertIn(
-            "ISSUED/OUTCOME_UNKNOWN never reclaimed", metadata["admissionPolicy"]
-        )
+        self.assertIn("PREPARED attempt zero", metadata["admissionPolicy"])
+        self.assertIn("exact ACTUAL_OBSERVED over ISSUED", metadata["admissionPolicy"])
         self.assertIn("VERIFIED/RECONCILED/COMMITTED", metadata["admissionPolicy"])
         acquire_sql = lease_nodes["Atomic Acquire Writer Lease"]["parameters"]["query"]
         release_sql = lease_nodes["Release Exact Writer Fence"]["parameters"]["query"]
@@ -100,7 +100,10 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             "state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN')",
             acquire_sql,
         )
-        self.assertIn("terminal.present", acquire_sql)
+        self.assertIn("terminal.present OR resumable.present", acquire_sql)
+        self.assertIn("actual_writer_effects.state = 'ISSUED'", acquire_sql)
+        self.assertIn("$11::text = 'ACTUAL_OBSERVED'", acquire_sql)
+        self.assertIn("$13::text = 'MAINTENANCE'", acquire_sql)
         self.assertIn("$5::text = 'SUCCESSOR'", acquire_sql)
         self.assertIn("$11::text = 'PREPARED'", acquire_sql)
         self.assertIn("$12::integer = 0", acquire_sql)
@@ -118,13 +121,15 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             "fencing_token = EXCLUDED.fencing_token",
         ):
             self.assertIn(assignment, acquire_sql)
-        self.assertEqual(
-            release_sql,
-            "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
+        self.assertIn("release_maintenance_lease", release_sql)
+        self.assertIn("release_writer_lease", release_sql)
+        self.assertIn(
+            "$json.lease_class",
+            lease_nodes["Release Exact Writer Fence"]["parameters"]["options"][
+                "queryReplacement"
+            ],
         )
-        self.assertNotIn("actual_writer_effects", release_sql)
         self.assertIn("finance_ops.acquire_writer_lease", acquire_sql)
-        self.assertIn("finance_ops.release_writer_lease", release_sql)
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text()
         self.assertIn("actual_writer_releases", migration)
         release_body = migration[
@@ -136,6 +141,16 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             release_body.index("actual_writer_releases"),
             release_body.index("actual_writer_effects"),
         )
+        writer_release_body = release_body[
+            : release_body.index(
+                "CREATE OR REPLACE FUNCTION finance_ops.release_maintenance_lease"
+            )
+        ]
+        self.assertNotIn("IF changed", writer_release_body)
+        self.assertIn(
+            "INSERT INTO finance_ops.actual_writer_releases", writer_release_body
+        )
+        self.assertIn("UPDATE finance_ops.writer_leases", writer_release_body)
         accepted = run_code_node(
             "Validate Fixed Lease Operation",
             validator_code,
@@ -144,7 +159,12 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
                 "resource_key": "actual:budget-1",
                 "lease_owner": "n8n:recovery:outbox-1",
                 "ttl_seconds": 120,
+                "lease_class": "ACTUAL_OUTBOX",
                 "outbox_id": "outbox-1",
+                "account_id": "account-1",
+                "budget_id": "budget-1",
+                "period_start": "2026-08-01",
+                "period_end": "2026-08-31",
                 "outbox_state": "ACTUAL_OBSERVED",
                 "attempt_count": 1,
                 "admission": "SUCCESSOR",
@@ -162,6 +182,7 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
                 "lease_owner": "n8n:recovery:outbox-1",
                 "ttl_seconds": 120,
                 "outbox_id": "outbox-1",
+                "lease_class": "ACTUAL_OUTBOX",
                 "outbox_state": "ACTUAL_OBSERVED",
                 "attempt_count": 0,
                 "admission": "INITIAL",
@@ -170,6 +191,22 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             {},
         )
         self.assertFalse(rejected_initial["ok"])
+        accepted_maintenance = run_code_node(
+            "Validate Fixed Lease Operation",
+            validator_code,
+            {
+                "operation": "ACQUIRE",
+                "lease_class": "MAINTENANCE",
+                "resource_key": "actual:budget-1",
+                "lease_owner": "n8n:maintenance:fixture",
+                "ttl_seconds": 600,
+            },
+            {},
+        )
+        self.assertTrue(accepted_maintenance["ok"], accepted_maintenance)
+        maintenance_request = accepted_maintenance["output"][0]["json"]
+        self.assertEqual(maintenance_request["lease_class"], "MAINTENANCE")
+        self.assertNotIn("outbox_id", maintenance_request)
         self.assertEqual(
             next_node(document, "Trusted Lease Request"),
             "Validate Fixed Lease Operation",
@@ -178,8 +215,10 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             next_node(document, "Validate Fixed Lease Operation"), "Lease Operation"
         )
         self.assertEqual(
-            metadata["fenceReleasePolicy"], "W20 durable COMMITTED readback only"
+            metadata["fenceReleasePolicy"],
+            "ACTUAL_OUTBOX requires durable COMMITTED readback; MAINTENANCE uses exact generic release",
         )
+        self.assertEqual(metadata["leaseClasses"], ["ACTUAL_OUTBOX", "MAINTENANCE"])
 
     def test_actual_observed_recovery_request_is_terminal_backed(self) -> None:
         actual_nodes = nodes("20-actual-outbox-apply.json")
@@ -213,6 +252,7 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertEqual(request["outbox_state"], "ACTUAL_OBSERVED")
         self.assertEqual(request["admission"], "SUCCESSOR")
         self.assertEqual(request["payload_sha256"], payload_sha256)
+        self.assertEqual(request["lease_class"], "ACTUAL_OUTBOX")
 
     def test_w20_checks_release_history_then_recovers_committed_exact_lease(
         self,
@@ -225,6 +265,18 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             next_node(document, "Route Recovery State", 3),
             "Read Back COMMITTED Recovery Replay",
         )
+        self.assertEqual(
+            next_node(document, "Route Recovery State", 4),
+            "Read Back COMMITTED Recovery Replay",
+        )
+        replay_state_filter = next(
+            condition
+            for condition in actual_nodes["Read Back COMMITTED Recovery Replay"][
+                "parameters"
+            ]["filters"]["conditions"]
+            if condition["keyName"] == "state"
+        )
+        self.assertIn("outbox_row.state", replay_state_filter["keyValue"])
         self.assertEqual(
             next_node(document, "Read Back COMMITTED Recovery Replay"),
             "Read Back Exact Actual Verification Receipt Replay",
@@ -297,6 +349,23 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             next_node(document, "Read Back Released Recovery Writer Fence"),
             "Return Verified Commit Receipt",
         )
+        for validated_receipt in (
+            "Return Verified Commit Receipt",
+            "Return Verified Commit Receipt Replay",
+            "Return Recovered COMMITTED Release Receipt",
+        ):
+            self.assertEqual(
+                next_node(document, validated_receipt), "Mark Recovery RELEASED"
+            )
+        self.assertEqual(
+            next_node(document, "Mark Recovery RELEASED"),
+            "Return RELEASED Recovery Receipt",
+        )
+        released_values = actual_nodes["Mark Recovery RELEASED"]["parameters"][
+            "columns"
+        ]["value"]
+        self.assertEqual(released_values["state"], "RELEASED")
+        self.assertEqual(document["meta"]["releasedState"], "RELEASED")
         release_code = actual_nodes["Build Recovery Fence Release"]["parameters"][
             "jsCode"
         ]
@@ -399,6 +468,20 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertTrue(replay["ok"], replay)
         self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
         self.assertEqual(replay["output"][0]["json"]["state"], "COMMITTED")
+        released_references = {
+            **references,
+            "Read Back COMMITTED Recovery Replay": {
+                "json": {**committed, "state": "RELEASED"}
+            },
+        }
+        released_replay = run_code_node(
+            "Return Verified Commit Receipt Replay",
+            replay_code,
+            receipt,
+            released_references,
+        )
+        self.assertTrue(released_replay["ok"], released_replay)
+        self.assertTrue(released_replay["output"][0]["json"]["replay_readback_only"])
 
         mismatched = dict(receipt, card_code="OTHER_CARD")
         mismatched_references = {
@@ -506,6 +589,7 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertTrue(built["ok"], built)
         request = built["output"][0]["json"]
         self.assertEqual(request["operation"], "RELEASE")
+        self.assertEqual(request["lease_class"], "ACTUAL_OUTBOX")
         self.assertEqual(request["lease_id"], effect["lease_id"])
         self.assertEqual(request["fencing_token"], committed["lease_fence"])
 
@@ -537,6 +621,19 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertTrue(output["committed_release_recovered"])
         self.assertFalse(output["replay_readback_only"])
         self.assertTrue(output["writer_release_verified"])
+        final_code = actual_nodes["Return RELEASED Recovery Receipt"]["parameters"][
+            "jsCode"
+        ]
+        finalized = run_code_node(
+            "Return RELEASED Recovery Receipt",
+            final_code,
+            {"batch_id": output["batch_id"], "state": "RELEASED"},
+            {"Return Recovered COMMITTED Release Receipt": {"json": output}},
+        )
+        self.assertTrue(finalized["ok"], finalized)
+        self.assertEqual(
+            finalized["output"][0]["json"]["durable_outbox_state"], "RELEASED"
+        )
 
 
 if __name__ == "__main__":

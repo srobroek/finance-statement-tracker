@@ -42,6 +42,7 @@ ALLOWED_INLINE_EDGES = {
     "90000000-0000-4000-8000-000000000918": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000919": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000920": frozenset({RECOVERY_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000923": frozenset({RECOVERY_FIXTURE_ID}),
     SWEEP_FIXTURE_ID: frozenset(
         {
             "10000000-0000-4000-8000-000000000001",
@@ -345,13 +346,29 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
     return workflow
 
 
-def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
-    request = {
+def lease_fixture_request(owner: str, resource_key: str, outbox_id: str) -> dict:
+    return {
         "operation": "ACQUIRE",
-        "resource_key": "actual:fixture_concurrency",
+        "lease_class": "ACTUAL_OUTBOX",
+        "resource_key": resource_key,
         "lease_owner": owner,
         "ttl_seconds": 120,
+        "outbox_id": outbox_id,
+        "outbox_state": "PREPARED",
+        "attempt_count": 0,
+        "admission": "INITIAL",
+        "account_id": "fixture-account",
+        "payload_sha256": "1" * 64,
+        "budget_id": resource_key.removeprefix("actual:"),
+        "period_start": "2026-08-01",
+        "period_end": "2026-08-31",
     }
+
+
+def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
+    request = lease_fixture_request(
+        owner, "actual:fixture_concurrency", "fixture-lease-concurrency"
+    )
     return wrapper(
         workflow_id,
         f"DISPOSABLE ONLY · Lease acquire {owner}",
@@ -362,10 +379,17 @@ def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
 
 def build_stale_lease_wrapper() -> dict:
     trigger = manual_node()
+    stale_request = canonical(
+        lease_fixture_request(
+            "n8n:fixture:stale",
+            "actual:fixture_stale",
+            "fixture-lease-stale",
+        )
+    )
     acquire_input = code_node(
         "lease-stale-input",
         "Build Stale Fixture Acquire",
-        "return [{json:{operation:'ACQUIRE',resource_key:'actual:fixture_stale',lease_owner:'n8n:fixture:stale',ttl_seconds:120}}];",
+        f"return [{{json:{stale_request}}}];",
         [-250, 0],
     )
     acquire = execute_node(
@@ -374,7 +398,7 @@ def build_stale_lease_wrapper() -> dict:
     corrupt = code_node(
         "lease-stale-corrupt",
         "Build Stale Fence Assertion",
-        "return [{json:{operation:'ASSERT',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];",
+        "return [{json:{operation:'ASSERT',lease_class:'ACTUAL_OUTBOX',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];",
         [250, 0],
     )
     assertion = execute_node(
@@ -661,30 +685,28 @@ def terminal_effect_upsert_node(state: str) -> dict:
     suffix = state.lower().replace("_", "-")
     payload_sha256 = ("b" if state == "ACTUAL_OBSERVED" else "c") * 64
     verified_payload_sha256 = ("d" if state == "ACTUAL_OBSERVED" else "e") * 64
+    effect_state = "ISSUED" if state == "ACTUAL_OBSERVED" else "VERIFIED"
+    verified_value = "NULL" if state == "ACTUAL_OBSERVED" else "$6::text"
     return {
         "id": f"seed-{suffix}-terminal-effect",
-        "name": f"Seed {state} Terminal Writer Evidence",
+        "name": f"Seed {state} Durable Writer Evidence",
         "type": "n8n-nodes-base.postgres",
         "typeVersion": 2.6,
         "position": [-300, 0],
+        "alwaysOutputData": True,
         "parameters": {
             "operation": "executeQuery",
             "query": (
                 "INSERT INTO finance_ops.actual_writer_effects "
                 "(resource_key, outbox_id, account_id, budget_id, payload_sha256, "
                 "verified_payload_sha256, period_start, period_end, state, attempt_count, "
-                "lease_id, lease_owner, fencing_token, updated_at) "
-                "VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, "
-                "$7::date, $8::date, 'VERIFIED', 1, $9::uuid, $10::text, 1, clock_timestamp()) "
-                "ON CONFLICT (resource_key, outbox_id) DO UPDATE SET "
-                "account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, "
-                "payload_sha256 = EXCLUDED.payload_sha256, "
-                "verified_payload_sha256 = EXCLUDED.verified_payload_sha256, "
-                "period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, "
-                "state = 'VERIFIED', attempt_count = 1, lease_id = EXCLUDED.lease_id, "
-                "lease_owner = EXCLUDED.lease_owner, fencing_token = 1, "
-                "updated_at = clock_timestamp() "
-                "RETURNING resource_key, outbox_id, payload_sha256, verified_payload_sha256, state;"
+                "lease_id, lease_owner, fencing_token, issued_at, updated_at) "
+                "VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, "
+                f"{verified_value}, $7::date, $8::date, '{effect_state}', 1, "
+                "$9::uuid, $10::text, 1, clock_timestamp(), clock_timestamp()) "
+                "ON CONFLICT (resource_key, outbox_id) DO NOTHING "
+                "RETURNING resource_key, outbox_id, payload_sha256, "
+                "verified_payload_sha256, state;"
             ),
             "options": {
                 "queryReplacement": "={{ ["
@@ -713,17 +735,22 @@ def committed_unreleased_seed_node() -> dict:
         "type": "n8n-nodes-base.postgres",
         "typeVersion": 2.6,
         "position": [-300, 0],
+        "alwaysOutputData": True,
         "parameters": {
             "operation": "executeQuery",
             "query": (
                 "WITH seeded_lease AS ("
-                "INSERT INTO finance_ops.writer_leases "
+                "INSERT INTO finance_ops.writer_leases AS current "
                 "(resource_key, lease_id, lease_owner, fencing_token, expires_at, released_at, updated_at) "
-                "VALUES ($1::text, $2::uuid, $3::text, 1, clock_timestamp() + interval '10 minutes', NULL, clock_timestamp()) "
+                "VALUES ($1::text, $2::uuid, $3::text, 1, "
+                "clock_timestamp() + interval '10 minutes', NULL, clock_timestamp()) "
                 "ON CONFLICT (resource_key) DO UPDATE SET lease_id = EXCLUDED.lease_id, "
                 "lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, "
                 "expires_at = EXCLUDED.expires_at, released_at = NULL, updated_at = clock_timestamp() "
-                "RETURNING resource_key, lease_id, lease_owner, fencing_token"
+                "WHERE current.released_at IS NOT NULL AND NOT EXISTS ("
+                "SELECT 1 FROM finance_ops.actual_writer_releases "
+                "WHERE resource_key = $1::text AND lease_id = $2::uuid AND fencing_token = 1"
+                ") RETURNING resource_key, lease_id, lease_owner, fencing_token"
                 ") INSERT INTO finance_ops.actual_writer_effects "
                 "(resource_key, outbox_id, account_id, budget_id, payload_sha256, "
                 "verified_payload_sha256, period_start, period_end, state, attempt_count, "
@@ -731,14 +758,7 @@ def committed_unreleased_seed_node() -> dict:
                 "SELECT resource_key, $4::text, $5::text, $6::text, $7::text, $8::text, "
                 "$9::date, $10::date, 'COMMITTED', 1, lease_id, lease_owner, fencing_token, "
                 "clock_timestamp() FROM seeded_lease "
-                "ON CONFLICT (resource_key, outbox_id) DO UPDATE SET "
-                "account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, "
-                "payload_sha256 = EXCLUDED.payload_sha256, "
-                "verified_payload_sha256 = EXCLUDED.verified_payload_sha256, "
-                "period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, "
-                "state = 'COMMITTED', attempt_count = 1, lease_id = EXCLUDED.lease_id, "
-                "lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, "
-                "updated_at = clock_timestamp() "
+                "ON CONFLICT (resource_key, outbox_id) DO NOTHING "
                 "RETURNING resource_key, outbox_id, payload_sha256, "
                 "verified_payload_sha256, state, lease_id::text AS lease_id, "
                 "lease_owner, fencing_token;"
@@ -862,6 +882,9 @@ def build_all() -> dict[str, dict]:
         ),
         "105-recover-verified.json": build_recovery_wrapper(
             "90000000-0000-4000-8000-000000000920", "VERIFIED"
+        ),
+        "109-recover-committed-unreleased.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000923", "COMMITTED"
         ),
     }
     catalog = {workflow["id"]: workflow for workflow in workflows.values()}
@@ -1109,6 +1132,15 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             ],
             "expected_exit": 0,
             "expected_state": "COMMITTED",
+            "finance_writes": 0,
+        },
+        "committed_unreleased_recovery": {
+            "workflow_id": "90000000-0000-4000-8000-000000000923",
+            "expected_exit": 0,
+            "expected_state": "COMMITTED",
+            "expected_durable_outbox_state": "RELEASED",
+            "writer_release_verified": True,
+            "committed_release_recovered": True,
             "finance_writes": 0,
         },
     }

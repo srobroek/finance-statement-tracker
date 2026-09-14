@@ -206,7 +206,8 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "releasedStateExcluded": "RELEASED"
   },
   "nodeGroups": [
     {
