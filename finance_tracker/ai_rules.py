@@ -116,39 +116,34 @@ def _unresolved(transaction: Transaction, field: str) -> bool:
 
 def _apply_resolution_cleanup(transaction: Transaction, field: str) -> None:
     """Clear derived review state without overriding manual locks."""
+    from .classification_audit import enforce_transaction_invariants
 
     locked = set(transaction.metadata.get("locked_fields", []))
-    resolution_field = (
-        "category_resolution"
-        if field == "category"
-        else "payee_resolution"
-        if field in {"vendor", "payee"}
-        else None
-    )
-    resolution_locked = resolution_field in locked if resolution_field else False
     if field == "category":
-        if not resolution_locked:
+        if "category_resolution" not in locked:
             transaction.metadata["category_resolution"] = "RESOLVED"
+        if "category_recommendations" not in locked:
             transaction.metadata.pop("category_recommendations", None)
     elif field in {"vendor", "payee"}:
-        if not resolution_locked:
+        if "payee_resolution" not in locked:
             transaction.metadata["payee_resolution"] = "RESOLVED"
+        if "payee_recommendations" not in locked:
             transaction.metadata.pop("payee_recommendations", None)
+        if "vendor_recommendations" not in locked:
             transaction.metadata.pop("vendor_recommendations", None)
-    queue_locked = resolution_locked or bool(
-        {"tags", "review_required", "classification_review_reasons"} & locked
-    )
-    if not queue_locked:
-        from .classification_audit import enforce_transaction_invariants
 
-        if _unresolved(transaction, "category"):
+    if _unresolved(transaction, "category"):
+        if "review_required" not in locked:
             transaction.review_required = True
-        else:
+    else:
+        if "tags" not in locked:
             transaction.tags.discard("category-review")
             transaction.tags.discard("needs-review")
+        if "review_required" not in locked:
             transaction.review_required = False
+        if "classification_review_reasons" not in locked:
             transaction.metadata.pop("classification_review_reasons", None)
-        enforce_transaction_invariants(transaction)
+    enforce_transaction_invariants(transaction)
 
 
 def validate_policy(policy: AIPolicy) -> None:
