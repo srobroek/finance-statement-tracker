@@ -705,97 +705,122 @@
   },
   {
     "schema_version": 1,
-    "rule_id": "vendor-mobile",
-    "name": "Normalize mobile providers",
+    "rule_id": "vendor-virgin-mobile",
+    "name": "Normalize Virgin Mobile",
     "stage": "VENDOR_NORMALIZATION",
     "priority": 70,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "contains",
-              "value": "VIRGIN MOBILE"
-            }
-          ]
-        },
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "regex",
-              "value": "(^|[^A-Z])ETISALAT|(^|[^A-Z])E&([^A-Z]|$)"
-            }
-          ]
-        }
-      ]
-    },
-    "actions": [
-      {
-        "action": "set",
-        "field": "vendor",
-        "value": "Mobile Provider"
-      }
-    ],
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "VIRGIN MOBILE"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Virgin Mobile"}],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
   },
   {
     "schema_version": 1,
-    "rule_id": "vendor-food-delivery",
-    "name": "Normalize food delivery",
+    "rule_id": "vendor-etisalat",
+    "name": "Normalize Etisalat",
     "stage": "VENDOR_NORMALIZATION",
-    "priority": 80,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "contains",
-              "value": "TALABAT"
-            }
-          ]
-        },
-        {
-          "all": [
-            {
-              "field": "merchant_raw",
-              "operator": "contains",
-              "value": "DELIVEROO"
-            }
-          ]
-        }
-      ]
-    },
-    "actions": [
-      {
-        "action": "set",
-        "field": "vendor",
-        "value": "Food Delivery"
-      }
-    ],
+    "priority": 71,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(^|[^A-Z])ETISALAT([^A-Z]|$)|(^|[^A-Z])E&([^A-Z]|$)"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Etisalat"}],
     "stop_on_match": true,
-    "rule_sets": [
-      "FULL_LEDGER",
-      "LIVE_CASHBACK"
-    ]
+    "rule_sets": ["FULL_LEDGER"]
   },
   {
     "schema_version": 1,
-    "rule_id": "vendor-ride-hailing",
-    "name": "Normalize ride hailing",
+    "rule_id": "vendor-talabat",
+    "name": "Normalize Talabat",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 80,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "TALABAT"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Talabat"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-deliveroo",
+    "name": "Normalize Deliveroo",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 81,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "DELIVEROO"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Deliveroo"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-uber-eats",
+    "name": "Normalize Uber Eats",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 82,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "UBER EATS"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Uber Eats"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER", "LIVE_CASHBACK"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-careem",
+    "name": "Normalize Careem",
     "stage": "VENDOR_NORMALIZATION",
     "priority": 90,
-    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(?:CAREEM|\\bUBER\\b|DUBAI TAXI|NATIONAL TAXI|CARS TAXI|TAKSI YONETIM)"}]}]},
-    "actions": [
-      {
-        "action": "set",
-        "field": "vendor",
-        "value": "Ride Hailing"
-      }
-    ],
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "CAREEM"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Careem"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-uber",
+    "name": "Normalize Uber",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 91,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "regex", "value": "(^|[^A-Z])UBER([^A-Z]|$)"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Uber"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-dubai-taxi",
+    "name": "Normalize Dubai Taxi",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 92,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "DUBAI TAXI"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Dubai Taxi"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-national-taxi",
+    "name": "Normalize National Taxi",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 93,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "NATIONAL TAXI"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "National Taxi"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-cars-taxi",
+    "name": "Normalize Cars Taxi",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 94,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "CARS TAXI"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Cars Taxi"}],
+    "stop_on_match": true,
+    "rule_sets": ["FULL_LEDGER"]
+  },
+  {
+    "schema_version": 1,
+    "rule_id": "vendor-taksi-yonetim",
+    "name": "Normalize Taksi Yonetim",
+    "stage": "VENDOR_NORMALIZATION",
+    "priority": 95,
+    "match": {"any": [{"all": [{"field": "merchant_raw", "operator": "contains", "value": "TAKSI YONETIM"}]}]},
+    "actions": [{"action": "set", "field": "vendor", "value": "Taksi Yonetim"}],
     "stop_on_match": true,
     "rule_sets": ["FULL_LEDGER"]
   },
@@ -1699,19 +1724,7 @@
     "name": "Food delivery",
     "stage": "CLASSIFICATION",
     "priority": 50,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "vendor",
-              "operator": "equals",
-              "value": "Food Delivery"
-            }
-          ]
-        }
-      ]
-    },
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Deliveroo", "Talabat", "Uber Eats"]}]}]},
     "actions": [
       {
         "action": "set_if_empty",
@@ -1736,19 +1749,7 @@
     "name": "Ride hailing",
     "stage": "CLASSIFICATION",
     "priority": 60,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "vendor",
-              "operator": "equals",
-              "value": "Ride Hailing"
-            }
-          ]
-        }
-      ]
-    },
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Careem", "Uber", "Dubai Taxi", "National Taxi", "Cars Taxi", "Taksi Yonetim"]}]}]},
     "actions": [
       {
         "action": "set_if_empty",
@@ -1844,19 +1845,7 @@
     "name": "Mobile and internet",
     "stage": "CLASSIFICATION",
     "priority": 90,
-    "match": {
-      "any": [
-        {
-          "all": [
-            {
-              "field": "vendor",
-              "operator": "equals",
-              "value": "Mobile Provider"
-            }
-          ]
-        }
-      ]
-    },
+    "match": {"any": [{"all": [{"field": "vendor", "operator": "in", "value": ["Etisalat", "Virgin Mobile"]}]}]},
     "actions": [
       {
         "action": "set_if_empty",

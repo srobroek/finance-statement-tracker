@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Iterable
 
 from .models import Transaction, money
+from .properties import locked_ownership_conflict
 
 
 SCHEMA_VERSION = 1
@@ -85,7 +86,15 @@ SUPPORTED_OPERATORS = frozenset(
     }
 )
 SUPPORTED_ACTIONS = frozenset(
-    {"set", "set_if_empty", "add_tag", "add_tags", "remove_tag", "request_evidence", "require_review"}
+    {
+        "set",
+        "set_if_empty",
+        "add_tag",
+        "add_tags",
+        "remove_tag",
+        "request_evidence",
+        "require_review",
+    }
 )
 WRITABLE_FIELDS = frozenset(
     {
@@ -150,7 +159,10 @@ class StaticRule:
             "priority": self.priority,
             "rule_sets": list(self.rule_sets),
             "match": {"any": [{"all": values} for _, values in sorted(groups.items())]},
-            "actions": [asdict(action) for action in sorted(self.actions, key=lambda item: item.sequence)],
+            "actions": [
+                asdict(action)
+                for action in sorted(self.actions, key=lambda item: item.sequence)
+            ],
             "stop_on_match": self.stop_on_match,
         }
 
@@ -185,15 +197,25 @@ def validate_rule(rule: StaticRule) -> None:
     for index, condition in enumerate(rule.conditions, start=1):
         operator = condition.operator.casefold()
         if condition.field not in SUPPORTED_FIELDS:
-            errors.append(f"condition {index} uses unsupported field {condition.field!r}")
+            errors.append(
+                f"condition {index} uses unsupported field {condition.field!r}"
+            )
         if operator not in SUPPORTED_OPERATORS:
-            errors.append(f"condition {index} uses unsupported operator {condition.operator!r}")
+            errors.append(
+                f"condition {index} uses unsupported operator {condition.operator!r}"
+            )
         if condition.group < 1:
             errors.append(f"condition {index} group must be at least 1")
         if operator in {"between", "date_between"} and condition.second_value is None:
             errors.append(f"condition {index} {operator} requires second_value")
-        if operator == "polarity" and str(condition.value).casefold() not in {"positive", "negative", "zero"}:
-            errors.append(f"condition {index} polarity must be positive, negative, or zero")
+        if operator == "polarity" and str(condition.value).casefold() not in {
+            "positive",
+            "negative",
+            "zero",
+        }:
+            errors.append(
+                f"condition {index} polarity must be positive, negative, or zero"
+            )
         if operator == "regex":
             try:
                 re.compile(str(condition.value))
@@ -204,7 +226,10 @@ def validate_rule(rule: StaticRule) -> None:
         action_name = action.action.casefold()
         if action_name not in SUPPORTED_ACTIONS:
             errors.append(f"action {index} uses unsupported action {action.action!r}")
-        if action_name in {"set", "set_if_empty"} and action.field not in WRITABLE_FIELDS:
+        if (
+            action_name in {"set", "set_if_empty"}
+            and action.field not in WRITABLE_FIELDS
+        ):
             errors.append(f"action {index} cannot set field {action.field!r}")
         if action_name in {"add_tag", "remove_tag"} and action.value is None:
             errors.append(f"action {index} requires a tag value")
@@ -250,7 +275,10 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
     elif op == "contains":
         result = expected_text in actual_text
     elif op == "contains_any":
-        result = any(_text(item, condition.case_sensitive) in actual_text for item in _values(expected))
+        result = any(
+            _text(item, condition.case_sensitive) in actual_text
+            for item in _values(expected)
+        )
     elif op == "not_contains":
         result = expected_text not in actual_text
     elif op == "starts_with":
@@ -259,11 +287,18 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
         result = actual_text.endswith(expected_text)
     elif op == "regex":
         flags = 0 if condition.case_sensitive else re.IGNORECASE
-        result = re.search(str(expected), "" if actual is None else str(actual), flags) is not None
+        result = (
+            re.search(str(expected), "" if actual is None else str(actual), flags)
+            is not None
+        )
     elif op == "in":
-        result = actual_text in {_text(item, condition.case_sensitive) for item in _values(expected)}
+        result = actual_text in {
+            _text(item, condition.case_sensitive) for item in _values(expected)
+        }
     elif op == "not_in":
-        result = actual_text not in {_text(item, condition.case_sensitive) for item in _values(expected)}
+        result = actual_text not in {
+            _text(item, condition.case_sensitive) for item in _values(expected)
+        }
     elif op == "numeric_equals":
         result = actual not in (None, "") and money(actual) == money(expected)
     elif op in {"gt", "gte", "lt", "lte"}:
@@ -271,11 +306,19 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
             result = False
         else:
             left, right = money(actual), money(expected)
-            result = {"gt": left > right, "gte": left >= right, "lt": left < right, "lte": left <= right}[op]
+            result = {
+                "gt": left > right,
+                "gte": left >= right,
+                "lt": left < right,
+                "lte": left <= right,
+            }[op]
     elif op == "between":
-        result = actual not in (None, "") and money(expected) <= money(actual) <= money(condition.second_value)
+        result = actual not in (None, "") and money(expected) <= money(actual) <= money(
+            condition.second_value
+        )
     elif op == "date_on":
         result = _date(actual) == _date(expected)
+
     elif op == "date_before":
         result = _date(actual) < _date(expected)
     elif op == "date_after":
@@ -302,11 +345,79 @@ def condition_matches(transaction: Transaction, condition: RuleCondition) -> boo
     elif op == "is_false":
         result = not bool(actual)
     elif op == "has_tag":
-        result = expected_text in {_text(item, condition.case_sensitive) for item in transaction.tags}
+        result = expected_text in {
+            _text(item, condition.case_sensitive) for item in transaction.tags
+        }
     else:
         raise ValueError(f"Unsupported rule operator: {condition.operator}")
 
     return not result if condition.negate else result
+
+
+def _manual_ownership(transaction: Transaction) -> str | None:
+    if locked_ownership_conflict(transaction):
+        return None
+    metadata = transaction.metadata
+    locked = set(metadata.get("locked_fields", []))
+    if "owner" in locked:
+        value = str(transaction.owner or "").strip().casefold()
+        if value in {"personal", "private"}:
+            return "PERSONAL"
+        if value in {"joint", "shared"}:
+            return "JOINT"
+    for field in ("property_ownership", "ownership"):
+        if field in locked:
+            value = str(metadata.get(field) or "").strip().casefold()
+            if value in {"personal", "private"}:
+                return "PERSONAL"
+            if value in {"joint", "shared"}:
+                return "JOINT"
+    for field in ("property_ownership", "ownership"):
+        value = str(metadata.get(field) or "").strip().casefold()
+        if value in {"personal", "private"}:
+            return "PERSONAL"
+        if value in {"joint", "shared"}:
+            return "JOINT"
+    return None
+
+
+def _mark_ownership_conflict(transaction: Transaction) -> None:
+    reasons = transaction.metadata.setdefault("property_review_reasons", [])
+    if not isinstance(reasons, list):
+        reasons = list(reasons) if isinstance(reasons, (tuple, set)) else [str(reasons)]
+        transaction.metadata["property_review_reasons"] = reasons
+    if "LOCKED_OWNERSHIP_CONFLICT" not in reasons:
+        reasons.append("LOCKED_OWNERSHIP_CONFLICT")
+    if "tags" not in set(transaction.metadata.get("locked_fields", [])):
+        transaction.tags.discard("shared")
+    transaction.review_required = True
+
+
+def _tag_lock_reason(
+    transaction: Transaction, tag: object, *, removing: bool = False
+) -> str | None:
+    locked = set(transaction.metadata.get("locked_fields", []))
+    if "tags" in locked:
+        return "tags"
+    normalized = str(tag).strip().casefold()
+    if normalized == "shared" and locked_ownership_conflict(transaction):
+        return "ownership_conflict"
+    if normalized in {"subscription", "recurring"} and "is_subscription" in locked:
+        if (not transaction.is_subscription and not removing) or (
+            transaction.is_subscription and removing
+        ):
+            return "is_subscription"
+    if normalized == "shared" and _manual_ownership(transaction) == "PERSONAL":
+        if not removing:
+            return "ownership"
+    return None
+
+
+def _tag_result(action: str, values: list[str], skipped: list[str]) -> str:
+    result = f"{action}:" + ",".join(values)
+    if skipped:
+        result += ",skipped_locked:" + ",".join(skipped)
+    return result
 
 
 def rule_matches(transaction: Transaction, rule: StaticRule) -> bool:
@@ -315,45 +426,67 @@ def rule_matches(transaction: Transaction, rule: StaticRule) -> bool:
     groups: dict[int, list[RuleCondition]] = {}
     for condition in rule.conditions:
         groups.setdefault(condition.group, []).append(condition)
-    return any(all(condition_matches(transaction, item) for item in conditions) for conditions in groups.values())
+    return any(
+        all(condition_matches(transaction, item) for item in conditions)
+        for conditions in groups.values()
+    )
 
 
 def apply_action(transaction: Transaction, action: RuleAction) -> str:
     name = action.action.casefold()
-    locked = set(transaction.metadata.get("locked_fields", []))
     if name in {"set", "set_if_empty"}:
         if not action.field:
             raise ValueError(f"{name} action requires a field")
         if action.field in set(transaction.metadata.get("locked_fields", [])):
             return f"skipped_locked:{action.field}"
-        if name == "set_if_empty" and transaction.value(action.field) not in (None, "", [], set()):
+        if name == "set_if_empty" and transaction.value(action.field) not in (
+            None,
+            "",
+            [],
+            set(),
+        ):
             return f"skipped_populated:{action.field}"
         transaction.set_value(action.field, action.value)
         return f"{name}:{action.field}"
     if name == "add_tag":
-        if "tags" in locked:
-            return "skipped_locked:tags"
+        reason = _tag_lock_reason(transaction, action.value)
+        if reason:
+            return f"skipped_locked:{reason}"
         transaction.tags.add(str(action.value))
         return f"add_tag:{action.value}"
     if name == "remove_tag":
-        if "tags" in locked:
-            return "skipped_locked:tags"
+        reason = _tag_lock_reason(transaction, action.value, removing=True)
+        if reason:
+            return f"skipped_locked:{reason}"
         transaction.tags.discard(str(action.value))
         return f"remove_tag:{action.value}"
     if name == "add_tags":
-        if "tags" in locked:
-            return "skipped_locked:tags"
-        values = tuple(str(value) for value in _values(action.value))
-        transaction.tags.update(values)
-        return "add_tags:" + ",".join(values)
+        values = [str(value) for value in _values(action.value)]
+        applied: list[str] = []
+        skipped: list[str] = []
+        for value in values:
+            if _tag_lock_reason(transaction, value):
+                skipped.append(value)
+                continue
+            transaction.tags.add(value)
+            applied.append(value)
+        if not applied and skipped:
+            return f"skipped_locked:{skipped[0]}"
+        return _tag_result("add_tags", applied, skipped)
     if name == "request_evidence":
-        if {"evidence_policy", "evidence_status"} & locked:
-            return "skipped_locked:evidence"
-        transaction.evidence_policy = str(action.value or "ON_DEMAND")
-        transaction.evidence_status = "REQUESTED"
+        locked = set(transaction.metadata.get("locked_fields", []))
+        changed = False
+        if "evidence_policy" not in locked:
+            transaction.evidence_policy = str(action.value or "ON_DEMAND")
+            changed = True
+        if "evidence_status" not in locked:
+            transaction.evidence_status = "REQUESTED"
+            changed = True
+        if not changed:
+            return "skipped_locked:evidence_policy"
         return "request_evidence"
     if name == "require_review":
-        if "review_required" in locked:
+        if "review_required" in set(transaction.metadata.get("locked_fields", [])):
             return "skipped_locked:review_required"
         transaction.review_required = True
         return "require_review"
@@ -367,7 +500,11 @@ class RuleEngine:
             validate_rule(rule)
         self.rules = sorted(
             enabled_rules,
-            key=lambda rule: (STAGE_ORDER.get(rule.stage, 999), rule.priority, rule.rule_id),
+            key=lambda rule: (
+                STAGE_ORDER.get(rule.stage, 999),
+                rule.priority,
+                rule.rule_id,
+            ),
         )
 
     def apply(self, transaction: Transaction) -> list[RuleTrace]:
@@ -379,6 +516,8 @@ class RuleEngine:
         stages: Iterable[str] | None = None,
     ) -> list[RuleTrace]:
         selected = None if stages is None else {str(stage).upper() for stage in stages}
+        if locked_ownership_conflict(transaction):
+            _mark_ownership_conflict(transaction)
         traces: list[RuleTrace] = []
         stopped_stages: set[str] = set()
         for rule in self.rules:
