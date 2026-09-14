@@ -298,6 +298,7 @@ preflight() {
     --protected-quiescence-receipt-digest "$FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST" \
     --required-live-export-digest "$FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST" \
     --contract-bijection-digest "$FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST" \
+    --repository-root "$repo_dir" \
     --project-id "$N8N_FINANCE_PROJECT_ID" \
     --accepted-identity "$accepted_identity" \
     --operator-ack "$1" \

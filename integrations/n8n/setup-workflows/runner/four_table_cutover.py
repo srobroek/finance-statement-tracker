@@ -117,6 +117,9 @@ LEGACY_TABLE_IDS = {
     "finance_mcp_requests": "sha256:3b9034f0",
 }
 PRESERVED_SOURCE_TABLES = frozenset({"finance_source_contracts"})
+PRESERVED_LEGACY_AUDIT_TABLES = frozenset(
+    {"finance_pipeline_runs", "finance_mcp_requests"}
+)
 
 
 class CutoverError(ValueError):
@@ -1313,7 +1316,12 @@ def _canonical_source_bundle(
                     f"CANONICAL_SOURCE_SELECTOR_INVALID:{item['reference_id']}"
                 )
             if target is None:
-                if item["source_table"] in PRESERVED_SOURCE_TABLES:
+                if (
+                    item["source_table"] in PRESERVED_SOURCE_TABLES
+                    or item["source_table"] in PRESERVED_LEGACY_AUDIT_TABLES
+                ):
+                    # Keep the legacy Data Table node executable while its
+                    # audit/history contract has no canonical target yet.
                     continue
                 node["type"] = "n8n-nodes-base.code"
                 parameters.pop("dataTableId", None)

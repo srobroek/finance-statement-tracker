@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import subprocess
 import unittest
 
@@ -42,6 +43,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             runner.PRESERVED_SOURCE_TABLES, frozenset({"finance_source_contracts"})
         )
         self.assertEqual(
+            runner.PRESERVED_LEGACY_AUDIT_TABLES,
+            frozenset({"finance_pipeline_runs", "finance_mcp_requests"}),
+        )
+        self.assertEqual(
             set(runner.LEGACY_TABLE_IDS) - {"finance_source_contracts"},
             {
                 "finance_source_cursors",
@@ -61,6 +66,61 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             inventory["source_matrix"]["path"],
             "integrations/n8n/data-table-migration-matrix.json",
         )
+
+    def test_canonical_source_preserves_legacy_audit_and_history_nodes(self) -> None:
+        runner = load_runner()
+        bundle = runner._canonical_source_bundle(
+            SimpleNamespace(workflow_root=ROOT / "integrations" / "n8n" / "workflows"),
+            "0" * 40,
+            "1" * 40,
+            "2" * 64,
+        )
+        workflows = {
+            entry["path"]: json.loads(entry["content"]) for entry in bundle["files"]
+        }
+        expected_nodes = {
+            "integrations/n8n/workflows/03-shared-statement-pipeline.json": (
+                {
+                    "Mark Terminal Readback Verified": "upsert",
+                    "Read Back Terminal Pipeline Receipt": "get",
+                    "Read Back Verified Terminal Receipt": "get",
+                    "Upsert Terminal Pipeline Receipt": "upsert",
+                },
+                "finance_pipeline_runs",
+            ),
+            "integrations/n8n/workflows/10-finance-operations-status.json": (
+                {
+                    "Mark MCP Receipt Verified": "update",
+                    "Read Back ACCEPTED MCP Request": "get",
+                    "Read Back Terminal MCP Request": "get",
+                    "Read Verified MCP Receipt": "get",
+                    "Upsert ACCEPTED MCP Request": "upsert",
+                    "Upsert Terminal MCP Request": "update",
+                },
+                "finance_mcp_requests",
+            ),
+        }
+        for path, (operations, table) in expected_nodes.items():
+            nodes = {node["name"]: node for node in workflows[path]["nodes"]}
+            for name, operation in operations.items():
+                with self.subTest(path=path, node=name):
+                    node = nodes[name]
+                    self.assertEqual(node["type"], "n8n-nodes-base.dataTable")
+                    self.assertEqual(node["parameters"]["resource"], "row")
+                    self.assertEqual(node["parameters"]["operation"], operation)
+                    self.assertTrue(node["parameters"]["filters"]["conditions"])
+                    selector = node["parameters"]["dataTableId"]
+                    selected = (
+                        selector["value"]
+                        if isinstance(selector, dict) and selector.get("__rl") is True
+                        else selector
+                    )
+                    self.assertEqual(selected, table)
+
+    def test_shell_preflight_passes_repository_root_to_runner(self) -> None:
+        source = SHELL_RUNNER.read_text(encoding="utf-8")
+        preflight = source.split("preflight() {", 1)[1].split("\nrun_readback()", 1)[0]
+        self.assertIn('--repository-root "$repo_dir"', preflight)
 
     def test_inventory_pin_and_references_are_coherent(self) -> None:
         raw = INVENTORY.read_bytes().replace(b"\r\n", b"\n")
