@@ -2,7 +2,11 @@ from datetime import date, datetime
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
-from finance_tracker.reports import evaluate_month_close, month_close_markdown
+from finance_tracker.reports import (
+    evaluate_month_close,
+    month_category_totals,
+    month_close_markdown,
+)
 
 
 class ReportTests(TestCase):
@@ -78,3 +82,17 @@ class ReportTests(TestCase):
 
         self.assertIn('"Groceries" : 100.00', output)
         self.assertNotIn('"Needs Review" : 900.00', output)
+
+    def test_month_close_excludes_resolved_notification_evidence(self) -> None:
+        notification = Transaction(
+            "notification",
+            datetime(2026, 8, 2),
+            "CARD",
+            "SHOP",
+            "900",
+            vendor="Shop",
+            category="Shopping",
+            source_type="outlook",
+        )
+
+        self.assertEqual(month_category_totals([notification], "2026-08"), {})

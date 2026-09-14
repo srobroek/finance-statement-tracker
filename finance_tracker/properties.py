@@ -54,12 +54,16 @@ def _add_review_reason(transaction: Transaction, reason: str) -> None:
         reasons.append(reason)
 
 
-def _mark_ownership_conflict(transaction: Transaction) -> None:
-    _add_review_reason(transaction, "LOCKED_OWNERSHIP_CONFLICT")
-    if not _locked(transaction, "tags"):
-        transaction.tags.discard("shared")
+def _require_review(transaction: Transaction, reason: str) -> None:
+    _add_review_reason(transaction, reason)
     if not _locked(transaction, "review_required"):
         transaction.review_required = True
+
+
+def _mark_ownership_conflict(transaction: Transaction) -> None:
+    _require_review(transaction, "LOCKED_OWNERSHIP_CONFLICT")
+    if not _locked(transaction, "tags"):
+        transaction.tags.discard("shared")
 
 
 @dataclass(frozen=True, slots=True)
@@ -346,12 +350,10 @@ def _resolve_explicit_property(
             != registry.by_rental_unit(transaction.rental_unit)
         ):
             _add_review_reason(transaction, "PROPERTY_CODE_RENTAL_UNIT_CONFLICT")
-        _add_review_reason(transaction, "PROPERTY_IDENTITY_CONFLICT")
-        transaction.review_required = True
+        _require_review(transaction, "PROPERTY_IDENTITY_CONFLICT")
         return None
     if unknown:
-        _add_review_reason(transaction, "UNKNOWN_CONFIGURED_PROPERTY")
-        transaction.review_required = True
+        _require_review(transaction, "UNKNOWN_CONFIGURED_PROPERTY")
         return None
     return candidates[0] if candidates else None
 
@@ -416,9 +418,7 @@ def project_property_tags(
             )
         )
         if has_explicit_hints:
-            if not transaction.review_required:
-                _add_review_reason(transaction, "UNKNOWN_CONFIGURED_PROPERTY")
-                transaction.review_required = True
+            _require_review(transaction, "UNKNOWN_CONFIGURED_PROPERTY")
         elif _manual_ownership(transaction) == "PERSONAL" and not _locked(
             transaction, "tags"
         ):
@@ -445,8 +445,7 @@ def project_property_tags(
             _normalise_ownership(transaction.metadata.get("property_ownership"))
             != ownership
         ):
-            _add_review_reason(transaction, "LOCKED_OWNERSHIP_CONFLICT")
-            transaction.review_required = True
+            _require_review(transaction, "LOCKED_OWNERSHIP_CONFLICT")
 
     if _locked(transaction, "tags"):
         return resolved

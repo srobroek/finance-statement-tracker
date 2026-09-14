@@ -30,6 +30,7 @@ from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
 from .transaction_semantics import (
     CASHBACK_TOPICS,
+    PENDING_CATEGORY_VALUES,
     finalize_transaction_topic,
 )
 from .classification_audit import enforce_transaction_invariants
@@ -218,10 +219,24 @@ def load_compiled_rules(path: str | Path | None) -> list[StaticRule]:
 
 
 _REIMBURSEMENT_CATEGORY = "Refunds & Reimbursements"
-_UNIDENTIFIED_CREDIT_CATEGORY = "To categorise"
 
 
-def _apply_credit_category_fallback(transaction: Any) -> None:
+def _configured_review_category(config: dict[str, Any]) -> str:
+    categories = {
+        str(category).strip()
+        for group in config.get("category_groups", [])
+        if isinstance(group, dict)
+        for category in group.get("categories", [])
+        if str(category).strip().casefold() in PENDING_CATEGORY_VALUES
+    }
+    if len(categories) != 1:
+        raise ValueError(
+            "Actual bootstrap config must define exactly one pending review category"
+        )
+    return next(iter(categories))
+
+
+def _apply_credit_category_fallback(transaction: Any, config: dict[str, Any]) -> None:
     """Keep unresolved positive credits visible without overriding locks."""
 
     direction = (
@@ -260,7 +275,7 @@ def _apply_credit_category_fallback(transaction: Any) -> None:
         return
     if transaction.metadata.get("transaction_topic_reason") != "CREDIT_DEFAULT_REFUND":
         return
-    transaction.category = _UNIDENTIFIED_CREDIT_CATEGORY
+    transaction.category = _configured_review_category(config)
     transaction.review_required = True
     transaction.tags.add("needs-review")
     transaction.metadata["category_resolution"] = "UNRESOLVED"
@@ -323,7 +338,7 @@ def build_actual_statement_run(
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
-        _apply_credit_category_fallback(transaction)
+        _apply_credit_category_fallback(transaction, config)
         enforce_transaction_invariants(transaction)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)

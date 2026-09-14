@@ -60,15 +60,6 @@ def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
     """Normalize derived classification state without overriding manual locks."""
 
     locked = set(transaction.metadata.get("locked_fields", []))
-    queue_locked = bool(
-        {
-            "review_required",
-            "classification_review_reasons",
-            "category_resolution",
-            "payee_resolution",
-        }
-        & locked
-    )
     if "tags" not in locked:
         transaction.tags = {
             str(tag).strip().casefold() for tag in transaction.tags if str(tag).strip()
@@ -101,14 +92,14 @@ def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
         elif payee or merchant:
             transaction.metadata["payee_resolution"] = "RESOLVED"
 
-    if not queue_locked:
+    if "review_required" not in locked:
+        transaction.review_required = bool(reasons)
+    if "tags" not in locked:
         if reasons:
-            transaction.review_required = True
-            if "tags" not in locked:
-                transaction.tags.add("needs-review")
+            transaction.tags.add("needs-review")
         else:
-            transaction.review_required = False
             transaction.tags.discard("needs-review")
+    if "classification_review_reasons" not in locked:
         transaction.metadata["classification_review_reasons"] = sorted(reasons)
     return tuple(sorted(reasons))
 

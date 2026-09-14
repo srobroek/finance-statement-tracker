@@ -66,6 +66,25 @@ class TransactionTopicTests(TestCase):
         self.assertIn("reimbursement", transaction.tags)
         self.assertIn("needs-review", transaction.tags)
 
+    def test_matched_reimbursement_preserves_locked_tags(self) -> None:
+        transaction = self.transaction(
+            "MATCHED MERCHANT CREDIT",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.tags = {"manual", "refund"}
+        transaction.metadata.update(
+            {
+                "original_transaction_id": "purchase-1",
+                "locked_fields": ["tags"],
+            }
+        )
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REIMBURSEMENT")
+        self.assertEqual(transaction.tags, {"manual", "refund"})
+
     def test_explicit_reward_credit_is_not_downgraded_to_refund(self) -> None:
         transaction = self.transaction(
             "MONTHLY CASHBACK REWARD CREDIT",
