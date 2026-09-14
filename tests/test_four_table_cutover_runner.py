@@ -137,6 +137,7 @@ const TARGET_NAMES = new Set([
   'finance_actual_batches',
   'finance_ai_reviews',
 ]);
+const COMPATIBILITY_TABLE_NAMES = new Set(TARGET_NAMES);
 const TARGET_SYSTEM_COLUMNS = ['id', 'createdAt', 'updatedAt'];
 const WORKFLOW_BODY_FIELDS = ['marker'];
 const canonical = (value) => {
@@ -742,6 +743,14 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         self.assertIn('--forward-receipt "$forward_receipt"', rollback_args)
         self.assertNotIn("PRODUCTION_ONLY", rollback_args)
         self.assertGreaterEqual(source.count('"${rollback_receipt_args[@]}"'), 2)
+        self.assertNotIn('cp -- "$runtime_json" "$forward_runtime_receipt"', source)
+        self.assertIn(
+            'credential_bindings="$repo_dir/integrations/n8n/credential-bindings.json"',
+            source,
+        )
+        self.assertNotIn("FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-", source)
+        self.assertIn('--canonical-source-input "$canonical_source"', source)
+        self.assertIn("FINANCE_FOUR_TABLE_CANONICAL_SOURCE_FILE_SHA256", source)
 
     def test_digest_adapter_composes_phase_contract_with_closed_table_set(self) -> None:
         source = DIGEST_ADAPTER.read_text(encoding="utf-8")
@@ -1573,6 +1582,69 @@ if (receiptMatchesCommittedState(receipt, readback, state, {{ ...canonicalSource
             {"rollback_runtime_receipt_sha256", "forward_runtime_receipt_sha256"}
             <= set(schema["oneOf"][1]["required"])
         )
+
+    def test_runtime_rejects_extra_project_workflows_and_tables(self) -> None:
+        source = CJS_RUNNER.read_text(encoding="utf-8")
+        load_workflows = source[
+            source.index("async function loadWorkflows") : source.index(
+                "function canonicalSourceFromInput"
+            )
+        ]
+        load_targets = source[
+            source.index("async function loadTargetState") : source.index(
+                "async function insertTargetRows"
+            )
+        ]
+        harness = f"""
+const projectId = 'project-1';
+const TARGET_NAMES = new Set(['target']);
+const COMPATIBILITY_TABLE_NAMES = new Set(['target', 'preserved']);
+function assertWorkflow() {{}}
+{load_workflows}
+{load_targets}
+const workflowGraph = {{
+  workflows: new Map([['expected', 'revision']]),
+  workflowBodyDigests: new Map([['expected', 'digest']]),
+}};
+const workflowClient = {{
+  async query() {{
+    return {{ rows: [
+      {{ id: 'expected', nodes: [], active: false, activeVersionId: null }},
+      {{ id: 'extra', nodes: [], active: false, activeVersionId: null }},
+    ] }};
+  }},
+}};
+const tableClient = {{
+  async query() {{
+    return {{ rows: [
+      {{ id: 'target-id', name: 'target' }},
+      {{ id: 'extra-id', name: 'unexpected' }},
+    ] }};
+  }},
+}};
+(async () => {{
+  try {{
+    await loadWorkflows(workflowClient, workflowGraph, false);
+    process.exit(2);
+  }} catch (error) {{
+    if (error.message !== 'EXACT_PROJECT_WORKFLOW_SET_REQUIRED') throw error;
+  }}
+  try {{
+    await loadTargetState(tableClient, new Map([['target', {{ tableId: 'target-id' }}]]));
+    process.exit(3);
+  }} catch (error) {{
+    if (error.message !== 'CLOSED_PROJECT_DATA_TABLE_SET_REQUIRED') throw error;
+  }}
+}})().catch((error) => {{ console.error(error); process.exit(1); }});
+"""
+        result = subprocess.run(
+            ["node", "-e", harness],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

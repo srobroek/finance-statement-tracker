@@ -3212,14 +3212,30 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         )
     if not legacy_rollback:
         module = _load_migration_module()
-        if (
-            _migration_runner(
-                args, module, source, source_head, source_backup_sha
-            ).run()
-            != migration_receipt
-        ):
+        migration_runner = _migration_runner(
+            args, module, source, source_head, source_backup_sha
+        )
+        if migration_runner.run() != migration_receipt:
             raise CutoverError("MIGRATION_RECEIPT_CONTENT_MISMATCH")
         _check_reference_rewrite(args.workflow_root)
+        expected_canonical_source = _canonical_runtime_source_bundle(
+            args,
+            source_head=source_head,
+            generator_head=generator_head,
+            identity_digest=identity_digest,
+            source_backup_sha256=source_backup_sha,
+            migration_receipt_sha256=receipt_sha,
+            migration_receipt=migration_receipt,
+            runner=migration_runner,
+            matrix=_load_matrix(),
+        )
+        observed_canonical_source = _protected_bytes(
+            args.canonical_source_input,
+            "CANONICAL_SOURCE_INPUT",
+            limit=64 * 1024 * 1024,
+        )
+        if observed_canonical_source != _canonical_bytes(expected_canonical_source):
+            raise CutoverError("CANONICAL_SOURCE_CURRENTNESS_DRIFT")
     _assert_currentness(
         args,
         source_head=source_head,
@@ -3442,6 +3458,8 @@ def _parser() -> argparse.ArgumentParser:
             )
         if operation == "preflight":
             command.add_argument("--canonical-source-output", type=Path)
+        if operation == "validate-inputs":
+            command.add_argument("--canonical-source-input", type=Path, required=True)
         if operation in {"forward", "rollback"}:
             command.add_argument("--pre-readback-raw", type=Path, required=True)
             command.add_argument("--post-readback-raw", type=Path, required=True)

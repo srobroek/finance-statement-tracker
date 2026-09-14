@@ -74,7 +74,7 @@ runtime_proof="$receipt_dir/finance-data-table-rollback-runtime-proof.json"
 runtime_state="$receipt_dir/finance-data-table-disposable-runtime-state.json"
 adapter="$repo_dir/integrations/n8n/setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs"
 runtime_script="$runner_dir/n8n-cli-four-table-cutover.cjs"
-credential_bindings="${FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-$repo_dir/integrations/n8n/credential-bindings.json}"
+credential_bindings="$repo_dir/integrations/n8n/credential-bindings.json"
 readback_parser="$runner_dir/parse_n8n_redacted_wrapper_output.py"
 workflow_root="$repo_dir/integrations/n8n/workflows"
 canonical_source="$receipt_dir/finance-four-table-canonical-source.json"
@@ -183,6 +183,7 @@ validate_inputs() {
     --runtime-action "$2" \
     --workflow-root "$workflow_root" \
     --live-export "$live_export" \
+    --canonical-source-input "$canonical_source" \
     --lock-receipt "$lock_receipt" \
     --operation-kind "${3^^}" >/dev/null
 }
@@ -235,10 +236,15 @@ run_runtime() {
     esac
   fi
 
-  local export_b64 lock_b64 credential_bindings_b64 runtime_json
+  local export_b64 lock_b64 credential_bindings_b64 canonical_source_sha runtime_json
   export_b64="$(base64 -w0 -- "$live_export")"
   lock_b64="$(base64 -w0 -- "$lock_receipt")"
   credential_bindings_b64="$(base64 -w0 -- "$credential_bindings")"
+  canonical_source_sha=""
+  if [[ "$runtime_input" = "$canonical_source" ]]; then
+    canonical_source_sha="$(sha256sum -- "$canonical_source")"
+    canonical_source_sha="${canonical_source_sha%% *}"
+  fi
   local -a runtime_env=(
     -e "N8N_FINANCE_PROJECT_ID=$N8N_FINANCE_PROJECT_ID"
     -e "FINANCE_FOUR_TABLE_OPERATION=${operation^^}"
@@ -259,6 +265,11 @@ run_runtime() {
     -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
     -e "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=$credential_bindings_b64"
   )
+  if [[ -n "$canonical_source_sha" ]]; then
+    runtime_env+=(
+      -e "FINANCE_FOUR_TABLE_CANONICAL_SOURCE_FILE_SHA256=$canonical_source_sha"
+    )
+  fi
   if [[ "$operation" = rollback ]]; then
     test -f "$forward_runtime_receipt"
     test ! -L "$forward_runtime_receipt"
@@ -292,10 +303,6 @@ run_runtime() {
   fi
   grep -F '"durable_journal":true' "$runtime_json" >/dev/null
   grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
-  if [[ "$operation" = forward ]]; then
-    cp -- "$runtime_json" "$forward_runtime_receipt"
-    chmod 0600 "$forward_runtime_receipt"
-  fi
 }
 
 preflight() {

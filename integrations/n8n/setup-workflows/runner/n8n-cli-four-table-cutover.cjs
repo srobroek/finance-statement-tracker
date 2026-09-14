@@ -479,17 +479,20 @@ function assertWorkflow(workflow, expectedRevision, expectedBodyDigest, workflow
 
 async function loadWorkflows(client, graph, strict = true) {
   const loaded = new Map();
-  const workflowIds = [...graph.workflows.keys()];
   const result = await client.query(
     `SELECT w.id, w.name, w.active, w."activeVersionId", w."versionId", w.nodes, w.connections,
             w.meta, w.settings, w."pinData"
        FROM workflow_entity w
        JOIN shared_workflow s ON s."workflowId" = w.id
-      WHERE s."projectId" = $1 AND s.role = 'workflow:owner' AND w.id = ANY($2::text[])
+      WHERE s."projectId" = $1 AND s.role = 'workflow:owner'
       FOR UPDATE`,
-    [projectId, workflowIds],
+    [projectId],
   );
   const rows = new Map(result.rows.map((workflow) => [workflow.id, workflow]));
+  if (result.rows.length !== graph.workflows.size || rows.size !== graph.workflows.size ||
+      [...rows.keys()].some((workflowId) => !graph.workflows.has(workflowId))) {
+    throw new Error('EXACT_PROJECT_WORKFLOW_SET_REQUIRED');
+  }
   for (const [workflowId, revision] of graph.workflows) {
     const workflow = rows.get(workflowId);
     if (strict) assertWorkflow(workflow, revision, graph.workflowBodyDigests.get(workflowId), workflowId);
@@ -513,7 +516,15 @@ function canonicalSourceFromInput(graph) {
     if (length > 64 * 1024 * 1024) throw new Error('CANONICAL_SOURCE_SIZE_EXCEEDED');
     chunks.push(chunk.subarray(0, count));
   }
-  const raw = Buffer.concat(chunks, length).toString('utf8');
+  const rawBuffer = Buffer.concat(chunks, length);
+  const expectedFileSha256 = digestText(
+    process.env.FINANCE_FOUR_TABLE_CANONICAL_SOURCE_FILE_SHA256,
+    'CANONICAL_SOURCE_FILE_SHA256_INVALID',
+  );
+  if (crypto.createHash('sha256').update(rawBuffer).digest('hex') !== expectedFileSha256) {
+    throw new Error('CANONICAL_SOURCE_FILE_CURRENTNESS_DRIFT');
+  }
+  const raw = rawBuffer.toString('utf8');
   let source;
   try { source = JSON.parse(raw); } catch { throw new Error('CANONICAL_SOURCE_JSON_INVALID'); }
   const provenance = provenanceFromEnvironment();
@@ -1062,12 +1073,18 @@ async function loadTargetState(client, targets) {
   const result = await client.query(
     `SELECT id, name
        FROM data_table
-      WHERE "projectId" = $1 AND name = ANY($2::text[])
+      WHERE "projectId" = $1
       ORDER BY name
       FOR UPDATE`,
-    [projectId, [...targetIds.keys()]],
+    [projectId],
   );
-  const tables = result.rows || [];
+  const projectTables = result.rows || [];
+  if (projectTables.some((table) => !COMPATIBILITY_TABLE_NAMES.has(String(table.name))) ||
+      new Set(projectTables.map((table) => String(table.name))).size !== projectTables.length ||
+      new Set(projectTables.map((table) => String(table.id))).size !== projectTables.length) {
+    throw new Error('CLOSED_PROJECT_DATA_TABLE_SET_REQUIRED');
+  }
+  const tables = projectTables.filter((table) => TARGET_NAMES.has(String(table.name)));
   if (tables.length !== TARGET_NAMES.size || new Set(tables.map((table) => table.name)).size !== TARGET_NAMES.size ||
       new Set(tables.map((table) => table.id)).size !== TARGET_NAMES.size) {
     throw new Error('EXACT_TARGET_READBACK_REQUIRED');
