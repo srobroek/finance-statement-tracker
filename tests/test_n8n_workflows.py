@@ -37,7 +37,9 @@ def git_canonical_sha256(path: Path) -> str:
 
 def load_bootstrap_generator():
     generator_path = N8N / "generate_platform_bootstrap.py"
-    spec = importlib.util.spec_from_file_location("finance_bootstrap_generator", generator_path)
+    spec = importlib.util.spec_from_file_location(
+        "finance_bootstrap_generator", generator_path
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load generator: {generator_path}")
     sys.path.insert(0, str(N8N))
@@ -51,7 +53,9 @@ def load_bootstrap_generator():
 
 def load_fixture_generator():
     generator_path = N8N / "disposable" / "generate_fixture_workflows.py"
-    spec = importlib.util.spec_from_file_location("finance_fixture_generator", generator_path)
+    spec = importlib.util.spec_from_file_location(
+        "finance_fixture_generator", generator_path
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load generator: {generator_path}")
     module = importlib.util.module_from_spec(spec)
@@ -59,17 +63,25 @@ def load_fixture_generator():
     return module
 
 
-def validate_fixture_against_schema(schema: dict, value: object, path: str = "$") -> None:
+def validate_fixture_against_schema(
+    schema: dict, value: object, path: str = "$"
+) -> None:
     """Execute the JSON-schema subset used by the browser capture contract."""
     expected_type = schema.get("type")
     if expected_type:
         types = expected_type if isinstance(expected_type, list) else [expected_type]
         matches = any(
-            kind == "object" and isinstance(value, dict)
-            or kind == "array" and isinstance(value, list)
-            or kind == "string" and isinstance(value, str)
-            or kind == "boolean" and isinstance(value, bool)
-            or kind == "number" and isinstance(value, (int, float)) and not isinstance(value, bool)
+            kind == "object"
+            and isinstance(value, dict)
+            or kind == "array"
+            and isinstance(value, list)
+            or kind == "string"
+            and isinstance(value, str)
+            or kind == "boolean"
+            and isinstance(value, bool)
+            or kind == "number"
+            and isinstance(value, (int, float))
+            and not isinstance(value, bool)
             for kind in types
         )
         if not matches:
@@ -138,7 +150,9 @@ class N8nWorkflowTests(unittest.TestCase):
         binary: dict,
         references: dict[str, dict],
     ) -> dict:
-        code = self.nodes("11-interactive-artifact-handoff.json")[node_name]["parameters"]["jsCode"]
+        code = self.nodes("11-interactive-artifact-handoff.json")[node_name][
+            "parameters"
+        ]["jsCode"]
         script = f"""
 const code = {json.dumps(code)};
 const jsonInput = {json.dumps(json_input)};
@@ -153,7 +167,9 @@ try {{
 }}
 """
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
+        self.assertIsNotNone(
+            node, "Node.js is required for exported W11 contract execution"
+        )
         environment = os.environ.copy()
         # W11 executes the same Ajv-backed validator as the exported n8n code.
         # Prefer the reviewed package dependency installed by CI, retaining
@@ -162,7 +178,9 @@ try {{
             ROOT / "packages/n8n-nodes-finance/node_modules",
             Path("/home/sjors/.cache/typescript/5.9/node_modules"),
         ]
-        available_roots = [str(path) for path in ajv_module_roots if (path / "ajv").is_dir()]
+        available_roots = [
+            str(path) for path in ajv_module_roots if (path / "ajv").is_dir()
+        ]
         if available_roots:
             environment["NODE_PATH"] = os.pathsep.join(available_roots)
         with tempfile.TemporaryDirectory() as temporary:
@@ -188,7 +206,9 @@ try {{
         references: dict[str, dict],
     ) -> dict:
         """Run exported Code-node source under the production JS runner flags."""
-        code = self.nodes("11-interactive-artifact-handoff.json")[node_name]["parameters"]["jsCode"]
+        code = self.nodes("11-interactive-artifact-handoff.json")[node_name][
+            "parameters"
+        ]["jsCode"]
         script = f"""
 function executeNode($json, $binary, $) {{
 {code}
@@ -205,12 +225,19 @@ try {{
 }}
 """
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported W11 contract execution")
+        self.assertIsNotNone(
+            node, "Node.js is required for exported W11 contract execution"
+        )
         with tempfile.TemporaryDirectory() as temporary:
             script_path = Path(temporary) / "restricted-exported-node.cjs"
             script_path.write_text(script, encoding="utf-8")
             result = subprocess.run(
-                [node, "--disallow-code-generation-from-strings", "--disable-proto=delete", str(script_path)],
+                [
+                    node,
+                    "--disallow-code-generation-from-strings",
+                    "--disable-proto=delete",
+                    str(script_path),
+                ],
                 cwd=ROOT,
                 env=os.environ.copy(),
                 capture_output=True,
@@ -242,7 +269,9 @@ try {{
 }}
 """
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
+        self.assertIsNotNone(
+            node, "Node.js is required for exported workflow contract execution"
+        )
         result = subprocess.run(
             [node, "-e", script],
             cwd=ROOT,
@@ -277,7 +306,9 @@ try {{
 }}
 """
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported workflow contract execution")
+        self.assertIsNotNone(
+            node, "Node.js is required for exported workflow contract execution"
+        )
         result = subprocess.run(
             [node, "-e", script],
             cwd=ROOT,
@@ -310,7 +341,9 @@ try {{
 }}
 """
         node = shutil.which("node")
-        self.assertIsNotNone(node, "Node.js is required for exported expression execution")
+        self.assertIsNotNone(
+            node, "Node.js is required for exported expression execution"
+        )
         result = subprocess.run(
             [node, "-e", script],
             cwd=ROOT,
@@ -376,15 +409,20 @@ try {{
                 workflow = self.workflow(filename)
                 contract = workflow["meta"]["blockerContract"]
                 self.assertEqual(row["blockers"], codes)
-                self.assertEqual(row["blocker_policy"], {
-                    "evaluation": "ALL_REQUIRED",
-                    "state": "BLOCKED",
-                    "operator_warning_required": True,
-                })
+                self.assertEqual(
+                    row["blocker_policy"],
+                    {
+                        "evaluation": "ALL_REQUIRED",
+                        "state": "BLOCKED",
+                        "operator_warning_required": True,
+                    },
+                )
                 self.assertTrue(workflow["meta"]["activationBlocked"])
                 self.assertEqual(workflow["meta"]["activationBlockers"], codes)
                 self.assertEqual(contract["schemaVersion"], catalog["schema_version"])
-                self.assertEqual(contract["registryPath"], "integrations/n8n/pipeline-registry.json")
+                self.assertEqual(
+                    contract["registryPath"], "integrations/n8n/pipeline-registry.json"
+                )
                 self.assertEqual(contract["workflowCode"], row["code"])
                 self.assertEqual(contract["evaluation"], "ALL_REQUIRED")
                 self.assertTrue(contract["activationBlocked"])
@@ -395,12 +433,15 @@ try {{
                     with self.subTest(blocker=item["code"]):
                         self.assertTrue(item["required"])
                         self.assertEqual(item["state"], "BLOCKED")
-                        self.assertEqual(item, {
-                            **definitions[item["code"]],
-                            "code": item["code"],
-                            "required": True,
-                            "state": "BLOCKED",
-                        })
+                        self.assertEqual(
+                            item,
+                            {
+                                **definitions[item["code"]],
+                                "code": item["code"],
+                                "required": True,
+                                "state": "BLOCKED",
+                            },
+                        )
                         evidence = item["evidence"]
                         self.assertTrue(evidence["artifact"])
                         self.assertTrue(evidence["required_fields"])
@@ -418,7 +459,8 @@ try {{
                 guard_names = {
                     node["name"]
                     for node in workflow["nodes"]
-                    if node["type"] in {
+                    if node["type"]
+                    in {
                         "n8n-nodes-base.stopAndError",
                         "@n8n/n8n-nodes-langchain.mcpTrigger",
                     }
@@ -492,9 +534,17 @@ try {{
     def test_workflow_exports_are_inactive_sanitized_and_fail_closed(self) -> None:
         forbidden_types = {"n8n-nodes-base.executeCommand", "n8n-nodes-base.ssh"}
         forbidden_markers = (
-            "ADCB_STATEMENT_PASSWORD_PLACEHOLDER", "sjor2908", "actual_password", "cashback_ingest_token",
-            "172.20.10.20", "notion", "$env", "gpt-5-mini", "lmchatopenai",
-            "financetransform", "unlockifprotected",
+            "ADCB_STATEMENT_PASSWORD_PLACEHOLDER",
+            "sjor2908",
+            "actual_password",
+            "cashback_ingest_token",
+            "172.20.10.20",
+            "notion",
+            "$env",
+            "gpt-5-mini",
+            "lmchatopenai",
+            "financetransform",
+            "unlockifprotected",
         )
         for filename, workflow in self.workflows.items():
             with self.subTest(workflow=filename):
@@ -542,7 +592,9 @@ try {{
 
     def test_custom_node_contract_is_narrow_and_frozen(self) -> None:
         contract = self.registry["custom_nodes"]
-        self.assertEqual((contract["package"], contract["version"]), ("n8n-nodes-finance", "0.1.0"))
+        self.assertEqual(
+            (contract["package"], contract["version"]), ("n8n-nodes-finance", "0.1.0")
+        )
         expected = contract["node_types"]
         seen: set[tuple[str, str]] = set()
         for workflow in self.workflows.values():
@@ -553,15 +605,24 @@ try {{
                 params = node.get("parameters", {})
                 self.assertIn(short, expected)
                 self.assertIn(params["operation"], expected[short])
-                allowed = {"operation", "readShape"} if short == "actualBudget" else {"operation"}
+                allowed = (
+                    {"operation", "readShape"}
+                    if short == "actualBudget"
+                    else {"operation"}
+                )
                 self.assertLessEqual(set(params), allowed)
                 if "readShape" in params:
                     self.assertEqual(params["operation"], "read")
-                    self.assertIn(params["readShape"], {"accounts", "categories", "transactionsByImportedIds"})
+                    self.assertIn(
+                        params["readShape"],
+                        {"accounts", "categories", "transactionsByImportedIds"},
+                    )
                 if short == "actualBudget":
                     self.assertIn("actualBudgetApi", node.get("credentials", {}))
                 if short == "financePdf" and params["operation"] == "unlock":
-                    self.assertIn("financeStatementPassword", node.get("credentials", {}))
+                    self.assertIn(
+                        "financeStatementPassword", node.get("credentials", {})
+                    )
                 seen.add((short, params["operation"]))
         for short, operations in expected.items():
             for operation in operations:
@@ -582,12 +643,14 @@ try {{
             shared["Run Isolated PDF Extraction"]["parameters"]["workflowId"]["value"],
             self.workflow("14-local-pdf-extraction.json")["id"],
         )
-        self.assertFalse(any(
-            node["type"] == "n8n-nodes-base.extractFromFile"
-            and node.get("parameters", {}).get("operation") == "pdf"
-            for workflow in self.workflows.values()
-            for node in workflow["nodes"]
-        ))
+        self.assertFalse(
+            any(
+                node["type"] == "n8n-nodes-base.extractFromFile"
+                and node.get("parameters", {}).get("operation") == "pdf"
+                for workflow in self.workflows.values()
+                for node in workflow["nodes"]
+            )
+        )
 
     def test_data_table_contract_is_postgres_and_schema_valid(self) -> None:
         self.assertEqual(self.tables["storage"], "n8n-data-tables-on-postgres")
@@ -601,15 +664,25 @@ try {{
             jsonschema.validators.validator_for(schema).check_schema(schema)
             jsonschema.validate(self.tables, schema)
         names = {row["name"] for row in self.tables["tables"]}
-        self.assertTrue({
-            "finance_source_contracts", "finance_source_cursors",
-            "finance_acquisition_receipts", "finance_archive_receipts",
-            "finance_document_operations", "finance_pipeline_runs",
-            "finance_actual_outbox", "finance_actual_verifications",
-            "finance_reconciliations", "finance_config_versions",
-            "finance_provider_circuits", "finance_execution_failures",
-            "finance_mcp_requests", "finance_agent_jobs", "finance_ai_policy_contracts",
-        }.issubset(names))
+        self.assertTrue(
+            {
+                "finance_source_contracts",
+                "finance_source_cursors",
+                "finance_acquisition_receipts",
+                "finance_archive_receipts",
+                "finance_document_operations",
+                "finance_pipeline_runs",
+                "finance_actual_outbox",
+                "finance_actual_verifications",
+                "finance_reconciliations",
+                "finance_config_versions",
+                "finance_provider_circuits",
+                "finance_execution_failures",
+                "finance_mcp_requests",
+                "finance_agent_jobs",
+                "finance_ai_policy_contracts",
+            }.issubset(names)
+        )
         self.assertEqual(set(self.tables["state_policies"]), names)
         for name, policy in self.tables["state_policies"].items():
             with self.subTest(table=name):
@@ -618,7 +691,9 @@ try {{
                 self.assertTrue(policy["concurrency"])
                 self.assertTrue(policy["index_semantics"])
 
-    def test_every_declared_data_table_is_referenced_by_a_connected_executable_node(self) -> None:
+    def test_every_declared_data_table_is_referenced_by_a_connected_executable_node(
+        self,
+    ) -> None:
         referenced: set[str] = set()
         for workflow in self.workflows.values():
             connected = set(workflow["connections"])
@@ -627,7 +702,10 @@ try {{
                     for branch in channel:
                         connected.update(edge["node"] for edge in branch)
             for node in workflow["nodes"]:
-                if node["name"] not in connected or node["type"] != "n8n-nodes-base.dataTable":
+                if (
+                    node["name"] not in connected
+                    or node["type"] != "n8n-nodes-base.dataTable"
+                ):
                     continue
                 value = node.get("parameters", {}).get("dataTableId", {}).get("value")
                 if value:
@@ -641,30 +719,76 @@ try {{
         self.assertNotIn("finance_ai_policy_contracts", referenced)
 
     def test_outbox_holds_only_pointer_hash_and_state_metadata(self) -> None:
-        table = next(row for row in self.tables["tables"] if row["name"] == "finance_actual_outbox")
+        table = next(
+            row
+            for row in self.tables["tables"]
+            if row["name"] == "finance_actual_outbox"
+        )
         columns = set(table["columns"])
-        self.assertTrue({"artifact_item_id", "artifact_etag", "payload_sha256", "config_version", "parser_version", "state"}.issubset(columns))
-        self.assertFalse({"transactions", "transaction", "payload_json", "statement_rows"} & columns)
-        self.assertEqual(table["allowed_states"], ["PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED", "FAILED"])
+        self.assertTrue(
+            {
+                "artifact_item_id",
+                "artifact_etag",
+                "payload_sha256",
+                "config_version",
+                "parser_version",
+                "state",
+            }.issubset(columns)
+        )
+        self.assertFalse(
+            {"transactions", "transaction", "payload_json", "statement_rows"} & columns
+        )
+        self.assertEqual(
+            table["allowed_states"],
+            ["PREPARED", "ACTUAL_OBSERVED", "VERIFIED", "COMMITTED", "FAILED"],
+        )
 
     def test_document_state_machine_marks_plaintext_ephemeral(self) -> None:
-        table = next(row for row in self.tables["tables"] if row["name"] == "finance_document_operations")
-        self.assertTrue({
-            "RECEIVED", "VALIDATED", "DECRYPTED_EPHEMERAL", "EXTRACTED_EPHEMERAL",
-            "SCHEMA_VALIDATED", "READY_FOR_PARSE", "COMMITTED", "QUARANTINED",
-            "UNSUPPORTED", "PASSWORD_FAILED",
-        }.issubset(set(table["allowed_states"])))
-        self.assertEqual(table["idempotency_key"], ["source_sha256", "document_profile", "requested_schema_version"])
+        table = next(
+            row
+            for row in self.tables["tables"]
+            if row["name"] == "finance_document_operations"
+        )
+        self.assertTrue(
+            {
+                "RECEIVED",
+                "VALIDATED",
+                "DECRYPTED_EPHEMERAL",
+                "EXTRACTED_EPHEMERAL",
+                "SCHEMA_VALIDATED",
+                "READY_FOR_PARSE",
+                "COMMITTED",
+                "QUARANTINED",
+                "UNSUPPORTED",
+                "PASSWORD_FAILED",
+            }.issubset(set(table["allowed_states"]))
+        )
+        self.assertEqual(
+            table["idempotency_key"],
+            ["source_sha256", "document_profile", "requested_schema_version"],
+        )
 
-    def test_outlook_sweep_freezes_window_exhausts_and_returns_one_heartbeat(self) -> None:
+    def test_outlook_sweep_freezes_window_exhausts_and_returns_one_heartbeat(
+        self,
+    ) -> None:
         workflow = self.workflow("12-outlook-message-sweep.json")
         nodes = self.nodes("12-outlook-message-sweep.json")
         outlook = nodes["Exhaust Outlook Pagination"]
         self.assertTrue(outlook["parameters"]["returnAll"])
         self.assertTrue(outlook["alwaysOutputData"])
-        code = nodes["Freeze Trusted Cursor Window"]["parameters"]["jsCode"] + nodes["Aggregate Exact Window Heartbeat"]["parameters"]["jsCode"]
+        code = (
+            nodes["Freeze Trusted Cursor Window"]["parameters"]["jsCode"]
+            + nodes["Aggregate Exact Window Heartbeat"]["parameters"]["jsCode"]
+        )
         compact = re.sub(r"\s+", "", code)
-        for term in ("run_upper_bound", "pagination_exhausted:true", "scanned_count", "heartbeat", "received>=start", "received<upper"):
+        for term in (
+            "run_upper_bound",
+            "pagination_exhausted:true",
+            "scanned_count",
+            "heartbeat",
+            "received>=start",
+            "received<upper",
+        ):
             self.assertIn(term, compact)
         self.assertTrue(workflow["meta"]["aggregateOutputAlwaysOne"])
         self.assertTrue(workflow["meta"]["cursorCommitExactlyOnce"])
@@ -672,7 +796,9 @@ try {{
         receipt_node = json.dumps(nodes["Upsert ENUMERATED Receipt"])
         self.assertIn("finance_ingestion_state", receipt_node)
         self.assertNotIn("finance_acquisition_receipts", receipt_node)
-        receipt_columns = nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"]["value"]
+        receipt_columns = nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"][
+            "value"
+        ]
         self.assertIn("receipt_run_id", receipt_columns)
         self.assertIn("receipt_run_upper_bound", receipt_columns)
         self.assertNotIn("committed_run_id", receipt_columns)
@@ -682,13 +808,27 @@ try {{
             nodes,
         )
         self.assertEqual(
-            [row["keyName"] for row in nodes["Upsert ENUMERATED Receipt"]["parameters"]["filters"]["conditions"]],
+            [
+                row["keyName"]
+                for row in nodes["Upsert ENUMERATED Receipt"]["parameters"]["filters"][
+                    "conditions"
+                ]
+            ],
             ["source_code"],
         )
-        self.assertEqual(nodes["CAS Update Source Cursor"]["parameters"]["operation"], "update")
-        cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
-        self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
-        self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
+        self.assertEqual(
+            nodes["CAS Update Source Cursor"]["parameters"]["operation"], "update"
+        )
+        cas_filters = nodes["CAS Update Source Cursor"]["parameters"]["filters"][
+            "conditions"
+        ]
+        self.assertEqual(
+            [row["keyName"] for row in cas_filters], ["source_code", "cursor_version"]
+        )
+        self.assertIn(
+            "SOURCE_CURSOR_VERSION_CONFLICT",
+            nodes["Build Cursor CAS Update"]["parameters"]["jsCode"],
+        )
 
     def test_outlook_enumerate_receipt_projects_before_one_row_cursor_cas(self) -> None:
         receipt = {
@@ -763,7 +903,9 @@ try {{
         )
         self.assertTrue(compared["ok"], compared)
 
-    def test_outlook_raw_canonical_receipts_project_through_every_readback_route(self) -> None:
+    def test_outlook_raw_canonical_receipts_project_through_every_readback_route(
+        self,
+    ) -> None:
         workflow = self.workflow("12-outlook-message-sweep.json")
         schema = {
             column["name"]
@@ -824,27 +966,45 @@ try {{
                     consumer,
                 )
                 projected = self.run_exported_workflow_node(
-                    "12-outlook-message-sweep.json", projector, raw_row, {},
+                    "12-outlook-message-sweep.json",
+                    projector,
+                    raw_row,
+                    {},
                 )
                 self.assertTrue(projected["ok"], projected)
                 output = projected["output"][0]["json"]
                 self.assertEqual(output["run_id"], raw_row["receipt_run_id"])
-                self.assertEqual(output["run_upper_bound"], raw_row["receipt_run_upper_bound"])
+                self.assertEqual(
+                    output["run_upper_bound"], raw_row["receipt_run_upper_bound"]
+                )
                 self.assertEqual(output["window_start"], raw_row["last_window_start"])
                 self.assertEqual(output["pages_fetched"], raw_row["last_pages_fetched"])
-                self.assertEqual(output["pagination_exhausted"], raw_row["last_pagination_exhausted"])
+                self.assertEqual(
+                    output["pagination_exhausted"], raw_row["last_pagination_exhausted"]
+                )
                 self.assertEqual(output["heartbeat"], raw_row["last_heartbeat"])
-                self.assertEqual(output["terminal_state"], raw_row["last_terminal_state"])
-                self.assertEqual(output["created_at"], raw_row["last_receipt_created_at"])
+                self.assertEqual(
+                    output["terminal_state"], raw_row["last_terminal_state"]
+                )
+                self.assertEqual(
+                    output["created_at"], raw_row["last_receipt_created_at"]
+                )
 
         missing_state = self.run_exported_workflow_node(
             "12-outlook-message-sweep.json",
             "Project Enumeration Receipt Fields for Sweep",
-            {key: value for key, value in raw_row.items() if key != "last_terminal_state"},
+            {
+                key: value
+                for key, value in raw_row.items()
+                if key != "last_terminal_state"
+            },
             {},
         )
         self.assertFalse(missing_state["ok"])
-        self.assertIn("ENUMERATION_RECEIPT_FIELD_MISSING:last_terminal_state", missing_state["error"])
+        self.assertIn(
+            "ENUMERATION_RECEIPT_FIELD_MISSING:last_terminal_state",
+            missing_state["error"],
+        )
 
     def test_email_identity_is_derived_after_authoritative_policy_binding(self) -> None:
         workflow = self.workflow("12-outlook-message-sweep.json")
@@ -855,13 +1015,19 @@ try {{
         handoff = nodes["Build Idempotent W09 Email Handoff"]["parameters"]["jsCode"]
         self.assertNotIn("handoff.idempotency_key", prepare)
         self.assertIn("request_canonical", policy)
-        self.assertEqual(request_hash["parameters"]["value"], "={{ $json.request_canonical }}")
-        self.assertEqual(request_hash["parameters"]["dataPropertyName"], "request_sha256")
+        self.assertEqual(
+            request_hash["parameters"]["value"], "={{ $json.request_canonical }}"
+        )
+        self.assertEqual(
+            request_hash["parameters"]["dataPropertyName"], "request_sha256"
+        )
         self.assertIn("...request", handoff)
         self.assertIn("job_id: `finance-ai:${requestSha256}`", handoff)
         self.assertIn("idempotency_key: requestSha256", handoff)
         self.assertEqual(
-            workflow["connections"]["Build Authoritative W09 Email Job"]["main"][0][0]["node"],
+            workflow["connections"]["Build Authoritative W09 Email Job"]["main"][0][0][
+                "node"
+            ],
             "SHA-256 W09 Email Request",
         )
         self.assertEqual(
@@ -881,24 +1047,37 @@ try {{
             "evidence_replay_keys": ["replay-1"],
             "archive_identity_keys": ["message-1:INLINE_BODY"],
             "archive_item_ids": ["drive-1"],
-            "unresolved": [{
-                "transaction_id": "tx-1",
-                "allowed_fields": ["category"],
-                "redacted_context": {"source_message_id": "message-1", "facts": {"total_minor": 123}},
-            }],
+            "unresolved": [
+                {
+                    "transaction_id": "tx-1",
+                    "allowed_fields": ["category"],
+                    "redacted_context": {
+                        "source_message_id": "message-1",
+                        "facts": {"total_minor": 123},
+                    },
+                }
+            ],
         }
         policy_rows = [
             {
-                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
-                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "a" * 64,
-                "config_sha256": "c" * 64, "output_schema_sha256": "d" * 64,
+                "policy_id": "classify-unresolved",
+                "state": "ACTIVE",
+                "agent_profile": "LUNA_MAX",
+                "agent_provider": "CODEX_SUBSCRIPTION",
+                "policy_sha256": "a" * 64,
+                "config_sha256": "c" * 64,
+                "output_schema_sha256": "d" * 64,
                 "allowed_fields_json": json.dumps(["category"]),
                 "allowed_values_json": json.dumps({"category": ["Groceries"]}),
             },
             {
-                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
-                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "b" * 64,
-                "config_sha256": "c" * 64, "output_schema_sha256": "d" * 64,
+                "policy_id": "classify-unresolved",
+                "state": "ACTIVE",
+                "agent_profile": "LUNA_MAX",
+                "agent_provider": "CODEX_SUBSCRIPTION",
+                "policy_sha256": "b" * 64,
+                "config_sha256": "c" * 64,
+                "output_schema_sha256": "d" * 64,
                 "allowed_fields_json": json.dumps(["category"]),
                 "allowed_values_json": json.dumps({"category": ["Household"]}),
             },
@@ -924,7 +1103,9 @@ try {{
             )
             self.assertTrue(handoff["ok"], handoff)
             result = handoff["output"][0]["json"]
-            identities.append((request_sha256, result["job_id"], result["idempotency_key"]))
+            identities.append(
+                (request_sha256, result["job_id"], result["idempotency_key"])
+            )
         self.assertNotEqual(identities[0][0], identities[1][0])
         self.assertNotEqual(identities[0][1], identities[1][1])
         self.assertNotEqual(identities[0][2], identities[1][2])
@@ -933,33 +1114,57 @@ try {{
         self.assertEqual(self.fixtures["contract_status"], "SPEC_ONLY")
         cases = {row["id"]: row for row in self.fixtures["mail_sweep_cases"]}
         required = {
-            "zero-messages", "one-hundred-one-messages", "pagination-failure",
-            "late-out-of-order", "duplicate-message-attachment-hash",
-            "failure-before-cursor", "failure-after-cursor",
+            "zero-messages",
+            "one-hundred-one-messages",
+            "pagination-failure",
+            "late-out-of-order",
+            "duplicate-message-attachment-hash",
+            "failure-before-cursor",
+            "failure-after-cursor",
         }
         self.assertTrue(required.issubset(cases))
         self.assertEqual(cases["zero-messages"]["expected"]["output_items"], 1)
-        self.assertEqual(cases["one-hundred-one-messages"]["expected"]["pages_fetched"], 2)
+        self.assertEqual(
+            cases["one-hundred-one-messages"]["expected"]["pages_fetched"], 2
+        )
         self.assertEqual(cases["pagination-failure"]["expected"]["cursor_commits"], 0)
-        self.assertEqual(cases["failure-before-cursor"]["expected"]["cursor_commits"], 0)
+        self.assertEqual(
+            cases["failure-before-cursor"]["expected"]["cursor_commits"], 0
+        )
 
     def test_monthly_workflows_poll_daily_until_deadline(self) -> None:
-        rows = {row["code"]: row for row in self.registry["workflows"] if row["code"] in {
-            "EI_MONTHLY_STATEMENT", "WIO_MONTHLY_STATEMENT",
-        }}
+        rows = {
+            row["code"]: row
+            for row in self.registry["workflows"]
+            if row["code"]
+            in {
+                "EI_MONTHLY_STATEMENT",
+                "WIO_MONTHLY_STATEMENT",
+            }
+        }
         self.assertEqual(len(rows), 2)
         for row in rows.values():
             self.assertTrue(row["schedule"].startswith("FREQ=DAILY;"))
             self.assertGreater(row["cycle_poll"]["cycle_day"], 0)
             self.assertGreater(row["cycle_poll"]["deadline_days"], 0)
         shared_names = set(self.nodes("22-shared-monthly-statement-cycle.json"))
-        for name in ("Upsert Waiting or Deadline Receipt", "Read Back Waiting or Deadline Receipt"):
+        for name in (
+            "Upsert Waiting or Deadline Receipt",
+            "Read Back Waiting or Deadline Receipt",
+        ):
             self.assertIn(name, shared_names)
-        for filename in ("04-ei-monthly-statement.json", "05-wio-monthly-statement.json"):
+        for filename in (
+            "04-ei-monthly-statement.json",
+            "05-wio-monthly-statement.json",
+        ):
             names = set(self.nodes(filename))
             self.assertEqual(
                 {name for name in names if not name.startswith("Stage ")},
-                {"Daily 20:40 Cycle Poll", "Open Configured Cycle Window", "Run Shared Monthly Statement Cycle"},
+                {
+                    "Daily 20:40 Cycle Poll",
+                    "Open Configured Cycle Window",
+                    "Run Shared Monthly Statement Cycle",
+                },
             )
             self.assertIn("Run Shared Monthly Statement Cycle", names)
         for name in (
@@ -975,7 +1180,9 @@ try {{
     def test_monthly_cycle_native_trigger_and_imported_caller_schema(self) -> None:
         """Check the source-level schema that n8n imports into each caller."""
         shared = self.workflow("22-shared-monthly-statement-cycle.json")
-        trigger = self.nodes("22-shared-monthly-statement-cycle.json")["Monthly Cycle Context"]
+        trigger = self.nodes("22-shared-monthly-statement-cycle.json")[
+            "Monthly Cycle Context"
+        ]
         trigger_inputs = trigger["parameters"]["workflowInputs"]["values"]
         expected_inputs = [
             {"name": "cycle_context", "type": "object"},
@@ -984,7 +1191,10 @@ try {{
         ]
         self.assertEqual(trigger_inputs, expected_inputs)
         self.assertNotIn("inputSource", trigger["parameters"])
-        for filename in ("04-ei-monthly-statement.json", "05-wio-monthly-statement.json"):
+        for filename in (
+            "04-ei-monthly-statement.json",
+            "05-wio-monthly-statement.json",
+        ):
             caller = self.nodes(filename)["Run Shared Monthly Statement Cycle"]
             inputs = caller["parameters"]["workflowInputs"]
             imported_schema = inputs["schema"]
@@ -1000,7 +1210,9 @@ try {{
                     for field in expected_inputs
                 ],
             )
-            self.assertEqual(set(inputs["value"]), {field["name"] for field in expected_inputs})
+            self.assertEqual(
+                set(inputs["value"]), {field["name"] for field in expected_inputs}
+            )
             self.assertEqual(
                 {row["id"]: row["type"] for row in imported_schema},
                 {field["name"]: field["type"] for field in expected_inputs},
@@ -1008,7 +1220,9 @@ try {{
             self.assertEqual(caller["parameters"]["workflowId"]["value"], shared["id"])
 
     def test_monthly_cycle_object_contract_rejects_untrusted_shapes(self) -> None:
-        contract = self.workflow("22-shared-monthly-statement-cycle.json")["meta"]["workflowInputContract"]
+        contract = self.workflow("22-shared-monthly-statement-cycle.json")["meta"][
+            "workflowInputContract"
+        ]
         valid = {
             "cycle_context": {
                 "run_id": "fixture:EI_AMAZON:2026-08",
@@ -1033,20 +1247,32 @@ try {{
         invalid["deadline_policy"] = "2026-08-06T23:59:59.000Z"
         self.assertTrue(list(Draft202012Validator(contract).iter_errors(invalid)))
 
-    def test_shared_pipeline_archives_delta_before_prepared_and_reads_every_state(self) -> None:
-        names = [node["name"] for node in self.workflow("03-shared-statement-pipeline.json")["nodes"]]
-        self.assertLess(names.index("Verify Durable Canonical Delta"), names.index("Upsert PREPARED Actual Outbox"))
+    def test_shared_pipeline_archives_delta_before_prepared_and_reads_every_state(
+        self,
+    ) -> None:
+        names = [
+            node["name"]
+            for node in self.workflow("03-shared-statement-pipeline.json")["nodes"]
+        ]
+        self.assertLess(
+            names.index("Verify Durable Canonical Delta"),
+            names.index("Upsert PREPARED Actual Outbox"),
+        )
         self.assertIn("Apply Prepared Outbox Safely", names)
         writer = set(self.nodes("20-actual-outbox-apply.json"))
         for name in (
-            "Download Immutable Delta Artifact", "SHA-256 Recovered Delta",
-            "Verify Recovery Contract", "Acquire Recovery Writer Fence",
-            "Assert Recovery Fence Before Import", "Release Recovery Writer Fence",
+            "Download Immutable Delta Artifact",
+            "SHA-256 Recovered Delta",
+            "Verify Recovery Contract",
+            "Acquire Recovery Writer Fence",
+            "Assert Recovery Fence Before Import",
+            "Release Recovery Writer Fence",
             "Upsert Exact Actual Verification Receipt",
             "Read Back Exact Actual Verification Receipt",
             "Compare Exact Actual Verification Receipt",
             "Read Back Released Recovery Writer Fence",
-            "Route Recovery State", "Read Back COMMITTED Recovery Replay",
+            "Route Recovery State",
+            "Read Back COMMITTED Recovery Replay",
             "Read Back Exact Actual Verification Receipt Replay",
             "Return Verified Commit Receipt Replay",
             "Assert Recovery Fence After Import",
@@ -1054,7 +1280,9 @@ try {{
             "Assert Recovery Fence Before Commit",
         ):
             self.assertIn(name, writer)
-        code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"]["parameters"]["jsCode"]
+        code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"][
+            "parameters"
+        ]["jsCode"]
         self.assertIn("expected_transactions", code)
         self.assertIn("expected_account_balance", code)
         self.assertIn("card_code", code)
@@ -1062,32 +1290,49 @@ try {{
         writer_nodes = self.nodes("20-actual-outbox-apply.json")
         self.assertIn(
             "card_code",
-            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["columns"]["value"],
+            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"][
+                "columns"
+            ]["value"],
         )
         self.assertEqual(
-            [row["keyName"] for row in writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["filters"]["conditions"]],
+            [
+                row["keyName"]
+                for row in writer_nodes["Upsert Exact Actual Verification Receipt"][
+                    "parameters"
+                ]["filters"]["conditions"]
+            ],
             ["idempotency_key"],
         )
         self.assertIn(
             "idempotency_key",
-            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"]["columns"]["value"],
+            writer_nodes["Upsert Exact Actual Verification Receipt"]["parameters"][
+                "columns"
+            ]["value"],
         )
         self.assertNotIn(
             "receipt.card_code || receipt.account_id",
             writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Route Recovery State"]["main"][3][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Route Recovery State"
+            ]["main"][3][0]["node"],
             "Read Back COMMITTED Recovery Replay",
         )
         self.assertIn(
             "replay_readback_only",
-            writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"],
+            writer_nodes["Return Verified Commit Receipt Replay"]["parameters"][
+                "jsCode"
+            ],
         )
-        replay_code = writer_nodes["Return Verified Commit Receipt Replay"]["parameters"]["jsCode"]
+        replay_code = writer_nodes["Return Verified Commit Receipt Replay"][
+            "parameters"
+        ]["jsCode"]
         self.assertIn("Verify Recovery Contract", replay_code)
         self.assertNotIn("Build Recovery Fence Release", replay_code)
-        committed_values = writer_nodes["Upsert COMMITTED Recovery"]["parameters"]["columns"]["value"]
+        committed_values = writer_nodes["Upsert COMMITTED Recovery"]["parameters"][
+            "columns"
+        ]["value"]
         self.assertEqual(
             {"lease_owner", "lease_fence"},
             {"lease_owner", "lease_fence"} & committed_values.keys(),
@@ -1097,40 +1342,65 @@ try {{
             writer_nodes["Return Verified Commit Receipt"]["parameters"]["jsCode"],
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Release Recovery Writer Fence"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Release Recovery Writer Fence"
+            ]["main"][0][0]["node"],
             "Read Back Released Recovery Writer Fence",
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Exact Actual Verification Receipt Replay"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Read Back Exact Actual Verification Receipt Replay"
+            ]["main"][0][0]["node"],
             "Read Back Released Recovery Writer Fence Replay",
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Recovery Import PREPARED"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Recovery Import PREPARED"
+            ]["main"][0][0]["node"],
             "Build Post-Import Fence Assert",
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back VERIFIED Recovery"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Read Back VERIFIED Recovery"
+            ]["main"][0][0]["node"],
             "Read Verification Receipt for Commit",
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Assert Recovery Fence Before Commit"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Assert Recovery Fence Before Commit"
+            ]["main"][0][0]["node"],
             "Build Recovery Fence Release",
         )
         self.assertEqual(
-            self.workflow("20-actual-outbox-apply.json")["connections"]["Read Back Released Recovery Writer Fence"]["main"][0][0]["node"],
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Read Back Released Recovery Writer Fence"
+            ]["main"][0][0]["node"],
             "Upsert COMMITTED Recovery",
         )
-        observed_values = writer_nodes["Upsert ACTUAL OBSERVED Recovery"]["parameters"]["columns"]["value"]
-        self.assertIn("actual.actual_result.added", observed_values["actual_transaction_id"])
-        self.assertIn("outbox_row.actual_transaction_id", observed_values["actual_transaction_id"])
+        observed_values = writer_nodes["Upsert ACTUAL OBSERVED Recovery"]["parameters"][
+            "columns"
+        ]["value"]
+        self.assertIn(
+            "actual.actual_result.added", observed_values["actual_transaction_id"]
+        )
+        self.assertIn(
+            "outbox_row.actual_transaction_id", observed_values["actual_transaction_id"]
+        )
 
-    def test_shared_pipeline_reuses_existing_outbox_before_prepared_upsert(self) -> None:
+    def test_shared_pipeline_reuses_existing_outbox_before_prepared_upsert(
+        self,
+    ) -> None:
         workflow = self.workflow("03-shared-statement-pipeline.json")
         nodes = self.nodes("03-shared-statement-pipeline.json")
         connections = workflow["connections"]
         prepare_code = nodes["Prepare Outbox Intent"]["parameters"]["jsCode"]
-        self.assertIn("idempotency_key = `statement:${source.document_sha256}`", prepare_code)
-        self.assertNotIn("idempotency_key = `${source.run_id}:${source.document_sha256}`", prepare_code)
+        self.assertIn(
+            "idempotency_key = `statement:${source.document_sha256}`", prepare_code
+        )
+        self.assertNotIn(
+            "idempotency_key = `${source.run_id}:${source.document_sha256}`",
+            prepare_code,
+        )
         self.assertTrue(nodes["Read Back Existing Actual Outbox"]["alwaysOutputData"])
         self.assertEqual(
             connections["Prepare Outbox Intent"]["main"][0][0]["node"],
@@ -1151,17 +1421,20 @@ try {{
         digest = "a" * 64
         draft = {
             "batch_id": "retry-run:new-outbox",
+            "outbox_id": "outbox:new-outbox",
             "idempotency_key": "statement:payload",
             "actual_file_id": "actual-file:replay",
             "account_id": "actual-account:EI_AMAZON",
             "card_code": "EI_AMAZON",
             "delta_sha256": digest,
+            "payload_sha256": digest,
             "start_date": "2026-08-01",
             "end_date": "2026-08-31",
             "state": "PREPARED",
         }
         existing = {
             **draft,
+            "outbox_id": "outbox:stable-existing",
             "batch_id": "statement:stable-existing",
             "state": "COMMITTED",
             "lease_owner": "n8n:recovery:statement:stable-existing",
@@ -1218,49 +1491,71 @@ try {{
             "Return Verified Commit Receipt Replay",
             receipt,
             {
-                "Verify Recovery Contract": {"json": {
-                    "outbox_row": selected_row,
-                    "manifest": {
-                        "actual_file_id": "actual-file:replay",
-                        "account_id": "actual-account:EI_AMAZON",
-                        "card_code": "EI_AMAZON",
-                        "period_start": "2026-08-01",
-                        "period_end": "2026-08-31",
-                        "expected_statement_balance_minor": -100,
-                    },
-                }},
+                "Verify Recovery Contract": {
+                    "json": {
+                        "outbox_row": selected_row,
+                        "manifest": {
+                            "actual_file_id": "actual-file:replay",
+                            "account_id": "actual-account:EI_AMAZON",
+                            "card_code": "EI_AMAZON",
+                            "period_start": "2026-08-01",
+                            "period_end": "2026-08-31",
+                            "expected_statement_balance_minor": -100,
+                        },
+                        "payload_sha256": digest,
+                    }
+                },
                 "Read Back COMMITTED Recovery Replay": {"json": selected_row},
                 "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
-                "Read Back Released Recovery Writer Fence Replay": {"json": {
-                    "resource_key": "actual:actual-file:replay",
-                    "lease_owner": "n8n:recovery:statement:stable-existing",
-                    "fencing_token": 9,
-                    "released": True,
-                }},
+                "Read Back Released Recovery Writer Fence Replay": {
+                    "json": {
+                        "resource_key": "actual:actual-file:replay",
+                        "outbox_id": selected_row["outbox_id"],
+                        "account_id": selected_row["account_id"],
+                        "payload_sha256": selected_row["payload_sha256"],
+                        "verified_payload_sha256": digest,
+                        "lease_owner": "n8n:recovery:statement:stable-existing",
+                        "fencing_token": 9,
+                        "released": True,
+                    }
+                },
             },
         )
         self.assertTrue(replay["ok"], replay)
         self.assertTrue(replay["output"][0]["json"]["replay_readback_only"])
 
-    def test_actual_writer_uses_import_delta_evidence_and_branch_safe_receipts(self) -> None:
+    def test_actual_writer_uses_import_delta_evidence_and_branch_safe_receipts(
+        self,
+    ) -> None:
         digest = "a" * 64
         root = {
-            "outbox_row": {"idempotency_key": "statement:one", "batch_id": "statement:one"},
+            "outbox_row": {
+                "idempotency_key": "statement:one",
+                "batch_id": "statement:one",
+            },
             "manifest": {
-                "actual_file_id": "actual-file", "account_id": "account-1",
-                "card_code": "ADCB_CASHBACK", "period_start": "2024-02-01",
-                "period_end": "2024-02-29", "expected_statement_balance_minor": 999999,
+                "actual_file_id": "actual-file",
+                "account_id": "account-1",
+                "card_code": "ADCB_CASHBACK",
+                "period_start": "2024-02-01",
+                "period_end": "2024-02-29",
+                "expected_statement_balance_minor": 999999,
                 "historical_import": True,
             },
             "verification": {
-                "account_id": "account-1", "card_code": "ADCB_CASHBACK",
+                "account_id": "account-1",
+                "card_code": "ADCB_CASHBACK",
                 "expected_transactions": [{"imported_id": "statement:one"}],
                 "expected_account_balance": 999999,
             },
         }
-        observed_state = {"expected_account_balance": 12500, "observed_account_balance": 12500}
+        observed_state = {
+            "expected_account_balance": 12500,
+            "observed_account_balance": 12500,
+        }
         contract = self.run_exported_workflow_node(
-            "20-actual-outbox-apply.json", "Build Recovery Verification Contract",
+            "20-actual-outbox-apply.json",
+            "Build Recovery Verification Contract",
             observed_state,
             {
                 "Verify Recovery Contract": {"json": root},
@@ -1270,94 +1565,149 @@ try {{
         self.assertTrue(contract["ok"], contract)
         projected = contract["output"][0]["json"]
         self.assertEqual(projected["verification"]["expected_account_balance"], 999999)
-        self.assertEqual(projected["balance_evidence"], {"expected": 12500, "observed": 12500})
+        self.assertEqual(
+            projected["balance_evidence"], {"expected": 12500, "observed": 12500}
+        )
         missing_delta = self.run_exported_workflow_node(
-            "20-actual-outbox-apply.json", "Build Recovery Verification Contract",
+            "20-actual-outbox-apply.json",
+            "Build Recovery Verification Contract",
             {"expected_account_balance": None, "observed_account_balance": None},
             {
                 "Verify Recovery Contract": {"json": root},
-                "Read Back ACTUAL OBSERVED Recovery": {"json": {
-                    "expected_account_balance": None, "observed_account_balance": None,
-                }},
+                "Read Back ACTUAL OBSERVED Recovery": {
+                    "json": {
+                        "expected_account_balance": None,
+                        "observed_account_balance": None,
+                    }
+                },
             },
         )
         self.assertFalse(missing_delta["ok"])
 
         receipt = {
-            "idempotency_key": "statement:one", "batch_id": "statement:one",
-            "actual_file_id": "actual-file", "account_id": "account-1",
-            "card_code": "ADCB_CASHBACK", "period_start": "2024-02-01",
-            "period_end": "2024-02-29", "expected_payload_sha256": digest,
-            "observed_payload_sha256": digest, "expected_count": 1, "observed_count": 1,
-            "expected_amount_sum_minor": -100, "observed_amount_sum_minor": -100,
-            "expected_account_balance": 999999, "observed_account_balance": 999999,
+            "idempotency_key": "statement:one",
+            "batch_id": "statement:one",
+            "actual_file_id": "actual-file",
+            "account_id": "account-1",
+            "card_code": "ADCB_CASHBACK",
+            "period_start": "2024-02-01",
+            "period_end": "2024-02-29",
+            "expected_payload_sha256": digest,
+            "observed_payload_sha256": digest,
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": -100,
+            "observed_amount_sum_minor": -100,
+            "expected_account_balance": 999999,
+            "observed_account_balance": 999999,
             "invariants_passed": True,
         }
         validated = self.run_exported_workflow_node(
-            "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
-            receipt, {"Verify Recovery Contract": {"json": root}},
+            "20-actual-outbox-apply.json",
+            "Validate Stored Verification Receipt for Commit",
+            receipt,
+            {"Verify Recovery Contract": {"json": root}},
         )
         self.assertTrue(validated["ok"], validated)
         bad_balance = self.run_exported_workflow_node(
-            "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
+            "20-actual-outbox-apply.json",
+            "Validate Stored Verification Receipt for Commit",
             {**receipt, "observed_account_balance": 12499},
             {"Verify Recovery Contract": {"json": root}},
         )
         self.assertFalse(bad_balance["ok"])
         for invalid in (
-            {**receipt, "expected_account_balance": None, "observed_account_balance": None},
+            {
+                **receipt,
+                "expected_account_balance": None,
+                "observed_account_balance": None,
+            },
             {**receipt, "expected_count": None, "observed_count": None},
-            {**receipt, "expected_amount_sum_minor": None, "observed_amount_sum_minor": None},
+            {
+                **receipt,
+                "expected_amount_sum_minor": None,
+                "observed_amount_sum_minor": None,
+            },
         ):
             rejected = self.run_exported_workflow_node(
-                "20-actual-outbox-apply.json", "Validate Stored Verification Receipt for Commit",
-                invalid, {"Verify Recovery Contract": {"json": root}},
+                "20-actual-outbox-apply.json",
+                "Validate Stored Verification Receipt for Commit",
+                invalid,
+                {"Verify Recovery Contract": {"json": root}},
             )
             self.assertFalse(rejected["ok"])
 
         committed = {
-            "batch_id": "statement:one", "state": "COMMITTED",
-            "lease_owner": "n8n:recovery:statement:one", "lease_fence": 4,
+            "batch_id": "statement:one",
+            "state": "COMMITTED",
+            "lease_owner": "n8n:recovery:statement:one",
+            "lease_fence": 4,
         }
         final = self.run_exported_workflow_node(
-            "20-actual-outbox-apply.json", "Return Verified Commit Receipt",
+            "20-actual-outbox-apply.json",
+            "Return Verified Commit Receipt",
             {},
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
-                "Read Back Released Recovery Writer Fence": {"json": {
-                    "resource_key": "actual:actual-file", "lease_id": "11111111-1111-4111-8111-111111111111",
-                    "lease_owner": committed["lease_owner"], "fencing_token": 4, "released": True,
-                }},
-                "Build Recovery Fence Release": {"json": {
-                    "resource_key": "actual:actual-file", "lease_id": "11111111-1111-4111-8111-111111111111",
-                    "lease_owner": committed["lease_owner"], "fencing_token": 4,
-                }},
+                "Read Back Released Recovery Writer Fence": {
+                    "json": {
+                        "resource_key": "actual:actual-file",
+                        "lease_id": "11111111-1111-4111-8111-111111111111",
+                        "lease_owner": committed["lease_owner"],
+                        "fencing_token": 4,
+                        "released": True,
+                    }
+                },
+                "Build Recovery Fence Release": {
+                    "json": {
+                        "resource_key": "actual:actual-file",
+                        "lease_id": "11111111-1111-4111-8111-111111111111",
+                        "lease_owner": committed["lease_owner"],
+                        "fencing_token": 4,
+                    }
+                },
             },
         )
         self.assertTrue(final["ok"], final)
 
-    def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(self) -> None:
+    def test_recovery_rehydrates_artifact_and_preserves_all_outbox_transitions(
+        self,
+    ) -> None:
         recovery = set(self.nodes("17-actual-outbox-recovery.json"))
         self.assertIn("Apply Nonterminal Outbox Safely", recovery)
         names = set(self.nodes("20-actual-outbox-apply.json"))
         for name in (
-            "Download Immutable Delta Artifact", "SHA-256 Recovered Delta",
-            "Verify Recovery Contract", "Acquire Recovery Writer Fence",
-            "Assert Recovery Fence Before Import", "Upsert ACTUAL OBSERVED Recovery",
-            "Read Back ACTUAL OBSERVED Recovery", "Build Recovery Verification Contract",
-            "Upsert VERIFIED Recovery", "Read Back VERIFIED Recovery",
-            "Upsert COMMITTED Recovery", "Read Back COMMITTED Recovery",
+            "Download Immutable Delta Artifact",
+            "SHA-256 Recovered Delta",
+            "Verify Recovery Contract",
+            "Acquire Recovery Writer Fence",
+            "Assert Recovery Fence Before Import",
+            "Upsert ACTUAL OBSERVED Recovery",
+            "Read Back ACTUAL OBSERVED Recovery",
+            "Build Recovery Verification Contract",
+            "Upsert VERIFIED Recovery",
+            "Read Back VERIFIED Recovery",
+            "Upsert COMMITTED Recovery",
+            "Read Back COMMITTED Recovery",
             "Release Recovery Writer Fence",
         ):
             self.assertIn(name, names)
         cases = {row["id"] for row in self.fixtures["writer_lease_cases"]}
-        self.assertTrue({
-            "concurrent-acquire", "expired-reacquire", "stale-token-before-import",
-            "kill-after-prepared", "kill-after-actual-observed", "kill-after-verified",
-        }.issubset(cases))
+        self.assertTrue(
+            {
+                "concurrent-acquire",
+                "expired-reacquire",
+                "stale-token-before-import",
+                "kill-after-prepared",
+                "kill-after-actual-observed",
+                "kill-after-verified",
+            }.issubset(cases)
+        )
 
-    def test_actual_writer_routes_canonical_delta_artifact_fields_to_download(self) -> None:
+    def test_actual_writer_routes_canonical_delta_artifact_fields_to_download(
+        self,
+    ) -> None:
         workflow = self.workflow("20-actual-outbox-apply.json")
         nodes = self.nodes("20-actual-outbox-apply.json")
         self.assertEqual(
@@ -1389,12 +1739,15 @@ try {{
             "={{ $json.delta_artifact_item_id }}",
         )
 
-    def test_committed_actual_replay_is_readback_only_and_rejects_stale_receipts(self) -> None:
+    def test_committed_actual_replay_is_readback_only_and_rejects_stale_receipts(
+        self,
+    ) -> None:
         digest = "a" * 64
         committed = {
             "batch_id": "outbox:replay-1",
             "idempotency_key": "outbox:replay-1",
             "actual_file_id": "actual-file:replay-1",
+            "account_id": "actual-account:EI_AMAZON",
             "state": "COMMITTED",
             "lease_owner": "n8n:recovery:outbox:replay-1",
             "lease_fence": 7,
@@ -1438,16 +1791,23 @@ try {{
                         "period_end": "2026-08-31",
                         "expected_statement_balance_minor": -100,
                     },
+                    "payload_sha256": digest,
                 }
             },
             "Read Back COMMITTED Recovery Replay": {"json": committed},
             "Read Back Exact Actual Verification Receipt Replay": {"json": receipt},
-            "Read Back Released Recovery Writer Fence Replay": {"json": {
-                "resource_key": "actual:actual-file:replay-1",
-                "lease_owner": committed["lease_owner"],
-                "fencing_token": committed["lease_fence"],
-                "released": True,
-            }},
+            "Read Back Released Recovery Writer Fence Replay": {
+                "json": {
+                    "resource_key": "actual:actual-file:replay-1",
+                    "outbox_id": "outbox:replay-1",
+                    "account_id": "actual-account:EI_AMAZON",
+                    "payload_sha256": digest,
+                    "verified_payload_sha256": digest,
+                    "lease_owner": committed["lease_owner"],
+                    "fencing_token": committed["lease_fence"],
+                    "released": True,
+                }
+            },
         }
         connections = self.workflow("20-actual-outbox-apply.json")["connections"]
         replay_route = ["Verify Recovery Contract", "Route Recovery State"]
@@ -1472,7 +1832,8 @@ try {{
         )
         self.assertEqual(
             set(references),
-            set(replay_route) - {"Route Recovery State", "Return Verified Commit Receipt Replay"},
+            set(replay_route)
+            - {"Route Recovery State", "Return Verified Commit Receipt Replay"},
         )
         replay = self.run_exported_workflow_node(
             "20-actual-outbox-apply.json",
@@ -1489,17 +1850,23 @@ try {{
             "Compare Exact Actual Verification Receipt",
             receipt,
             {
-                "Verify Recovery Contract": {"json": {
-                    "outbox_row": committed,
-                    "manifest": {"expected_statement_balance_minor": -100},
-                }},
-                "Recovery Verify Actual": {"json": {"actual": {
-                    "expected_sha256": digest,
-                    "observed_sha256": digest,
-                    "transaction_count": 1,
-                    "amount_sum": 100,
-                    "account_balance": -100,
-                }}},
+                "Verify Recovery Contract": {
+                    "json": {
+                        "outbox_row": committed,
+                        "manifest": {"expected_statement_balance_minor": -100},
+                    }
+                },
+                "Recovery Verify Actual": {
+                    "json": {
+                        "actual": {
+                            "expected_sha256": digest,
+                            "observed_sha256": digest,
+                            "transaction_count": 1,
+                            "amount_sum": 100,
+                            "account_balance": -100,
+                        }
+                    }
+                },
             },
         )
         self.assertTrue(fresh["ok"], fresh)
@@ -1508,17 +1875,23 @@ try {{
             "Compare Exact Actual Verification Receipt",
             {**receipt, "observed_account_balance": -101},
             {
-                "Verify Recovery Contract": {"json": {
-                    "outbox_row": committed,
-                    "manifest": {"expected_statement_balance_minor": -100},
-                }},
-                "Recovery Verify Actual": {"json": {"actual": {
-                    "expected_sha256": digest,
-                    "observed_sha256": digest,
-                    "transaction_count": 1,
-                    "amount_sum": 100,
-                    "account_balance": -100,
-                }}},
+                "Verify Recovery Contract": {
+                    "json": {
+                        "outbox_row": committed,
+                        "manifest": {"expected_statement_balance_minor": -100},
+                    }
+                },
+                "Recovery Verify Actual": {
+                    "json": {
+                        "actual": {
+                            "expected_sha256": digest,
+                            "observed_sha256": digest,
+                            "transaction_count": 1,
+                            "amount_sum": 100,
+                            "account_balance": -100,
+                        }
+                    }
+                },
             },
         )
         self.assertFalse(bad_balance["ok"])
@@ -1529,19 +1902,23 @@ try {{
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
-                "Build Recovery Fence Release": {"json": {
-                    "resource_key": "actual:actual-file:replay",
-                    "lease_id": "00000000-0000-4000-8000-000000000007",
-                    "lease_owner": "n8n:recovery:outbox:replay-1",
-                    "fencing_token": 7,
-                }},
-                "Read Back Released Recovery Writer Fence": {"json": {
-                    "resource_key": "actual:actual-file:replay",
-                    "lease_id": "00000000-0000-4000-8000-000000000007",
-                    "lease_owner": "n8n:recovery:outbox:replay-1",
-                    "fencing_token": 7,
-                    "released": True,
-                }},
+                "Build Recovery Fence Release": {
+                    "json": {
+                        "resource_key": "actual:actual-file:replay",
+                        "lease_id": "00000000-0000-4000-8000-000000000007",
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                    }
+                },
+                "Read Back Released Recovery Writer Fence": {
+                    "json": {
+                        "resource_key": "actual:actual-file:replay",
+                        "lease_id": "00000000-0000-4000-8000-000000000007",
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                        "released": True,
+                    }
+                },
             },
         )
         self.assertTrue(normal["ok"], normal)
@@ -1553,13 +1930,17 @@ try {{
             {
                 "Read Back COMMITTED Recovery": {"json": committed},
                 "Validate Stored Verification Receipt for Commit": {"json": receipt},
-                "Build Recovery Fence Release": {"json": {
-                    "resource_key": "actual:actual-file:replay",
-                    "lease_id": "00000000-0000-4000-8000-000000000007",
-                    "lease_owner": "n8n:recovery:outbox:replay-1",
-                    "fencing_token": 7,
-                }},
-                "Read Back Released Recovery Writer Fence": {"json": {"released": False}},
+                "Build Recovery Fence Release": {
+                    "json": {
+                        "resource_key": "actual:actual-file:replay",
+                        "lease_id": "00000000-0000-4000-8000-000000000007",
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                    }
+                },
+                "Read Back Released Recovery Writer Fence": {
+                    "json": {"released": False}
+                },
             },
         )
         self.assertFalse(unreleased_normal["ok"])
@@ -1577,7 +1958,9 @@ try {{
                 {
                     **references,
                     "Read Back COMMITTED Recovery Replay": {"json": invalid_committed},
-                    "Read Back Exact Actual Verification Receipt Replay": {"json": invalid_receipt},
+                    "Read Back Exact Actual Verification Receipt Replay": {
+                        "json": invalid_receipt
+                    },
                 },
             )
             self.assertFalse(rejected["ok"])
@@ -1587,26 +1970,50 @@ try {{
             receipt,
             {
                 **references,
-                "Read Back Released Recovery Writer Fence Replay": {"json": {
-                    "resource_key": "actual:actual-file:replay-1",
-                    "lease_owner": "n8n:recovery:outbox:replay-1",
-                    "fencing_token": 7,
-                    "released": False,
-                }},
+                "Read Back Released Recovery Writer Fence Replay": {
+                    "json": {
+                        "resource_key": "actual:actual-file:replay-1",
+                        "outbox_id": "outbox:replay-1",
+                        "account_id": "actual-account:EI_AMAZON",
+                        "payload_sha256": digest,
+                        "verified_payload_sha256": digest,
+                        "lease_owner": "n8n:recovery:outbox:replay-1",
+                        "fencing_token": 7,
+                        "released": False,
+                    }
+                },
             },
         )
         self.assertFalse(unreleased_replay["ok"], unreleased_replay)
 
-    def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(self) -> None:
+    def test_writer_lease_uses_only_fixed_parameterized_postgres_functions(
+        self,
+    ) -> None:
         workflow = self.workflow("18-finance-writer-lease.json")
-        validator = next(node for node in workflow["nodes"] if node["name"] == "Validate Fixed Lease Operation")
+        validator = next(
+            node
+            for node in workflow["nodes"]
+            if node["name"] == "Validate Fixed Lease Operation"
+        )
         self.assertNotIn("crypto.randomUUID", validator["parameters"]["jsCode"])
-        postgres = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.postgres"]
+        postgres = [
+            node
+            for node in workflow["nodes"]
+            if node["type"] == "n8n-nodes-base.postgres"
+        ]
         self.assertEqual(len(postgres), 3)
         queries = "\n".join(node["parameters"]["query"] for node in postgres)
-        for function in ("finance_ops.acquire_writer_lease", "finance_ops.assert_writer_lease", "finance_ops.release_writer_lease"):
+        for function in (
+            "finance_ops.acquire_writer_lease",
+            "finance_ops.assert_writer_lease",
+            "finance_ops.release_writer_lease",
+        ):
             self.assertIn(function, queries)
-        acquire = next(node for node in postgres if "acquire_writer_lease" in node["parameters"]["query"])
+        acquire = next(
+            node
+            for node in postgres
+            if "acquire_writer_lease" in node["parameters"]["query"]
+        )
         self.assertIn(
             "finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer)",
             acquire["parameters"]["query"],
@@ -1619,59 +2026,137 @@ try {{
             "attempt_count = 0 AND $5::text = 'INITIAL'",
             acquire["parameters"]["query"],
         )
-        self.assertIn("NOT EXISTS (SELECT 1 FROM blockers)", acquire["parameters"]["query"])
-        self.assertNotIn("$json.lease_id", acquire["parameters"]["options"]["queryReplacement"])
+        self.assertIn(
+            "NOT EXISTS (SELECT 1 FROM blockers)", acquire["parameters"]["query"]
+        )
+        self.assertNotIn(
+            "$json.lease_id", acquire["parameters"]["options"]["queryReplacement"]
+        )
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))
-        migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(encoding="utf-8")
-        signature = migration[migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"):migration.index(") RETURNS TABLE", migration.index("CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"))]
+        migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(
+            encoding="utf-8"
+        )
+        signature = migration[
+            migration.index(
+                "CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"
+            ) : migration.index(
+                ") RETURNS TABLE",
+                migration.index(
+                    "CREATE OR REPLACE FUNCTION finance_ops.acquire_writer_lease"
+                ),
+            )
+        ]
         self.assertEqual(signature.count("text"), 2)
         self.assertNotIn("p_lease_id", signature)
         self.assertIn("gen_random_uuid()", migration)
-        self.assertIn("ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", migration)
-        self.assertIn("DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);", migration)
-        for term in ("ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", "current.fencing_token + 1", "current.expires_at <= clock_timestamp()", "assert_writer_lease", "release_writer_lease"):
+        self.assertIn(
+            "ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE", migration
+        )
+        self.assertIn(
+            "DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);",
+            migration,
+        )
+        for term in (
+            "ON CONFLICT ON CONSTRAINT writer_leases_pkey DO UPDATE",
+            "current.fencing_token + 1",
+            "current.expires_at <= clock_timestamp()",
+            "assert_writer_lease",
+            "release_writer_lease",
+        ):
             self.assertIn(term, migration)
-        release_body = migration[migration.index("CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease"):]
-        self.assertIn("IF changed = 1 THEN", release_body)
+        release_body = migration[
+            migration.index(
+                "CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease"
+            ) :
+        ]
+        self.assertIn("IF changed = 1 OR EXISTS", release_body)
+        self.assertIn("INSERT INTO finance_ops.actual_writer_releases", release_body)
         self.assertIn("AND released_at IS NOT NULL", release_body)
 
-    def test_error_workflow_persists_only_redacted_receipts_with_real_readback(self) -> None:
+    def test_error_workflow_persists_only_redacted_receipts_with_real_readback(
+        self,
+    ) -> None:
         filename = "16-operations-error-handler.json"
         workflow = self.workflow(filename)
         nodes = self.nodes(filename)
         self.assertFalse(workflow["meta"]["sharedCircuitBreaker"])
-        self.assertEqual(workflow["meta"]["failureReceiptTable"], "finance_execution_failures")
+        self.assertEqual(
+            workflow["meta"]["failureReceiptTable"], "finance_execution_failures"
+        )
         self.assertEqual(workflow["settings"]["saveDataSuccessExecution"], "none")
         self.assertEqual(workflow["settings"]["saveDataErrorExecution"], "none")
         self.assertNotIn("Circuit", json.dumps(workflow["connections"]))
-        for name, operation in [("Upsert Durable Failure Receipt", "upsert"), ("Read Back Failure Receipt", "get"), ("Mark Failure Readback Verified", "update"), ("Read Back Verified Failure Receipt", "get")]:
+        for name, operation in [
+            ("Upsert Durable Failure Receipt", "upsert"),
+            ("Read Back Failure Receipt", "get"),
+            ("Mark Failure Readback Verified", "update"),
+            ("Read Back Verified Failure Receipt", "get"),
+        ]:
             node = nodes[name]
             self.assertEqual(node["type"], "n8n-nodes-base.dataTable")
             self.assertEqual(node["parameters"]["operation"], operation)
-            self.assertEqual(node["parameters"]["dataTableId"]["value"], "finance_execution_failures")
-            self.assertEqual(node["parameters"]["filters"]["conditions"][0]["keyName"], "execution_id")
+            self.assertEqual(
+                node["parameters"]["dataTableId"]["value"], "finance_execution_failures"
+            )
+            self.assertEqual(
+                node["parameters"]["filters"]["conditions"][0]["keyName"],
+                "execution_id",
+            )
             self.assertTrue(node["alwaysOutputData"])
-        raw = {"execution": {"id": "exec-1", "lastNodeExecuted": "Fetch Outlook", "error": {"message": "password: super-secret; jane@example.com 1234567890123456", "httpCode": 503}}, "workflow": {"id": "workflow-1", "name": "Finance acquisition"}}
-        redaction = self.run_exported_workflow_node(filename, "Redact and Classify Failure", raw, {})
+        raw = {
+            "execution": {
+                "id": "exec-1",
+                "lastNodeExecuted": "Fetch Outlook",
+                "error": {
+                    "message": "password: super-secret; jane@example.com 1234567890123456",
+                    "httpCode": 503,
+                },
+            },
+            "workflow": {"id": "workflow-1", "name": "Finance acquisition"},
+        }
+        redaction = self.run_exported_workflow_node(
+            filename, "Redact and Classify Failure", raw, {}
+        )
         self.assertTrue(redaction["ok"], redaction)
         receipt = redaction["output"][0]["json"]
         for sensitive in ["super-secret", "jane@example.com", "1234567890123456"]:
             self.assertNotIn(sensitive, json.dumps(receipt))
         self.assertEqual(receipt["error_class"], "TRANSIENT")
         references = {"Redact and Classify Failure": {"json": receipt}}
-        for name, verified in [("Compare Failure Receipt Readback", False), ("Verify Durable Failure Receipt", True)]:
+        for name, verified in [
+            ("Compare Failure Receipt Readback", False),
+            ("Verify Durable Failure Receipt", True),
+        ]:
             observed = {**receipt, "readback_verified": verified}
-            result = self.run_exported_workflow_node_with_items(filename, name, [observed], references)
+            result = self.run_exported_workflow_node_with_items(
+                filename, name, [observed], references
+            )
             self.assertTrue(result["ok"], result)
-            for invalid in [[], [{}], [observed, observed], [{**observed, "workflow_id": "other"}], [{**observed, "readback_verified": not verified}], [{**observed, "error_message_redacted": "tampered"}]]:
-                result = self.run_exported_workflow_node_with_items(filename, name, invalid, references)
+            for invalid in [
+                [],
+                [{}],
+                [observed, observed],
+                [{**observed, "workflow_id": "other"}],
+                [{**observed, "readback_verified": not verified}],
+                [{**observed, "error_message_redacted": "tampered"}],
+            ]:
+                result = self.run_exported_workflow_node_with_items(
+                    filename, name, invalid, references
+                )
                 self.assertFalse(result["ok"], result)
-        missing_identity = self.run_exported_workflow_node(filename, "Redact and Classify Failure", {"execution": {}, "workflow": {}}, {})
+        missing_identity = self.run_exported_workflow_node(
+            filename,
+            "Redact and Classify Failure",
+            {"execution": {}, "workflow": {}},
+            {},
+        )
         self.assertFalse(missing_identity["ok"])
 
     def test_ai_contract_uses_subscription_runner_and_value_domains(self) -> None:
-        handoff = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")
+        handoff = load_json(
+            N8N / "contracts" / "subscription-agent-handoff-v1.schema.json"
+        )
         proposal = load_json(N8N / "contracts" / "ai-proposal-v1.schema.json")
         try:
             import jsonschema
@@ -1700,49 +2185,75 @@ try {{
                 "tags": ["grocery", "in_store"],
                 "review_required": False,
                 "category_recommendation": {
-                    "name": "Groceries", "group": "Living", "reason": "Exact merchant",
+                    "name": "Groceries",
+                    "group": "Living",
+                    "reason": "Exact merchant",
                 },
                 "rule_recommendation": {"enabled": False, "evidence_count": 3},
             }
             for field, value in typed_values.items():
                 result = {
                     **base,
-                    "proposals": [{
-                        "transaction_id": "actual:fixture:1",
-                        "field": field,
-                        "value": value,
-                        "confidence": 0.95,
-                        "reason_code": "FIXTURE_MATCH",
-                    }],
+                    "proposals": [
+                        {
+                            "transaction_id": "actual:fixture:1",
+                            "field": field,
+                            "value": value,
+                            "confidence": 0.95,
+                            "reason_code": "FIXTURE_MATCH",
+                        }
+                    ],
                 }
                 jsonschema.validate(result, proposal)
             with self.assertRaises(jsonschema.ValidationError):
-                jsonschema.validate({
-                    **base,
-                    "proposals": [{
-                        "transaction_id": "actual:fixture:1",
-                        "field": "vendor",
-                        "value": False,
-                        "confidence": 0.95,
-                        "reason_code": "TYPE_MISMATCH",
-                    }],
-                }, proposal)
+                jsonschema.validate(
+                    {
+                        **base,
+                        "proposals": [
+                            {
+                                "transaction_id": "actual:fixture:1",
+                                "field": "vendor",
+                                "value": False,
+                                "confidence": 0.95,
+                                "reason_code": "TYPE_MISMATCH",
+                            }
+                        ],
+                    },
+                    proposal,
+                )
         proposal_item = proposal["properties"]["proposals"]["items"]
         self.assertIn("value", proposal_item["required"])
         self.assertNotIn("value_json", json.dumps(proposal_item))
         self.assertEqual(len(proposal_item["oneOf"]), 5)
         unresolved = handoff["$defs"]["unresolved"]
         self.assertIn("allowed_values", unresolved["required"])
-        self.assertEqual(unresolved["properties"]["allowed_values"]["maxProperties"], 10)
-        self.assertEqual(proposal["properties"]["auth_mode"]["const"], "CHATGPT_SUBSCRIPTION")
-        self.assertEqual(handoff["properties"]["agent_provider"]["const"], "CODEX_SUBSCRIPTION")
+        self.assertEqual(
+            unresolved["properties"]["allowed_values"]["maxProperties"], 10
+        )
+        self.assertEqual(
+            proposal["properties"]["auth_mode"]["const"], "CHATGPT_SUBSCRIPTION"
+        )
+        self.assertEqual(
+            handoff["properties"]["agent_provider"]["const"], "CODEX_SUBSCRIPTION"
+        )
 
-    def test_ai_workflow_derives_profile_enforces_domains_and_omits_internal_hash(self) -> None:
+    def test_ai_workflow_derives_profile_enforces_domains_and_omits_internal_hash(
+        self,
+    ) -> None:
         nodes = self.nodes("09-ai-proposal.json")
         untrusted = nodes["Validate Untrusted Proposal Request"]["parameters"]["jsCode"]
-        validation = nodes["Build Authoritative Redacted Proposal Job"]["parameters"]["jsCode"]
-        response = nodes["Validate Proposal Schema and Policy Boundary"]["parameters"]["jsCode"]
-        for forbidden in ("agent_profile", "policy_sha256", "config_sha256", "output_schema_sha256"):
+        validation = nodes["Build Authoritative Redacted Proposal Job"]["parameters"][
+            "jsCode"
+        ]
+        response = nodes["Validate Proposal Schema and Policy Boundary"]["parameters"][
+            "jsCode"
+        ]
+        for forbidden in (
+            "agent_profile",
+            "policy_sha256",
+            "config_sha256",
+            "output_schema_sha256",
+        ):
             self.assertIn(f"'{forbidden}'", untrusted)
         policy_node = json.dumps(nodes["Read Active Server AI Policy Contract"])
         self.assertIn("application-contract-bundle.json", policy_node)
@@ -1797,17 +2308,19 @@ try {{
             "Validate Untrusted Proposal Request",
             {
                 "policy_id": "classify-unresolved",
-                "unresolved": [{
-                    "transaction_id": "actual:fixture:1",
-                    "allowed_fields": ["category"],
-                    "redacted_context": {
-                        "merchant": "  Grocery Store  ",
-                        "currency": "AED",
-                        "source_message_id": "mailbox-secret",
-                        "email": "person@example.test",
-                        "description": "card 4111 1111 1111 1111",
-                    },
-                }],
+                "unresolved": [
+                    {
+                        "transaction_id": "actual:fixture:1",
+                        "allowed_fields": ["category"],
+                        "redacted_context": {
+                            "merchant": "  Grocery Store  ",
+                            "currency": "AED",
+                            "source_message_id": "mailbox-secret",
+                            "email": "person@example.test",
+                            "description": "card 4111 1111 1111 1111",
+                        },
+                    }
+                ],
             },
             {},
         )
@@ -1818,17 +2331,32 @@ try {{
         adapter = self.nodes("21-subscription-agent-adapter.json")[
             "Validate and Build Fixed Provider Invocation"
         ]["parameters"]["jsCode"]
-        request_source = adapter[adapter.index("const request = {"):adapter.index("const prompt = [")]
-        for private_field in ("archive_sha256", "evidence_replay_keys", "archive_identity_keys", "archive_item_ids"):
+        request_source = adapter[
+            adapter.index("const request = {") : adapter.index("const prompt = [")
+        ]
+        for private_field in (
+            "archive_sha256",
+            "evidence_replay_keys",
+            "archive_identity_keys",
+            "archive_item_ids",
+        ):
             self.assertNotIn(f"{private_field}:", request_source)
 
     def test_ai_policy_targets_are_complete_and_profile_owned(self) -> None:
         policies = load_json(ROOT / "config" / "ai-policies.json")["policies"]
         target_contract = load_json(N8N / "ai-policy-targets.json")
-        configured = {target for policy in policies for target in policy["target_fields"]}
+        configured = {
+            target for policy in policies for target in policy["target_fields"]
+        }
         self.assertEqual(configured, set(target_contract["target_fields"]))
-        schema = load_json(N8N / "contracts" / "subscription-agent-handoff-v1.schema.json")
-        schema_targets = set(schema["$defs"]["unresolved"]["properties"]["allowed_fields"]["items"]["enum"])
+        schema = load_json(
+            N8N / "contracts" / "subscription-agent-handoff-v1.schema.json"
+        )
+        schema_targets = set(
+            schema["$defs"]["unresolved"]["properties"]["allowed_fields"]["items"][
+                "enum"
+            ]
+        )
         self.assertTrue(configured.issubset(schema_targets))
         self.assertEqual(schema_targets - configured, {"review_required"})
         for policy in policies:
@@ -1838,13 +2366,19 @@ try {{
     def test_ai_policy_contract_compiler_is_current_and_server_owned(self) -> None:
         result = subprocess.run(
             [sys.executable, str(N8N / "compile_ai_policy_contracts.py")],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         source = load_json(ROOT / "config" / "ai-policies.json")["policies"]
         seed = load_json(N8N / "generated" / "ai-policy-contracts.seed.json")
         self.assertEqual(seed["contract_status"], "SPEC_ONLY")
-        self.assertEqual({row["policy_id"] for row in source}, {row["policy_id"] for row in seed["rows"]})
+        self.assertEqual(
+            {row["policy_id"] for row in source},
+            {row["policy_id"] for row in seed["rows"]},
+        )
         for row in seed["rows"]:
             self.assertRegex(row["policy_sha256"], r"^[a-f0-9]{64}$")
             self.assertRegex(row["config_sha256"], r"^[a-f0-9]{64}$")
@@ -1855,7 +2389,10 @@ try {{
     def test_platform_bootstrap_generator_is_current(self) -> None:
         result = subprocess.run(
             [sys.executable, str(N8N / "generate_platform_bootstrap.py"), "--check"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(N8N / "generated" / "platform-bootstrap-manifest.json")
@@ -1869,16 +2406,25 @@ try {{
         self.assertFalse(evidence["source_workflow_unmodified_import_tested"])
         self.assertFalse(evidence["seed_independent_readback_tested"])
         self.assertFalse(evidence["production_validated"])
-        self.assertRegex(evidence["github_actions_run"], r"^https://github\.com/.+/actions/runs/\d+/job/\d+$")
+        self.assertRegex(
+            evidence["github_actions_run"],
+            r"^https://github\.com/.+/actions/runs/\d+/job/\d+$",
+        )
         self.assertIn("SOURCE_MIGRATION_GATE_REQUIRED", manifest["activation_blockers"])
-        self.assertIn("LEGACY_SOURCE_ROWS_RESTORE_REQUIRED", manifest["activation_blockers"])
+        self.assertIn(
+            "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED", manifest["activation_blockers"]
+        )
         self.assertIn(
             "SOURCE_MIGRATION_GATE_REQUIRED",
-            self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
+            self.workflow("19-platform-data-table-bootstrap.json")["meta"][
+                "activationBlockers"
+            ],
         )
         self.assertIn(
             "LEGACY_SOURCE_ROWS_RESTORE_REQUIRED",
-            self.workflow("19-platform-data-table-bootstrap.json")["meta"]["activationBlockers"],
+            self.workflow("19-platform-data-table-bootstrap.json")["meta"][
+                "activationBlockers"
+            ],
         )
         self.assertEqual(
             manifest["sources"]["data_tables_sha256"],
@@ -1886,9 +2432,7 @@ try {{
         )
         self.assertEqual(
             manifest["sources"]["ai_policy_seed_sha256"],
-            git_canonical_sha256(
-                N8N / "generated" / "ai-policy-contracts.seed.json"
-            ),
+            git_canonical_sha256(N8N / "generated" / "ai-policy-contracts.seed.json"),
         )
         self.assertEqual(
             manifest["sources"]["config_version_seed_sha256"],
@@ -1896,22 +2440,36 @@ try {{
         )
         self.assertEqual(
             manifest["sources"]["application_contract_bundle_sha256"],
-            git_canonical_sha256(N8N / "generated" / "application-contract-bundle.json"),
+            git_canonical_sha256(
+                N8N / "generated" / "application-contract-bundle.json"
+            ),
         )
         self.assertEqual(
             manifest["sources"]["application_contract_bundle_schema_sha256"],
-            git_canonical_sha256(N8N / "generated" / "application-contract-bundle.schema.json"),
+            git_canonical_sha256(
+                N8N / "generated" / "application-contract-bundle.schema.json"
+            ),
         )
         result = subprocess.run(
             [sys.executable, str(N8N / "compile_config_versions.py")],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_platform_bootstrap_reuses_migration_generator_schema_digest(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(N8N / "generate_data_table_migration.py"), "--schema-digest"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            [
+                sys.executable,
+                str(N8N / "generate_data_table_migration.py"),
+                "--schema-digest",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         canonical_digest = result.stdout.strip()
@@ -1922,17 +2480,37 @@ try {{
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         self.assertEqual(manifest["target_schema_contract"]["digest"], canonical_digest)
         self.assertEqual(workflow["meta"]["targetSchemaDigest"], canonical_digest)
-        self.assertIn(canonical_digest, nodes["Verify Canonical Target Contract"]["parameters"]["jsCode"])
-        self.assertIn(canonical_digest, nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"])
+        self.assertIn(
+            canonical_digest,
+            nodes["Verify Canonical Target Contract"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            canonical_digest,
+            nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"],
+        )
 
-    def test_retained_four_table_readback_receipt_schema_accepts_redacted_fixture(self) -> None:
-        schema = load_json(N8N / "schemas" / "finance-data-table-readback-receipt-v1.schema.json")
+    def test_retained_four_table_readback_receipt_schema_accepts_redacted_fixture(
+        self,
+    ) -> None:
+        schema = load_json(
+            N8N / "schemas" / "finance-data-table-readback-receipt-v1.schema.json"
+        )
         Draft202012Validator.check_schema(schema)
-        raw = load_json(ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json")["raw_stdout"]
+        raw = load_json(
+            ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json"
+        )["raw_stdout"]
         prefix = "finance data table digest verified:"
-        payload = json.loads(next(line[len(prefix):] for line in raw.splitlines() if line.startswith(prefix)))
+        payload = json.loads(
+            next(
+                line[len(prefix) :]
+                for line in raw.splitlines()
+                if line.startswith(prefix)
+            )
+        )
         Draft202012Validator(schema).validate(payload)
-        self.assertEqual([table["row_count"] for table in payload["tables"]], [4, 3, 5, 5])
+        self.assertEqual(
+            [table["row_count"] for table in payload["tables"]], [4, 3, 5, 5]
+        )
         self.assertFalse(payload["migration_receipt"]["bound"])
         self.assertFalse(payload["forward_gate"]["command_executed"])
         self.assertFalse(payload["rollback_gate"]["command_executed"])
@@ -1941,15 +2519,19 @@ try {{
         generator = load_bootstrap_generator()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            paths = tuple(root / name for name in ("bundle", "schema", "manifest", "workflow"))
+            paths = tuple(
+                root / name for name in ("bundle", "schema", "manifest", "workflow")
+            )
             expected = ("bundle\n", "schema\n", "manifest\n", "workflow\n")
             for path, text in zip(paths, expected):
                 path.write_text(text, encoding="utf-8")
-            with mock.patch.object(generator, "BUNDLE_PATH", paths[0]), \
-                mock.patch.object(generator, "BUNDLE_SCHEMA_PATH", paths[1]), \
-                mock.patch.object(generator, "MANIFEST_PATH", paths[2]), \
-                mock.patch.object(generator, "WORKFLOW_PATH", paths[3]), \
-                mock.patch.object(generator, "render", return_value=expected):
+            with (
+                mock.patch.object(generator, "BUNDLE_PATH", paths[0]),
+                mock.patch.object(generator, "BUNDLE_SCHEMA_PATH", paths[1]),
+                mock.patch.object(generator, "MANIFEST_PATH", paths[2]),
+                mock.patch.object(generator, "WORKFLOW_PATH", paths[3]),
+                mock.patch.object(generator, "render", return_value=expected),
+            ):
                 self.assertEqual(generator.main(["--check"]), 0)
                 paths[0].write_text("stale\n", encoding="utf-8")
                 self.assertEqual(generator.main(["--check"]), 1)
@@ -1957,7 +2539,9 @@ try {{
                     generator.main(["--check", "--write"])
                 self.assertEqual(error.exception.code, 2)
 
-    def test_application_contract_bundle_is_schema_valid_ordered_and_self_hashed(self) -> None:
+    def test_application_contract_bundle_is_schema_valid_ordered_and_self_hashed(
+        self,
+    ) -> None:
         bundle_path = N8N / "generated" / "application-contract-bundle.json"
         schema_path = N8N / "generated" / "application-contract-bundle.schema.json"
         bundle = load_json(bundle_path)
@@ -1975,7 +2559,9 @@ try {{
         )
         payload = dict(bundle)
         payload.pop("bundle_content_sha256")
-        canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        canonical = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
         self.assertEqual(
             hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
             bundle["bundle_content_sha256"],
@@ -1985,9 +2571,13 @@ try {{
             "config/transaction-email-sources.json",
             "config/ai-policies.json",
         }
-        self.assertEqual({source["path"] for source in bundle["source_documents"]}, expected_sources)
+        self.assertEqual(
+            {source["path"] for source in bundle["source_documents"]}, expected_sources
+        )
         for source in bundle["source_documents"]:
-            self.assertEqual(source["sha256"], git_canonical_sha256(ROOT / source["path"]))
+            self.assertEqual(
+                source["sha256"], git_canonical_sha256(ROOT / source["path"])
+            )
         self.assertEqual(
             [resolver["sources"][0]["path"] for resolver in bundle["resolver_maps"]],
             [
@@ -2007,51 +2597,75 @@ try {{
             nodes["SHA-256 Application Contract Bundle"]["parameters"]["type"],
             "SHA256",
         )
-        verify = nodes["Verify Application Contract Bundle Digest and Maps"]["parameters"]["jsCode"]
+        verify = nodes["Verify Application Contract Bundle Digest and Maps"][
+            "parameters"
+        ]["jsCode"]
         self.assertIn("APPLICATION_CONTRACT_BUNDLE_DIGEST_MISMATCH", verify)
         self.assertIn("APPLICATION_CONTRACT_BUNDLE_RESOLVER_MAP_INVALID", verify)
         self.assertEqual(
-            workflow["connections"]["Manual Platform Bootstrap Only"]["main"][0][0]["node"],
+            workflow["connections"]["Manual Platform Bootstrap Only"]["main"][0][0][
+                "node"
+            ],
             "Load and Validate Application Contract Bundle",
         )
         duplicate_key = deepcopy(bundle)
-        duplicate_key["resolver_maps"][0]["entries"][1]["key"] = duplicate_key["resolver_maps"][0]["entries"][0]["key"]
+        duplicate_key["resolver_maps"][0]["entries"][1]["key"] = duplicate_key[
+            "resolver_maps"
+        ][0]["entries"][0]["key"]
         with self.assertRaises(ValidationError):
             validator.validate(duplicate_key)
         arbitrary_source_contract = deepcopy(bundle)
-        arbitrary_source_contract["source_contracts"][0]["contract"]["unapproved"] = True
+        arbitrary_source_contract["source_contracts"][0]["contract"]["unapproved"] = (
+            True
+        )
         with self.assertRaises(ValidationError):
             validator.validate(arbitrary_source_contract)
         arbitrary_policy_contract = deepcopy(bundle)
-        arbitrary_policy_contract["ai_policy_contracts"][0]["contract"]["unapproved"] = True
+        arbitrary_policy_contract["ai_policy_contracts"][0]["contract"][
+            "unapproved"
+        ] = True
         with self.assertRaises(ValidationError):
             validator.validate(arbitrary_policy_contract)
 
-    def test_application_contract_bundle_preserves_transaction_semantics_and_unique_ids(self) -> None:
-        transaction_sources = load_json(ROOT / "config" / "transaction-email-sources.json")["sources"]
+    def test_application_contract_bundle_preserves_transaction_semantics_and_unique_ids(
+        self,
+    ) -> None:
+        transaction_sources = load_json(
+            ROOT / "config" / "transaction-email-sources.json"
+        )["sources"]
         expected_codes = [row["code"] for row in transaction_sources]
-        self.assertEqual(expected_codes, [
-            "RAKBANK_CARD_TRANSACTION",
-            "STANDARD_CHARTERED_CARD_TRANSACTION",
-        ])
+        self.assertEqual(
+            expected_codes,
+            [
+                "RAKBANK_CARD_TRANSACTION",
+                "STANDARD_CHARTERED_CARD_TRANSACTION",
+            ],
+        )
         bundle = load_json(N8N / "generated" / "application-contract-bundle.json")
         transaction_contracts = [
-            row for row in bundle["source_contracts"]
+            row
+            for row in bundle["source_contracts"]
             if row["source_path"] == "config/transaction-email-sources.json"
         ]
-        self.assertEqual([row["source_code"] for row in transaction_contracts], expected_codes)
+        self.assertEqual(
+            [row["source_code"] for row in transaction_contracts], expected_codes
+        )
         self.assertEqual(
             [row["key"] for row in bundle["resolver_maps"][0]["entries"]],
             expected_codes,
         )
-        self.assertEqual(len({row["source_code"] for row in transaction_contracts}), len(expected_codes))
+        self.assertEqual(
+            len({row["source_code"] for row in transaction_contracts}),
+            len(expected_codes),
+        )
 
         generator = load_bootstrap_generator()
         documents = {
-            path: load_json(ROOT / path)
-            for path in generator.APPLICATION_CONFIG_PATHS
+            path: load_json(ROOT / path) for path in generator.APPLICATION_CONFIG_PATHS
         }
-        documents["config/transaction-email-sources.json"]["sources"][1]["code"] = expected_codes[0]
+        documents["config/transaction-email-sources.json"]["sources"][1]["code"] = (
+            expected_codes[0]
+        )
         with self.assertRaisesRegex(ValueError, "duplicate code identities"):
             generator.build_source_contracts(documents, bundle["source_documents"])
 
@@ -2072,7 +2686,8 @@ try {{
     def test_platform_bootstrap_is_manual_only_native_and_nonfinancial(self) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")
         registry_row = next(
-            row for row in self.registry["workflows"]
+            row
+            for row in self.registry["workflows"]
             if row["code"] == "PLATFORM_DATA_TABLE_BOOTSTRAP"
         )
         self.assertTrue(registry_row["manual_only"])
@@ -2084,7 +2699,8 @@ try {{
         self.assertTrue(workflow["meta"]["financeLedgerMutationForbidden"])
         self.assertTrue(workflow["meta"]["actualMutationForbidden"])
         triggers = [
-            node for node in workflow["nodes"]
+            node
+            for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.manualTrigger"
         ]
         self.assertEqual(len(triggers), 1)
@@ -2097,16 +2713,23 @@ try {{
                 "n8n-nodes-base.crypto",
             },
         )
-        self.assertFalse(any(
-            node["type"].startswith("n8n-nodes-finance.")
-            or node["type"] in {
-                "n8n-nodes-base.postgres", "n8n-nodes-base.httpRequest",
-                "n8n-nodes-base.microsoftOutlook", "n8n-nodes-base.microsoftOneDrive",
-            }
-            for node in workflow["nodes"]
-        ))
+        self.assertFalse(
+            any(
+                node["type"].startswith("n8n-nodes-finance.")
+                or node["type"]
+                in {
+                    "n8n-nodes-base.postgres",
+                    "n8n-nodes-base.httpRequest",
+                    "n8n-nodes-base.microsoftOutlook",
+                    "n8n-nodes-base.microsoftOneDrive",
+                }
+                for node in workflow["nodes"]
+            )
+        )
 
-    def test_platform_bootstrap_creates_every_declared_table_with_exact_columns(self) -> None:
+    def test_platform_bootstrap_creates_every_declared_table_with_exact_columns(
+        self,
+    ) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")
         matrix = load_json(N8N / "data-table-migration-matrix.json")
         expected = {
@@ -2121,22 +2744,27 @@ try {{
             for table in matrix["tables"]
             if table.get("node_references")
         }
-        expected.update({
-            table["name"]: [
-                {"name": field, "type": column_type}
-                for field, column_type in table["columns"].items()
-            ]
-            for table in self.tables["tables"]
-            if table["name"] in referenced_legacy
-        })
+        expected.update(
+            {
+                table["name"]: [
+                    {"name": field, "type": column_type}
+                    for field, column_type in table["columns"].items()
+                ]
+                for table in self.tables["tables"]
+                if table["name"] in referenced_legacy
+            }
+        )
         creates = [
-            node for node in workflow["nodes"]
+            node
+            for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.dataTable"
             and node["parameters"].get("resource") == "table"
             and node["parameters"].get("operation") == "create"
         ]
         self.assertEqual(len(creates), len(expected))
-        self.assertEqual({node["parameters"]["tableName"] for node in creates}, set(expected))
+        self.assertEqual(
+            {node["parameters"]["tableName"] for node in creates}, set(expected)
+        )
         for node in creates:
             parameters = node["parameters"]
             name = parameters["tableName"]
@@ -2146,15 +2774,22 @@ try {{
             [node["parameters"]["tableName"] for node in creates],
             [
                 table["name"]
-                for table in load_bootstrap_generator().compatibility_table_rows(self.tables, matrix)
-            ] + matrix["targets"],
+                for table in load_bootstrap_generator().compatibility_table_rows(
+                    self.tables, matrix
+                )
+            ]
+            + matrix["targets"],
         )
         row_nodes = [
-            node for node in workflow["nodes"]
+            node
+            for node in workflow["nodes"]
             if node["type"] == "n8n-nodes-base.dataTable"
             and node["parameters"].get("resource") == "row"
         ]
-        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
+        self.assertEqual(
+            [node["name"] for node in row_nodes],
+            ["Upsert Disabled Source Contract Templates"],
+        )
         self.assertEqual(workflow["meta"]["targetTables"], matrix["targets"])
         self.assertFalse(workflow["meta"]["legacyTableCreationForbidden"])
         self.assertEqual(
@@ -2172,18 +2807,39 @@ try {{
     def test_platform_bootstrap_seeds_only_disabled_legacy_templates(self) -> None:
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
         data_nodes = [
-            node for node in nodes.values()
+            node
+            for node in nodes.values()
             if node["type"] == "n8n-nodes-base.dataTable"
         ]
         self.assertTrue(data_nodes)
-        row_nodes = [node for node in data_nodes if node["parameters"].get("resource") == "row"]
-        self.assertEqual([node["name"] for node in row_nodes], ["Upsert Disabled Source Contract Templates"])
-        self.assertEqual(row_nodes[0]["parameters"]["dataTableId"]["value"], "finance_source_contracts")
+        row_nodes = [
+            node for node in data_nodes if node["parameters"].get("resource") == "row"
+        ]
+        self.assertEqual(
+            [node["name"] for node in row_nodes],
+            ["Upsert Disabled Source Contract Templates"],
+        )
+        self.assertEqual(
+            row_nodes[0]["parameters"]["dataTableId"]["value"],
+            "finance_source_contracts",
+        )
         # Declared-but-unreferenced legacy schemas are preserved when already
         # present, but a fresh compatibility bootstrap does not create them.
-        self.assertFalse(any(node["parameters"].get("tableName") == "finance_ai_policy_contracts" for node in data_nodes))
-        self.assertFalse(any(node["parameters"].get("tableName") == "finance_config_versions" for node in data_nodes))
-        template_code = nodes["Emit Disabled Source Contract Templates"]["parameters"]["jsCode"]
+        self.assertFalse(
+            any(
+                node["parameters"].get("tableName") == "finance_ai_policy_contracts"
+                for node in data_nodes
+            )
+        )
+        self.assertFalse(
+            any(
+                node["parameters"].get("tableName") == "finance_config_versions"
+                for node in data_nodes
+            )
+        )
+        template_code = nodes["Emit Disabled Source Contract Templates"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn("enabled: false", template_code)
         self.assertIn("template:", template_code)
         self.assertEqual(
@@ -2195,13 +2851,22 @@ try {{
         self.assertIn("TARGET_SCHEMA_TYPE_UNSUPPORTED", target_guard)
         receipt = nodes["Emit Redacted Bootstrap Receipt"]["parameters"]["jsCode"]
         compact_receipt = re.sub(r"\s+", "", receipt)
-        for marker in ("runtime_cutover:false", "deletion_authorized:false", "second_run_noop:true", "mode:'0600'"):
+        for marker in (
+            "runtime_cutover:false",
+            "deletion_authorized:false",
+            "second_run_noop:true",
+            "mode:'0600'",
+        ):
             self.assertIn(marker, compact_receipt)
 
-    def test_platform_bootstrap_readback_rejects_partial_extra_type_and_id_drift(self) -> None:
+    def test_platform_bootstrap_readback_rejects_partial_extra_type_and_id_drift(
+        self,
+    ) -> None:
         workflow = self.workflow("19-platform-data-table-bootstrap.json")
         nodes = self.nodes("19-platform-data-table-bootstrap.json")
-        verifier = nodes["Verify Canonical Target Table Readback"]["parameters"]["jsCode"]
+        verifier = nodes["Verify Canonical Target Table Readback"]["parameters"][
+            "jsCode"
+        ]
         matrix = load_json(N8N / "data-table-migration-matrix.json")
         contract = {
             "target_tables": matrix["targets"],
@@ -2230,7 +2895,9 @@ try {{
                 "id": created[target]["id"],
                 "columns": [
                     {"name": field, "type": definition["type"]}
-                    for field, definition in matrix["target_schemas"][target]["columns"].items()
+                    for field, definition in matrix["target_schemas"][target][
+                        "columns"
+                    ].items()
                 ],
             }
             for target in matrix["targets"]
@@ -2240,7 +2907,8 @@ try {{
                 **row,
                 "columns": list(reversed(row["columns"])),
             }
-            if row["name"] == "finance_ingestion_state" else row
+            if row["name"] == "finance_ingestion_state"
+            else row
             for row in valid_rows
         ]
 
@@ -2257,22 +2925,72 @@ const $input = {{ all: () => inputRows.map(json => ({{ json }})) }};
 const execute = () => {{ {verifier} }};
 try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error(String(error.message)); process.exit(1); }}
 """
-            return subprocess.run(["node", "-e", harness], capture_output=True, text=True, check=False)
+            return subprocess.run(
+                ["node", "-e", harness], capture_output=True, text=True, check=False
+            )
 
         valid = run(valid_rows)
         self.assertEqual(valid.returncode, 0, valid.stderr)
         self.assertIn("TARGET_SCHEMA_READBACK_VERIFIED", valid.stdout)
-        self.assertEqual(run(valid_rows).stdout, valid.stdout, "second readback must be a deterministic no-op")
+        self.assertEqual(
+            run(valid_rows).stdout,
+            valid.stdout,
+            "second readback must be a deterministic no-op",
+        )
         native = run(native_readback_rows)
         self.assertEqual(native.returncode, 0, native.stderr)
-        self.assertEqual(native.stdout, valid.stdout, "native column order must be canonicalized")
+        self.assertEqual(
+            native.stdout, valid.stdout, "native column order must be canonicalized"
+        )
 
         cases = [
             (valid_rows[:-1], "TARGET_TABLE_MISSING"),
-            ([{**row, "columns": [*row["columns"], {"name": "unexpected", "type": "string"}]} if row["name"] == matrix["targets"][0] else row for row in valid_rows], "TARGET_SCHEMA_MISMATCH"),
-            ([{**row, "columns": [{**column, "type": "number"} if index == 0 and row["name"] == matrix["targets"][0] else column for index, column in enumerate(row["columns"])]} for row in valid_rows], "TARGET_SCHEMA_MISMATCH"),
-            ([{**row, "id": "different-id"} if row["name"] == matrix["targets"][0] else row for row in valid_rows], "TARGET_TABLE_ID_MISMATCH"),
-            ([*valid_rows, {"name": "finance_documents_extra", "id": "extra", "columns": []}], "TARGET_TABLE_EXTRA"),
+            (
+                [
+                    {
+                        **row,
+                        "columns": [
+                            *row["columns"],
+                            {"name": "unexpected", "type": "string"},
+                        ],
+                    }
+                    if row["name"] == matrix["targets"][0]
+                    else row
+                    for row in valid_rows
+                ],
+                "TARGET_SCHEMA_MISMATCH",
+            ),
+            (
+                [
+                    {
+                        **row,
+                        "columns": [
+                            {**column, "type": "number"}
+                            if index == 0 and row["name"] == matrix["targets"][0]
+                            else column
+                            for index, column in enumerate(row["columns"])
+                        ],
+                    }
+                    for row in valid_rows
+                ],
+                "TARGET_SCHEMA_MISMATCH",
+            ),
+            (
+                [
+                    {**row, "id": "different-id"}
+                    if row["name"] == matrix["targets"][0]
+                    else row
+                    for row in valid_rows
+                ],
+                "TARGET_TABLE_ID_MISMATCH",
+            ),
+            (
+                [
+                    *valid_rows,
+                    {"name": "finance_documents_extra", "id": "extra", "columns": []},
+                ],
+                "TARGET_TABLE_EXTRA",
+            ),
         ]
         for rows, marker in cases:
             result = run(rows)
@@ -2287,45 +3005,90 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "finance.document.request.v1",
         ):
             params = facade[name]["parameters"]
-            self.assertEqual(params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010")
+            self.assertEqual(
+                params["workflowId"]["value"], "10000000-0000-4000-8000-000000000010"
+            )
             self.assertIn("_mcp_request_id", params["workflowInputs"]["value"])
-        artifact_inputs = facade["finance.reviewed-artifact.handoff.v1"]["parameters"]["workflowInputs"]["value"]
-        self.assertEqual(set(artifact_inputs), {"_mcp_request_id", "operation_code", "artifact_id"})
+        artifact_inputs = facade["finance.reviewed-artifact.handoff.v1"]["parameters"][
+            "workflowInputs"
+        ]["value"]
+        self.assertEqual(
+            set(artifact_inputs), {"_mcp_request_id", "operation_code", "artifact_id"}
+        )
         self.assertNotIn("expected_sha256", artifact_inputs)
-        self.assertIn("server-owned", facade["finance.reviewed-artifact.handoff.v1"]["parameters"]["description"])
+        self.assertIn(
+            "server-owned",
+            facade["finance.reviewed-artifact.handoff.v1"]["parameters"]["description"],
+        )
         nodes = self.nodes("10-finance-operations-status.json")
         for name in (
-            "Upsert ACCEPTED MCP Request", "Read Back ACCEPTED MCP Request",
-            "Upsert Terminal MCP Request", "Read Back Terminal MCP Request",
-            "Mark MCP Receipt Verified", "Read Verified MCP Receipt",
+            "Upsert ACCEPTED MCP Request",
+            "Read Back ACCEPTED MCP Request",
+            "Upsert Terminal MCP Request",
+            "Read Back Terminal MCP Request",
+            "Mark MCP Receipt Verified",
+            "Read Verified MCP Receipt",
         ):
             self.assertIn("finance_mcp_requests", json.dumps(nodes[name]))
         terminal = nodes["Build Redacted MCP Terminal Receipt"]["parameters"]["jsCode"]
         self.assertIn("[REDACTED]", terminal)
         self.assertIn("FAILED", terminal)
-        dispatch_validation = nodes["Validate Bounded MCP Dispatch"]["parameters"]["jsCode"]
-        self.assertIn("'artifact.submit_reviewed': ['artifact_id']", dispatch_validation)
-        self.assertNotIn("'artifact.submit_reviewed': ['artifact_id', 'expected_sha256']", dispatch_validation)
-        dispatch_inputs = nodes["Dispatch Reviewed Artifact"]["parameters"]["workflowInputs"]["value"]
+        dispatch_validation = nodes["Validate Bounded MCP Dispatch"]["parameters"][
+            "jsCode"
+        ]
+        self.assertIn(
+            "'artifact.submit_reviewed': ['artifact_id']", dispatch_validation
+        )
+        self.assertNotIn(
+            "'artifact.submit_reviewed': ['artifact_id', 'expected_sha256']",
+            dispatch_validation,
+        )
+        dispatch_inputs = nodes["Dispatch Reviewed Artifact"]["parameters"][
+            "workflowInputs"
+        ]["value"]
         self.assertEqual(set(dispatch_inputs), {"operation_code", "artifact_id"})
         self.assertNotIn("expected_sha256", dispatch_inputs)
 
-    def test_ai_proposal_is_archived_hash_verified_and_left_pending_review(self) -> None:
+    def test_ai_proposal_is_archived_hash_verified_and_left_pending_review(
+        self,
+    ) -> None:
         nodes = self.nodes("09-ai-proposal.json")
-        self.assertEqual(nodes["Convert Proposal Artifact to File"]["type"], "n8n-nodes-base.convertToFile")
-        self.assertEqual(nodes["Archive Proposal Artifact in OneDrive"]["type"], "n8n-nodes-base.microsoftOneDrive")
-        self.assertEqual(nodes["Read Back Proposal Artifact"]["parameters"]["operation"], "download")
-        self.assertIn("AGENT_PROPOSAL_ARTIFACT_HASH_MISMATCH", nodes["Verify Proposal Artifact Readback"]["parameters"]["jsCode"])
+        self.assertEqual(
+            nodes["Convert Proposal Artifact to File"]["type"],
+            "n8n-nodes-base.convertToFile",
+        )
+        self.assertEqual(
+            nodes["Archive Proposal Artifact in OneDrive"]["type"],
+            "n8n-nodes-base.microsoftOneDrive",
+        )
+        self.assertEqual(
+            nodes["Read Back Proposal Artifact"]["parameters"]["operation"], "download"
+        )
+        self.assertIn(
+            "AGENT_PROPOSAL_ARTIFACT_HASH_MISMATCH",
+            nodes["Verify Proposal Artifact Readback"]["parameters"]["jsCode"],
+        )
         values = nodes["Upsert SUCCEEDED Agent Job"]["parameters"]["columns"]["value"]
         self.assertEqual(values["review_state"], "PENDING")
-        self.assertTrue({"proposal_artifact_item_id", "proposal_artifact_etag", "proposal_artifact_schema"}.issubset(values))
+        self.assertTrue(
+            {
+                "proposal_artifact_item_id",
+                "proposal_artifact_etag",
+                "proposal_artifact_schema",
+            }.issubset(values)
+        )
 
-    def test_disposable_fixture_workflows_are_generated_current_and_hashed(self) -> None:
+    def test_disposable_fixture_workflows_are_generated_current_and_hashed(
+        self,
+    ) -> None:
         disposable = N8N / "disposable"
         generated = disposable / "generated"
         result = subprocess.run(
             [sys.executable, str(disposable / "generate_fixture_workflows.py")],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(disposable / "fixture-manifest.json")
@@ -2336,10 +3099,13 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
-            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"])
+            self.assertEqual(
+                hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"]
+            )
 
-
-    def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(self) -> None:
+    def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(
+        self,
+    ) -> None:
         generator = load_fixture_generator()
         generated = N8N / "disposable" / "generated"
         observed_edges = set()
@@ -2369,13 +3135,17 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
         self.assertEqual(observed_edges, expected_edges)
 
-    def test_disposable_inline_generator_rejects_invalid_graphs_and_payloads(self) -> None:
+    def test_disposable_inline_generator_rejects_invalid_graphs_and_payloads(
+        self,
+    ) -> None:
         generator = load_fixture_generator()
 
         def workflow(workflow_id: str, target_id: str | None = None) -> dict:
-            nodes = [] if target_id is None else [
-                generator.execute_node("call", "Call Child", target_id, [0, 0])
-            ]
+            nodes = (
+                []
+                if target_id is None
+                else [generator.execute_node("call", "Call Child", target_id, [0, 0])]
+            )
             return {
                 "id": workflow_id,
                 "name": workflow_id,
@@ -2388,7 +3158,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         parent = workflow("parent", "child")
         child = workflow("child")
         with self.assertRaisesRegex(ValueError, "not allowlisted"):
-            generator.inline_execute_workflows(parent, {"parent": parent, "child": child}, {})
+            generator.inline_execute_workflows(
+                parent, {"parent": parent, "child": child}, {}
+            )
         with self.assertRaisesRegex(ValueError, "unknown"):
             generator.inline_execute_workflows(
                 parent, {"parent": parent}, {"parent": frozenset({"child"})}
@@ -2415,7 +3187,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         )
         inlined["nodes"][0]["parameters"]["workflowJson"] = "{"
         with self.assertRaisesRegex(ValueError, "malformed"):
-            generator.validate_inline_workflow(inlined, {"parent": frozenset({"child"})})
+            generator.validate_inline_workflow(
+                inlined, {"parent": frozenset({"child"})}
+            )
 
         malformed_nodes = {
             "non-object": "not-a-node",
@@ -2469,7 +3243,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(payload["publish"], {"id": payload["create_response"]["id"]})
 
         module_path = N8N / "disposable" / "runtime_payload.py"
-        spec = importlib.util.spec_from_file_location("n8n_disposable_runtime_payload", module_path)
+        spec = importlib.util.spec_from_file_location(
+            "n8n_disposable_runtime_payload", module_path
+        )
         self.assertIsNotNone(spec)
         self.assertIsNotNone(spec.loader)
         module = importlib.util.module_from_spec(spec)
@@ -2485,7 +3261,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         with self.assertRaisesRegex(ValueError, "N8N_WORKFLOW_CREATED_ID_REQUIRED"):
             module.build_runtime_payload(workflow, {})
 
-    def test_disposable_fixtures_are_inactive_manual_and_external_write_free(self) -> None:
+    def test_disposable_fixtures_are_inactive_manual_and_external_write_free(
+        self,
+    ) -> None:
         generated = N8N / "disposable" / "generated"
         fixtures = [load_json(path) for path in sorted(generated.glob("*.json"))]
         production_ids = {workflow["id"] for workflow in self.workflows.values()}
@@ -2503,29 +3281,49 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                 self.assertNotIn(workflow["id"], production_ids)
                 self.assertTrue(workflow["meta"]["disposableOnly"])
                 self.assertTrue(workflow["meta"]["productionImportForbidden"])
-                self.assertFalse({node["type"] for node in workflow["nodes"]} & forbidden)
-                self.assertFalse(any(
-                    node["type"] == "n8n-nodes-base.microsoftOutlook"
-                    and node.get("parameters", {}).get("operation") != "getAll"
-                    for node in workflow["nodes"]
-                ))
-                self.assertTrue(any(
-                    node["type"] in {
-                        "n8n-nodes-base.manualTrigger",
-                        "n8n-nodes-base.executeWorkflowTrigger",
-                    }
-                    for node in workflow["nodes"]
-                ))
-        self.assertFalse(registry_files & {path.name for path in generated.glob("*.json")})
+                self.assertFalse(
+                    {node["type"] for node in workflow["nodes"]} & forbidden
+                )
+                self.assertFalse(
+                    any(
+                        node["type"] == "n8n-nodes-base.microsoftOutlook"
+                        and node.get("parameters", {}).get("operation") != "getAll"
+                        for node in workflow["nodes"]
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        node["type"]
+                        in {
+                            "n8n-nodes-base.manualTrigger",
+                            "n8n-nodes-base.executeWorkflowTrigger",
+                        }
+                        for node in workflow["nodes"]
+                    )
+                )
+        self.assertFalse(
+            registry_files & {path.name for path in generated.glob("*.json")}
+        )
 
-    def test_disposable_fixture_matrix_covers_runtime_requested_boundaries(self) -> None:
+    def test_disposable_fixture_matrix_covers_runtime_requested_boundaries(
+        self,
+    ) -> None:
         manifest = load_json(N8N / "disposable" / "fixture-manifest.json")
         scenarios = manifest["scenario_contract"]
         self.assertEqual(scenarios["sweep_zero"]["expected"]["scanned_count"], 0)
         self.assertTrue(scenarios["sweep_zero"]["expected"]["heartbeat"])
-        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["scanned_count"], 1)
-        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["matched_count"], 1)
-        self.assertEqual(scenarios["sweep_one_no_attachments"]["expected"]["attachment_identity_keys"], [])
+        self.assertEqual(
+            scenarios["sweep_one_no_attachments"]["expected"]["scanned_count"], 1
+        )
+        self.assertEqual(
+            scenarios["sweep_one_no_attachments"]["expected"]["matched_count"], 1
+        )
+        self.assertEqual(
+            scenarios["sweep_one_no_attachments"]["expected"][
+                "attachment_identity_keys"
+            ],
+            [],
+        )
         fixture_ids = {row["id"] for row in manifest["workflows"]}
         scenario_ids = {
             workflow_id
@@ -2536,13 +3334,21 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             )
         }
         self.assertTrue(scenario_ids <= fixture_ids)
-        self.assertEqual(scenarios["sweep_101"]["expected"]["attachment_identity_keys"], [])
+        self.assertEqual(
+            scenarios["sweep_101"]["expected"]["attachment_identity_keys"], []
+        )
         self.assertEqual(scenarios["sweep_101"]["expected"]["scanned_count"], 101)
-        self.assertEqual(scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"])
-        self.assertEqual(scenarios["sweep_pagination_failure"]["expected_exit"], "nonzero")
+        self.assertEqual(
+            scenarios["sweep_late_order"]["expected_ids"], ["m1", "m2", "m3"]
+        )
+        self.assertEqual(
+            scenarios["sweep_pagination_failure"]["expected_exit"], "nonzero"
+        )
         self.assertTrue(scenarios["lease_concurrency"]["run_concurrently"])
         self.assertEqual(scenarios["lease_concurrency"]["expected_successes"], 1)
-        self.assertEqual(scenarios["lease_stale"]["expected_error"], "WRITER_LEASE_STALE")
+        self.assertEqual(
+            scenarios["lease_stale"]["expected_error"], "WRITER_LEASE_STALE"
+        )
         self.assertEqual(scenarios["ai_negative"]["runner_calls"], 0)
         self.assertEqual(
             scenarios["ai_positive_luna"],
@@ -2564,7 +3370,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(sol["default_execution_forbidden"])
         self.assertEqual(scenarios["outbox_recovery"]["expected_state"], "COMMITTED")
         self.assertEqual(scenarios["outbox_recovery"]["finance_writes"], 0)
-        self.assertEqual(scenarios["error_redaction"]["receipt_sink"], "finance_execution_failures")
+        self.assertEqual(
+            scenarios["error_redaction"]["receipt_sink"], "finance_execution_failures"
+        )
         self.assertEqual(
             set(manifest["blocked_runtime_scenarios"]),
             {
@@ -2573,7 +3381,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             },
         )
 
-    def test_positive_ai_wrappers_are_fixed_redacted_and_model_unselectable(self) -> None:
+    def test_positive_ai_wrappers_are_fixed_redacted_and_model_unselectable(
+        self,
+    ) -> None:
         generated = N8N / "disposable" / "generated"
         luna = load_json(generated / "106-ai-positive-luna.json")
         sol = load_json(generated / "107-ai-positive-sol-gated.json")
@@ -2585,9 +3395,16 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertIn(policy_id, serialized)
             self.assertIn("10000000-0000-4000-8000-000000000009", serialized)
             for forbidden in (
-                '"model"', '"url"', '"credential"', '"prompt"',
-                '"policy_sha256"', '"config_sha256"', '"output_schema_sha256"',
-                '"amount"', '"source_id"', '"dedupe_key"',
+                '"model"',
+                '"url"',
+                '"credential"',
+                '"prompt"',
+                '"policy_sha256"',
+                '"config_sha256"',
+                '"output_schema_sha256"',
+                '"amount"',
+                '"source_id"',
+                '"dedupe_key"',
             ):
                 self.assertNotIn(forbidden, serialized)
             self.assertTrue(workflow["meta"]["financeWritesImpossible"])
@@ -2597,7 +3414,10 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
     def test_rule_ownership_compiler_is_current_disjoint_and_complete(self) -> None:
         result = subprocess.run(
             [sys.executable, str(N8N / "compile_rule_ownership.py")],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = load_json(N8N / "generated" / "rule-ownership-manifest.json")
@@ -2605,20 +3425,43 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         n8n_rules = load_json(N8N / "generated" / "n8n-runtime-rules.json")
         self.assertEqual(manifest["overlap"], [])
         self.assertEqual(manifest["unowned"], [])
-        actual_keys = {(row["rule_id"], scope) for row in actual["rules"] for scope in row["rule_sets"]}
-        n8n_keys = {(row["rule_id"], scope) for row in n8n_rules["rules"] for scope in row["rule_sets"]}
-        owned_keys = {(row["rule_id"], row["rule_set"]) for row in manifest["ownership"]}
+        actual_keys = {
+            (row["rule_id"], scope)
+            for row in actual["rules"]
+            for scope in row["rule_sets"]
+        }
+        n8n_keys = {
+            (row["rule_id"], scope)
+            for row in n8n_rules["rules"]
+            for scope in row["rule_sets"]
+        }
+        owned_keys = {
+            (row["rule_id"], row["rule_set"]) for row in manifest["ownership"]
+        }
         self.assertFalse(actual_keys & n8n_keys)
         self.assertEqual(actual_keys | n8n_keys, owned_keys)
-        self.assertTrue(all(row["execution_owner"] == "ACTUAL" and row["actual_representable"] for row in actual["rules"]))
-        self.assertTrue(all(row["execution_owner"] == "N8N_ONLY" and not row["actual_representable"] for row in n8n_rules["rules"]))
+        self.assertTrue(
+            all(
+                row["execution_owner"] == "ACTUAL" and row["actual_representable"]
+                for row in actual["rules"]
+            )
+        )
+        self.assertTrue(
+            all(
+                row["execution_owner"] == "N8N_ONLY" and not row["actual_representable"]
+                for row in n8n_rules["rules"]
+            )
+        )
 
     def test_workflow_ui_renderer_is_current_readable_and_idempotent(self) -> None:
         renderer = N8N / "refactor_workflow_ui.py"
         before = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
         result = subprocess.run(
             [sys.executable, str(renderer), "--check"],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         after = {path.name: path.read_bytes() for path in WORKFLOWS.glob("*.json")}
@@ -2634,7 +3477,11 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertNotIn("SETUP REQUIRED", workflow["name"].upper())
             self.assertNotIn("PAUSED", workflow["name"].upper())
             self.assertTrue(workflow["name"].strip(), filename)
-            notes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.stickyNote"]
+            notes = [
+                node
+                for node in workflow["nodes"]
+                if node["type"] == "n8n-nodes-base.stickyNote"
+            ]
             code = workflow["meta"]["financeWorkflowCode"]
             if code in operator_warning_codes:
                 self.assertEqual(len(notes), 1, filename)
@@ -2651,18 +3498,34 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                     continue
                 if node["parameters"].get("language") == "pythonNative":
                     code = node["parameters"]["pythonCode"]
-                    compile("def task(_items):\n" + "\n".join("    " + line for line in code.splitlines()), filename, "exec")
-                    self.assertIn("from finance_tracker.n8n_notifications import normalize_archived_mailbox", code)
+                    compile(
+                        "def task(_items):\n"
+                        + "\n".join("    " + line for line in code.splitlines()),
+                        filename,
+                        "exec",
+                    )
+                    self.assertIn(
+                        "from finance_tracker.n8n_notifications import normalize_archived_mailbox",
+                        code,
+                    )
                     continue
                 code = node["parameters"]["jsCode"]
-                self.assertEqual(code.count("// Purpose:"), 1, f"{filename}::{node['name']}")
-                self.assertGreaterEqual(len(code.splitlines()), 2, f"{filename}::{node['name']}")
-                self.assertLessEqual(max(map(len, code.splitlines())), 600, f"{filename}::{node['name']}")
+                self.assertEqual(
+                    code.count("// Purpose:"), 1, f"{filename}::{node['name']}"
+                )
+                self.assertGreaterEqual(
+                    len(code.splitlines()), 2, f"{filename}::{node['name']}"
+                )
+                self.assertLessEqual(
+                    max(map(len, code.splitlines())), 600, f"{filename}::{node['name']}"
+                )
 
     def test_canvas_groups_are_native_valid_and_exclude_triggers(self) -> None:
         trigger_types = {
-            "n8n-nodes-base.manualTrigger", "n8n-nodes-base.scheduleTrigger",
-            "n8n-nodes-base.executeWorkflowTrigger", "n8n-nodes-base.errorTrigger",
+            "n8n-nodes-base.manualTrigger",
+            "n8n-nodes-base.scheduleTrigger",
+            "n8n-nodes-base.executeWorkflowTrigger",
+            "n8n-nodes-base.errorTrigger",
             "@n8n/n8n-nodes-langchain.mcpTrigger",
         }
         grouped_workflows = 0
@@ -2678,7 +3541,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                 for node_id in group["nodeIds"]:
                     self.assertIn(node_id, by_id, filename)
                     self.assertNotIn(by_id[node_id]["type"], trigger_types)
-                    self.assertNotIn(node_id, seen, f"duplicate canvas group membership {filename}")
+                    self.assertNotIn(
+                        node_id, seen, f"duplicate canvas group membership {filename}"
+                    )
                     seen.add(node_id)
         self.assertGreaterEqual(grouped_workflows, 15)
 
@@ -2687,7 +3552,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(contract["n8n_version"], "2.37.10")
         self.assertEqual(len(contract["folders"]), 6)
         workflow_rows = contract["workflows"]
-        self.assertEqual(len(workflow_rows), len({row["code"] for row in workflow_rows}))
+        self.assertEqual(
+            len(workflow_rows), len({row["code"] for row in workflow_rows})
+        )
         self.assertEqual(
             {row["code"] for row in workflow_rows},
             {row["code"] for row in self.registry["workflows"]},
@@ -2697,25 +3564,40 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         for workflow in self.workflows.values():
             code = workflow["meta"]["financeWorkflowCode"]
             self.assertEqual(workflow["meta"]["workflowFolder"]["id"], by_code[code])
-            self.assertEqual(workflow["meta"]["workflowTags"], contract["workflow_tags"])
-            self.assertEqual([tag["name"] for tag in workflow["tags"]], contract["workflow_tags"])
+            self.assertEqual(
+                workflow["meta"]["workflowTags"], contract["workflow_tags"]
+            )
+            self.assertEqual(
+                [tag["name"] for tag in workflow["tags"]], contract["workflow_tags"]
+            )
             self.assertEqual(
                 workflow["tags"],
-                [{"id": tag_by_name[name], "name": name} for name in contract["workflow_tags"]],
+                [
+                    {"id": tag_by_name[name], "name": name}
+                    for name in contract["workflow_tags"]
+                ],
             )
-            self.assertEqual(len({tag["id"] for tag in workflow["tags"]}), len(contract["workflow_tags"]))
+            self.assertEqual(
+                len({tag["id"] for tag in workflow["tags"]}),
+                len(contract["workflow_tags"]),
+            )
             self.assertNotIn("parentFolderId", workflow)
         sql = (N8N / "workflow-folder-placement.sql").read_text(encoding="utf-8")
         for marker in (
-            "application_project_id", "WORKFLOW_ACTIVATION_VERSION_CHANGED", "shared_workflow",
-            "WORKFLOW_FOLDER_MAP_COUNT_MISMATCH", "WORKFLOW_FOLDER_READBACK_MISMATCH",
+            "application_project_id",
+            "WORKFLOW_ACTIVATION_VERSION_CHANGED",
+            "shared_workflow",
+            "WORKFLOW_FOLDER_MAP_COUNT_MISMATCH",
+            "WORKFLOW_FOLDER_READBACK_MISMATCH",
         ):
             self.assertIn(marker, sql)
         self.assertNotIn("finance_project_id", sql)
         self.assertNotIn("finance_commit", sql)
 
     def test_execute_subworkflow_references_use_from_list(self) -> None:
-        workflow_names = {workflow["id"]: workflow["name"] for workflow in self.workflows.values()}
+        workflow_names = {
+            workflow["id"]: workflow["name"] for workflow in self.workflows.values()
+        }
         count = 0
         for filename, workflow in self.workflows.items():
             for node in workflow["nodes"]:
@@ -2726,14 +3608,24 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
                     continue
                 count += 1
                 reference = node["parameters"]["workflowId"]
-                self.assertEqual(reference["mode"], "list", f"{filename}::{node['name']}")
-                self.assertEqual(reference["cachedResultName"], workflow_names[reference["value"]])
+                self.assertEqual(
+                    reference["mode"], "list", f"{filename}::{node['name']}"
+                )
+                self.assertEqual(
+                    reference["cachedResultName"], workflow_names[reference["value"]]
+                )
         self.assertGreaterEqual(count, 20)
 
-    def test_outlook_and_onedrive_nodes_use_exact_binary_and_server_filter_contracts(self) -> None:
-        for filename in ("01-outlook-finance-acquisition.json", "12-outlook-message-sweep.json"):
+    def test_outlook_and_onedrive_nodes_use_exact_binary_and_server_filter_contracts(
+        self,
+    ) -> None:
+        for filename in (
+            "01-outlook-finance-acquisition.json",
+            "12-outlook-message-sweep.json",
+        ):
             outlook_nodes = [
-                node for node in self.workflow(filename)["nodes"]
+                node
+                for node in self.workflow(filename)["nodes"]
                 if node["type"] == "n8n-nodes-base.microsoftOutlook"
                 and node.get("parameters", {}).get("resource") == "folderMessage"
                 and node.get("parameters", {}).get("operation") == "getAll"
@@ -2756,7 +3648,8 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         uploads = []
         for workflow in self.workflows.values():
             uploads.extend(
-                node for node in workflow["nodes"]
+                node
+                for node in workflow["nodes"]
                 if node["type"] == "n8n-nodes-base.microsoftOneDrive"
                 and node.get("parameters", {}).get("operation") == "upload"
             )
@@ -2767,25 +3660,42 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertEqual(node["parameters"]["binaryPropertyName"], "data")
 
         acquisition = self.workflow("01-outlook-finance-acquisition.json")
-        self.assertNotIn("Get Messages from Configured Folder", acquisition["connections"])
+        self.assertNotIn(
+            "Get Messages from Configured Folder", acquisition["connections"]
+        )
         self.assertNotIn(
             "Exact Sender Subject and Window Filter",
             {node["name"] for node in acquisition["nodes"]},
         )
-        sweep_connections = self.workflow("12-outlook-message-sweep.json")["connections"]
+        sweep_connections = self.workflow("12-outlook-message-sweep.json")[
+            "connections"
+        ]
         self.assertEqual(
             sweep_connections["Exhaust Outlook Pagination"]["main"][0][0]["node"],
             "Aggregate Exact Window Heartbeat",
         )
 
-    def test_interactive_browser_handoff_validates_before_archive_and_is_idempotent(self) -> None:
+    def test_interactive_browser_handoff_validates_before_archive_and_is_idempotent(
+        self,
+    ) -> None:
         table = next(
-            row for row in self.tables["tables"]
+            row
+            for row in self.tables["tables"]
             if row["name"] == "finance_document_operations"
         )
         nodes = self.nodes("11-interactive-artifact-handoff.json")
-        self.assertTrue({"source_code", "config_version", "actual_file_id", "account_id", "period_key"}.issubset(table["columns"]))
-        connections = self.workflow("11-interactive-artifact-handoff.json")["connections"]
+        self.assertTrue(
+            {
+                "source_code",
+                "config_version",
+                "actual_file_id",
+                "account_id",
+                "period_key",
+            }.issubset(table["columns"])
+        )
+        connections = self.workflow("11-interactive-artifact-handoff.json")[
+            "connections"
+        ]
         self.assertEqual(
             connections["Validate Browser Capture Schema"]["main"][0][0]["node"],
             "Load Existing Browser Archive Receipt",
@@ -2799,7 +3709,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "Archive Browser Capture in OneDrive",
         )
         self.assertEqual(
-            nodes["New Browser Artifact?"]["parameters"]["conditions"]["conditions"][0]["leftValue"],
+            nodes["New Browser Artifact?"]["parameters"]["conditions"]["conditions"][0][
+                "leftValue"
+            ],
             "={{ $json.idempotency_action }}",
         )
         idempotency = nodes["Check Existing Browser Artifact"]["parameters"]["jsCode"]
@@ -2808,18 +3720,29 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertIn("idempotency_action: 'NOOP'", idempotency)
         verify = nodes["Verify Browser Archive Receipt"]["parameters"]["jsCode"]
         self.assertIn("BROWSER_ARCHIVE_HASH_INVALID", verify)
-        self.assertTrue(nodes["Parse Browser Capture JSON Before Archive"]["type"] == "n8n-nodes-base.code")
+        self.assertTrue(
+            nodes["Parse Browser Capture JSON Before Archive"]["type"]
+            == "n8n-nodes-base.code"
+        )
         validate = nodes["Validate Browser Capture Schema"]["parameters"]["jsCode"]
         self.assertIn("BROWSER_CAPTURE_BINARY_HASH_MISMATCH", validate)
         self.assertIn("expected_source_sha256", validate)
         self.assertIn("expected_capture_sha256", validate)
-        self.assertTrue(self.workflow("11-interactive-artifact-handoff.json")["meta"]["reuploadForbidden"])
+        self.assertTrue(
+            self.workflow("11-interactive-artifact-handoff.json")["meta"][
+                "reuploadForbidden"
+            ]
+        )
         self.assertEqual(
-            self.workflow("11-interactive-artifact-handoff.json")["meta"]["artifactIdHashConflict"],
+            self.workflow("11-interactive-artifact-handoff.json")["meta"][
+                "artifactIdHashConflict"
+            ],
             "BROWSER_ARTIFACT_ID_HASH_CONFLICT",
         )
         self.assertEqual(
-            nodes["Dispatch Browser Capture to Headless Pipeline"]["parameters"]["workflowId"]["mode"],
+            nodes["Dispatch Browser Capture to Headless Pipeline"]["parameters"][
+                "workflowId"
+            ]["mode"],
             "list",
         )
 
@@ -2828,13 +3751,17 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertIn("Validate MCP Durable Document Reference", nodes)
         self.assertIn("Download MCP Reviewed Capture", nodes)
         self.assertIn("Resolve Capture Hash Contract", nodes)
-        reference = nodes["Validate Reviewed Artifact Reference"]["parameters"]["jsCode"]
+        reference = nodes["Validate Reviewed Artifact Reference"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn("MCP_REVIEWED_BINARY_FORBIDDEN", reference)
         self.assertIn("MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED", reference)
         self.assertIn("MCP_REVIEWED_FIELDS_FORBIDDEN", reference)
         self.assertIn("expected_source_sha256", reference)
         self.assertIn("expected_capture_sha256", reference)
-        durable = nodes["Validate MCP Durable Document Reference"]["parameters"]["jsCode"]
+        durable = nodes["Validate MCP Durable Document Reference"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn("MCP_REVIEWED_DOCUMENT_NOT_FOUND", durable)
         self.assertIn("server_source_sha256", durable)
         self.assertEqual(
@@ -2850,7 +3777,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "SHA-256 Browser Capture Input",
         )
         self.assertEqual(
-            connections["Validate MCP Durable Document Reference"]["main"][0][0]["node"],
+            connections["Validate MCP Durable Document Reference"]["main"][0][0][
+                "node"
+            ],
             "Download MCP Reviewed Capture",
         )
         self.assertEqual(
@@ -2858,21 +3787,37 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "Resolve Capture Hash Contract",
         )
         self.assertEqual(
-            set(self.workflow("11-interactive-artifact-handoff.json")["meta"]["browserHandoff"]["handoff_modes"]),
+            set(
+                self.workflow("11-interactive-artifact-handoff.json")["meta"][
+                    "browserHandoff"
+                ]["handoff_modes"]
+            ),
             {"HEADED_CAPTURE", "MCP_REVIEWED"},
         )
         self.assertEqual(
-            self.workflow("11-interactive-artifact-handoff.json")["meta"]["browserHandoff"]["mcp_reviewed_contract"],
+            self.workflow("11-interactive-artifact-handoff.json")["meta"][
+                "browserHandoff"
+            ]["mcp_reviewed_contract"],
             ["artifact_id"],
         )
 
-    def test_browser_capture_fixtures_execute_against_embedded_canonical_schema(self) -> None:
+    def test_browser_capture_fixtures_execute_against_embedded_canonical_schema(
+        self,
+    ) -> None:
         schema = load_json(ROOT / "config" / "browser-capture-schema-v1.json")
-        code = self.nodes("11-interactive-artifact-handoff.json")["Validate Browser Capture Schema"]["parameters"]["jsCode"]
+        code = self.nodes("11-interactive-artifact-handoff.json")[
+            "Validate Browser Capture Schema"
+        ]["parameters"]["jsCode"]
         embedded, _ = json.JSONDecoder().raw_decode(code.split("const schema = ", 1)[1])
         self.assertEqual(embedded, schema)
 
-        valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
+        valid = load_json(
+            ROOT
+            / "tests"
+            / "fixtures"
+            / "browser-captures"
+            / "valid-transaction-rows.json"
+        )
         validate_fixture_against_schema(embedded, valid)
         capture_binary = json.dumps(
             valid,
@@ -2885,18 +3830,30 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertNotEqual(capture_binary_sha256, source_content_sha256)
         self.assertEqual(valid, json.loads(capture_binary))
 
-        invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
+        invalid = load_json(
+            ROOT
+            / "tests"
+            / "fixtures"
+            / "browser-captures"
+            / "invalid-forbidden-field.json"
+        )
         durable_storage: list[dict] = []
 
-        def archive_if_valid(capture: dict, expected_source: str, expected_binary: str) -> None:
+        def archive_if_valid(
+            capture: dict, expected_source: str, expected_binary: str
+        ) -> None:
             validate_fixture_against_schema(embedded, capture)
-            self.assertEqual(capture["artifact"]["source_content_sha256"], expected_source)
-            actual_binary = hashlib.sha256(json.dumps(
-                capture,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")).hexdigest()
+            self.assertEqual(
+                capture["artifact"]["source_content_sha256"], expected_source
+            )
+            actual_binary = hashlib.sha256(
+                json.dumps(
+                    capture,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
             self.assertEqual(actual_binary, expected_binary)
             durable_storage.append(capture)
 
@@ -2905,7 +3862,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertEqual(durable_storage, [])
 
         archive_if_valid(valid, source_content_sha256, capture_binary_sha256)
-        self.assertEqual([row["capture_id"] for row in durable_storage], [valid["capture_id"]])
+        self.assertEqual(
+            [row["capture_id"] for row in durable_storage], [valid["capture_id"]]
+        )
 
         receipt = {
             "document_id": valid["capture_id"],
@@ -2914,7 +3873,10 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         }
 
         def replay(source_hash: str, binary_hash: str) -> str:
-            if receipt["source_sha256"] != source_hash or receipt["output_sha256"] != binary_hash:
+            if (
+                receipt["source_sha256"] != source_hash
+                or receipt["output_sha256"] != binary_hash
+            ):
                 raise ValueError("BROWSER_ARTIFACT_ID_HASH_CONFLICT")
             return "NOOP"
 
@@ -2924,8 +3886,16 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         with self.assertRaisesRegex(ValueError, "BROWSER_ARTIFACT_ID_HASH_CONFLICT"):
             replay("d" * 64, capture_binary_sha256)
 
-    def test_exported_w11_validator_and_idempotency_execute_real_fixture_bytes(self) -> None:
-        valid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "valid-transaction-rows.json")
+    def test_exported_w11_validator_and_idempotency_execute_real_fixture_bytes(
+        self,
+    ) -> None:
+        valid = load_json(
+            ROOT
+            / "tests"
+            / "fixtures"
+            / "browser-captures"
+            / "valid-transaction-rows.json"
+        )
         capture_binary = json.dumps(
             valid,
             ensure_ascii=False,
@@ -2948,68 +3918,123 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "operation_code": "artifact.submit_reviewed",
             "artifact_id": valid["capture_id"],
         }
-        result = self.run_exported_node("Validate Reviewed Artifact Reference", mcp_request, {}, {})
+        result = self.run_exported_node(
+            "Validate Reviewed Artifact Reference", mcp_request, {}, {}
+        )
         self.assertEqual(result["output"][0]["json"]["handoff_mode"], "MCP_REVIEWED")
-        result = self.run_exported_node("Validate Reviewed Artifact Reference", mcp_request, binary, {})
-        self.assertEqual(result, {"ok": False, "error": "MCP_REVIEWED_BINARY_FORBIDDEN"})
+        result = self.run_exported_node(
+            "Validate Reviewed Artifact Reference", mcp_request, binary, {}
+        )
+        self.assertEqual(
+            result, {"ok": False, "error": "MCP_REVIEWED_BINARY_FORBIDDEN"}
+        )
         result = self.run_exported_node(
             "Validate Reviewed Artifact Reference",
             {**mcp_request, "expected_capture_sha256": capture_binary_sha256},
             {},
             {},
         )
-        self.assertEqual(result, {"ok": False, "error": "MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED"})
+        self.assertEqual(
+            result, {"ok": False, "error": "MCP_REVIEWED_HASHES_MUST_BE_SERVER_DERIVED"}
+        )
         result = self.run_exported_node(
             "Validate Reviewed Artifact Reference",
             {**mcp_request, "url": "https://client-controlled.example.test"},
             {},
             {},
         )
-        self.assertEqual(result, {"ok": False, "error": "Artifact metadata must be resolved from durable server state"})
+        self.assertEqual(
+            result,
+            {
+                "ok": False,
+                "error": "Artifact metadata must be resolved from durable server state",
+            },
+        )
         result = self.run_exported_node(
             "Validate Reviewed Artifact Reference",
-            {"artifact_id": valid["capture_id"], "expected_sha256": source_content_sha256,
-             "expected_source_sha256": source_content_sha256, "expected_capture_sha256": capture_binary_sha256},
+            {
+                "artifact_id": valid["capture_id"],
+                "expected_sha256": source_content_sha256,
+                "expected_source_sha256": source_content_sha256,
+                "expected_capture_sha256": capture_binary_sha256,
+            },
             binary,
             {},
         )
-        self.assertEqual(result, {"ok": False, "error": "EXPECTED_SHA256_LEGACY_FORBIDDEN"})
+        self.assertEqual(
+            result, {"ok": False, "error": "EXPECTED_SHA256_LEGACY_FORBIDDEN"}
+        )
         references = {
-            "SHA-256 Browser Capture Input": {"json": {"input_sha256": capture_binary_sha256}},
+            "SHA-256 Browser Capture Input": {
+                "json": {"input_sha256": capture_binary_sha256}
+            },
             "Resolve Capture Hash Contract": {"json": contract, "binary": binary},
         }
-        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, references)
+        result = self.run_exported_node(
+            "Validate Browser Capture Schema", valid, binary, references
+        )
         self.assertTrue(result["ok"], result)
-        validator_code = self.nodes("11-interactive-artifact-handoff.json")["Validate Browser Capture Schema"]["parameters"]["jsCode"]
-        for forbidden_runtime_primitive in ("require(", "eval(", "new Function", "WebAssembly.compile"):
+        validator_code = self.nodes("11-interactive-artifact-handoff.json")[
+            "Validate Browser Capture Schema"
+        ]["parameters"]["jsCode"]
+        for forbidden_runtime_primitive in (
+            "require(",
+            "eval(",
+            "new Function",
+            "WebAssembly.compile",
+        ):
             self.assertNotIn(forbidden_runtime_primitive, validator_code)
         restricted_result = self.run_exported_node_without_dynamic_code(
-            "Validate Browser Capture Schema", valid, binary, references,
+            "Validate Browser Capture Schema",
+            valid,
+            binary,
+            references,
         )
         self.assertTrue(restricted_result["ok"], restricted_result)
 
-        invalid = load_json(ROOT / "tests" / "fixtures" / "browser-captures" / "invalid-forbidden-field.json")
+        invalid = load_json(
+            ROOT
+            / "tests"
+            / "fixtures"
+            / "browser-captures"
+            / "invalid-forbidden-field.json"
+        )
         invalid_bytes = json.dumps(
             invalid,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
-        invalid_binary = {"data": {"data": base64.b64encode(invalid_bytes).decode("ascii")}}
+        invalid_binary = {
+            "data": {"data": base64.b64encode(invalid_bytes).decode("ascii")}
+        }
         invalid_hash = hashlib.sha256(invalid_bytes).hexdigest()
         invalid_refs = {
             "SHA-256 Browser Capture Input": {"json": {"input_sha256": invalid_hash}},
-            "Resolve Capture Hash Contract": {"json": {
-                **contract,
-                "artifact_id": invalid["capture_id"],
-                "expected_source_sha256": invalid["artifact"]["source_content_sha256"],
-                "expected_capture_sha256": invalid_hash,
-            }, "binary": invalid_binary},
+            "Resolve Capture Hash Contract": {
+                "json": {
+                    **contract,
+                    "artifact_id": invalid["capture_id"],
+                    "expected_source_sha256": invalid["artifact"][
+                        "source_content_sha256"
+                    ],
+                    "expected_capture_sha256": invalid_hash,
+                },
+                "binary": invalid_binary,
+            },
         }
-        result = self.run_exported_node("Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs)
-        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_FORBIDDEN_FIELD:capture.password"})
+        result = self.run_exported_node(
+            "Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs
+        )
+        self.assertEqual(
+            result,
+            {"ok": False, "error": "BROWSER_CAPTURE_FORBIDDEN_FIELD:capture.password"},
+        )
         restricted_invalid = self.run_exported_node_without_dynamic_code(
-            "Validate Browser Capture Schema", invalid, invalid_binary, invalid_refs,
+            "Validate Browser Capture Schema",
+            invalid,
+            invalid_binary,
+            invalid_refs,
         )
         self.assertEqual(
             restricted_invalid,
@@ -3023,15 +4048,29 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         source_mismatch = {**contract, "expected_source_sha256": "d" * 64}
         mismatch_refs = {
             **references,
-            "Resolve Capture Hash Contract": {"json": source_mismatch, "binary": binary},
+            "Resolve Capture Hash Contract": {
+                "json": source_mismatch,
+                "binary": binary,
+            },
         }
-        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, mismatch_refs)
-        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_PROVENANCE_MISMATCH"})
+        result = self.run_exported_node(
+            "Validate Browser Capture Schema", valid, binary, mismatch_refs
+        )
+        self.assertEqual(
+            result, {"ok": False, "error": "BROWSER_CAPTURE_PROVENANCE_MISMATCH"}
+        )
 
         binary_mismatch = {**contract, "expected_capture_sha256": "c" * 64}
-        mismatch_refs["Resolve Capture Hash Contract"] = {"json": binary_mismatch, "binary": binary}
-        result = self.run_exported_node("Validate Browser Capture Schema", valid, binary, mismatch_refs)
-        self.assertEqual(result, {"ok": False, "error": "BROWSER_CAPTURE_BINARY_HASH_MISMATCH"})
+        mismatch_refs["Resolve Capture Hash Contract"] = {
+            "json": binary_mismatch,
+            "binary": binary,
+        }
+        result = self.run_exported_node(
+            "Validate Browser Capture Schema", valid, binary, mismatch_refs
+        )
+        self.assertEqual(
+            result, {"ok": False, "error": "BROWSER_CAPTURE_BINARY_HASH_MISMATCH"}
+        )
 
         existing = {
             "document_id": valid["capture_id"],
@@ -3043,21 +4082,41 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         idempotency_references = {
             "Resolve Capture Hash Contract": {"json": contract, "binary": binary},
             "Validate Browser Capture Schema": {"json": valid, "binary": binary},
-            "SHA-256 Browser Capture Input": {"json": {"input_sha256": capture_binary_sha256}},
+            "SHA-256 Browser Capture Input": {
+                "json": {"input_sha256": capture_binary_sha256}
+            },
         }
-        result = self.run_exported_node("Check Existing Browser Artifact", existing, binary, idempotency_references)
+        result = self.run_exported_node(
+            "Check Existing Browser Artifact", existing, binary, idempotency_references
+        )
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["output"][0]["json"]["idempotency_action"], "NOOP")
 
         source_conflict = {**existing, "source_sha256": "d" * 64}
-        result = self.run_exported_node("Check Existing Browser Artifact", source_conflict, binary, idempotency_references)
-        self.assertEqual(result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"})
+        result = self.run_exported_node(
+            "Check Existing Browser Artifact",
+            source_conflict,
+            binary,
+            idempotency_references,
+        )
+        self.assertEqual(
+            result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"}
+        )
 
         binary_conflict = {**existing, "output_sha256": "c" * 64}
-        result = self.run_exported_node("Check Existing Browser Artifact", binary_conflict, binary, idempotency_references)
-        self.assertEqual(result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"})
+        result = self.run_exported_node(
+            "Check Existing Browser Artifact",
+            binary_conflict,
+            binary,
+            idempotency_references,
+        )
+        self.assertEqual(
+            result, {"ok": False, "error": "BROWSER_ARTIFACT_ID_HASH_CONFLICT"}
+        )
 
-    def test_browser_capture_pipeline_is_write_disabled_and_skips_pdf_and_cashback(self) -> None:
+    def test_browser_capture_pipeline_is_write_disabled_and_skips_pdf_and_cashback(
+        self,
+    ) -> None:
         workflow = self.workflow("03-shared-statement-pipeline.json")
         nodes = self.nodes("03-shared-statement-pipeline.json")
         connections = workflow["connections"]
@@ -3070,8 +4129,16 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             connections["Browser Capture Write?"]["main"][0][0]["node"],
             "Complete Browser Capture Headless Receipt",
         )
-        self.assertFalse(any(node["type"] == "n8n-nodes-finance.actualBudget" and node["parameters"].get("operation") in {"import", "preflight"} for node in workflow["nodes"]))
-        terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"]["jsCode"]
+        self.assertFalse(
+            any(
+                node["type"] == "n8n-nodes-finance.actualBudget"
+                and node["parameters"].get("operation") in {"import", "preflight"}
+                for node in workflow["nodes"]
+            )
+        )
+        terminal = nodes["Complete Browser Capture Headless Receipt"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn("direct_actual_writer", terminal)
         self.assertIn("direct_cashback_writer", terminal)
 
@@ -3079,39 +4146,57 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         workflow = self.workflow("03-shared-statement-pipeline.json")
         nodes = self.nodes("03-shared-statement-pipeline.json")
         self.assertEqual(
-            workflow["connections"]["Apply Prepared Outbox Safely"]["main"][0][0]["node"],
+            workflow["connections"]["Apply Prepared Outbox Safely"]["main"][0][0][
+                "node"
+            ],
             "Build Trusted Cashback Finalization",
         )
         self.assertEqual(
-            workflow["connections"]["Build Trusted Cashback Finalization"]["main"][0][0]["node"],
+            workflow["connections"]["Build Trusted Cashback Finalization"]["main"][0][
+                0
+            ]["node"],
             "Convert Trusted Actual Receipt to File",
         )
         self.assertEqual(
-            workflow["connections"]["Convert Trusted Actual Receipt to File"]["main"][0][0]["node"],
+            workflow["connections"]["Convert Trusted Actual Receipt to File"]["main"][
+                0
+            ][0]["node"],
             "SHA-256 Trusted Actual Receipt",
         )
         self.assertEqual(
-            workflow["connections"]["SHA-256 Trusted Actual Receipt"]["main"][0][0]["node"],
+            workflow["connections"]["SHA-256 Trusted Actual Receipt"]["main"][0][0][
+                "node"
+            ],
             "Finalize Trusted Cashback Payload",
         )
         self.assertEqual(
-            workflow["connections"]["Finalize Trusted Cashback Payload"]["main"][0][0]["node"],
+            workflow["connections"]["Finalize Trusted Cashback Payload"]["main"][0][0][
+                "node"
+            ],
             "Statement Cashback Required",
         )
         self.assertEqual(
-            workflow["connections"]["Build Cashback Reconciliation Request"]["main"][0][0]["node"],
+            workflow["connections"]["Build Cashback Reconciliation Request"]["main"][0][
+                0
+            ]["node"],
             "Reconcile Cashback Statement",
         )
         self.assertEqual(
-            workflow["connections"]["Reconcile Cashback Statement"]["main"][0][0]["node"],
+            workflow["connections"]["Reconcile Cashback Statement"]["main"][0][0][
+                "node"
+            ],
             "Cashback Close Required",
         )
         self.assertEqual(
-            workflow["connections"]["Finalize Eligible Cashback Period"]["main"][0][0]["node"],
+            workflow["connections"]["Finalize Eligible Cashback Period"]["main"][0][0][
+                "node"
+            ],
             "Validate Cashback Finalization Response",
         )
         self.assertEqual(
-            workflow["connections"]["Validate Cashback Finalization Response"]["main"][0][0]["node"],
+            workflow["connections"]["Validate Cashback Finalization Response"]["main"][
+                0
+            ][0]["node"],
             "Upsert Reconciliation Receipt",
         )
         self.assertEqual(
@@ -3127,18 +4212,33 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "actual_import_receipt_sha256",
         )
         self.assertTrue(
-            nodes["Reconcile Cashback Statement"]["parameters"]["url"].endswith("/api/reconcile")
+            nodes["Reconcile Cashback Statement"]["parameters"]["url"].endswith(
+                "/api/reconcile"
+            )
         )
         self.assertIn(
             "Build Cashback Reconciliation Request",
             nodes["Reconcile Cashback Statement"]["parameters"]["jsonBody"],
         )
-        self.assertIn("CASHBACK_FINALIZE_RESPONSE_BINDING_MISMATCH", nodes["Validate Cashback Finalization Response"]["parameters"]["jsCode"])
-        self.assertIn("close_id", nodes["Upsert Reconciliation Receipt"]["parameters"]["columns"]["value"]["cashback_close_id"])
+        self.assertIn(
+            "CASHBACK_FINALIZE_RESPONSE_BINDING_MISMATCH",
+            nodes["Validate Cashback Finalization Response"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "close_id",
+            nodes["Upsert Reconciliation Receipt"]["parameters"]["columns"]["value"][
+                "cashback_close_id"
+            ],
+        )
         body = nodes["Finalize Eligible Cashback Period"]["parameters"]["jsonBody"]
         self.assertIn("Finalize Trusted Cashback Payload", body)
-        self.assertNotIn("cashback_finalization", nodes["Validate Statement Reconciliation and IDs"]["parameters"]["jsCode"])
-        trusted_builder = nodes["Build Trusted Cashback Finalization"]["parameters"]["jsCode"]
+        self.assertNotIn(
+            "cashback_finalization",
+            nodes["Validate Statement Reconciliation and IDs"]["parameters"]["jsCode"],
+        )
+        trusted_builder = nodes["Build Trusted Cashback Finalization"]["parameters"][
+            "jsCode"
+        ]
         self.assertNotIn("source.card_code || source.account_id", trusted_builder)
         self.assertNotIn("actual.card_code || actual.account_id", trusted_builder)
 
@@ -3154,17 +4254,23 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         statement = {
             "statement_reference": "EI-2026-08",
             "statement_sha256": "c" * 64,
-            "transactions": [{
-                "transaction_id": "statement-transaction-1",
-                "transaction_date": "2026-08-15",
-                "description": "Synthetic Merchant",
-                "amount_aed": "8.00",
-                "currency_original": "AED",
-                "transaction_type": "PURCHASE",
-                "purchase_type": "GROCERY",
-            }],
+            "transactions": [
+                {
+                    "transaction_id": "statement-transaction-1",
+                    "transaction_date": "2026-08-15",
+                    "description": "Synthetic Merchant",
+                    "amount_aed": "8.00",
+                    "currency_original": "AED",
+                    "transaction_type": "PURCHASE",
+                    "purchase_type": "GROCERY",
+                }
+            ],
         }
-        manifest = {"period_start": "2026-08-01", "period_end": "2026-08-31", "card_code": "EI_AMAZON"}
+        manifest = {
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "card_code": "EI_AMAZON",
+        }
         actual = {
             "batch_id": "outbox:ei-2026-08",
             "actual_file_id": "actual-file-1",
@@ -3200,10 +4306,14 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(result["ok"], result)
         close = result["output"][0]["json"]["cashback_finalization"]
         self.assertEqual(close["actual_import_receipt"]["state"], "COMMITTED")
-        self.assertEqual(close["actual_import_receipt"]["account_id"], "actual-account:EI_AMAZON")
+        self.assertEqual(
+            close["actual_import_receipt"]["account_id"], "actual-account:EI_AMAZON"
+        )
         self.assertEqual(close["actual_import_receipt"]["card_code"], "EI_AMAZON")
         self.assertEqual(close["actual_import_receipt"]["period_end"], "2026-08-31")
-        self.assertEqual(close["actual_import_receipt"]["expected_payload_sha256"], digest)
+        self.assertEqual(
+            close["actual_import_receipt"]["expected_payload_sha256"], digest
+        )
         receipt_digest = hashlib.sha256(
             json.dumps(
                 close["actual_import_receipt"],
@@ -3224,7 +4334,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             receipt_digest,
         )
         self.assertEqual(
-            finalized["output"][0]["json"]["cashback_finalization"]["actual_import_receipt_sha256"],
+            finalized["output"][0]["json"]["cashback_finalization"][
+                "actual_import_receipt_sha256"
+            ],
             receipt_digest,
         )
         reconciled = self.run_exported_workflow_node(
@@ -3242,7 +4354,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             "statement-transaction-1",
         )
         self.assertEqual(reconcile_request["transactions"][0]["event_type"], "PURCHASE")
-        self.assertEqual(reconcile_request["transactions"][0]["purchase_type"], "GROCERY")
+        self.assertEqual(
+            reconcile_request["transactions"][0]["purchase_type"], "GROCERY"
+        )
         close_id = "cashback-close:EI_AMAZON:2026-08-01:2026-08-31"
         finalize_response = {
             "period": {
@@ -3271,9 +4385,20 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(validated_close["ok"], validated_close)
         self.assertEqual(validated_close["output"][0]["json"]["close_id"], close_id)
         for invalid_response in (
-            {"period": {key: value for key, value in finalize_response["period"].items() if key != "close_id"}},
+            {
+                "period": {
+                    key: value
+                    for key, value in finalize_response["period"].items()
+                    if key != "close_id"
+                }
+            },
             {"period": {**finalize_response["period"], "status": "COMMITTED"}},
-            {"period": {**finalize_response["period"], "actual_verification_sha256": "d" * 64}},
+            {
+                "period": {
+                    **finalize_response["period"],
+                    "actual_verification_sha256": "d" * 64,
+                }
+            },
         ):
             rejected_response = self.run_exported_workflow_node(
                 "03-shared-statement-pipeline.json",
@@ -3288,7 +4413,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertFalse(rejected_response["ok"])
         empty_statement_references = {
             **references,
-            "Validate Statement Reconciliation and IDs": {"json": {**statement, "transactions": []}},
+            "Validate Statement Reconciliation and IDs": {
+                "json": {**statement, "transactions": []}
+            },
         }
         empty_reconcile = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
@@ -3299,7 +4426,11 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertFalse(empty_reconcile["ok"])
         missing_card_references = {
             **references,
-            "Verify Archive and Execution Context": {"json": {key: value for key, value in source.items() if key != "card_code"}},
+            "Verify Archive and Execution Context": {
+                "json": {
+                    key: value for key, value in source.items() if key != "card_code"
+                }
+            },
         }
         missing_card_reconcile = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
@@ -3326,10 +4457,16 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         )
 
         for label, invalid in {
-            "missing": {key: value for key, value in actual.items() if key != "observed_payload_sha256"},
+            "missing": {
+                key: value
+                for key, value in actual.items()
+                if key != "observed_payload_sha256"
+            },
             "stale": {**actual, "state": "ACTUAL_OBSERVED"},
             "cross-account": {**actual, "account_id": "RAK_WORLD"},
-            "missing-card": {key: value for key, value in actual.items() if key != "card_code"},
+            "missing-card": {
+                key: value for key, value in actual.items() if key != "card_code"
+            },
             "cross-card": {**actual, "card_code": "RAK_WORLD"},
             "cross-period": {**actual, "period_end": "2026-09-01"},
             "digest-mismatch": {**actual, "observed_payload_sha256": "d" * 64},
@@ -3342,7 +4479,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             )
             self.assertFalse(rejected["ok"], label)
 
-    def test_reconciliation_readback_rejects_stale_version_close_and_digest(self) -> None:
+    def test_reconciliation_readback_rejects_stale_version_close_and_digest(
+        self,
+    ) -> None:
         nodes = self.nodes("03-shared-statement-pipeline.json")
         self.assertIn(
             "RECONCILIATION_READBACK_BINDING_MISMATCH",
@@ -3368,8 +4507,12 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         refs = {
             "Verify Archive and Execution Context": {"json": source},
             "Apply Prepared Outbox Safely": {"json": actual},
-            "Build Cashback Reconciliation Request": {"json": {"cashback_reconcile": request}},
-            "Validate Cashback Finalization Response": {"json": {"close_id": row["cashback_close_id"]}},
+            "Build Cashback Reconciliation Request": {
+                "json": {"cashback_reconcile": request}
+            },
+            "Validate Cashback Finalization Response": {
+                "json": {"close_id": row["cashback_close_id"]}
+            },
         }
         valid = self.run_exported_workflow_node(
             "03-shared-statement-pipeline.json",
@@ -3380,7 +4523,10 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         self.assertTrue(valid["ok"], valid)
         for invalid in (
             {**row, "reconciliation_version": 2},
-            {**row, "cashback_close_id": "cashback-close:RAK_WORLD:2026-08-01:2026-08-31"},
+            {
+                **row,
+                "cashback_close_id": "cashback-close:RAK_WORLD:2026-08-01:2026-08-31",
+            },
             {**row, "actual_verification_sha256": "c" * 64},
             {**row, "statement_sha256": "d" * 64},
         ):
@@ -3392,7 +4538,9 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             )
             self.assertFalse(rejected["ok"])
 
-    def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(self) -> None:
+    def test_subscription_adapter_uses_pinned_community_nodes_and_server_owned_controls(
+        self,
+    ) -> None:
         lock = load_json(N8N / "community-node-lock.json")
         self.assertEqual(
             {(row["package"], row["version"]) for row in lock["packages"]},
@@ -3402,13 +4550,24 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         )
         nodes = self.nodes("21-subscription-agent-adapter.json")
         codex = nodes["Run Codex Subscription Provider"]
-        self.assertEqual((codex["type"], codex["typeVersion"]), ("n8n-nodes-prodex.prodex", 2))
+        self.assertEqual(
+            (codex["type"], codex["typeVersion"]), ("n8n-nodes-prodex.prodex", 2)
+        )
         self.assertEqual(
             set(codex["parameters"]),
             {
-                "operation", "useN8nCredentials", "systemPrompt", "skills", "prompt",
-                "model", "reasoningEffort", "personality", "threadMode", "sandbox",
-                "workingDirectory", "options",
+                "operation",
+                "useN8nCredentials",
+                "systemPrompt",
+                "skills",
+                "prompt",
+                "model",
+                "reasoningEffort",
+                "personality",
+                "threadMode",
+                "sandbox",
+                "workingDirectory",
+                "options",
             },
         )
         self.assertEqual(codex["parameters"]["sandbox"], "read_only")
@@ -3427,14 +4586,23 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         )
         assignments = {
             row["name"]: row["value"]
-            for row in nodes["Subscription Provider Parameters"]["parameters"]["assignments"]["assignments"]
+            for row in nodes["Subscription Provider Parameters"]["parameters"][
+                "assignments"
+            ]["assignments"]
         }
-        self.assertEqual(json.loads(assignments["proposal_output_schema"]), proposal_schema)
-        build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"]["jsCode"]
+        self.assertEqual(
+            json.loads(assignments["proposal_output_schema"]), proposal_schema
+        )
+        build = nodes["Validate and Build Fixed Provider Invocation"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn("provider_prompt", build)
         for expected in (
-            "CODEX_SUBSCRIPTION", "provider_model", "provider_reasoning_effort",
-            "provider_auth_mode", "Output JSON Schema",
+            "CODEX_SUBSCRIPTION",
+            "provider_model",
+            "provider_reasoning_effort",
+            "provider_auth_mode",
+            "Output JSON Schema",
         ):
             self.assertIn(expected, build)
         validator_name = "Validate ProDex Proposal Schema and Normalize Provider Output"
@@ -3459,12 +4627,22 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
         self.assertNotIn("Run Claude Subscription Provider", adapter_json)
         self.assertEqual(
-            self.workflow("21-subscription-agent-adapter.json")["meta"]["supportedProviders"],
+            self.workflow("21-subscription-agent-adapter.json")["meta"][
+                "supportedProviders"
+            ],
             ["CODEX_SUBSCRIPTION"],
         )
-        self.assertNotIn("providerBranchesEnabled", self.workflow("21-subscription-agent-adapter.json")["meta"])
-        self.assertNotIn("Provider Route", self.workflow("21-subscription-agent-adapter.json")["connections"])
-        self.assertIn("gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"]))
+        self.assertNotIn(
+            "providerBranchesEnabled",
+            self.workflow("21-subscription-agent-adapter.json")["meta"],
+        )
+        self.assertNotIn(
+            "Provider Route",
+            self.workflow("21-subscription-agent-adapter.json")["connections"],
+        )
+        self.assertIn(
+            "gpt-5.6-luna", json.dumps(nodes["Subscription Provider Parameters"])
+        )
 
     def test_subscription_adapter_generator_is_direct_only(self) -> None:
         generator = (N8N / "refactor_workflow_ui.py").read_text(encoding="utf-8")

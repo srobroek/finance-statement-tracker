@@ -90,13 +90,58 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertIn("VERIFIED/RECONCILED/COMMITTED", metadata["admissionPolicy"])
         acquire_sql = lease_nodes["Atomic Acquire Writer Lease"]["parameters"]["query"]
         release_sql = lease_nodes["Release Exact Writer Fence"]["parameters"]["query"]
+        validator_code = lease_nodes["Validate Fixed Lease Operation"]["parameters"][
+            "jsCode"
+        ]
         self.assertIn(
             "state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN')",
             acquire_sql,
         )
+        self.assertIn("terminal.present", acquire_sql)
+        self.assertIn("$5::text = 'SUCCESSOR'", acquire_sql)
+        self.assertIn("$11::text = 'PREPARED'", acquire_sql)
+        self.assertIn("$12::integer = 0", acquire_sql)
         self.assertIn("state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')", release_sql)
         self.assertIn("finance_ops.acquire_writer_lease", acquire_sql)
         self.assertIn("finance_ops.release_writer_lease", release_sql)
+        self.assertIn(
+            "actual_writer_releases",
+            (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(),
+        )
+        accepted = run_code_node(
+            "Validate Fixed Lease Operation",
+            validator_code,
+            {
+                "operation": "ACQUIRE",
+                "resource_key": "actual:budget-1",
+                "lease_owner": "n8n:recovery:outbox-1",
+                "ttl_seconds": 120,
+                "outbox_id": "outbox-1",
+                "outbox_state": "ACTUAL_OBSERVED",
+                "attempt_count": 1,
+                "admission": "SUCCESSOR",
+                "payload_sha256": "a" * 64,
+            },
+            {},
+        )
+        self.assertTrue(accepted["ok"], accepted)
+        rejected_initial = run_code_node(
+            "Validate Fixed Lease Operation",
+            validator_code,
+            {
+                "operation": "ACQUIRE",
+                "resource_key": "actual:budget-1",
+                "lease_owner": "n8n:recovery:outbox-1",
+                "ttl_seconds": 120,
+                "outbox_id": "outbox-1",
+                "outbox_state": "ACTUAL_OBSERVED",
+                "attempt_count": 0,
+                "admission": "INITIAL",
+                "payload_sha256": "a" * 64,
+            },
+            {},
+        )
+        self.assertFalse(rejected_initial["ok"])
         self.assertEqual(
             next_node(document, "Trusted Lease Request"),
             "Validate Fixed Lease Operation",
@@ -107,6 +152,39 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertEqual(
             metadata["fenceReleasePolicy"], "W20 terminal verified readback only"
         )
+
+    def test_actual_observed_recovery_request_is_terminal_backed(self) -> None:
+        actual_nodes = nodes("20-actual-outbox-apply.json")
+        request_code = actual_nodes["Build Recovery Lease Acquire Request"][
+            "parameters"
+        ]["jsCode"]
+        payload_sha256 = "a" * 64
+        result = run_code_node(
+            "Build Recovery Lease Acquire Request",
+            request_code,
+            {},
+            {
+                "Verify Recovery Contract": {
+                    "json": {
+                        "payload_sha256": payload_sha256,
+                        "outbox_row": {
+                            "outbox_id": "outbox-verified",
+                            "batch_id": "batch-verified",
+                            "actual_file_id": "budget-1",
+                            "account_id": "account-1",
+                            "state": "ACTUAL_OBSERVED",
+                            "attempt_count": 1,
+                        },
+                        "manifest": {"account_id": "account-1"},
+                    }
+                }
+            },
+        )
+        self.assertTrue(result["ok"], result)
+        request = result["output"][0]["json"]
+        self.assertEqual(request["outbox_state"], "ACTUAL_OBSERVED")
+        self.assertEqual(request["admission"], "SUCCESSOR")
+        self.assertEqual(request["payload_sha256"], payload_sha256)
 
     def test_w20_replay_is_readback_only_and_fences_surround_actual_mutation(
         self,
@@ -158,9 +236,20 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
                 "filters"
             ]["conditions"][0]["keyValue"],
         )
+        replay_query = actual_nodes["Read Back Released Recovery Writer Fence Replay"][
+            "parameters"
+        ]["query"]
+        self.assertIn("actual_writer_releases", replay_query)
+        self.assertIn("outbox_id = $2", replay_query)
+        self.assertIn("fencing_token = $5", replay_query)
+        self.assertNotIn("writer_leases", replay_query)
 
         committed = {
             "batch_id": "outbox:historical:1",
+            "outbox_id": "outbox:historical:1",
+            "actual_file_id": "actual-file:historical:1",
+            "account_id": "actual-account:ADCB_CASHBACK",
+            "payload_sha256": "a" * 64,
             "state": "COMMITTED",
             "lease_owner": "n8n:recovery:historical:1",
             "lease_fence": 9,
@@ -192,6 +281,10 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             "Read Back Released Recovery Writer Fence Replay": {
                 "json": {
                     "resource_key": "actual:actual-file:historical:1",
+                    "outbox_id": committed["outbox_id"],
+                    "account_id": committed["account_id"],
+                    "payload_sha256": committed["payload_sha256"],
+                    "verified_payload_sha256": committed["payload_sha256"],
                     "lease_owner": committed["lease_owner"],
                     "fencing_token": committed["lease_fence"],
                     "released": True,
@@ -208,7 +301,8 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
                         "expected_statement_balance_minor": receipt[
                             "expected_account_balance"
                         ],
-                    }
+                    },
+                    "payload_sha256": receipt["expected_payload_sha256"],
                 }
             },
         }
@@ -239,6 +333,10 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             "Read Back Released Recovery Writer Fence Replay": {
                 "json": {
                     "resource_key": "actual:actual-file:historical:1",
+                    "outbox_id": committed["outbox_id"],
+                    "account_id": committed["account_id"],
+                    "payload_sha256": committed["payload_sha256"],
+                    "verified_payload_sha256": committed["payload_sha256"],
                     "lease_owner": committed["lease_owner"],
                     "fencing_token": committed["lease_fence"],
                     "released": False,
