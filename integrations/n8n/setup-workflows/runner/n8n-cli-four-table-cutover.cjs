@@ -173,8 +173,16 @@ function digestText(value, code) {
 function credentialBindingsFromEnvironment() {
   const encoded = process.env.FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64;
   if (typeof encoded !== 'string' || encoded.length === 0) throw new Error('CREDENTIAL_BINDINGS_REQUIRED');
+  const raw = Buffer.from(encoded, 'base64');
+  const approvedSha256 = digestText(
+    process.env.FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_SHA256,
+    'CREDENTIAL_BINDINGS_SHA256_INVALID',
+  );
+  if (crypto.createHash('sha256').update(raw).digest('hex') !== approvedSha256) {
+    throw new Error('CREDENTIAL_BINDINGS_CURRENTNESS_DRIFT');
+  }
   let contract;
-  try { contract = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')); } catch { throw new Error('CREDENTIAL_BINDINGS_INVALID'); }
+  try { contract = JSON.parse(raw.toString('utf8')); } catch { throw new Error('CREDENTIAL_BINDINGS_INVALID'); }
   if (!contract || typeof contract !== 'object' || Array.isArray(contract) ||
       Object.keys(contract).sort().join(',') !== 'bindings,schema_version,source,workflow_code_metadata_key' ||
       contract.schema_version !== CREDENTIAL_BINDINGS_SCHEMA || contract.workflow_code_metadata_key !== 'financeWorkflowCode' ||
@@ -1079,7 +1087,8 @@ async function loadTargetState(client, targets) {
     [projectId],
   );
   const projectTables = result.rows || [];
-  if (projectTables.some((table) => !COMPATIBILITY_TABLE_NAMES.has(String(table.name))) ||
+  if (projectTables.length !== COMPATIBILITY_TABLE_NAMES.size ||
+      projectTables.some((table) => !COMPATIBILITY_TABLE_NAMES.has(String(table.name))) ||
       new Set(projectTables.map((table) => String(table.name))).size !== projectTables.length ||
       new Set(projectTables.map((table) => String(table.id))).size !== projectTables.length) {
     throw new Error('CLOSED_PROJECT_DATA_TABLE_SET_REQUIRED');
@@ -1845,7 +1854,7 @@ async function execute() {
       const targetRowCounts = Object.fromEntries(
         [...canonicalSource.targets].map(([name, target]) => [name, target.rows.length]),
       );
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions, canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows), target_digest: canonicalSource.targetDigest, target_projection_sha256: canonicalSource.targetProjectionSha256, target_readback_sha256: targetStateDigest(targetPlan.after), rollback_targets_sha256: digest(targetPlan.rollbackTargets), target_row_counts: targetRowCounts, preserved_table_writes: false };
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions, canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows), target_digest: canonicalSource.targetDigest, target_projection_sha256: canonicalSource.targetProjectionSha256, target_readback_sha256: targetStateDigest(targetPlan.after), rollback_targets_sha256: digest(targetPlan.rollbackTargets), target_row_counts: targetRowCounts, preserved_table_writes: false };
       unsigned.target_prestate = targetStateEvidence(targetPlan.before);
       return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) }, rollbackWorkflows, targetPlan.rollbackTargets);
     }

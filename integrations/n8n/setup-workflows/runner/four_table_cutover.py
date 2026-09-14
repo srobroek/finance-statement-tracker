@@ -2472,8 +2472,13 @@ def _assert_currentness(
             args, "live_export", None
         ) or args.migration_receipt.with_name(LIVE_EXPORT_FILENAME)
         export = _read_json(export_path)[0]
-        observed_export_sha = export.get("export_sha256")
-        if observed_export_sha != export_sha:
+        unsigned_export = dict(export)
+        observed_export_sha = unsigned_export.pop("export_sha256", None)
+        if (
+            observed_export_sha != export_sha
+            or hashlib.sha256(_canonical_bytes(unsigned_export)).hexdigest()
+            != export_sha
+        ):
             raise CutoverError("LIVE_EXPORT_CURRENTNESS_DRIFT")
     identity_path = args.accepted_identity or args.migration_receipt.with_name(
         "finance-four-table-accepted-identity.json"
@@ -3210,6 +3215,12 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
             runtime_receipt=runtime_receipt,
             runtime_receipt_sha256=runtime_receipt_sha,
         )
+    credential_bindings_before = _protected_bytes(
+        CREDENTIAL_BINDINGS_PATH,
+        "CREDENTIAL_BINDINGS",
+        limit=4 * 1024 * 1024,
+    )
+    observed_canonical_source: bytes | None = None
     if not legacy_rollback:
         module = _load_migration_module()
         migration_runner = _migration_runner(
@@ -3236,6 +3247,13 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         )
         if observed_canonical_source != _canonical_bytes(expected_canonical_source):
             raise CutoverError("CANONICAL_SOURCE_CURRENTNESS_DRIFT")
+        credential_bindings_after = _protected_bytes(
+            CREDENTIAL_BINDINGS_PATH,
+            "CREDENTIAL_BINDINGS",
+            limit=4 * 1024 * 1024,
+        )
+        if credential_bindings_after != credential_bindings_before:
+            raise CutoverError("CREDENTIAL_BINDINGS_CURRENTNESS_DRIFT")
     _assert_currentness(
         args,
         source_head=source_head,
@@ -3259,6 +3277,14 @@ def validate_inputs(args: argparse.Namespace) -> dict[str, Any]:
         "inputs_verified": True,
         "workflow_export_sha256": export["export_sha256"],
         "lock_receipt_sha256": lock_sha,
+        "canonical_source_file_sha256": (
+            hashlib.sha256(observed_canonical_source).hexdigest()
+            if observed_canonical_source is not None
+            else None
+        ),
+        "credential_bindings_sha256": hashlib.sha256(
+            credential_bindings_before
+        ).hexdigest(),
     }
 
 

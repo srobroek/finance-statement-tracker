@@ -65,8 +65,8 @@ forward_runtime_receipt="$receipt_dir/finance-four-table-runtime-forward.json"
 rollback_runtime_receipt="$receipt_dir/finance-four-table-runtime-rollback.json"
 runtime_stdout="$receipt_dir/finance-four-table-runtime-${operation}.stdout.raw"
 runtime_stderr="$receipt_dir/finance-four-table-runtime-${operation}.stderr.raw"
-recovery_stdout="$receipt_dir/finance-four-table-runtime-forward-recovery.stdout.raw"
-recovery_stderr="$receipt_dir/finance-four-table-runtime-forward-recovery.stderr.raw"
+recovery_stdout="$receipt_dir/finance-four-table-runtime-${operation}-recovery.stdout.raw"
+recovery_stderr="$receipt_dir/finance-four-table-runtime-${operation}-recovery.stderr.raw"
 pre_readback="$receipt_dir/finance-data-table-readback-${operation}-pre.raw"
 post_readback="$receipt_dir/finance-data-table-readback-${operation}-post.raw"
 second_post_readback="$receipt_dir/finance-data-table-readback-${operation}-second-post.raw"
@@ -166,7 +166,8 @@ test -n "$source_head"
 test -n "$generator_head"
 
 validate_inputs() {
-  python3 "$runner_dir/four_table_cutover.py" validate-inputs \
+  local validation_json
+  validation_json="$(python3 "$runner_dir/four_table_cutover.py" validate-inputs \
     "${resolver_args[@]}" "${rollback_receipt_args[@]}" \
     --source-backup "$source_backup" \
     --migration-receipt "$migration_receipt" \
@@ -185,7 +186,12 @@ validate_inputs() {
     --live-export "$live_export" \
     --canonical-source-input "$canonical_source" \
     --lock-receipt "$lock_receipt" \
-    --operation-kind "${3^^}" >/dev/null
+    --operation-kind "${3^^}")"
+  readarray -t approved_runtime_digests < <(
+    python3 -c 'import json,sys; value=json.load(sys.stdin); print(value["canonical_source_file_sha256"] or ""); print(value["credential_bindings_sha256"])' <<<"$validation_json"
+  )
+  approved_canonical_source_sha="${approved_runtime_digests[0]}"
+  approved_credential_bindings_sha="${approved_runtime_digests[1]}"
 }
 recover_runtime_receipt() {
   local recovery_input="$1"
@@ -240,12 +246,8 @@ run_runtime() {
   local export_b64 lock_b64 credential_bindings_b64 canonical_source_sha runtime_json
   export_b64="$(base64 -w0 -- "$live_export")"
   lock_b64="$(base64 -w0 -- "$lock_receipt")"
+  canonical_source_sha="$approved_canonical_source_sha"
   credential_bindings_b64="$(base64 -w0 -- "$credential_bindings")"
-  canonical_source_sha=""
-  if [[ "$runtime_input" = "$canonical_source" ]]; then
-    canonical_source_sha="$(sha256sum -- "$canonical_source")"
-    canonical_source_sha="${canonical_source_sha%% *}"
-  fi
   local -a runtime_env=(
     -e "N8N_FINANCE_PROJECT_ID=$N8N_FINANCE_PROJECT_ID"
     -e "FINANCE_FOUR_TABLE_OPERATION=${operation^^}"
@@ -264,6 +266,7 @@ run_runtime() {
     -e "FINANCE_FOUR_TABLE_STATEMENT_TIMEOUT_MS=$statement_timeout_ms"
     -e "FINANCE_FOUR_TABLE_EXPORT_B64=$export_b64"
     -e "FINANCE_FOUR_TABLE_LOCK_B64=$lock_b64"
+    -e "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_SHA256=$approved_credential_bindings_sha"
     -e "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=$credential_bindings_b64"
   )
   if [[ -n "$canonical_source_sha" ]]; then
@@ -298,9 +301,6 @@ run_runtime() {
   test -s "$runtime_json"
   chmod 0600 "$runtime_json"
 
-  if [[ "$operation" = forward ]]; then
-    grep -F '"replay_noop":true' "$runtime_json" >/dev/null
-  fi
   grep -F '"durable_journal":true' "$runtime_json" >/dev/null
   grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
 }
@@ -430,18 +430,33 @@ args=(
   --post-readback-raw "$post_readback"
   --runtime-state "$runtime_state"
   --forward-runtime-receipt "$forward_runtime_receipt"
-  --rollback-runtime-receipt "$rollback_runtime_receipt"
   --output "$cutover_receipt"
 )
 if [[ "$operation" = forward ]]; then
   args+=(--second-post-readback-raw "$second_post_readback")
 fi
 if [[ "$operation" = rollback ]]; then
-  args+=(--forward-receipt "$forward_receipt" --runtime-proof "$runtime_proof")
+  args+=(
+    --forward-receipt "$forward_receipt"
+    --runtime-proof "$runtime_proof"
+    --rollback-runtime-receipt "$rollback_runtime_receipt"
+  )
 fi
 
 python3 "$runner_dir/four_table_cutover.py" "${args[@]}"
 if [[ "$operation" = forward ]]; then
-  cp -- "$cutover_receipt" "$forward_receipt"
-  chmod 0600 "$forward_receipt"
+  forward_receipt_temp="$(mktemp --tmpdir="$receipt_dir" .finance-four-table-forward.XXXXXX)"
+  trap 'rm -f -- "$forward_receipt_temp"' EXIT
+  cp -- "$cutover_receipt" "$forward_receipt_temp"
+  chmod 0600 "$forward_receipt_temp"
+  mv -T -- "$forward_receipt_temp" "$forward_receipt"
+  trap - EXIT
+  test -f "$forward_receipt"
+  test ! -L "$forward_receipt"
+  test "$(stat -c '%a' "$forward_receipt")" = 600
+  test "$(stat -c '%h' "$forward_receipt")" = 1
+  test "$(stat -c '%u' "$forward_receipt")" = "$(id -u)"
+  for protected in "$source_backup" "$migration_receipt" "$accepted_identity" "$live_export" "$forward_runtime_receipt"; do
+    test "$(realpath -e -- "$forward_receipt")" != "$(realpath -e -- "$protected")"
+  done
 fi

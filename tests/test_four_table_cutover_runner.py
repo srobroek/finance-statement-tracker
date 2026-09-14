@@ -370,7 +370,8 @@ async function writeRuntimeReceipt(receipt) { emitted = receipt; }
   if ([...forwardState].some(([name, table]) =>
     !sameJson(table.userRows, targets.get(name).rows) ||
     table.systemRows.some((row) => row.id >= 0))) process.exit(2);
-  if (first.preserved_table_writes !== false ||
+  if (first.replay_noop !== false ||
+      first.preserved_table_writes !== false ||
       first.target_readback_sha256 !== targetStateDigest(forwardState) ||
       first.rollback_targets_sha256 !== digest(forwardRollbackTargets) ||
       !sameJson(first.target_row_counts, Object.fromEntries(
@@ -751,6 +752,16 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         self.assertNotIn("FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-", source)
         self.assertIn('--canonical-source-input "$canonical_source"', source)
         self.assertIn("FINANCE_FOUR_TABLE_CANONICAL_SOURCE_FILE_SHA256", source)
+        self.assertIn("FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_SHA256", source)
+        common_args = source.split("args=(", 1)[1].split(
+            'if [[ "$operation" = forward ]]', 1
+        )[0]
+        self.assertNotIn("--rollback-runtime-receipt", common_args)
+        self.assertIn("runtime-${operation}-recovery.stdout.raw", source)
+        self.assertIn('mktemp --tmpdir="$receipt_dir"', source)
+        self.assertIn('mv -T -- "$forward_receipt_temp" "$forward_receipt"', source)
+        self.assertIn("stat -c '%h' \"$forward_receipt\"", source)
+        self.assertIn('realpath -e -- "$forward_receipt"', source)
         self.assertIn('recover_runtime_receipt "$runtime_input"', source)
         recovery = source[
             source.index("recover_runtime_receipt() {") : source.index(
