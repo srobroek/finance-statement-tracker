@@ -1,6 +1,8 @@
-from datetime import datetime
+from datetime import UTC, datetime
+from decimal import Decimal
 from unittest import TestCase
 
+from finance_tracker.ai_rules import AIEnrichmentEngine, AIPolicy
 from finance_tracker.classification_audit import (
     build_classification_exception_report,
     enforce_transaction_invariants,
@@ -10,7 +12,13 @@ from finance_tracker.models import Transaction
 
 class ClassificationAuditRegressionTests(TestCase):
     def transaction(self) -> Transaction:
-        return Transaction("tx", datetime(2026, 8, 1), "CARD", "UNKNOWN", "10")
+        return Transaction(
+            "tx",
+            datetime(2026, 8, 1, tzinfo=UTC),
+            "CARD",
+            "UNKNOWN",
+            Decimal(10),
+        )
 
     def test_plural_ai_category_recommendations_are_reported_as_pending(self) -> None:
         transaction = self.transaction()
@@ -44,3 +52,73 @@ class ClassificationAuditRegressionTests(TestCase):
         self.assertTrue(transaction.review_required)
         self.assertEqual(transaction.tags, {"Manual"})
         self.assertIn("UNCATEGORIZED", reasons)
+
+    def test_ai_resolution_preserves_independent_source_review_reasons(self) -> None:
+        transaction = Transaction(
+            "source-review",
+            datetime(2026, 8, 16, tzinfo=UTC),
+            "SC_PLATINUM_X",
+            "UNKNOWN MERCHANT",
+            Decimal(100),
+            vendor="unknown",
+            category="Needs Review",
+            tags={"category-review", "needs-review", "reimbursement"},
+            review_required=True,
+            metadata={
+                "browser_review_reasons": [
+                    "SOURCE_REVIEW_REQUIRED",
+                    "MISSING_AED_EQUIVALENT",
+                    "VISIBLE_ROWS_REQUIRE_REVIEW",
+                ],
+                "reimbursement_match_status": "UNMATCHED",
+            },
+        )
+        policy = AIPolicy(
+            policy_id="resolve-classification",
+            name="Resolve classification",
+            priority=1,
+            instruction="Resolve category and vendor",
+            target_fields=("category", "vendor"),
+        )
+
+        traces = AIEnrichmentEngine([policy]).enrich(
+            transaction,
+            lambda _request: {
+                "proposals": [
+                    {
+                        "field": "category",
+                        "value": "Online Shopping",
+                        "confidence": 0.99,
+                    },
+                    {
+                        "field": "vendor",
+                        "value": "Amazon",
+                        "confidence": 0.99,
+                    },
+                ]
+            },
+        )
+
+        self.assertTrue(all(trace.accepted for trace in traces))
+        self.assertEqual(transaction.category, "Online Shopping")
+        self.assertEqual(transaction.vendor, "Amazon")
+        self.assertEqual(
+            transaction.metadata["browser_review_reasons"],
+            [
+                "SOURCE_REVIEW_REQUIRED",
+                "MISSING_AED_EQUIVALENT",
+                "VISIBLE_ROWS_REQUIRE_REVIEW",
+            ],
+        )
+        self.assertEqual(
+            transaction.metadata["classification_review_reasons"],
+            [
+                "MISSING_AED_EQUIVALENT",
+                "SOURCE_REVIEW_REQUIRED",
+                "UNMATCHED_REIMBURSEMENT",
+                "VISIBLE_ROWS_REQUIRE_REVIEW",
+            ],
+        )
+        self.assertTrue(transaction.review_required)
+        self.assertIn("needs-review", transaction.tags)
+        self.assertIn("reimbursement", transaction.tags)
