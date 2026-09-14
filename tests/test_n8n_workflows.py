@@ -3421,6 +3421,22 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
         validator_name = "Validate ProDex Proposal Schema and Normalize Provider Output"
         normalizer = nodes[validator_name]["parameters"]["jsCode"]
         self.assertIn("PRODEX_AUTH_REQUIRED", normalizer)
+        self.assertIn(
+            "restore the existing persistent one-time subscription auth state from protected state",
+            normalizer,
+        )
+        normalizer_lower = normalizer.lower()
+        for forbidden in (
+            "codex login",
+            "re-enable",
+            "api key",
+            "custom mcp",
+            "separate runner",
+            "per-run",
+            "device auth",
+            "device login",
+        ):
+            self.assertNotIn(forbidden, normalizer_lower)
         adapter_json = json.dumps(self.workflow("21-subscription-agent-adapter.json"))
         self.assertNotIn("Run Claude Subscription Provider", adapter_json)
         self.assertEqual(
