@@ -22,9 +22,9 @@
     },
     {
       "config_name": "static-rules.seed",
-      "version": "sha256-477f1f2114e4f5bc",
+      "version": "sha256-7ed2100e15886a7a",
       "source_path": "config/static-rules.seed.json",
-      "content_sha256": "477f1f2114e4f5bcc4c7fbfb58e603eb9506edc7b922e30a8c3cbb3897486fd1",
+      "content_sha256": "7ed2100e15886a7ac1ea86e36c352c5e80e7ddd21cc304d65f4e38f7dc2c2200",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
