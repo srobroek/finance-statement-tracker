@@ -506,6 +506,7 @@ function validateCanonicalGraph(workflow, targetIds) {
     if (!node || typeof node.id !== 'string' || !node.id || typeof node.name !== 'string' || !node.name ||
         typeof node.type !== 'string' || !node.type || ids.has(node.id) || names.has(node.name)) throw new Error('CANONICAL_SOURCE_NODE_IDENTITY_INVALID');
     ids.add(node.id);
+    names.add(node.name);
     if (node.type !== 'n8n-nodes-base.dataTable') continue;
     const parameters = node.parameters && typeof node.parameters === 'object' ? node.parameters : {};
     if (parameters.resource === 'table') {
