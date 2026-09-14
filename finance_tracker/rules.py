@@ -390,7 +390,8 @@ def _mark_ownership_conflict(transaction: Transaction) -> None:
         reasons.append("LOCKED_OWNERSHIP_CONFLICT")
     if "tags" not in set(transaction.metadata.get("locked_fields", [])):
         transaction.tags.discard("shared")
-    transaction.review_required = True
+    if "review_required" not in set(transaction.metadata.get("locked_fields", [])):
+        transaction.review_required = True
 
 
 def _tag_lock_reason(
