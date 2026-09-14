@@ -1,12 +1,386 @@
 {
-  "schema_version":1,
-  "contract_status":"SPEC_ONLY",
-  "authoring_source":"config/ai-policies.json",
-  "target_fields":["category","category_recommendation","channel","evidence_policy","is_subscription","property_code","rental_unit","reward_bucket","rule_recommendation","subcategory","tags","vendor"],
-  "protected_proposal_fields":["channel","reward_bucket"],
-  "direct_commit_forbidden":true,
-  "profile_policy":{
-    "LUNA_MAX":{"policy_class":"NORMAL","runner_model":"gpt-5.6-luna","runner_reasoning_effort":"max"},
-    "SOL_MEDIUM":{"policy_class":"EXCEPTION","runner_model":"gpt-5.6-sol","runner_reasoning_effort":"medium"}
+  "schema_version": 1,
+  "contract_status": "SPEC_ONLY",
+  "authoring_source": "config/ai-policies.json",
+  "candidate_kinds": [
+    "DETERMINISTIC_RULE",
+    "AGENT_POLICY"
+  ],
+  "target_kinds": [
+    "DETERMINISTIC_WRITABLE",
+    "SUGGESTION_ONLY"
+  ],
+  "target_fields": [
+    "category",
+    "category_recommendation",
+    "channel",
+    "evidence_policy",
+    "is_subscription",
+    "property_code",
+    "rental_unit",
+    "reward_bucket",
+    "rule_recommendation",
+    "subcategory",
+    "tags",
+    "vendor"
+  ],
+  "deterministic_writable_fields": [
+    "vendor",
+    "category",
+    "subcategory",
+    "tags",
+    "evidence_policy",
+    "review_required",
+    "category_recommendation",
+    "is_subscription",
+    "property_code",
+    "rental_unit",
+    "rule_recommendation"
+  ],
+  "suggestion_only_fields": [
+    "channel",
+    "reward_bucket"
+  ],
+  "protected_proposal_fields": [
+    "channel",
+    "reward_bucket"
+  ],
+  "protected_identity_fields": [
+    "transaction_id",
+    "transaction_at",
+    "card",
+    "account",
+    "institution",
+    "account_last4",
+    "merchant_raw",
+    "source_type",
+    "source_message_id"
+  ],
+  "protected_economic_fields": [
+    "amount_aed",
+    "amount_original",
+    "currency",
+    "source_direction"
+  ],
+  "protected_actual_structural_fields": [
+    "transaction_type",
+    "is_refund",
+    "reconciliation_status",
+    "existing_link",
+    "actual_transaction_id",
+    "deduplication_key"
+  ],
+  "profile_policy": {
+    "LUNA_MAX": {
+      "policy_class": "NORMAL",
+      "runner_model": "gpt-5.6-luna",
+      "runner_reasoning_effort": "max"
+    },
+    "SOL_MEDIUM": {
+      "policy_class": "EXCEPTION",
+      "runner_model": "gpt-5.6-sol",
+      "runner_reasoning_effort": "medium"
+    }
+  },
+  "direct_commit_forbidden": true,
+  "forbidden_side_effect_capabilities": [
+    "APPLY_ACTUAL",
+    "PROMOTE_PROPOSAL",
+    "MUTATE_LEDGER",
+    "NETWORK",
+    "PROVIDER_CALL",
+    "SQLITE_WRITE",
+    "PERSIST",
+    "SEND_NOTIFICATION"
+  ],
+  "effect_matrix": {
+    "vendor": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "category": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "subcategory": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "tags": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "evidence_policy": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "review_required": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "category_recommendation": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "is_subscription": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "property_code": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "rental_unit": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "rule_recommendation": {
+      "effect_kind": "DETERMINISTIC_WRITE",
+      "writable": true,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "NONE"
+    },
+    "channel": {
+      "effect_kind": "SUGGESTION_ONLY",
+      "writable": false,
+      "suggestion_only": true,
+      "unresolved_only": true,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "PROPOSAL"
+    },
+    "reward_bucket": {
+      "effect_kind": "SUGGESTION_ONLY",
+      "writable": false,
+      "suggestion_only": true,
+      "unresolved_only": true,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "PROPOSAL"
+    },
+    "transaction_id": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "transaction_at": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "card": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "account": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "institution": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "account_last4": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "merchant_raw": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "source_type": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "source_message_id": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "IDENTITY"
+    },
+    "amount_aed": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ECONOMIC"
+    },
+    "amount_original": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ECONOMIC"
+    },
+    "currency": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ECONOMIC"
+    },
+    "source_direction": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ECONOMIC"
+    },
+    "transaction_type": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    },
+    "is_refund": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    },
+    "reconciliation_status": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    },
+    "existing_link": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    },
+    "actual_transaction_id": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    },
+    "deduplication_key": {
+      "effect_kind": "FORBIDDEN",
+      "writable": false,
+      "suggestion_only": false,
+      "unresolved_only": false,
+      "direct_commit_allowed": false,
+      "validator_required": true,
+      "protection_class": "ACTUAL_STRUCTURAL"
+    }
   }
 }
