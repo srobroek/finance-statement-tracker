@@ -51,6 +51,16 @@ const ALLOWED_PROJECT_TABLES = new Set([
   ...CANONICAL_TABLE_NAMES,
   ...PRESERVED_TABLE_NAMES,
 ]);
+const PINNED_PRESERVED_TABLE_IDS = new Map([
+  ['finance_source_contracts', 'sha256:73b62207'],
+  ['finance_source_cursors', 'sha256:60e428cd'],
+  ['finance_archive_receipts', 'sha256:49bf4e32'],
+  ['finance_document_operations', 'sha256:2ad2a52a'],
+  ['finance_pipeline_runs', 'sha256:48eb19e5'],
+  ['finance_reconciliations', 'sha256:f47bf1e1'],
+  ['finance_mcp_requests', 'sha256:3b9034f0'],
+  ['finance_execution_failures', 'sha256:59c34ab8'],
+]);
 const TARGET_SCHEMA_DIGESTS = new Map([
   ['finance_actual_batches', 'e85b91693673a2cc19a3cf7cd27be7886a8f41dea38f4c8b818f73431a750511'],
   ['finance_ai_reviews', '30add9a2089cd56bff376b97388f7b7208bf29fb360032f649ec38cb84c1566f'],
@@ -71,12 +81,16 @@ function assertCanonicalTableNames(tables) {
 }
 function assertAllowedProjectTables(listed) {
   if (!listed || !Number.isInteger(listed.count) || !Array.isArray(listed.data) ||
-      listed.count !== listed.data.length || listed.data.length > ALLOWED_PROJECT_TABLES.size) {
+      listed.count !== listed.data.length || listed.data.length !== ALLOWED_PROJECT_TABLES.size) {
     throw new Error('CLOSED_FINANCE_DATA_TABLE_SET_REQUIRED');
   }
   const observed = listed.data.map((table) => String(table.name || ''));
   if (new Set(observed).size !== observed.length ||
-      observed.some((name) => !ALLOWED_PROJECT_TABLES.has(name))) {
+      observed.some((name) => !ALLOWED_PROJECT_TABLES.has(name)) ||
+      listed.data.some((table) => {
+        const expectedId = PINNED_PRESERVED_TABLE_IDS.get(String(table.name || ''));
+        return expectedId !== undefined && String(table.id || '') !== expectedId;
+      })) {
     throw new Error('CLOSED_FINANCE_DATA_TABLE_SET_REQUIRED');
   }
 }

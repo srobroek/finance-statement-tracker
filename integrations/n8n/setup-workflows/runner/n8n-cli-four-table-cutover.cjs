@@ -500,11 +500,26 @@ async function loadWorkflows(client, graph, strict = true) {
     `SELECT w.id, w.name, w.active, w."activeVersionId", w."versionId", w.nodes, w.connections,
             w.meta, w.settings, w."pinData"
        FROM workflow_entity w
-       JOIN shared_workflow s ON s."workflowId" = w.id
-      WHERE s."projectId" = $1 AND s.role = 'workflow:owner'
+      WHERE EXISTS (
+        SELECT 1 FROM shared_workflow s
+         WHERE s."workflowId" = w.id AND s."projectId" = $1 AND s.role = 'workflow:owner'
+      )
       FOR UPDATE`,
     [projectId],
   );
+  const sharesResult = await client.query(
+    `SELECT "workflowId" AS workflow_id, "projectId" AS project_id, role
+       FROM shared_workflow
+      WHERE "workflowId" = ANY($1::text[])
+      ORDER BY "workflowId", "projectId"`,
+    [[...graph.workflows.keys()]],
+  );
+  const shares = sharesResult.rows || [];
+  if (shares.length !== graph.workflows.size ||
+      shares.some((share) => !graph.workflows.has(String(share.workflow_id)) ||
+        String(share.project_id) !== projectId || share.role !== 'workflow:owner')) {
+    throw new Error('WORKFLOW_OWNER_SHARE_SCOPE_INVALID');
+  }
   const rows = new Map(result.rows.map((workflow) => [workflow.id, workflow]));
   if (result.rows.length !== graph.workflows.size || rows.size !== graph.workflows.size ||
       [...rows.keys()].some((workflowId) => !graph.workflows.has(workflowId))) {

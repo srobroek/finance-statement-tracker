@@ -793,6 +793,7 @@ def _validate_live_export(
         or not all(isinstance(item, Mapping) for item in target_ids)
         or len(target_ids) != len(TARGETS)
         or {item.get("name") for item in target_ids} != set(TARGETS)
+        or len({item.get("table_id") for item in target_ids}) != len(TARGETS)
     ):
         raise CutoverError("EXACT_TARGET_EXPORT_REQUIRED")
     expected_schemas = (

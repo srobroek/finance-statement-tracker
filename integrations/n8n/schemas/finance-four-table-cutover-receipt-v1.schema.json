@@ -175,11 +175,11 @@
       "additionalProperties": false,
       "required": ["reference_count", "actions", "unresolved", "replay_noop"],
       "properties": {
-        "reference_count": {"const": 33},
+        "reference_count": {"const": 37},
         "actions": {
           "type": "array",
-          "minItems": 33,
-          "maxItems": 33,
+          "minItems": 37,
+          "maxItems": 37,
           "items": {
             "type": "object",
             "required": ["reference_id", "action", "source_table", "canonical_table_name", "workflow_id", "revision_id", "node_id", "old_table_id"],

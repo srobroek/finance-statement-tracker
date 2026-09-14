@@ -784,7 +784,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
 const crypto = require('node:crypto');
 {contract}
 const tables = [...CANONICAL_TABLE_NAMES, ...PRESERVED_TABLE_NAMES]
-  .map((name) => ({{ name, id: `id-${{name}}` }}));
+  .map((name) => ({{ name, id: PINNED_PRESERVED_TABLE_IDS.get(name) || `id-${{name}}` }}));
 assertAllowedProjectTables({{ count: tables.length, data: tables }});
 const observedTargets = CANONICAL_TABLE_NAMES.map((name) => ({{ name, row_count: 0 }}));
 const forwardPre = readbackReceipt('FORWARD_PRE', observedTargets, 0);
@@ -1620,6 +1620,7 @@ if (receiptMatchesCommittedState(receipt, readback, state, {{ ...canonicalSource
 const projectId = 'project-1';
 const TARGET_NAMES = new Set(['target']);
 const COMPATIBILITY_TABLE_NAMES = new Set(['target', 'preserved']);
+const LEGACY_TABLE_IDS = new Map();
 function assertWorkflow() {{}}
 {load_workflows}
 {load_targets}
@@ -1628,7 +1629,12 @@ const workflowGraph = {{
   workflowBodyDigests: new Map([['expected', 'digest']]),
 }};
 const workflowClient = {{
-  async query() {{
+  async query(sql) {{
+    if (String(sql).includes('FROM shared_workflow')) {{
+      return {{ rows: [
+        {{ workflow_id: 'expected', project_id: projectId, role: 'workflow:owner' }},
+      ] }};
+    }}
     return {{ rows: [
       {{ id: 'expected', nodes: [], active: false, activeVersionId: null }},
       {{ id: 'extra', nodes: [], active: false, activeVersionId: null }},
