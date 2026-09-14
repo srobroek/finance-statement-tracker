@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
-from .models import Transaction
 from .actual_notes import parse_actual_notes
+from .models import Transaction
 from .transaction_semantics import PENDING_CATEGORY_VALUES, UNKNOWN_PAYEE_VALUES
 
 
 def _review_reasons(transaction: Transaction) -> set[str]:
-    """Recompute review reasons from current fields, never stale raw metadata."""
+    """Recompute review reasons from current fields and authoritative review metadata."""
 
     reasons: set[str] = set()
     category = str(transaction.category or "").strip()
@@ -31,12 +32,17 @@ def _review_reasons(transaction: Transaction) -> set[str]:
         str(tag).casefold() for tag in transaction.tags
     }:
         reasons.add("REVIEW_REQUIRED")
-    if transaction.metadata.get("property_review_reasons"):
+    for metadata_key in ("browser_review_reasons", "property_review_reasons"):
+        metadata_reasons = transaction.metadata.get(metadata_key) or ()
+        if isinstance(metadata_reasons, str):
+            metadata_reasons = (metadata_reasons,)
         reasons.update(
             str(value).strip().upper()
-            for value in transaction.metadata["property_review_reasons"]
+            for value in metadata_reasons
             if str(value).strip()
         )
+    if transaction.metadata.get("reimbursement_match_status") == "UNMATCHED":
+        reasons.add("UNMATCHED_REIMBURSEMENT")
     if transaction.tags and "rental" in {
         str(tag).casefold() for tag in transaction.tags
     }:
