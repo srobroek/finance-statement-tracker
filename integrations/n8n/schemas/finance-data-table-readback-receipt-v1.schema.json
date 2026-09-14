@@ -8,6 +8,7 @@
     "schema_version",
     "receipt_contract",
     "status",
+    "phase",
     "scope",
     "finance_tables",
     "tables",
@@ -46,10 +47,7 @@
       "const": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST"
     },
     "finance_tables": {
-      "enum": [
-        0,
-        4
-      ]
+      "const": 4
     },
     "tables": {
       "type": "array",
@@ -105,13 +103,11 @@
             "const": "FORWARD_PRE_READBACK"
           },
           "finance_tables": {
-            "const": 0
+            "const": 4
           },
           "tables": {
-            "maxItems": 0
-          },
-          "total_rows": {
-            "const": 0
+            "minItems": 4,
+            "maxItems": 4
           }
         }
       },

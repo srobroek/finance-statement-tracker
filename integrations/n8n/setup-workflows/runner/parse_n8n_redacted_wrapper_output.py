@@ -93,15 +93,14 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         "secret_values_recorded",
     }
     phase = value.get("phase")
-    if phase is not None:
-        if phase not in {
-            "FORWARD_PRE",
-            "FORWARD_POST",
-            "ROLLBACK_PRE",
-            "ROLLBACK_POST",
-        }:
-            raise ValueError("DATA_TABLE_DIGEST_PHASE_MISMATCH")
-        expected_keys.add("phase")
+    if phase not in {
+        "FORWARD_PRE",
+        "FORWARD_POST",
+        "ROLLBACK_PRE",
+        "ROLLBACK_POST",
+    }:
+        raise ValueError("DATA_TABLE_DIGEST_PHASE_MISMATCH")
+    expected_keys.add("phase")
     forward_pre = phase == "FORWARD_PRE"
     if set(value) != expected_keys:
         raise ValueError("DATA_TABLE_DIGEST_RECEIPT_KEYS_MISMATCH")
@@ -121,13 +120,9 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
         "digest_sha256",
     }
     tables = value.get("tables")
-    if not isinstance(tables, list):
-        raise TypeError("DATA_TABLE_DIGEST_TABLES_MISMATCH")
-    if forward_pre:
-        if tables:
-            raise ValueError("DATA_TABLE_DIGEST_TABLES_MISMATCH")
-    elif (
-        len(tables) != 4
+    if (
+        not isinstance(tables, list)
+        or len(tables) != 4
         or any(
             not isinstance(table, dict) or set(table) != table_keys for table in tables
         )
@@ -170,7 +165,7 @@ def parse_data_table_receipt(raw: str) -> dict[str, Any]:
             )
         ):
             raise ValueError("DATA_TABLE_DIGEST_TABLE_CONTRACT_MISMATCH")
-    expected_table_count = 0 if forward_pre else 4
+    expected_table_count = 4
     if len({table["table_id_sha256"] for table in tables}) != expected_table_count:
         raise ValueError("DATA_TABLE_DIGEST_TABLE_IDENTITY_MISMATCH")
     migration_receipt = value.get("migration_receipt")

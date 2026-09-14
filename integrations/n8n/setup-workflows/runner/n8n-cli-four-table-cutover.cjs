@@ -19,8 +19,10 @@ const n8nPackageJson = require.resolve('n8n/package.json', { paths: [n8nPackageR
 const pg = createRequire(n8nPackageJson)('pg');
 
 const EXPORT_SCHEMA = 'finance-four-table-live-export-v1';
+const CANONICAL_SOURCE_SCHEMA = 'finance-four-table-canonical-source-v2';
 const LEGACY_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
-const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
+const PREVIOUS_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
+const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v3';
 const JOURNAL_TABLE = 'finance_four_table_cutover_journal';
 const APPROVED_LOCK_TIMEOUT_MS = 5_000;
 const APPROVED_STATEMENT_TIMEOUT_MS = 30_000;
@@ -33,6 +35,14 @@ const TARGET_NAMES = new Set([
   'finance_actual_batches',
   'finance_ai_reviews',
 ]);
+const TARGET_LOGICAL_KEYS = new Map([
+  ['finance_actual_batches', ['idempotency_key']],
+  ['finance_ai_reviews', ['idempotency_key']],
+  ['finance_documents', ['document_id']],
+  ['finance_ingestion_state', ['source_code']],
+]);
+const TARGET_COLUMN_TYPES = new Set(['string', 'number', 'boolean', 'date']);
+const TARGET_SYSTEM_COLUMNS = ['id', 'createdAt', 'updatedAt'];
 const LEGACY_TABLE_IDS = new Map([
   ['finance_source_contracts', 'sha256:73b62207'],
   ['finance_source_cursors', 'sha256:60e428cd'],
@@ -102,6 +112,7 @@ function clone(value) {
 }
 
 function canonical(value) {
+  if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
@@ -473,20 +484,21 @@ function canonicalSourceFromInput(graph) {
     const count = fs.readSync(0, chunk, 0, chunk.length, null);
     if (count === 0) break;
     length += count;
-    if (length > 32 * 1024 * 1024) throw new Error('CANONICAL_SOURCE_SIZE_EXCEEDED');
+    if (length > 64 * 1024 * 1024) throw new Error('CANONICAL_SOURCE_SIZE_EXCEEDED');
     chunks.push(chunk.subarray(0, count));
   }
   const raw = Buffer.concat(chunks, length).toString('utf8');
   let source;
   try { source = JSON.parse(raw); } catch { throw new Error('CANONICAL_SOURCE_JSON_INVALID'); }
   const provenance = provenanceFromEnvironment();
-  if (!source || source.schema_version !== 'finance-four-table-canonical-source-v1' ||
+  if (!source || source.schema_version !== CANONICAL_SOURCE_SCHEMA ||
       source.source_head !== provenance.source_head || source.generator_head !== provenance.generator_head ||
       source.accepted_identity_sha256 !== provenance.accepted_identity_sha256 ||
       source.legacy_reference_inventory_sha256 !== APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256 ||
       !Array.isArray(source.files) || source.files.length !== graph.workflows.size) {
     throw new Error('CANONICAL_SOURCE_BINDING_MISMATCH');
   }
+  const targets = validateTargetProjection(source, graph);
   digestText(source.source_corpus_sha256, 'CANONICAL_SOURCE_SHA256_INVALID');
   const corpus = crypto.createHash('sha256');
   const workflows = new Map();
@@ -506,8 +518,124 @@ function canonicalSourceFromInput(graph) {
     workflows.set(workflow.id, workflow);
   }
   if (corpus.digest('hex') !== source.source_corpus_sha256) throw new Error('CANONICAL_SOURCE_CORPUS_DIGEST_MISMATCH');
-  return { workflows, sha256: source.source_corpus_sha256 };
+  return {
+    workflows,
+    targets,
+    sha256: source.source_corpus_sha256,
+    targetProjectionSha256: source.target_projection_sha256,
+    targetDigest: source.target_digest,
+  };
 }
+function digestWithoutNewline(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function exactKeys(value, expected, code) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join(',') !== [...expected].sort().join(',')) {
+    throw new Error(code);
+  }
+}
+
+function validateTargetProjection(source, graph) {
+  const expectedSourceKeys = new Set([
+    'schema_version',
+    'source_head',
+    'generator_head',
+    'accepted_identity_sha256',
+    'source_corpus_sha256',
+    'legacy_reference_inventory_sha256',
+    'files',
+    'source_backup_sha256',
+    'migration_receipt_sha256',
+    'migration_matrix_sha256',
+    'target_digest',
+    'target_projection_sha256',
+    'targets',
+  ]);
+  exactKeys(source, expectedSourceKeys, 'CANONICAL_SOURCE_FIELDS_INVALID');
+  const provenance = provenanceFromEnvironment();
+  if (source.schema_version !== CANONICAL_SOURCE_SCHEMA ||
+      source.source_backup_sha256 !== provenance.source_backup_sha256 ||
+      source.migration_receipt_sha256 !== provenance.migration_receipt_sha256) {
+    throw new Error('CANONICAL_TARGET_PROJECTION_BINDING_MISMATCH');
+  }
+  for (const field of ['migration_matrix_sha256', 'target_digest', 'target_projection_sha256']) {
+    digestText(source[field], `CANONICAL_${field.toUpperCase()}_INVALID`);
+  }
+  if (!Array.isArray(source.targets) || source.targets.length !== TARGET_NAMES.size ||
+      digest(source.targets) !== source.target_projection_sha256) {
+    throw new Error('CANONICAL_TARGET_PROJECTION_INTEGRITY_MISMATCH');
+  }
+  const targets = new Map();
+  for (const target of source.targets) {
+    exactKeys(
+      target,
+      ['name', 'schema_sha256', 'columns', 'logical_key', 'row_count', 'rows_sha256', 'rows'],
+      'CANONICAL_TARGET_FIELDS_INVALID',
+    );
+    const name = text(target.name, 'CANONICAL_TARGET_NAME_INVALID');
+    if (!TARGET_NAMES.has(name) || targets.has(name) || !graph.targetIds.has(name)) {
+      throw new Error(`CANONICAL_TARGET_NAME_INVALID:${name}`);
+    }
+    digestText(target.schema_sha256, `CANONICAL_TARGET_SCHEMA_SHA256_INVALID:${name}`);
+    digestText(target.rows_sha256, `CANONICAL_TARGET_ROWS_SHA256_INVALID:${name}`);
+    if (target.schema_sha256 !== graph.targetSchemaDigests.get(name) ||
+        !Array.isArray(target.columns) || target.columns.length === 0 ||
+        !Array.isArray(target.logical_key) ||
+        !sameJson(target.logical_key, TARGET_LOGICAL_KEYS.get(name)) ||
+        !Array.isArray(target.rows) || target.row_count !== target.rows.length ||
+        !Number.isInteger(target.row_count) || target.row_count < 0 || target.row_count > 100000) {
+      throw new Error(`CANONICAL_TARGET_SCHEMA_INVALID:${name}`);
+    }
+    const columnTypes = new Map();
+    let previousColumn = '';
+    for (const column of target.columns) {
+      exactKeys(column, ['name', 'type'], `CANONICAL_TARGET_COLUMN_INVALID:${name}`);
+      if (typeof column.name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(column.name) ||
+          column.name <= previousColumn || !TARGET_COLUMN_TYPES.has(column.type)) {
+        throw new Error(`CANONICAL_TARGET_COLUMN_INVALID:${name}`);
+      }
+      previousColumn = column.name;
+      columnTypes.set(column.name, column.type);
+    }
+    if (target.logical_key.some((field) => !columnTypes.has(field))) {
+      throw new Error(`CANONICAL_TARGET_LOGICAL_KEY_INVALID:${name}`);
+    }
+    const rowStrings = [];
+    const logicalKeys = new Set();
+    for (const row of target.rows) {
+      exactKeys(row, columnTypes.keys(), `CANONICAL_TARGET_ROW_FIELDS_INVALID:${name}`);
+      for (const [field, type] of columnTypes) {
+        const value = row[field];
+        if (value === null) continue;
+        if ((type === 'string' && typeof value !== 'string') ||
+            (type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) ||
+            (type === 'boolean' && typeof value !== 'boolean') ||
+            (type === 'date' && (typeof value !== 'string' || !Number.isFinite(Date.parse(value))))) {
+          throw new Error(`CANONICAL_TARGET_ROW_TYPE_INVALID:${name}:${field}`);
+        }
+      }
+      const logicalKey = JSON.stringify(target.logical_key.map((field) => row[field]));
+      if (target.logical_key.some((field) => row[field] === null) || logicalKeys.has(logicalKey)) {
+        throw new Error(`CANONICAL_TARGET_LOGICAL_KEY_INVALID:${name}`);
+      }
+      logicalKeys.add(logicalKey);
+      rowStrings.push(JSON.stringify(canonical(row)));
+    }
+    if (digestWithoutNewline(rowStrings) !== target.rows_sha256) {
+      throw new Error(`CANONICAL_TARGET_ROWS_DIGEST_MISMATCH:${name}`);
+    }
+    targets.set(name, {
+      ...target,
+      tableId: graph.targetIds.get(name),
+      columnTypes,
+    });
+  }
+  if (targets.size !== TARGET_NAMES.size) throw new Error('CANONICAL_TARGET_SET_INVALID');
+  return targets;
+}
+
 
 function validateCanonicalGraph(workflow, targetIds) {
   if (!Array.isArray(workflow.nodes) || !workflow.connections || typeof workflow.connections !== 'object' || Array.isArray(workflow.connections)) {
@@ -853,7 +981,55 @@ function applyForward(workflows, credentials, canonicalWorkflows) {
 }
 
 
-async function verifyTargets(client, targetIds) {
+function quoteIdentifier(value, code) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value)) {
+    throw new Error(code);
+  }
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function physicalTargetTable(tableId) {
+  const prefix = process.env.DB_TABLE_PREFIX || '';
+  if (!/^[A-Za-z0-9_]{0,64}$/.test(prefix)) throw new Error('DB_TABLE_PREFIX_INVALID');
+  return quoteIdentifier(`${prefix}data_table_user_${tableId}`, 'TARGET_TABLE_ID_INVALID');
+}
+
+function sortedUserRows(rows, columns) {
+  return rows
+    .map((row) => Object.fromEntries(columns.map((column) => [column.name, canonical(row[column.name] ?? null)])))
+    .sort((left, right) => Buffer.compare(
+      Buffer.from(JSON.stringify(canonical(left))),
+      Buffer.from(JSON.stringify(canonical(right))),
+    ));
+}
+
+function targetStateEvidence(state) {
+  return [...state.values()].map((table) => {
+    const rowStrings = table.userRows.map((row) => JSON.stringify(canonical(row)));
+    return {
+      name: table.name,
+      table_id_sha256: crypto.createHash('sha256').update(table.tableId).digest('hex'),
+      row_count: table.userRows.length,
+      rows_sha256: digestWithoutNewline(rowStrings),
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function targetStateDigest(state) {
+  return digest(targetStateEvidence(state));
+}
+
+function targetSnapshot(state) {
+  return [...state.values()].map((table) => ({
+    name: table.name,
+    table_id: table.tableId,
+    columns: table.columns,
+    rows: table.systemRows,
+  })).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function loadTargetState(client, targets) {
+  const targetIds = new Map([...targets].map(([name, target]) => [name, target.tableId]));
   const result = await client.query(
     `SELECT id, name
        FROM data_table
@@ -867,10 +1043,122 @@ async function verifyTargets(client, targetIds) {
       new Set(tables.map((table) => table.id)).size !== TARGET_NAMES.size) {
     throw new Error('EXACT_TARGET_READBACK_REQUIRED');
   }
-  for (const table of tables) {
-    if (!TARGET_NAMES.has(String(table.name))) throw new Error(`UNEXPECTED_TARGET_READBACK:${table.name}`);
-    if (table.id !== targetIds.get(table.name)) throw new Error(`TARGET_ID_READBACK_MISMATCH:${table.name}`);
+  const columnResult = await client.query(
+    `SELECT "dataTableId" AS table_id, name, type, "index"
+       FROM data_table_column
+      WHERE "dataTableId" = ANY($1::text[])
+      ORDER BY "dataTableId", name
+      FOR UPDATE`,
+    [[...targetIds.values()]],
+  );
+  const columnsById = new Map([...targetIds.values()].map((id) => [id, []]));
+  for (const column of columnResult.rows || []) {
+    if (!columnsById.has(column.table_id)) throw new Error('UNEXPECTED_TARGET_COLUMN');
+    columnsById.get(column.table_id).push({ name: String(column.name), type: String(column.type).toLowerCase() });
   }
+  const state = new Map();
+  for (const table of tables) {
+    const name = String(table.name);
+    if (!TARGET_NAMES.has(name)) throw new Error(`UNEXPECTED_TARGET_READBACK:${name}`);
+    if (table.id !== targetIds.get(name)) throw new Error(`TARGET_ID_READBACK_MISMATCH:${name}`);
+    const target = targets.get(name);
+    const columns = (columnsById.get(table.id) || []).sort((left, right) => left.name.localeCompare(right.name));
+    if (!sameJson(columns, target.columns) || digestWithoutNewline(columns) !== target.schema_sha256) {
+      throw new Error(`TARGET_SCHEMA_READBACK_MISMATCH:${name}`);
+    }
+    const rowsResult = await client.query(`SELECT * FROM ${physicalTargetTable(table.id)} ORDER BY id FOR UPDATE`);
+    const systemRows = (rowsResult.rows || []).map((row) => canonical(row));
+    const expectedFields = new Set([...TARGET_SYSTEM_COLUMNS, ...columns.map((column) => column.name)]);
+    for (const row of systemRows) {
+      if (Object.keys(row).length !== expectedFields.size ||
+          Object.keys(row).some((field) => !expectedFields.has(field)) ||
+          !Number.isInteger(row.id)) {
+        throw new Error(`TARGET_ROW_SHAPE_INVALID:${name}`);
+      }
+    }
+    state.set(name, {
+      name,
+      tableId: table.id,
+      columns,
+      systemRows,
+      userRows: sortedUserRows(systemRows, columns),
+    });
+  }
+  return state;
+}
+
+async function insertTargetRows(client, target, rows, includeSystemColumns) {
+  if (rows.length === 0) return;
+  const fields = includeSystemColumns
+    ? [...TARGET_SYSTEM_COLUMNS, ...target.columns.map((column) => column.name)]
+    : ['id', ...target.columns.map((column) => column.name)];
+  const rowsPerBatch = Math.max(1, Math.floor(1000 / fields.length));
+  for (let offset = 0; offset < rows.length; offset += rowsPerBatch) {
+    const batch = rows.slice(offset, offset + rowsPerBatch);
+    const parameters = [];
+    const values = batch.map((row, rowIndex) => {
+      const source = includeSystemColumns
+        ? row
+        : { id: -(offset + rowIndex + 1), ...row };
+      const placeholders = fields.map((field) => {
+        parameters.push(source[field] ?? null);
+        return `$${parameters.length}`;
+      });
+      return `(${placeholders.join(', ')})`;
+    });
+    await client.query(
+      `INSERT INTO ${physicalTargetTable(target.tableId)}
+         (${fields.map((field) => quoteIdentifier(field, 'TARGET_COLUMN_NAME_INVALID')).join(', ')})
+       OVERRIDING SYSTEM VALUE
+       VALUES ${values.join(', ')}`,
+      parameters,
+    );
+  }
+}
+
+async function replaceTargetRows(client, targets, rowsByName, includeSystemColumns) {
+  for (const name of [...TARGET_NAMES].sort((left, right) => left.localeCompare(right))) {
+    const target = targets.get(name);
+    if (!target) throw new Error(`TARGET_PROJECTION_MISSING:${name}`);
+    await client.query(`DELETE FROM ${physicalTargetTable(target.tableId)}`);
+    await insertTargetRows(client, target, rowsByName.get(name) || [], includeSystemColumns);
+    if (process.env.FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_TARGET === name) {
+      throw new Error(`INJECTED_FAILURE_AFTER_TARGET:${name}`);
+    }
+  }
+}
+
+async function applyTargetProjection(client, targets) {
+  const before = await loadTargetState(client, targets);
+  const matches = [...before].every(([name, table]) => sameJson(table.userRows, targets.get(name).rows));
+  if (matches) {
+    return {
+      alreadyApplied: true,
+      before,
+      after: before,
+      rollbackTargets: null,
+    };
+  }
+  if ([...before.values()].some((table) => table.systemRows.length !== 0)) {
+    throw new Error('TARGET_PRESTATE_NOT_EMPTY_OR_PROJECTED');
+  }
+  const rollbackTargets = targetSnapshot(before);
+  await replaceTargetRows(
+    client,
+    targets,
+    new Map([...targets].map(([name, target]) => [name, target.rows])),
+    false,
+  );
+  const after = await loadTargetState(client, targets);
+  if ([...after].some(([name, table]) => !sameJson(table.userRows, targets.get(name).rows))) {
+    throw new Error('TARGET_PROJECTION_POST_READBACK_MISMATCH');
+  }
+  return {
+    alreadyApplied: false,
+    before,
+    after,
+    rollbackTargets,
+  };
 }
 
 async function verifyInFlight(client) {
@@ -884,7 +1172,12 @@ async function verifyInFlight(client) {
   if (result.rows[0]?.count !== 0) throw new Error('LIVE_IN_FLIGHT_EXECUTIONS_PRESENT');
 }
 
-async function persistRecoveryJournal(client, receipt, rollbackWorkflows = null) {
+async function persistRecoveryJournal(
+  client,
+  receipt,
+  rollbackWorkflows = null,
+  rollbackTargets = null,
+) {
   await client.query(
     `CREATE TABLE IF NOT EXISTS ${JOURNAL_TABLE} (
        receipt_sha256 varchar(64) PRIMARY KEY,
@@ -896,10 +1189,11 @@ async function persistRecoveryJournal(client, receipt, rollbackWorkflows = null)
      )`,
   );
   await client.query(`ALTER TABLE ${JOURNAL_TABLE} ADD COLUMN IF NOT EXISTS rollback_workflows jsonb`);
+  await client.query(`ALTER TABLE ${JOURNAL_TABLE} ADD COLUMN IF NOT EXISTS rollback_targets jsonb`);
   await client.query(
     `INSERT INTO ${JOURNAL_TABLE}
-       (receipt_sha256, project_id, operation, lock_resource, receipt, rollback_workflows)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+       (receipt_sha256, project_id, operation, lock_resource, receipt, rollback_workflows, rollback_targets)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
      ON CONFLICT (receipt_sha256) DO NOTHING`,
     [
       receipt.runtime_plan_receipt_sha256,
@@ -908,6 +1202,7 @@ async function persistRecoveryJournal(client, receipt, rollbackWorkflows = null)
       receipt.lock_resource,
       JSON.stringify(receipt),
       JSON.stringify(rollbackWorkflows),
+      JSON.stringify(rollbackTargets),
     ],
   );
 }
@@ -936,6 +1231,56 @@ async function loadRollbackWorkflows(client, receipt, graph, requireGraphBodies 
   return restored;
 }
 
+
+function validateRollbackTargets(snapshot, receipt, targets) {
+  if (!Array.isArray(snapshot) || snapshot.length !== TARGET_NAMES.size ||
+      digest(snapshot) !== receipt.rollback_targets_sha256) {
+    throw new Error('ROLLBACK_TARGET_SNAPSHOT_MISMATCH');
+  }
+  const restored = new Map();
+  for (const table of snapshot) {
+    exactKeys(table, ['name', 'table_id', 'columns', 'rows'], 'ROLLBACK_TARGET_SNAPSHOT_INVALID');
+    const target = targets.get(table.name);
+    if (!target || restored.has(table.name) || table.table_id !== target.tableId ||
+        !sameJson(table.columns, target.columns) || !Array.isArray(table.rows)) {
+      throw new Error('ROLLBACK_TARGET_SNAPSHOT_INVALID');
+    }
+    const expectedFields = new Set([...TARGET_SYSTEM_COLUMNS, ...target.columns.map((column) => column.name)]);
+    for (const row of table.rows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row) ||
+          Object.keys(row).length !== expectedFields.size ||
+          Object.keys(row).some((field) => !expectedFields.has(field)) ||
+          !Number.isInteger(row.id)) {
+        throw new Error('ROLLBACK_TARGET_SNAPSHOT_INVALID');
+      }
+    }
+    restored.set(table.name, table.rows.map((row) => canonical(row)));
+  }
+  return restored;
+}
+
+async function loadRollbackTargets(client, receipt, targets) {
+  const result = await client.query(
+    `SELECT rollback_targets FROM ${JOURNAL_TABLE}
+      WHERE receipt_sha256 = $1 AND project_id = $2 AND operation = 'FORWARD' AND lock_resource = $3`,
+    [receipt.runtime_plan_receipt_sha256, projectId, receipt.lock_resource],
+  );
+  if (result.rows?.length !== 1) throw new Error('ROLLBACK_TARGET_SNAPSHOT_MISMATCH');
+  return validateRollbackTargets(result.rows[0].rollback_targets, receipt, targets);
+}
+
+async function restoreTargetSnapshot(client, targets, rowsByName) {
+  await replaceTargetRows(client, targets, rowsByName, true);
+  const restored = await loadTargetState(client, targets);
+  for (const [name, table] of restored) {
+    const expected = (rowsByName.get(name) || []).map((row) => canonical(row));
+    if (!sameJson(table.systemRows, expected)) {
+      throw new Error(`ROLLBACK_TARGET_POST_READBACK_MISMATCH:${name}`);
+    }
+  }
+  return restored;
+}
+
 function validateLockReceipt(lockReceipt, exported, binding, resource) {
   if (!lockReceipt || lockReceipt.schema_version !== 'finance-four-table-writer-lock-v1' ||
       lockReceipt.lock_name !== 'finance_four_table_cutover' ||
@@ -957,7 +1302,7 @@ function validateLockReceipt(lockReceipt, exported, binding, resource) {
 }
 
 function validateForwardReceipt(receipt, exported, resource, binding, canonicalSourceSha256 = null) {
-  if (!receipt || ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) || receipt.operation !== 'FORWARD' ||
+  if (!receipt || ![LEGACY_RUNTIME_SCHEMA, PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) || receipt.operation !== 'FORWARD' ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
       receipt.export_sha256 !== exported.export_sha256 || receipt.action_count !== 33 ||
       receipt.durable_journal !== true || receipt.commit_protocol !== 'postgresql_synchronous_wal' ||
@@ -979,7 +1324,7 @@ function validateForwardReceipt(receipt, exported, resource, binding, canonicalS
       receipt.credential_ids_recorded !== false || receipt.secret_values_recorded !== false || !Array.isArray(receipt.actions)) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_INTEGRITY_INVALID');
   }
-  if (receipt.schema_version === RUNTIME_SCHEMA) {
+  if ([PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version)) {
     if (!/^[0-9a-f]{64}$/.test(receipt.rollback_workflows_sha256) ||
         !/^[0-9a-f]{64}$/.test(receipt.canonical_source_sha256) ||
         (canonicalSourceSha256 !== null && receipt.canonical_source_sha256 !== canonicalSourceSha256)) {
@@ -987,6 +1332,30 @@ function validateForwardReceipt(receipt, exported, resource, binding, canonicalS
     }
   } else if (Object.hasOwn(receipt, 'rollback_workflows_sha256') || Object.hasOwn(receipt, 'canonical_source_sha256')) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_VERSION_MISMATCH');
+  }
+  if (receipt.schema_version === RUNTIME_SCHEMA) {
+    if (!/^[0-9a-f]{64}$/.test(receipt.rollback_targets_sha256) ||
+        !/^[0-9a-f]{64}$/.test(receipt.target_projection_sha256) ||
+        !/^[0-9a-f]{64}$/.test(receipt.target_readback_sha256) ||
+        !/^[0-9a-f]{64}$/.test(receipt.target_digest) ||
+        receipt.preserved_table_writes !== false ||
+        !receipt.target_row_counts || typeof receipt.target_row_counts !== 'object' ||
+        Array.isArray(receipt.target_row_counts) ||
+        Object.keys(receipt.target_row_counts).sort().join(',') !== [...TARGET_NAMES].sort().join(',') ||
+        Object.values(receipt.target_row_counts).some((count) => !Number.isInteger(count) || count < 0)) {
+      throw new Error('FORWARD_RUNTIME_TARGET_RECEIPT_INTEGRITY_INVALID');
+    }
+  }
+  if (receipt.schema_version === RUNTIME_SCHEMA &&
+      (!Array.isArray(receipt.target_prestate) ||
+       receipt.target_prestate.length !== TARGET_NAMES.size ||
+       receipt.target_prestate.some((table) =>
+         !table || typeof table !== 'object' || Array.isArray(table) ||
+         !TARGET_NAMES.has(table.name) ||
+         !/^[0-9a-f]{64}$/.test(table.table_id_sha256) ||
+         !/^[0-9a-f]{64}$/.test(table.rows_sha256) ||
+         !Number.isInteger(table.row_count) || table.row_count < 0))) {
+    throw new Error('FORWARD_RUNTIME_TARGET_PRESTATE_INVALID');
   }
   validateBinding(receipt, binding, 'FORWARD_RUNTIME_RECEIPT');
   if (receipt.credential_contract_digest !== digest(credentialBindingsFromEnvironment()) ||
@@ -1048,7 +1417,7 @@ function replayValidationExport(exported, receipt) {
 
 async function loadForwardReplayJournal(client, graph, lock, canonicalSource, exported, readback, state) {
   const result = await client.query(
-    `SELECT receipt, rollback_workflows
+    `SELECT receipt, rollback_workflows, rollback_targets
        FROM ${JOURNAL_TABLE}
       WHERE project_id = $1
         AND operation = 'FORWARD'
@@ -1086,7 +1455,10 @@ async function loadForwardReplayJournal(client, graph, lock, canonicalSource, ex
   if (receipt.readback_digest_sha256 !== digest(readback) ||
       receipt.credential_state_digest_after !== state.credentialStateDigest ||
       receipt.workflow_credential_objects_digest_after !== state.workflowCredentialObjectsDigest ||
-      receipt.workflow_revision_digest_after !== state.workflowRevisionDigest) {
+      receipt.workflow_revision_digest_after !== state.workflowRevisionDigest ||
+      receipt.target_readback_sha256 !== state.targetReadbackDigest ||
+      receipt.target_projection_sha256 !== canonicalSource.targetProjectionSha256 ||
+      receipt.target_digest !== canonicalSource.targetDigest) {
     throw new Error('FORWARD_REPLAY_ORIGINAL_JOURNAL_STATE_MISMATCH');
   }
   const bodies = row.rollback_workflows;
@@ -1104,18 +1476,29 @@ async function loadForwardReplayJournal(client, graph, lock, canonicalSource, ex
   if (findReferences(graph, rollbackWorkflows).some((item) => !item.oldMatches)) {
     throw new Error('FORWARD_REPLAY_ROLLBACK_SNAPSHOT_NOT_LEGACY');
   }
+  validateRollbackTargets(row.rollback_targets, receipt, canonicalSource.targets);
   return receipt;
 }
 
 
 function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
   if (!receipt || receipt.operation !== 'ROLLBACK' ||
-      ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) ||
+      ![LEGACY_RUNTIME_SCHEMA, PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(receipt.schema_version) ||
       receipt.project_id !== projectId || receipt.lock_resource !== resource ||
       receipt.export_sha256 !== exported.export_sha256 ||
       receipt.durable_journal !== true ||
       receipt.commit_protocol !== 'postgresql_synchronous_wal') {
     throw new Error('ROLLBACK_RUNTIME_JOURNAL_INTEGRITY_INVALID');
+  }
+  if (receipt.schema_version === RUNTIME_SCHEMA &&
+      (!/^[0-9a-f]{64}$/.test(receipt.canonical_source_sha256) ||
+       !/^[0-9a-f]{64}$/.test(receipt.target_digest) ||
+       !/^[0-9a-f]{64}$/.test(receipt.target_projection_sha256) ||
+       !/^[0-9a-f]{64}$/.test(receipt.target_readback_sha256) ||
+       !/^[0-9a-f]{64}$/.test(receipt.rollback_targets_sha256) ||
+       receipt.target_rows_restored !== true ||
+       receipt.preserved_table_writes !== false)) {
+    throw new Error('ROLLBACK_RUNTIME_TARGET_JOURNAL_INTEGRITY_INVALID');
   }
   validateBinding(receipt, binding, 'ROLLBACK_RUNTIME_JOURNAL');
   const unsigned = { ...receipt };
@@ -1130,7 +1513,13 @@ function validateRollbackJournalReceipt(receipt, exported, resource, binding) {
 async function recoverRuntimeJournal() {
   const exported = decode('FINANCE_FOUR_TABLE_EXPORT_B64');
   const graph = validateExport(exported);
-  const canonicalSource = operation === 'FORWARD' ? canonicalSourceFromInput(graph) : null;
+  const recoveryForwardReceipt = operation === 'ROLLBACK'
+    ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64')
+    : null;
+  const canonicalSource = operation === 'FORWARD' ||
+    recoveryForwardReceipt?.schema_version !== LEGACY_RUNTIME_SCHEMA
+    ? canonicalSourceFromInput(graph)
+    : null;
   const binding = bindingFromEnvironment();
   const lockReceipt = decode('FINANCE_FOUR_TABLE_LOCK_B64');
   const resource = `finance_four_table_cutover:${projectId}`;
@@ -1139,7 +1528,7 @@ async function recoverRuntimeJournal() {
   try {
     await client.connect();
     const result = await client.query(
-      `SELECT receipt
+      `SELECT receipt, rollback_targets
          FROM ${JOURNAL_TABLE}
         WHERE project_id = $1
           AND lock_resource = $2
@@ -1160,6 +1549,19 @@ async function recoverRuntimeJournal() {
     const validated = operation === 'FORWARD'
       ? validateForwardReceipt(receipt, exported, resource, binding, canonicalSource.sha256)
       : validateRollbackJournalReceipt(receipt, exported, resource, binding);
+    if (validated.schema_version === RUNTIME_SCHEMA) {
+      if (!canonicalSource ||
+          validated.canonical_source_sha256 !== canonicalSource.sha256 ||
+          validated.target_projection_sha256 !== canonicalSource.targetProjectionSha256 ||
+          validated.target_digest !== canonicalSource.targetDigest) {
+        throw new Error(`${operation}_RUNTIME_TARGET_JOURNAL_BINDING_INVALID`);
+      }
+      const targetState = await loadTargetState(client, canonicalSource.targets);
+      if (targetStateDigest(targetState) !== validated.target_readback_sha256) {
+        throw new Error(`${operation}_RUNTIME_TARGET_JOURNAL_STATE_MISMATCH`);
+      }
+      validateRollbackTargets(row.rollback_targets, validated, canonicalSource.targets);
+    }
     await writeRuntimeReceipt(validated);
   } finally {
     await client.end();
@@ -1197,13 +1599,17 @@ async function execute() {
   const graph = validateExport(exported);
   const forwardReceipt = operation === 'ROLLBACK' ? decode('FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') : null;
   if (operation === 'ROLLBACK' && (!forwardReceipt || forwardReceipt.operation !== 'FORWARD' ||
-      ![LEGACY_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(forwardReceipt.schema_version))) {
+      ![LEGACY_RUNTIME_SCHEMA, PREVIOUS_RUNTIME_SCHEMA, RUNTIME_SCHEMA].includes(forwardReceipt.schema_version))) {
     throw new Error('FORWARD_RUNTIME_RECEIPT_REQUIRED');
   }
-  const canonicalSource = operation === 'FORWARD' || forwardReceipt.schema_version === RUNTIME_SCHEMA
+  const canonicalSource = operation === 'FORWARD' || forwardReceipt.schema_version !== LEGACY_RUNTIME_SCHEMA
     ? canonicalSourceFromInput(graph) : null;
   const lock = await acquireProjectLock();
-  const commitAndJournal = async (unsignedReceipt, rollbackWorkflows = null) => {
+  const commitAndJournal = async (
+    unsignedReceipt,
+    rollbackWorkflows = null,
+    rollbackTargets = null,
+  ) => {
     const journal = {
       ...unsignedReceipt,
       ...lock.binding,
@@ -1211,7 +1617,7 @@ async function execute() {
       commit_protocol: 'postgresql_synchronous_wal',
     };
     validateBinding(journal, lock.binding, 'RUNTIME_JOURNAL');
-    await persistRecoveryJournal(lock.client, journal, rollbackWorkflows);
+    await persistRecoveryJournal(lock.client, journal, rollbackWorkflows, rollbackTargets);
     await lock.client.query('COMMIT');
     // COMMIT releases the transaction-scoped advisory lock before this output.
     // The committed journal is the recovery boundary for this read-only step.
@@ -1220,7 +1626,6 @@ async function execute() {
   };
   try {
     await verifyInFlight(lock.client);
-    await verifyTargets(lock.client, graph.targetIds);
     const credentialsBefore = await credentialState(lock.client);
     const credentialsByBinding = new Map(credentialsBefore.values.map((value) => [value.placeholder, value]));
     const workflows = await loadWorkflows(lock.client, graph, false);
@@ -1247,7 +1652,9 @@ async function execute() {
         }
       }
       const plan = applyForward(workflows, credentialsByBinding, canonicalSource.workflows);
+      const targetPlan = await applyTargetProjection(lock.client, canonicalSource.targets);
       if (plan.alreadyApplied) {
+        if (!targetPlan.alreadyApplied) throw new Error('FORWARD_REPLAY_TARGET_STATE_MISMATCH');
         const readback = workflowReadback(workflows);
         if (!sameJson(readback, workflowReadback(plan.expected)) ||
             !allCredentialOrigins(credentialOriginsBefore, 'opaque')) {
@@ -1264,12 +1671,14 @@ async function execute() {
             credentialStateDigest: credentialsBefore.digest,
             workflowCredentialObjectsDigest: workflowCredentialsBefore,
             workflowRevisionDigest: workflowRevisionDigestBefore,
+            targetReadbackDigest: targetStateDigest(targetPlan.after),
           },
         );
         await lock.client.query('COMMIT');
         await writeRuntimeReceipt(original);
         return original;
       }
+      if (targetPlan.alreadyApplied) throw new Error('FORWARD_FIRST_RUN_TARGET_STATE_MISMATCH');
       const rollbackWorkflows = [...workflows.values()].map((workflow) => ({
         id: workflow.id, ...Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field] ?? null])),
       })).sort((left, right) => left.id.localeCompare(right.id));
@@ -1297,9 +1706,12 @@ async function execute() {
       if (credentialsAfter.digest !== credentialsBefore.digest) throw new Error('CREDENTIAL_STATE_CHANGED');
       const workflowCredentialsAfter = workflowCredentialObjectsDigest(postCredentials);
       if (workflowOpaqueCredentialObjectsDigest(postCredentials, credentialOriginsBefore) !== workflowOpaqueCredentialsBefore) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
-      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions };
-      Object.assign(unsigned, { canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows) });
-      return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) }, rollbackWorkflows);
+      const targetRowCounts = Object.fromEntries(
+        [...canonicalSource.targets].map(([name, target]) => [name, target.rows.length]),
+      );
+      const unsigned = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: true, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions, canonical_source_sha256: canonicalSource.sha256, rollback_workflows_sha256: digest(rollbackWorkflows), target_digest: canonicalSource.targetDigest, target_projection_sha256: canonicalSource.targetProjectionSha256, target_readback_sha256: targetStateDigest(targetPlan.after), rollback_targets_sha256: digest(targetPlan.rollbackTargets), target_row_counts: targetRowCounts, preserved_table_writes: false };
+      unsigned.target_prestate = targetStateEvidence(targetPlan.before);
+      return await commitAndJournal({ ...unsigned, runtime_plan_receipt_sha256: digest({ ...unsigned, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) }, rollbackWorkflows, targetPlan.rollbackTargets);
     }
     if (forwardReceipt.project_id !== projectId || forwardReceipt.lock_resource !== lock.resource) {
       throw new Error('FORWARD_RUNTIME_RECEIPT_BINDING_INVALID');
@@ -1341,10 +1753,34 @@ async function execute() {
         !replayBoundRollback,
       );
     }
+    let rollbackTargetRows = null;
+    if (forwardReceipt.schema_version === RUNTIME_SCHEMA) {
+      const currentTargets = await loadTargetState(lock.client, canonicalSource.targets);
+      if ([...currentTargets].some(([name, table]) =>
+        !sameJson(table.userRows, canonicalSource.targets.get(name).rows)) ||
+          targetStateDigest(currentTargets) !== forwardReceipt.target_readback_sha256 ||
+          canonicalSource.targetProjectionSha256 !== forwardReceipt.target_projection_sha256 ||
+          canonicalSource.targetDigest !== forwardReceipt.target_digest) {
+        throw new Error('ROLLBACK_TARGET_STATE_DRIFT');
+      }
+      rollbackTargetRows = await loadRollbackTargets(
+        lock.client,
+        forwardReceipt,
+        canonicalSource.targets,
+      );
+    }
     const changed = new Map([...rollbackWorkflows].map(([id, workflow]) => [
       id, Object.fromEntries(WORKFLOW_BODY_FIELDS.map((field) => [field, workflow[field]])),
     ]));
     await updateWorkflows(lock.client, changed);
+    let restoredTargets = null;
+    if (rollbackTargetRows !== null) {
+      restoredTargets = await restoreTargetSnapshot(
+        lock.client,
+        canonicalSource.targets,
+        rollbackTargetRows,
+      );
+    }
     const restored = await loadWorkflows(lock.client, graph, false);
     const restoredCredentialOrigins = validateCredentialBindings(restored, credentialsByBinding);
     if (credentialOriginBitset(restoredCredentialOrigins) !== forwardReceipt.credential_origin_bitset) {
@@ -1360,9 +1796,24 @@ async function execute() {
     const workflowRevisionDigestAfter = workflowRevisionDigest(restored);
     if (workflowOpaqueCredentialObjectsDigest(postCredentials, expectedCredentialOrigins) !== workflowOpaqueCredentialsBeforeRollback) throw new Error('WORKFLOW_OPAQUE_CREDENTIAL_OBJECTS_CHANGED');
     const credentialOriginBitsetAfter = credentialOriginBitset(restoredCredentialOrigins);
-    const unsignedRollback = { schema_version: RUNTIME_SCHEMA, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: [...byId.values()].map((action) => { const leaf = credentialLeavesFromEnvironment().find((candidate) => candidate.key === `${action.workflow_id}:${action.node_id}`); return { reference_id: action.reference_id, workflow_id: action.workflow_id, node_id: action.node_id, restored: true, credential_origin: leaf ? expectedCredentialOrigins.get(leaf.key) : 'none', credential_tuple_digest: digest({ workflow_id: action.workflow_id, node_id: action.node_id, credential_type: leaf?.credential_type || '', placeholder: leaf?.placeholder || '' }) }; }) };
-    unsignedRollback.schema_version = forwardReceipt.schema_version;
-    return await commitAndJournal({ ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) });
+    if (restoredTargets !== null &&
+        !sameJson(targetStateEvidence(restoredTargets), forwardReceipt.target_prestate)) {
+      throw new Error('ROLLBACK_TARGET_PRESTATE_RESTORATION_MISMATCH');
+    }
+    const unsignedRollback = { schema_version: forwardReceipt.schema_version, operation, project_id: projectId, lock_resource: lock.resource, export_sha256: exported.export_sha256, ...lock.binding, ...credentialContractSummary(), action_count: 33, replay_noop: false, readback_verified: true, readback_digest_sha256: digest(readback), credential_state_digest_before: credentialsBefore.digest, credential_state_digest_after: credentialsAfter.digest, workflow_credential_objects_digest_before: workflowCredentialsBefore, workflow_credential_objects_digest_after: workflowCredentialsAfter, workflow_revision_digest_before: workflowRevisionDigestBefore, workflow_revision_digest_after: workflowRevisionDigestAfter, credential_origin_bitset: credentialOriginBitsetBefore, credential_origin_post_bitset: credentialOriginBitsetAfter, credential_origin_digest: credentialOriginDigest(credentialOriginBitsetBefore), credential_origin_post_digest: credentialOriginDigest(credentialOriginBitsetAfter), credential_ids_recorded: false, secret_values_recorded: false, actions: byId.size === 33 ? [...byId.values()] : [] };
+    if (forwardReceipt.schema_version === RUNTIME_SCHEMA) {
+      Object.assign(unsignedRollback, {
+        canonical_source_sha256: canonicalSource.sha256,
+        target_digest: forwardReceipt.target_digest,
+        target_projection_sha256: forwardReceipt.target_projection_sha256,
+        target_readback_sha256: targetStateDigest(restoredTargets),
+        rollback_targets_sha256: forwardReceipt.rollback_targets_sha256,
+        target_rows_restored: true,
+        preserved_table_writes: false,
+      });
+    }
+    const rollbackReceipt = { ...unsignedRollback, runtime_plan_receipt_sha256: digest({ ...unsignedRollback, durable_journal: true, commit_protocol: 'postgresql_synchronous_wal' }) };
+    return await commitAndJournal(rollbackReceipt, null, restoredTargets === null ? null : targetSnapshot(restoredTargets));
   } catch (error) {
     // PostgreSQL transaction rollback is the only compensation path. A second
     // application update could itself fail or create a new revision.

@@ -1912,6 +1912,7 @@ try {{
         raw = load_json(ROOT / "tests" / "fixtures" / "n8n-2.36.2-data-table-digest-output.json")["raw_stdout"]
         prefix = "finance data table digest verified:"
         payload = json.loads(next(line[len(prefix):] for line in raw.splitlines() if line.startswith(prefix)))
+        payload["phase"] = "FORWARD_POST"
         Draft202012Validator(schema).validate(payload)
         self.assertEqual([table["row_count"] for table in payload["tables"]], [4, 3, 5, 5])
         self.assertFalse(payload["migration_receipt"]["bound"])

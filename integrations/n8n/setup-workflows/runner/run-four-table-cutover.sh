@@ -216,7 +216,7 @@ run_runtime() {
     receipt_schema="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["forward_runtime_receipt_schema"])' "$receipt_dir/finance-four-table-precondition.json")"
     case "$receipt_schema" in
     finance-four-table-runtime-plan-v1) runtime_input="$forward_runtime_receipt" ;;
-    finance-four-table-runtime-plan-v2) ;;
+    finance-four-table-runtime-plan-v2 | finance-four-table-runtime-plan-v3) ;;
     *)
       echo "FORWARD_RUNTIME_RECEIPT_SCHEMA_INVALID" >&2
       return 1
@@ -282,7 +282,7 @@ run_runtime() {
   grep -F '"durable_journal":true' "$runtime_json" >/dev/null
   grep -F '"commit_protocol":"postgresql_synchronous_wal"' "$runtime_json" >/dev/null
   if [[ "$operation" = forward ]]; then
-    test -f "$forward_runtime_receipt"
+    cp -- "$runtime_json" "$forward_runtime_receipt"
     chmod 0600 "$forward_runtime_receipt"
   fi
 }
@@ -329,6 +329,7 @@ run_rollback_restore() {
     --workflow-root "$workflow_root" \
     --live-export "$live_export" \
     --lock-receipt "$lock_receipt" \
+    --forward-runtime-receipt "$forward_runtime_receipt" \
     --runtime-state "$runtime_state" \
     --output "$runtime_proof" >/dev/null
   chmod 0600 "$runtime_state" "$runtime_proof"
@@ -408,6 +409,7 @@ args=(
   --pre-readback-raw "$pre_readback"
   --post-readback-raw "$post_readback"
   --runtime-state "$runtime_state"
+  --forward-runtime-receipt "$forward_runtime_receipt"
   --output "$cutover_receipt"
 )
 if [[ "$operation" = forward ]]; then

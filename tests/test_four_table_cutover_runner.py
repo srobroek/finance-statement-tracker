@@ -106,6 +106,291 @@ def run_cjs_validation(
     )
 
 
+def target_runtime_harness() -> str:
+    source = CJS_RUNNER.read_text(encoding="utf-8")
+    target_helpers = source[
+        source.index("function quoteIdentifier") : source.index(
+            "async function verifyInFlight"
+        )
+    ]
+    rollback_helpers = source[
+        source.index("function validateRollbackTargets") : source.index(
+            "function validateLockReceipt"
+        )
+    ]
+    execute = source[
+        source.index("async function execute()") : source.index(
+            "async function writeRuntimeReceipt"
+        )
+    ]
+    preamble = r"""
+const crypto = require('node:crypto');
+let operation = 'FORWARD';
+const projectId = 'project-1';
+const JOURNAL_TABLE = 'finance_four_table_cutover_journal';
+const LEGACY_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v1';
+const PREVIOUS_RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v2';
+const RUNTIME_SCHEMA = 'finance-four-table-runtime-plan-v3';
+const TARGET_NAMES = new Set([
+  'finance_ingestion_state',
+  'finance_documents',
+  'finance_actual_batches',
+  'finance_ai_reviews',
+]);
+const TARGET_SYSTEM_COLUMNS = ['id', 'createdAt', 'updatedAt'];
+const WORKFLOW_BODY_FIELDS = ['marker'];
+const canonical = (value) => {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+  }
+  return value;
+};
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const digest = (value) => crypto.createHash('sha256').update(`${JSON.stringify(canonical(value))}\n`).digest('hex');
+const digestWithoutNewline = (value) => crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+const sameJson = (left, right) => JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+function exactKeys(value, expected, code) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      Object.keys(value).sort().join(',') !== [...expected].sort().join(',')) throw new Error(code);
+}
+const columnsByName = new Map([
+  ['finance_actual_batches', [{ name: 'idempotency_key', type: 'string' }]],
+  ['finance_ai_reviews', [{ name: 'idempotency_key', type: 'string' }]],
+  ['finance_documents', [{ name: 'document_id', type: 'string' }]],
+  ['finance_ingestion_state', [{ name: 'source_code', type: 'string' }]],
+]);
+const valuesByName = new Map([
+  ['finance_actual_batches', [{ idempotency_key: 'batch-1' }]],
+  ['finance_ai_reviews', [{ idempotency_key: 'review-1' }]],
+  ['finance_documents', [{ document_id: 'document-1' }]],
+  ['finance_ingestion_state', [{ source_code: 'outlook' }]],
+]);
+const targets = new Map([...TARGET_NAMES].sort().map((name) => [name, {
+  name,
+  tableId: `target-${name}`,
+  columns: columnsByName.get(name),
+  schema_sha256: digestWithoutNewline(columnsByName.get(name)),
+  rows: valuesByName.get(name),
+}]));
+const graph = {
+  targetIds: new Map([...targets].map(([name, target]) => [name, target.tableId])),
+  workflows: new Map([['wf', 'legacy-revision']]),
+  workflowBodyDigests: new Map([['wf', 'body']]),
+};
+let workflowState = { id: 'wf', marker: 'legacy', versionId: 'legacy-revision', nodes: [], active: false };
+let rowsById = new Map([...targets.values()].map((target) => [target.tableId, []]));
+let transactionSnapshot = null;
+let persisted = [];
+let emitted = null;
+let forwardReceipt = null;
+let forwardRollbackTargets = null;
+const mutationSql = [];
+const client = {
+  async query(sql, parameters = []) {
+    const text = String(sql);
+    if (text === 'COMMIT') {
+      transactionSnapshot = null;
+      return { rows: [] };
+    }
+    if (text === 'ROLLBACK') {
+      if (transactionSnapshot) {
+        rowsById = new Map(transactionSnapshot.rows.map(([id, rows]) => [id, clone(rows)]));
+        workflowState = clone(transactionSnapshot.workflow);
+      }
+      transactionSnapshot = null;
+      return { rows: [] };
+    }
+    if (text.includes('FROM data_table\n')) {
+      return { rows: [...targets.values()].map((target) => ({ id: target.tableId, name: target.name })) };
+    }
+    if (text.includes('FROM data_table_column')) {
+      return { rows: [...targets.values()].flatMap((target) =>
+        target.columns.map((column, index) => ({ table_id: target.tableId, ...column, index }))) };
+    }
+    if (text.startsWith('SELECT * FROM ')) {
+      const tableId = text.match(/data_table_user_(target-[^"]+)/)[1];
+      return { rows: clone(rowsById.get(tableId)) };
+    }
+    if (text.startsWith('DELETE FROM ')) {
+      mutationSql.push(text);
+      const tableId = text.match(/data_table_user_(target-[^"]+)/)[1];
+      rowsById.set(tableId, []);
+      return { rows: [] };
+    }
+    if (text.startsWith('INSERT INTO ')) {
+      mutationSql.push(text);
+      const tableId = text.match(/data_table_user_(target-[^"]+)/)[1];
+      const fieldText = text.match(/\n\s*\(([^)]+)\)\n\s*OVERRIDING SYSTEM VALUE/)[1];
+      const fields = fieldText.split(',').map((field) => field.trim().replaceAll('"', ''));
+      const rows = rowsById.get(tableId);
+      for (let offset = 0; offset < parameters.length; offset += fields.length) {
+        const row = Object.fromEntries(fields.map((field, index) => [field, parameters[offset + index]]));
+        row.createdAt ??= '2026-01-01T00:00:00.000Z';
+        row.updatedAt ??= '2026-01-01T00:00:00.000Z';
+        rows.push(row);
+      }
+      return { rows: [] };
+    }
+    if (text.startsWith('SELECT rollback_targets')) {
+      return { rows: [{ rollback_targets: clone(forwardRollbackTargets) }] };
+    }
+    return { rows: [] };
+  },
+  async end() {},
+};
+function decode(name) {
+  if (name === 'FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64') return forwardReceipt;
+  return { export_sha256: 'export', references: [] };
+}
+function validateExport() { return graph; }
+function canonicalSourceFromInput() {
+  return {
+    workflows: new Map([['wf', { id: 'wf', marker: 'canonical' }]]),
+    targets,
+    sha256: 'canonical-source',
+    targetProjectionSha256: 'projection',
+    targetDigest: 'target-digest',
+  };
+}
+async function acquireProjectLock() {
+  transactionSnapshot = {
+    rows: [...rowsById].map(([id, rows]) => [id, clone(rows)]),
+    workflow: clone(workflowState),
+  };
+  return {
+    client,
+    resource: 'finance_four_table_cutover:project-1',
+    binding: {
+      operation_nonce: 'nonce',
+      protected_quiescence_receipt_digest: 'q'.repeat(64),
+      required_live_export_digest: 'e'.repeat(64),
+      contract_bijection_digest: 'b'.repeat(64),
+    },
+  };
+}
+async function verifyInFlight() {}
+async function credentialState() { return { values: [], digest: 'c'.repeat(64) }; }
+function validateCredentialBindings() { return new Map(); }
+function credentialOriginBitset() { return ''; }
+function workflowCredentialObjectsDigest() { return 'd'.repeat(64); }
+function workflowRevisionDigest() { return workflowState.versionId; }
+function workflowOpaqueCredentialObjectsDigest() { return 'o'.repeat(64); }
+function allCredentialOrigins() { return true; }
+function credentialOriginsFromBitset() { return new Map(); }
+function credentialOriginDigest(value) { return digest(value); }
+function credentialBindingForNode() { return null; }
+function credentialContractSummary() {
+  return { credential_contract_digest: digest([]), credential_binding_count: 0, credential_leaf_count: 0 };
+}
+function credentialLeavesFromEnvironment() { return []; }
+function assertWorkflow() {}
+async function loadWorkflows() { return new Map([['wf', clone(workflowState)]]); }
+function findReferences() {
+  return Array.from({ length: 33 }, (_, index) => ({
+    reference: {
+      reference_id: `ref-${index}`,
+      workflow_id: 'wf',
+      revision_id: 'legacy-revision',
+      node_id: `node-${index}`,
+      canonical_table_id: 'target-finance_documents',
+    },
+    workflow: clone(workflowState),
+    node: {},
+    selector: 'legacy',
+    oldMatches: workflowState.marker === 'legacy',
+    targetMatches: workflowState.marker === 'canonical',
+  }));
+}
+function applyForward() {
+  const alreadyApplied = workflowState.marker === 'canonical';
+  return {
+    alreadyApplied,
+    expected: new Map([['wf', { id: 'wf', marker: 'canonical' }]]),
+    changed: alreadyApplied ? new Map() : new Map([['wf', { marker: 'canonical' }]]),
+  };
+}
+function workflowReadback(workflows) {
+  return [...workflows.values()].map((workflow) => ({ marker: workflow.marker }));
+}
+async function updateWorkflows(_client, changed) {
+  if (changed.size > 0) workflowState = { ...workflowState, marker: changed.get('wf').marker };
+  workflowState.versionId = workflowState.marker === 'canonical' ? 'canonical-revision' : 'legacy-revision';
+}
+async function persistRecoveryJournal(_client, receipt, rollbackWorkflows, rollbackTargets) {
+  persisted.push({ receipt, rollbackWorkflows: clone(rollbackWorkflows), rollbackTargets: clone(rollbackTargets) });
+  if (receipt.operation === 'FORWARD') {
+    forwardReceipt = receipt;
+    forwardRollbackTargets = clone(rollbackTargets);
+  }
+}
+async function loadForwardReplayJournal(_client, _graph, _lock, source, _exported, _readback, state) {
+  if (state.targetReadbackDigest !== forwardReceipt.target_readback_sha256 ||
+      source.targetProjectionSha256 !== forwardReceipt.target_projection_sha256) {
+    throw new Error('FORWARD_REPLAY_TARGET_STATE_MISMATCH');
+  }
+  return forwardReceipt;
+}
+async function loadRollbackWorkflows() {
+  return new Map([['wf', { id: 'wf', marker: 'legacy' }]]);
+}
+function validateForwardReceipt() {}
+function replayValidationExport(value) { return value; }
+function validateBinding() {}
+async function verifyLegacyForwardJournal() {}
+function rollbackSelectorReceipt() { throw new Error('legacy rollback unavailable'); }
+async function writeRuntimeReceipt(receipt) { emitted = receipt; }
+"""
+    scenario = r"""
+(async () => {
+  const mode = process.argv[1] || 'roundtrip';
+  if (mode === 'failure') {
+    process.env.FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_TARGET = 'finance_documents';
+    try {
+      await execute();
+      process.exit(20);
+    } catch (error) {
+      if (error.message !== 'INJECTED_FAILURE_AFTER_TARGET:finance_documents') throw error;
+    }
+    if ([...rowsById.values()].some((rows) => rows.length !== 0) ||
+        workflowState.marker !== 'legacy' || persisted.length !== 0) process.exit(21);
+    delete process.env.FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_TARGET;
+    const recovered = await execute();
+    const recoveredState = await loadTargetState(client, targets);
+    if ([...recoveredState].some(([name, table]) => !sameJson(table.userRows, targets.get(name).rows)) ||
+        targetStateDigest(recoveredState) !== recovered.target_readback_sha256) process.exit(22);
+    process.stdout.write('failure-atomic');
+    return;
+  }
+  const first = await execute();
+  const forwardState = await loadTargetState(client, targets);
+  if ([...forwardState].some(([name, table]) =>
+    !sameJson(table.userRows, targets.get(name).rows) ||
+    table.systemRows.some((row) => row.id >= 0))) process.exit(2);
+  if (first.preserved_table_writes !== false ||
+      first.target_readback_sha256 !== targetStateDigest(forwardState) ||
+      first.rollback_targets_sha256 !== digest(forwardRollbackTargets) ||
+      !sameJson(first.target_row_counts, Object.fromEntries(
+        [...targets].map(([name, target]) => [name, target.rows.length]),
+      )) ||
+      persisted.length !== 1) process.exit(3);
+  const mutationCount = mutationSql.length;
+  const replay = await execute();
+  if (replay !== first || mutationSql.length !== mutationCount || persisted.length !== 1) process.exit(4);
+  operation = 'ROLLBACK';
+  const rollback = await execute();
+  if ([...rowsById.values()].some((rows) => rows.length !== 0) ||
+      workflowState.marker !== 'legacy' ||
+      rollback.target_rows_restored !== true ||
+      rollback.preserved_table_writes !== false) process.exit(5);
+  if (mutationSql.some((sql) => /finance_(source|archive|pipeline|mcp|reconciliations)/.test(sql))) process.exit(6);
+  process.stdout.write('roundtrip');
+})().catch((error) => { console.error(error); process.exit(1); });
+"""
+    return preamble + target_helpers + rollback_helpers + execute + scenario
+
+
 class FourTableCutoverRunnerTests(unittest.TestCase):
     def test_python_runner_preserves_four_targets_and_source_contract(self) -> None:
         runner = load_runner()
@@ -350,6 +635,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             '"bound":true,"sha256":"' + "a" * 64 + '"',
             1,
         )
+        raw = raw.replace('"scope":', '"phase":"FORWARD_POST","scope":', 1)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "readback.raw"
             path.write_text(raw, encoding="utf-8")
@@ -471,15 +757,15 @@ assertAllowedProjectTables({{ count: tables.length, data: tables }});
 const observedTargets = CANONICAL_TABLE_NAMES.map((name) => ({{ name, row_count: 0 }}));
 const forwardPre = readbackReceipt('FORWARD_PRE', observedTargets, 0);
 if (forwardPre.status !== 'FORWARD_PRE_READBACK' ||
-    forwardPre.finance_tables !== 0 || forwardPre.tables.length !== 0) process.exit(2);
+    forwardPre.finance_tables !== 4 || forwardPre.tables.length !== 4) process.exit(2);
 const rollbackPre = readbackReceipt('ROLLBACK_PRE', observedTargets, 0);
 if (rollbackPre.status !== 'VERIFIED' || rollbackPre.finance_tables !== 4) process.exit(3);
-try {{
-  readbackReceipt('FORWARD_PRE', [{{ ...observedTargets[0], row_count: 1 }}, ...observedTargets.slice(1)], 1);
-  process.exit(5);
-}} catch (error) {{
-  if (error.message !== 'FORWARD_PRE_READBACK_MUST_BE_OBSERVED_EMPTY') throw error;
-}}
+const replayPre = readbackReceipt(
+  'FORWARD_PRE',
+  [{{ ...observedTargets[0], row_count: 1 }}, ...observedTargets.slice(1)],
+  1,
+);
+if (replayPre.finance_tables !== 4 || replayPre.total_rows !== 1) process.exit(5);
 try {{
   assertTargetSchemaDigest('finance_documents', [{{ name: 'wrong', type: 'string' }}]);
   process.exit(6);
@@ -523,10 +809,6 @@ try {{
             {
                 "status": "FORWARD_PRE_READBACK",
                 "phase": "FORWARD_PRE",
-                "finance_tables": 0,
-                "tables": [],
-                "total_rows": 0,
-                "digest_sha256": hashlib.sha256(b"[]").hexdigest(),
             }
         )
         schema = json.loads(
@@ -543,7 +825,7 @@ try {{
             path = Path(temporary) / "pre.raw"
             path.write_text(prefix + json.dumps(payload, separators=(",", ":")) + "\n")
             observed = runner._parse_readback(path, "a" * 64, "FORWARD_PRE")
-            self.assertEqual(observed["finance_tables"], 0)
+            self.assertEqual(observed["finance_tables"], 4)
             with self.assertRaisesRegex(runner.CutoverError, "READBACK_PHASE_MISMATCH"):
                 runner._parse_readback(path, "a" * 64, "ROLLBACK_PRE")
 
@@ -658,6 +940,9 @@ const original = {{
   export_sha256: 'original-export',
   readback_digest_sha256: digest(originalReadback),
   rollback_workflows_sha256: digest(originalRollback),
+  target_readback_sha256: 'target-state',
+  target_projection_sha256: 'projection',
+  target_digest: 'target-digest',
   credential_state_digest_after: 'credential-state',
   workflow_credential_objects_digest_after: 'workflow-credentials',
   workflow_revision_digest_after: 'workflow-revisions',
@@ -686,8 +971,8 @@ const lock = {{
       this.queries.push(sql);
       if (String(sql).startsWith('SELECT receipt')) return {{
         rows: [
-          {{ receipt: original, rollback_workflows: originalRollback }},
-          {{ receipt: replacement, rollback_workflows: [{{ id: 'wf', marker: 'canonical' }}] }},
+          {{ receipt: original, rollback_workflows: originalRollback, rollback_targets: [] }},
+          {{ receipt: replacement, rollback_workflows: [{{ id: 'wf', marker: 'canonical' }}], rollback_targets: [] }},
         ],
       }};
       return {{ rows: [] }};
@@ -701,7 +986,7 @@ let persisted = 0;
 let emitted = null;
 function decode() {{ return exported; }}
 function validateExport() {{ return graph; }}
-function canonicalSourceFromInput() {{ return {{ workflows: canonical, sha256: 'canonical-source' }}; }}
+function canonicalSourceFromInput() {{ return {{ workflows: canonical, targets: new Map(), sha256: 'canonical-source', targetProjectionSha256: 'projection', targetDigest: 'target-digest' }}; }}
 async function acquireProjectLock() {{ return lock; }}
 async function verifyInFlight() {{}}
 async function verifyTargets() {{}}
@@ -720,11 +1005,14 @@ function findReferences(_graph, workflows) {{
   }}];
 }}
 function applyForward() {{ return {{ alreadyApplied: true, expected: canonical, changed: new Map() }}; }}
+async function applyTargetProjection() {{ return {{ alreadyApplied: true, after: new Map() }}; }}
+function targetStateDigest() {{ return 'target-state'; }}
 function workflowReadback() {{ return originalReadback; }}
 function sameJson(left, right) {{ return JSON.stringify(left) === JSON.stringify(right); }}
 function allCredentialOrigins() {{ return true; }}
 async function persistRecoveryJournal() {{ persisted += 1; }}
 function validateBinding() {{}}
+function validateRollbackTargets() {{}}
 function validateForwardReceipt(receipt, historicalExport) {{
   if (historicalExport.export_sha256 !== receipt.export_sha256) throw new Error('historical export not rebound');
 }}
@@ -792,6 +1080,7 @@ lock_receipt=/receipts/lock.json
 runtime_state=/receipts/state.json
 runtime_proof=/receipts/proof.json
 log="$PWD/rollback-runtime.log"
+forward_runtime_receipt=/receipts/runtime-forward.json
 python3() {{ printf '%s\\n' "$*" >"$log"; }}
 chmod() {{ :; }}
 run_rollback_restore
@@ -807,6 +1096,73 @@ grep -F -- '--output /receipts/proof.json' "$log" >/dev/null
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_nonempty_target_rows_replay_and_rollback_through_runtime_execute(
+        self,
+    ) -> None:
+        result = subprocess.run(
+            ["node", "-e", target_runtime_harness(), "roundtrip"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "roundtrip")
+
+    def test_injected_target_failure_is_atomic_through_runtime_execute(self) -> None:
+        result = subprocess.run(
+            ["node", "-e", target_runtime_harness(), "failure"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "failure-atomic")
+
+    def test_nonempty_source_projects_into_bound_runtime_bundle(self) -> None:
+        cutover = load_runner()
+        migration = cutover._load_migration_module()
+        source = {
+            "finance_source_cursors": [
+                {
+                    "source_code": "MAIL",
+                    "cursor_value": "2026-08-01",
+                    "committed_run_id": "run-1",
+                    "cursor_version": 2,
+                    "readback_verified": True,
+                }
+            ],
+            "finance_acquisition_receipts": [],
+            "finance_archive_receipts": [],
+            "finance_document_operations": [],
+            "finance_actual_outbox": [],
+            "finance_actual_verifications": [],
+            "finance_reconciliations": [],
+            "finance_agent_jobs": [],
+        }
+        migration_runner = migration.MigrationRunner(source)
+        migration_receipt = migration_runner.run()
+        bundle = cutover._canonical_runtime_source_bundle(
+            SimpleNamespace(workflow_root=ROOT / "integrations" / "n8n" / "workflows"),
+            source_head="0" * 40,
+            generator_head="1" * 40,
+            identity_digest="2" * 64,
+            source_backup_sha256="3" * 64,
+            migration_receipt_sha256="4" * 64,
+            migration_receipt=migration_receipt,
+            runner=migration_runner,
+            matrix=cutover._load_matrix(),
+        )
+        targets = {target["name"]: target for target in bundle["targets"]}
+        self.assertEqual(
+            bundle["schema_version"], "finance-four-table-canonical-source-v2"
+        )
+        self.assertEqual(targets["finance_ingestion_state"]["row_count"], 1)
+        self.assertEqual(
+            targets["finance_ingestion_state"]["rows"][0]["source_code"], "MAIL"
+        )
 
 
 if __name__ == "__main__":

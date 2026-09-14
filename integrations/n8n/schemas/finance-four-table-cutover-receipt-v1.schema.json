@@ -36,7 +36,7 @@
         "reference_rewrite": {
           "properties": {"verified": {"const": true}}
         },
-        "pre_readback": {"$ref": "#/$defs/forward_pre_readback"},
+        "pre_readback": {"properties": {"phase": {"const": "FORWARD_PRE"}}},
         "readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
         "post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}},
         "second_post_readback": {"properties": {"phase": {"const": "FORWARD_POST"}}}
@@ -55,7 +55,11 @@
         "post_readback",
         "second_post_readback",
         "runtime_execution",
-        "runtime_action"
+        "runtime_action",
+        "forward_runtime_receipt_sha256",
+        "target_projection_sha256",
+        "rollback_targets_sha256",
+        "target_rows_applied"
       ]
     },
     {
@@ -76,7 +80,11 @@
         "pre_readback",
         "post_readback",
         "runtime_execution",
-        "runtime_action"
+        "runtime_action",
+        "forward_runtime_receipt_sha256",
+        "target_projection_sha256",
+        "rollback_targets_sha256",
+        "target_rows_restored"
       ]
     }
   ],
@@ -101,6 +109,11 @@
     "restored_source_digest": {"$ref": "#/$defs/digest"},
     "target_digest": {"$ref": "#/$defs/digest"},
     "target_schema_sha256": {"$ref": "#/$defs/digest"},
+    "forward_runtime_receipt_sha256": {"$ref": "#/$defs/digest"},
+    "target_projection_sha256": {"$ref": "#/$defs/digest"},
+    "rollback_targets_sha256": {"$ref": "#/$defs/digest"},
+    "target_rows_applied": {"const": true},
+    "target_rows_restored": {"const": true},
     "side_by_side_created": {"const": true},
     "target_tables": {
       "type": "array",
@@ -137,22 +150,16 @@
       }
     },
     "second_run_noop": {"const": true},
-    "first_run_created": {"const": true},
+    "first_run_created": {"type": "boolean"},
     "readback": {"$ref": "#/$defs/readback"},
-    "pre_readback": {
-      "oneOf": [
-        {"$ref": "#/$defs/forward_pre_readback"},
-        {"$ref": "#/$defs/rollback_pre_readback"},
-        {"$ref": "#/$defs/readback"}
-      ]
-    },
+    "pre_readback": {"$ref": "#/$defs/readback"},
     "post_readback": {"$ref": "#/$defs/readback"},
     "second_post_readback": {"$ref": "#/$defs/readback"},
     "runtime_execution": {"const": true},
     "runtime_action": {"type": "string", "minLength": 1},
     "restore_roundtrip": {"const": true},
     "pre_delete": {"const": true},
-    "target_tables_untouched": {"const": true},
+    "target_tables_untouched": {"const": false},
     "old_tables_preserved": {"const": true},
     "runtime_cutover": {"const": false},
     "deletion_authorized": {"const": false},
@@ -209,7 +216,7 @@
       "required": ["verified", "phase", "digest_sha256", "finance_tables", "total_rows", "tables"],
       "properties": {
         "verified": {"const": true},
-        "phase": {"enum": ["FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"]},
+        "phase": {"enum": ["FORWARD_PRE", "FORWARD_POST", "ROLLBACK_PRE", "ROLLBACK_POST"]},
         "digest_sha256": {"$ref": "#/$defs/digest"},
         "finance_tables": {"const": 4},
         "total_rows": {"type": "integer", "minimum": 0},

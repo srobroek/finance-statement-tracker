@@ -117,14 +117,12 @@ function readbackReceipt(phase, tables, totalRows) {
     throw new Error(`DATA_TABLE_READBACK_PHASE_INVALID:${phase}`);
   }
   const forwardPre = phase === 'FORWARD_PRE';
-  if (forwardPre && (
-    tables.length !== CANONICAL_TABLES.size
-    || totalRows !== 0
-    || tables.some((table) => table.row_count !== 0)
-  )) {
-    throw new Error('FORWARD_PRE_READBACK_MUST_BE_OBSERVED_EMPTY');
+  if (tables.length !== CANONICAL_TABLES.size ||
+      tables.some((table) => !Number.isInteger(table.row_count) || table.row_count < 0) ||
+      totalRows !== tables.reduce((count, table) => count + table.row_count, 0)) {
+    throw new Error('DATA_TABLE_READBACK_TARGET_SET_INVALID');
   }
-  const receiptTables = forwardPre ? [] : tables;
+  const receiptTables = tables;
   return {
     schema_version: 1,
     receipt_contract: 'finance-data-table-readback-receipt-v1',
@@ -197,7 +195,9 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
         if (!Array.isArray(page.data) || page.data.length > 1000) throw new Error('DATA_TABLE_ROW_PAGE_INVALID');
         if (expectedCount === null) expectedCount = page.count;
         if (page.count !== expectedCount) throw new Error(`DATA_TABLE_ROW_COUNT_DRIFT:${table.name}`);
-        rows.push(...page.data.map((row) => JSON.stringify(canonical(row))));
+        rows.push(JSON.stringify(canonical(Object.fromEntries(
+          schema.map((column) => [column.name, row[column.name] ?? null]),
+        ))));
         skip += page.data.length;
         if (skip >= page.count) break;
         if (page.data.length === 0) throw new Error('DATA_TABLE_PAGINATION_STALLED');
