@@ -274,7 +274,7 @@ def _timestamp(value: Any, name: str) -> str:
 
 def _confidence(value: Any) -> float:
     if isinstance(value, bool):
-        raise ValueError("confidence must be a finite number between 0 and 1")
+        raise TypeError("confidence must be a finite number between 0 and 1")
     try:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
@@ -637,7 +637,7 @@ class LedgerObservation:
         object.__setattr__(self, "observation_hash", expected)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "LedgerObservation":
+    def from_mapping(cls, value: Mapping[str, Any]) -> LedgerObservation:
         data = _strict_mapping(value, _OBSERVATION_FIELDS, "LedgerObservation")
         required = (
             "observation_id",
@@ -765,7 +765,7 @@ class CandidateEnvelope:
         object.__setattr__(self, "candidate_hash", expected)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "CandidateEnvelope":
+    def from_mapping(cls, value: Mapping[str, Any]) -> CandidateEnvelope:
         data = _strict_mapping(value, _CANDIDATE_FIELDS, "CandidateEnvelope")
         required = (
             "candidate_id",
@@ -881,7 +881,7 @@ class ProposalEnvelope:
         object.__setattr__(self, "proposal_hash", expected)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ProposalEnvelope":
+    def from_mapping(cls, value: Mapping[str, Any]) -> ProposalEnvelope:
         data = _strict_mapping(value, _PROPOSAL_FIELDS, "ProposalEnvelope")
         required = (
             "proposal_id",
@@ -982,7 +982,7 @@ class EffectEnvelope:
         object.__setattr__(self, "effect_hash", expected)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "EffectEnvelope":
+    def from_mapping(cls, value: Mapping[str, Any]) -> EffectEnvelope:
         data = _strict_mapping(value, _EFFECT_FIELDS, "EffectEnvelope")
         required = (
             "effect_id",
@@ -1070,7 +1070,7 @@ class FeedbackEnvelope:
         object.__setattr__(self, "feedback_hash", expected)
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "FeedbackEnvelope":
+    def from_mapping(cls, value: Mapping[str, Any]) -> FeedbackEnvelope:
         data = _strict_mapping(value, _FEEDBACK_FIELDS, "FeedbackEnvelope")
         required = (
             "feedback_id",
@@ -1140,21 +1140,21 @@ __all__ = [
     "CANDIDATE_KINDS",
     "DECISIONS",
     "DETERMINISTIC_WRITABLE_FIELDS",
-    "EffectEnvelope",
-    "EffectPolicy",
-    "FeedbackEnvelope",
     "FORBIDDEN_SIDE_EFFECT_CAPABILITIES",
-    "LedgerObservation",
     "POLICY_A_EFFECT_MATRIX",
     "PROTECTED_ACTUAL_STRUCTURAL_FIELDS",
     "PROTECTED_ECONOMIC_FIELDS",
     "PROTECTED_FIELDS",
     "PROTECTED_IDENTITY_FIELDS",
-    "ProposalEnvelope",
     "SCHEMA_VERSION",
     "SUGGESTION_ONLY_FIELDS",
     "TARGET_KINDS",
     "CandidateEnvelope",
+    "EffectEnvelope",
+    "EffectPolicy",
+    "FeedbackEnvelope",
+    "LedgerObservation",
+    "ProposalEnvelope",
     "canonical_json",
     "canonical_sha256",
     "sha256",

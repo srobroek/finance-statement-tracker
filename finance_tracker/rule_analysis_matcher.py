@@ -21,8 +21,8 @@ from .rule_analysis_reasons import (
     reason_record,
 )
 from .rule_analysis_schema import (
-    LedgerObservation,
     SCHEMA_VERSION,
+    LedgerObservation,
     canonical_json,
     sha256,
 )
