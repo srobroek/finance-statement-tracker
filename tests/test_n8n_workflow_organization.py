@@ -29,7 +29,9 @@ def load_organizer():
 
 
 def load_sql_generator():
-    spec = importlib.util.spec_from_file_location("finance_workflow_sql_generator", SQL_GENERATOR_SOURCE)
+    spec = importlib.util.spec_from_file_location(
+        "finance_workflow_sql_generator", SQL_GENERATOR_SOURCE
+    )
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load {SQL_GENERATOR_SOURCE}")
     module = importlib.util.module_from_spec(spec)
@@ -83,7 +85,9 @@ class WorkflowOrganizationTests(unittest.TestCase):
             *sorted((root / "generated").glob("*.json")),
         ]
         for path in owned:
-            self.assertNotIn("finance_ai_review_queue", path.read_text(encoding="utf-8"), path)
+            self.assertNotIn(
+                "finance_ai_review_queue", path.read_text(encoding="utf-8"), path
+            )
 
     def test_canonical_export_identity_is_checked_and_reported(self):
         o = self.organizer
@@ -120,7 +124,9 @@ class WorkflowOrganizationTests(unittest.TestCase):
         update = re.search(r"UPDATE workflow_entity w.*?;", sql, flags=re.DOTALL)
         self.assertIsNotNone(update)
         update_sql = update.group(0)
-        self.assertIn('SET "parentFolderId" = c.folder_id, "updatedAt" = NOW()', update_sql)
+        self.assertIn(
+            'SET "parentFolderId" = c.folder_id, "updatedAt" = NOW()', update_sql
+        )
         self.assertNotIn("active =", update_sql)
         self.assertNotIn('"activeVersionId" =', update_sql)
         self.assertNotIn("name =", update_sql)
@@ -192,7 +198,7 @@ INSERT INTO shared_workflow VALUES
                     "--command",
                     f'SET search_path TO "{schema}"',
                     "--command",
-                    f'\\i {N8N / "workflow-folder-placement.sql"}',
+                    f"\\i {N8N / 'workflow-folder-placement.sql'}",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -254,19 +260,26 @@ INSERT INTO shared_workflow VALUES
             self.assertIn(row["target_name"], sql)
             self.assertIn(row["folder_id"], sql)
 
-    def test_both_sql_outputs_are_byte_identical_to_canonical_contract_renderer(self):
+    def test_generated_organization_outputs_are_current_and_preserve_pins(self):
         generator = load_sql_generator()
         rendered = generator.render_outputs()
-        self.assertEqual(
-            set(rendered),
-            {
-                N8N / "workflow-folder-placement.sql",
-                N8N / "workflow-organization-cutover.sql",
-            },
+
+        self.assertIn(generator.PLACEMENT_OUTPUT, rendered)
+        self.assertIn(generator.CUTOVER_OUTPUT, rendered)
+        self.assertIn(generator.ORGANIZER, rendered)
+        organizer = rendered[generator.ORGANIZER]
+        self.assertIn(
+            f'CANONICAL_EXPORT_SHA256 = "{self.organizer.CANONICAL_EXPORT_SHA256}"',
+            organizer,
+        )
+        self.assertIn(
+            f'CANONICAL_PERSISTED_BODY_MD5 = "{self.organizer.CANONICAL_PERSISTED_BODY_MD5}"',
+            organizer,
         )
         for path, expected in rendered.items():
             self.assertEqual(path.read_text(encoding="utf-8"), expected)
             self.assertNotIn("{{", expected)
+
         completed = subprocess.run(
             [sys.executable, str(SQL_GENERATOR_SOURCE), "--check"],
             cwd=ROOT,
@@ -278,8 +291,18 @@ INSERT INTO shared_workflow VALUES
 
     def test_sql_do_blocks_read_context_instead_of_using_psql_variables(self):
         cases = (
-            ("workflow-folder-placement.sql", "application_project_id", "application_folder_context", 2),
-            ("workflow-organization-cutover.sql", "finance_project_id", "finance_organization_context", 3),
+            (
+                "workflow-folder-placement.sql",
+                "application_project_id",
+                "application_folder_context",
+                2,
+            ),
+            (
+                "workflow-organization-cutover.sql",
+                "finance_project_id",
+                "finance_organization_context",
+                3,
+            ),
         )
         for filename, variable, context, minimum_context_blocks in cases:
             with self.subTest(filename=filename):
@@ -309,11 +332,14 @@ INSERT INTO shared_workflow VALUES
             "ORPHAN_WORKFLOW_DELETE_COUNT_MISMATCH",
         ):
             self.assertIn(marker, sql)
+
     def test_sql_rehearsal_runs_against_postgres_when_configured(self):
         dsn = os.environ.get("FINANCE_WORKFLOW_SQL_DSN")
         project_id = os.environ.get("FINANCE_WORKFLOW_PROJECT_ID")
         if not dsn or not project_id or shutil.which("psql") is None:
-            self.skipTest("set FINANCE_WORKFLOW_SQL_DSN and FINANCE_WORKFLOW_PROJECT_ID for integration")
+            self.skipTest(
+                "set FINANCE_WORKFLOW_SQL_DSN and FINANCE_WORKFLOW_PROJECT_ID for integration"
+            )
         completed = subprocess.run(
             [
                 "psql",

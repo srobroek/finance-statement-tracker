@@ -557,8 +557,18 @@ function renderAttention(payload) {
   const root = document.querySelector("#attention");
   const alerts = [];
   (payload.alerts || []).forEach((alert) => alerts.push(alert));
-  if (payload.data_status?.is_stale) {
-    alerts.push({ key: "feed:stale", title: "Live feed is stale", detail: `No successful ingest recorded within ${payload.data_status.stale_after_minutes} minutes. Recommendations may be incomplete.` });
+  const status = payload.data_status || {};
+  if (status.is_stale) {
+    const timezone = status.check_timezone || "Asia/Dubai";
+    const format = (value) => formatScheduledTime(value, timezone) || "unknown";
+    const last = format(status.last_successful_check_at || status.last_successful_ingest_at);
+    const due = format(status.expected_due_at || status.due_at);
+    const next = format(status.next_scheduled_check_at || status.next_check_at);
+    const checkStatus = String(status.check_status || "SCHEDULE_ERROR").replaceAll("_", " ").toLowerCase();
+    const detail = status.check_status === "OVERDUE"
+      ? `Scheduled feed check overdue. Due ${due}; last checked ${last}; next check ${next}.`
+      : `Scheduled feed ${checkStatus}. Last checked ${last}.`;
+    alerts.push({ key: "feed:stale", title: "Scheduled feed needs attention", detail });
   }
   if (payload.data_status?.variance_count) {
     const count = payload.data_status.variance_count;
@@ -617,17 +627,49 @@ async function setAlertAcknowledgement(alertKey, acknowledged) {
   if (!response.ok) throw new Error(payload.error || "Could not update alert.");
 }
 
+function formatScheduledTime(value, timezone = "Asia/Dubai") {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  try {
+    return parsed.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: timezone,
+    });
+  } catch {
+    return parsed.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+}
+
 function renderStatus(status) {
   const root = document.querySelector("#as-of");
-  const lastIngest = status?.last_successful_ingest_at;
+  const timezone = status?.check_timezone || "Asia/Dubai";
+  const last = formatScheduledTime(status?.last_successful_check_at || status?.last_successful_ingest_at, timezone);
+  const due = formatScheduledTime(status?.expected_due_at || status?.due_at, timezone);
+  const next = formatScheduledTime(status?.next_scheduled_check_at || status?.next_check_at, timezone);
+  const checkStatus = String(status?.check_status || (status?.is_stale ? "SCHEDULE_ERROR" : "CURRENT"));
+  const label = {
+    CURRENT: "Scheduled feed",
+    OVERDUE: "Scheduled feed overdue",
+    NEVER_CHECKED: "Scheduled feed not checked",
+    INVALID_CHECK_TIMESTAMP: "Scheduled feed check time invalid",
+    SCHEDULE_UNCONFIGURED: "Scheduled feed schedule unconfigured",
+    SCHEDULE_ERROR: "Scheduled feed status unavailable",
+  }[checkStatus] || "Scheduled feed status unavailable";
+  const parts = [label, `Last checked ${last || "never"}`];
+  if (due) parts.push(`Due ${due}`);
+  if (next) parts.push(`Next check ${next}`);
   root.className = `as-of ${status?.is_stale ? "stale" : "live"}`;
-  if (!lastIngest) {
-    root.textContent = "Feed not checked";
-    return;
-  }
-  const time = new Date(lastIngest).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  root.textContent = status.is_stale ? `Stale · ${time}` : `Live · ${time}`;
-  root.title = `Last successful ingest: ${new Date(lastIngest).toLocaleString()}`;
+  root.textContent = parts.join(" · ");
+  root.title = [
+    `Scheduled feed timezone: ${timezone}.`,
+    `Last successful scheduled feed check: ${last || "never"}.`,
+    due ? `Expected due: ${due}.` : "",
+    next ? `Next scheduled check: ${next}.` : "",
+  ].filter(Boolean).join(" ");
 }
 
 async function loadDashboard() {

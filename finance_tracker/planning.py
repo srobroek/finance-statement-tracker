@@ -7,6 +7,9 @@ from decimal import Decimal, ROUND_CEILING
 from statistics import median
 from typing import Any, Iterable
 
+from .actual_notes import parse_actual_notes
+from .transaction_semantics import PENDING_CATEGORY_VALUES, UNKNOWN_PAYEE_VALUES
+
 
 EXCLUDED_BUDGET_CATEGORIES = frozenset(
     {
@@ -30,28 +33,41 @@ def _month(value: str) -> str:
 def _round_up_minor(value: int, increment_minor: int) -> int:
     if increment_minor <= 0:
         raise ValueError("increment_minor must be positive")
-    return int((Decimal(value) / increment_minor).to_integral_value(rounding=ROUND_CEILING)) * increment_minor
+    return (
+        int(
+            (Decimal(value) / increment_minor).to_integral_value(rounding=ROUND_CEILING)
+        )
+        * increment_minor
+    )
 
 
 def _eligible_expense(row: dict[str, Any]) -> bool:
     category = str(row.get("category_name") or "").strip()
-    unresolved = category.casefold() in {
-        "holding",
-        "needs review",
-        "uncategorized",
-        "uncategorised",
-        "unmapped",
-    }
+    payee = str(row.get("payee_name") or row.get("imported_payee") or "").strip()
+    unresolved = category.casefold() in PENDING_CATEGORY_VALUES
+    try:
+        note_tags = set(
+            parse_actual_notes(str(row.get("notes") or ""), legacy=True).tags
+        )
+    except ValueError:
+        note_tags = set()
+    tags = {str(tag).casefold() for tag in row.get("tags") or ()}
+    tags.update(str(tag).casefold() for tag in note_tags)
     review_required = bool(row.get("review_required")) or bool(
-        {"review", "needs-review"} & {str(tag).casefold() for tag in row.get("tags") or ()}
+        {"review", "needs-review"} & tags
+    )
+    payee_fields_present = "payee_name" in row or "imported_payee" in row
+    payee_unresolved = payee_fields_present and (
+        not payee or payee.casefold() in UNKNOWN_PAYEE_VALUES
     )
     return (
         not row.get("tombstone")
         and not row.get("is_parent")
         and not row.get("transfer_id")
         and int(row.get("amount") or 0) < 0
-        and category not in EXCLUDED_BUDGET_CATEGORIES
         and not unresolved
+        and not payee_unresolved
+        and category not in EXCLUDED_BUDGET_CATEGORIES
         and not review_required
     )
 
@@ -73,7 +89,8 @@ def recommend_category_budgets(
         {
             _month(str(row.get("date") or ""))
             for row in transactions
-            if _eligible_expense(row) and _month(str(row.get("date") or "")) < current_month
+            if _eligible_expense(row)
+            and _month(str(row.get("date") or "")) < current_month
         }
     )[-lookback_months:]
     by_category_month: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -83,7 +100,9 @@ def recommend_category_budgets(
         month = _month(str(row.get("date") or ""))
         if month not in months:
             continue
-        by_category_month[str(row.get("category_name") or "")][month] += abs(int(row["amount"]))
+        by_category_month[str(row.get("category_name") or "")][month] += abs(
+            int(row["amount"])
+        )
 
     recommendations: list[dict[str, Any]] = []
     multiplier = Decimal("1") + buffer_percent / Decimal("100")
@@ -93,9 +112,13 @@ def recommend_category_budgets(
             continue
         observed = [month_values.get(month, 0) for month in months]
         nonzero_median = int(median(active))
-        recommended = _round_up_minor(int(Decimal(nonzero_median) * multiplier), round_to_minor)
+        recommended = _round_up_minor(
+            int(Decimal(nonzero_median) * multiplier), round_to_minor
+        )
         active_ratio = Decimal(len(active)) / Decimal(max(1, len(months)))
-        volatility = Decimal(max(active) - min(active)) / Decimal(max(1, nonzero_median))
+        volatility = Decimal(max(active) - min(active)) / Decimal(
+            max(1, nonzero_median)
+        )
         automation = "fixed"
         if active_ratio >= Decimal("0.75") and volatility >= Decimal("0.75"):
             automation = "refill-to-cap"
@@ -113,7 +136,9 @@ def recommend_category_budgets(
                 "confidence": "high" if len(active) >= 6 else "medium",
             }
         )
-    return sorted(recommendations, key=lambda item: (-item["recommended_minor"], item["category"]))
+    return sorted(
+        recommendations, key=lambda item: (-item["recommended_minor"], item["category"])
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,12 +166,18 @@ def recommend_schedules(
         matched = [
             row
             for row in rows
-            if str(row.get("payee_name") or row.get("imported_payee") or "").casefold() in payees
-            or (categories and str(row.get("category_name") or "").casefold() in categories)
+            if str(row.get("payee_name") or row.get("imported_payee") or "").casefold()
+            in payees
+            or (
+                categories
+                and str(row.get("category_name") or "").casefold() in categories
+            )
         ]
         by_account: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in matched:
-            by_account[str(row.get("account_name") or row.get("account") or "")].append(row)
+            by_account[str(row.get("account_name") or row.get("account") or "")].append(
+                row
+            )
         for account, account_rows in by_account.items():
             months = sorted({_month(row["date"]) for row in account_rows})
             if len(months) < policy.minimum_months:
@@ -154,7 +185,10 @@ def recommend_schedules(
             latest_by_month: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in account_rows:
                 latest_by_month[_month(row["date"])].append(row)
-            monthly_amounts = [sum(abs(int(row["amount"])) for row in latest_by_month[month]) for month in months]
+            monthly_amounts = [
+                sum(abs(int(row["amount"])) for row in latest_by_month[month])
+                for month in months
+            ]
             days = sorted(int(row["date"][8:10]) for row in account_rows)
             median_day = int(median(days))
             next_year = as_of.year + (1 if as_of.month == 12 else 0)
@@ -174,7 +208,9 @@ def recommend_schedules(
                         "start": next_date,
                         "endMode": "never",
                     },
-                    "amount_op": "isbetween" if policy.amount_mode == "between" else "isapprox",
+                    "amount_op": "isbetween"
+                    if policy.amount_mode == "between"
+                    else "isapprox",
                     "amount_min_minor": minimum,
                     "amount_max_minor": maximum,
                     "amount_minor": median_amount,
@@ -191,4 +227,3 @@ def recommend_schedules(
                 }
             )
     return sorted(results, key=lambda item: item["name"])
-

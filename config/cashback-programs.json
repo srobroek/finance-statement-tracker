@@ -116,7 +116,7 @@
       "fx_cost_rate": "0",
       "tiers": [
         {"code": "BASE", "minimum_spend_aed": "0", "rates": {}},
-        {"code": "ENHANCED", "minimum_spend_aed": "10000", "rates": {"RAK_GROCERY": "0.10", "RAK_DINING": "0.10", "RAK_TRAVEL": "0.10", "RAK_STANDARD": "0.01", "RAK_EWALLET": "0.03"}}
+        {"code": "QUALIFYING", "minimum_spend_aed": "10000", "rates": {"RAK_GROCERY": "0.10", "RAK_DINING": "0.10", "RAK_TRAVEL": "0.10", "RAK_STANDARD": "0.01", "RAK_EWALLET": "0.03"}}
       ],
       "buckets": [
         {"code": "RAK_GROCERY", "cashback_cap_aed": "300", "categories": ["GROCERY"], "assignment": {"categories": ["GROCERY"]}},

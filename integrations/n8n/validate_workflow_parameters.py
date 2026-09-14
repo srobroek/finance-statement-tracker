@@ -96,7 +96,9 @@ def _named_node_protected_fields(
     """
 
     named_nodes = {
-        name for name in NAMED_NODE_REFERENCE.findall(value) if name in parameter_node_names
+        name
+        for name in NAMED_NODE_REFERENCE.findall(value)
+        if name in parameter_node_names
     }
     if not named_nodes:
         return set(), []
@@ -107,7 +109,9 @@ def _named_node_protected_fields(
         if field
     ]
     protected_fields = [
-        field for field in referenced_fields if _is_protected_field(field, protected_names)
+        field
+        for field in referenced_fields
+        if _is_protected_field(field, protected_names)
     ]
     if not referenced_fields:
         protected_fields = ["<entire-node>"]
@@ -154,7 +158,9 @@ def _parameter_assignments(node: dict[str, Any]) -> list[dict[str, Any]]:
     if not isinstance(parameters, dict):
         return []
     assignments = parameters.get("assignments")
-    if isinstance(assignments, dict) and isinstance(assignments.get("assignments"), list):
+    if isinstance(assignments, dict) and isinstance(
+        assignments.get("assignments"), list
+    ):
         return [row for row in assignments["assignments"] if isinstance(row, dict)]
     values = parameters.get("values")
     if isinstance(values, list):
@@ -165,6 +171,23 @@ def _parameter_assignments(node: dict[str, Any]) -> list[dict[str, Any]]:
             for name, value in values.items()
         ]
     return []
+
+
+def _is_ordinary_native_set(node: dict[str, Any], node_name: str, spec: Any) -> bool:
+    """Skip non-parameter native Sets while retaining projector-shaped Sets.
+
+    Parameter contracts use the legacy assignment export (or an explicitly
+    owned manual Set).  A manual Set outside that contract is ordinary
+    executable JSON unless its name advertises parameter/projector intent;
+    those remain findings so unowned projectors cannot hide in the corpus.
+    """
+
+    if node.get("type") != "n8n-nodes-base.set" or spec is not None:
+        return False
+    parameters = node.get("parameters")
+    if not isinstance(parameters, dict) or parameters.get("mode") != "manual":
+        return False
+    return re.search(r"parameter|projector", node_name, re.IGNORECASE) is None
 
 
 def _workflow_documents(
@@ -183,7 +206,9 @@ def _workflow_documents(
     return documents
 
 
-def _global_values(root: Path, contract: dict[str, Any]) -> tuple[set[str], list[dict[str, str]]]:
+def _global_values(
+    root: Path, contract: dict[str, Any]
+) -> tuple[set[str], list[dict[str, str]]]:
     values: set[str] = set()
     findings: list[dict[str, str]] = []
     for source in contract["global_contract_sources"]:
@@ -204,7 +229,9 @@ def _global_values(root: Path, contract: dict[str, Any]) -> tuple[set[str], list
     return values, findings
 
 
-def _credential_values(root: Path, contract: dict[str, Any]) -> tuple[set[str], list[dict[str, str]]]:
+def _credential_values(
+    root: Path, contract: dict[str, Any]
+) -> tuple[set[str], list[dict[str, str]]]:
     """Load canonical credential identifiers without treating them as secrets."""
 
     values: set[str] = set()
@@ -231,11 +258,18 @@ def _validate_schema(root: Path, contract: dict[str, Any]) -> list[dict[str, str
     try:
         schema = load_json(root / SCHEMA_PATH.relative_to(ROOT))
     except (OSError, json.JSONDecodeError) as error:
-        return [_finding("OWNERSHIP_SCHEMA_UNREADABLE", detail=error.__class__.__name__)]
+        return [
+            _finding("OWNERSHIP_SCHEMA_UNREADABLE", detail=error.__class__.__name__)
+        ]
     errors = sorted(Draft202012Validator(schema).iter_errors(contract), key=str)
     if not errors:
         return []
-    return [_finding("OWNERSHIP_SCHEMA_INVALID", detail="; ".join(error.message for error in errors))]
+    return [
+        _finding(
+            "OWNERSHIP_SCHEMA_INVALID",
+            detail="; ".join(error.message for error in errors),
+        )
+    ]
 
 
 def scan(
@@ -246,7 +280,11 @@ def scan(
 ) -> dict[str, Any]:
     """Return a deterministic inventory and fail-closed ownership findings."""
 
-    ownership = contract if contract is not None else load_json(root / CONTRACT_PATH.relative_to(ROOT))
+    ownership = (
+        contract
+        if contract is not None
+        else load_json(root / CONTRACT_PATH.relative_to(ROOT))
+    )
     findings = _validate_schema(root, ownership)
     global_values, source_findings = _global_values(root, ownership)
     findings.extend(source_findings)
@@ -256,24 +294,33 @@ def scan(
     discovered_names = {name for name, _ in docs}
     expected_names = set(ownership["workflows"])
     for missing in sorted(expected_names - discovered_names):
-        findings.append(_finding("WORKFLOW_FILE_MISSING", workflow=missing, detail="allowlist entry has no export"))
+        findings.append(
+            _finding(
+                "WORKFLOW_FILE_MISSING",
+                workflow=missing,
+                detail="allowlist entry has no export",
+            )
+        )
 
     parameter_nodes: list[dict[str, Any]] = []
     local_literals: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     parameter_types = set(ownership["parameter_node_types"])
     forbidden = ownership["forbidden"]
-    key_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in forbidden["credential_key_patterns"]]
-    value_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in forbidden["secret_value_patterns"]]
+    key_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in forbidden["credential_key_patterns"]
+    ]
+    value_patterns = [
+        re.compile(pattern, re.IGNORECASE)
+        for pattern in forbidden["secret_value_patterns"]
+    ]
     protected_names = {name.casefold() for name in forbidden["protected_field_names"]}
     parameter_node_names = {
         node_name
         for workflow_spec in ownership["workflows"].values()
         for node_name in workflow_spec.get("nodes", {})
     }
-
     for workflow, document in sorted(docs, key=lambda row: row[0]):
-        if not isinstance(document, dict) or not isinstance(document.get("nodes"), list):
-            continue
         workflow_spec = ownership["workflows"].get(workflow, {})
         node_specs = workflow_spec.get("nodes", {})
         seen_nodes: set[str] = set()
@@ -281,11 +328,20 @@ def scan(
             if not isinstance(node, dict) or node.get("type") not in parameter_types:
                 continue
             node_name = str(node.get("name", ""))
-            seen_nodes.add(node_name)
             spec = node_specs.get(node_name)
+            if _is_ordinary_native_set(node, node_name, spec):
+                continue
             assignments = _parameter_assignments(node)
+            if not assignments:
+                # Native Set nodes that emit fixed JSON are not parameter
+                # projectors; only assignment-based projectors participate in
+                # the ownership contract.
+                continue
+            seen_nodes.add(node_name)
             fields = spec.get("fields", {}) if isinstance(spec, dict) else {}
-            caller_fields = spec.get("caller_fields", {}) if isinstance(spec, dict) else {}
+            caller_fields = (
+                spec.get("caller_fields", {}) if isinstance(spec, dict) else {}
+            )
             inventory = {
                 "workflow": workflow,
                 "node": node_name,
@@ -294,17 +350,48 @@ def scan(
             }
             parameter_nodes.append(inventory)
             if node.get("credentials"):
-                findings.append(_finding("CREDENTIAL_BINDING_ON_PARAMETER_NODE", workflow=workflow, node=node_name, detail="parameter nodes cannot own n8n credential bindings"))
+                findings.append(
+                    _finding(
+                        "CREDENTIAL_BINDING_ON_PARAMETER_NODE",
+                        workflow=workflow,
+                        node=node_name,
+                        detail="parameter nodes cannot own n8n credential bindings",
+                    )
+                )
             parameters = node.get("parameters")
-            if not isinstance(parameters, dict) or parameters.get("includeOtherFields") is not False:
-                findings.append(_finding("CALLER_PROJECTOR_UNRESTRICTED", workflow=workflow, node=node_name, detail="parameter nodes must preserve caller JSON only through exact assignments"))
+            if (
+                not isinstance(parameters, dict)
+                or parameters.get("includeOtherFields") is not False
+            ):
+                findings.append(
+                    _finding(
+                        "CALLER_PROJECTOR_UNRESTRICTED",
+                        workflow=workflow,
+                        node=node_name,
+                        detail="parameter nodes must preserve caller JSON only through exact assignments",
+                    )
+                )
             if spec is None:
-                findings.append(_finding("PARAMETER_NODE_UNALLOWLISTED", workflow=workflow, node=node_name, detail="Set/Edit Fields node is not in the ownership contract"))
+                findings.append(
+                    _finding(
+                        "PARAMETER_NODE_UNALLOWLISTED",
+                        workflow=workflow,
+                        node=node_name,
+                        detail="Set/Edit Fields node is not in the ownership contract",
+                    )
+                )
             assignment_names: set[str] = set()
             for assignment in assignments:
                 field = assignment.get("name")
                 if not isinstance(field, str) or not field:
-                    findings.append(_finding("PARAMETER_FIELD_NAME_INVALID", workflow=workflow, node=node_name, detail="assignment name is missing"))
+                    findings.append(
+                        _finding(
+                            "PARAMETER_FIELD_NAME_INVALID",
+                            workflow=workflow,
+                            node=node_name,
+                            detail="assignment name is missing",
+                        )
+                    )
                     continue
                 assignment_names.add(field)
                 field_spec = fields.get(field)
@@ -314,52 +401,141 @@ def scan(
                         "type": caller_fields[field],
                         "expression_allowed": True,
                     }
-                category = field_spec.get("category") if isinstance(field_spec, dict) else ""
-                inventory["fields"].append({"name": field, "category": category, "type": assignment.get("type", "")})
+                category = (
+                    field_spec.get("category") if isinstance(field_spec, dict) else ""
+                )
+                inventory["fields"].append(
+                    {
+                        "name": field,
+                        "category": category,
+                        "type": assignment.get("type", ""),
+                    }
+                )
                 value = assignment.get("value")
                 nested_keys = list(_mapping_keys(value))
-                if any(pattern.search(candidate) for pattern in key_patterns for candidate in [field, *nested_keys]):
-                    findings.append(_finding("CREDENTIAL_OR_SECRET_FIELD", workflow=workflow, node=node_name, field=field, detail="credential or secret-shaped field name"))
-                if any(pattern.search(candidate) for pattern in value_patterns for candidate in _scalar_strings(value)):
-                    findings.append(_finding("SECRET_VALUE_IN_PARAMETER", workflow=workflow, node=node_name, field=field, detail="secret-shaped literal"))
-                if any(candidate in credential_values for candidate in _scalar_strings(value)):
-                    findings.append(_finding("CREDENTIAL_IDENTIFIER_IN_PARAMETER", workflow=workflow, node=node_name, field=field, detail="value matches a canonical n8n credential identifier"))
+                if any(
+                    pattern.search(candidate)
+                    for pattern in key_patterns
+                    for candidate in [field, *nested_keys]
+                ):
+                    findings.append(
+                        _finding(
+                            "CREDENTIAL_OR_SECRET_FIELD",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="credential or secret-shaped field name",
+                        )
+                    )
+                if any(
+                    pattern.search(candidate)
+                    for pattern in value_patterns
+                    for candidate in _scalar_strings(value)
+                ):
+                    findings.append(
+                        _finding(
+                            "SECRET_VALUE_IN_PARAMETER",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="secret-shaped literal",
+                        )
+                    )
+                if any(
+                    candidate in credential_values
+                    for candidate in _scalar_strings(value)
+                ):
+                    findings.append(
+                        _finding(
+                            "CREDENTIAL_IDENTIFIER_IN_PARAMETER",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="value matches a canonical n8n credential identifier",
+                        )
+                    )
                 if field_spec is None:
-                    findings.append(_finding("PARAMETER_FIELD_UNALLOWLISTED", workflow=workflow, node=node_name, field=field, detail="field is not in the ownership contract"))
+                    findings.append(
+                        _finding(
+                            "PARAMETER_FIELD_UNALLOWLISTED",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="field is not in the ownership contract",
+                        )
+                    )
                     continue
                 expected_type = field_spec["type"]
                 actual_type = _field_type(assignment)
                 if actual_type != expected_type:
-                    findings.append(_finding("PARAMETER_TYPE_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"expected {expected_type}, observed {actual_type or 'unknown'}"))
-                expression = _is_expression(value)
-                if expression and not field_spec.get("expression_allowed", False):
-                    findings.append(_finding("UNDECLARED_INPUT_EXPRESSION", workflow=workflow, node=node_name, field=field, detail="expression is not allowlisted for this field"))
-                if expression and isinstance(value, str):
-                    named_nodes, protected_fields = _named_node_protected_fields(value, parameter_node_names, protected_names)
-                    if protected_fields:
-                        findings.append(_finding(
-                            "PROTECTED_NAMED_NODE_INPUT",
+                    findings.append(
+                        _finding(
+                            "PARAMETER_TYPE_MISMATCH",
                             workflow=workflow,
                             node=node_name,
                             field=field,
-                            detail=f"expression reads protected field(s) {protected_fields} from named parameter node(s) {sorted(named_nodes)}",
-                        ))
+                            detail=f"expected {expected_type}, observed {actual_type or 'unknown'}",
+                        )
+                    )
+                expression = _is_expression(value)
+                if expression and not field_spec.get("expression_allowed", False):
+                    findings.append(
+                        _finding(
+                            "UNDECLARED_INPUT_EXPRESSION",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="expression is not allowlisted for this field",
+                        )
+                    )
+                if expression and isinstance(value, str):
+                    named_nodes, protected_fields = _named_node_protected_fields(
+                        value, parameter_node_names, protected_names
+                    )
+                    if protected_fields:
+                        findings.append(
+                            _finding(
+                                "PROTECTED_NAMED_NODE_INPUT",
+                                workflow=workflow,
+                                node=node_name,
+                                field=field,
+                                detail=f"expression reads protected field(s) {protected_fields} from named parameter node(s) {sorted(named_nodes)}",
+                            )
+                        )
                 if category == "caller_passthrough":
                     expected_reference = "={{ $json." + field + " }}"
                     if value != expected_reference:
-                        findings.append(_finding(
-                            "CALLER_PROJECTOR_NOT_EXACT",
-                            workflow=workflow,
-                            node=node_name,
-                            field=field,
-                            detail=f"caller field must be projected only from {expected_reference}",
-                        ))
+                        findings.append(
+                            _finding(
+                                "CALLER_PROJECTOR_NOT_EXACT",
+                                workflow=workflow,
+                                node=node_name,
+                                field=field,
+                                detail=f"caller field must be projected only from {expected_reference}",
+                            )
+                        )
                 if category == "global_generated_contract":
                     source = field_spec.get("source")
                     if expression:
-                        findings.append(_finding("GLOBAL_CALLER_EXPRESSION", workflow=workflow, node=node_name, field=field, detail="global contract values must be fixed generated literals"))
+                        findings.append(
+                            _finding(
+                                "GLOBAL_CALLER_EXPRESSION",
+                                workflow=workflow,
+                                node=node_name,
+                                field=field,
+                                detail="global contract values must be fixed generated literals",
+                            )
+                        )
                     elif not isinstance(source, dict):
-                        findings.append(_finding("GLOBAL_SOURCE_MISSING", workflow=workflow, node=node_name, field=field, detail="global field has no source selector"))
+                        findings.append(
+                            _finding(
+                                "GLOBAL_SOURCE_MISSING",
+                                workflow=workflow,
+                                node=node_name,
+                                field=field,
+                                detail="global field has no source selector",
+                            )
+                        )
                     else:
                         source_path = root / source["path"]
                         source_document: Any = None
@@ -367,59 +543,176 @@ def scan(
                         try:
                             source_document = load_json(source_path)
                             source_readable = True
-                            allowed = _selector_values(source_document, source["selector"])
+                            allowed = _selector_values(
+                                source_document, source["selector"]
+                            )
                         except (OSError, json.JSONDecodeError) as error:
                             allowed = []
-                            findings.append(_finding("GLOBAL_SOURCE_UNREADABLE", workflow=workflow, node=node_name, field=field, detail=f"{source['path']}: {error.__class__.__name__}"))
+                            findings.append(
+                                _finding(
+                                    "GLOBAL_SOURCE_UNREADABLE",
+                                    workflow=workflow,
+                                    node=node_name,
+                                    field=field,
+                                    detail=f"{source['path']}: {error.__class__.__name__}",
+                                )
+                            )
                         if source["selector"] == "$" and source_readable:
                             try:
-                                parsed_value = json.loads(value) if isinstance(value, str) else None
+                                parsed_value = (
+                                    json.loads(value)
+                                    if isinstance(value, str)
+                                    else None
+                                )
                             except json.JSONDecodeError:
                                 parsed_value = None
                                 document_valid = False
                             else:
                                 document_valid = True
                             if not document_valid:
-                                findings.append(_finding("GLOBAL_DOCUMENT_INVALID", workflow=workflow, node=node_name, field=field, detail=f"value is not valid JSON for {source['path']}"))
+                                findings.append(
+                                    _finding(
+                                        "GLOBAL_DOCUMENT_INVALID",
+                                        workflow=workflow,
+                                        node=node_name,
+                                        field=field,
+                                        detail=f"value is not valid JSON for {source['path']}",
+                                    )
+                                )
                             elif parsed_value != source_document:
-                                findings.append(_finding("GLOBAL_DOCUMENT_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value does not equal the complete document at {source['path']}"))
+                                findings.append(
+                                    _finding(
+                                        "GLOBAL_DOCUMENT_MISMATCH",
+                                        workflow=workflow,
+                                        node=node_name,
+                                        field=field,
+                                        detail=f"value does not equal the complete document at {source['path']}",
+                                    )
+                                )
                         elif source["selector"] != "$" and value not in allowed:
-                            findings.append(_finding("GLOBAL_VALUE_MISMATCH", workflow=workflow, node=node_name, field=field, detail=f"value is not present at {source['path']}::{source['selector']}"))
-                if category == "workflow_local_input" and expression and _is_protected_field(field, protected_names):
-                    findings.append(_finding("PROTECTED_CALLER_INPUT", workflow=workflow, node=node_name, field=field, detail="dynamic expression targets a protected field"))
-                if category in {"workflow_local_input", "workflow_local_constant"} and isinstance(value, str) and not expression and len(value) >= MIN_SHARED_LITERAL_LENGTH:
+                            findings.append(
+                                _finding(
+                                    "GLOBAL_VALUE_MISMATCH",
+                                    workflow=workflow,
+                                    node=node_name,
+                                    field=field,
+                                    detail=f"value is not present at {source['path']}::{source['selector']}",
+                                )
+                            )
+                if (
+                    category == "workflow_local_input"
+                    and expression
+                    and _is_protected_field(field, protected_names)
+                ):
+                    findings.append(
+                        _finding(
+                            "PROTECTED_CALLER_INPUT",
+                            workflow=workflow,
+                            node=node_name,
+                            field=field,
+                            detail="dynamic expression targets a protected field",
+                        )
+                    )
+                if (
+                    category in {"workflow_local_input", "workflow_local_constant"}
+                    and isinstance(value, str)
+                    and not expression
+                    and len(value) >= MIN_SHARED_LITERAL_LENGTH
+                ):
                     if value in global_values:
-                        findings.append(_finding("SHARED_LITERAL_COPIED", workflow=workflow, node=node_name, field=field, detail="literal belongs to a generated global contract; resolve it through the contract"))
-                    local_literals[value].append({
-                        "workflow": workflow,
-                        "node": node_name,
-                        "field": field,
-                        "duplicate_literal_allowed": bool(field_spec.get("duplicate_literal_allowed", False)),
-                    })
+                        findings.append(
+                            _finding(
+                                "SHARED_LITERAL_COPIED",
+                                workflow=workflow,
+                                node=node_name,
+                                field=field,
+                                detail="literal belongs to a generated global contract; resolve it through the contract",
+                            )
+                        )
+                    local_literals[value].append(
+                        {
+                            "workflow": workflow,
+                            "node": node_name,
+                            "field": field,
+                            "duplicate_literal_allowed": bool(
+                                field_spec.get("duplicate_literal_allowed", False)
+                            ),
+                        }
+                    )
             if spec is not None:
                 if not caller_fields:
-                    findings.append(_finding("CALLER_FIELDS_UNDECLARED", workflow=workflow, node=node_name, detail="parameter node must declare the caller fields preserved by its validated merge"))
+                    findings.append(
+                        _finding(
+                            "CALLER_FIELDS_UNDECLARED",
+                            workflow=workflow,
+                            node=node_name,
+                            detail="parameter node must declare the caller fields preserved by its validated merge",
+                        )
+                    )
                 for missing_field in sorted(set(caller_fields) - assignment_names):
-                    findings.append(_finding("CALLER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="caller field is not projected by the parameter node"))
+                    findings.append(
+                        _finding(
+                            "CALLER_FIELD_MISSING",
+                            workflow=workflow,
+                            node=node_name,
+                            field=missing_field,
+                            detail="caller field is not projected by the parameter node",
+                        )
+                    )
                 for missing_field in sorted(set(fields) - assignment_names):
-                    findings.append(_finding("PARAMETER_FIELD_MISSING", workflow=workflow, node=node_name, field=missing_field, detail="allowlisted field is absent from export"))
+                    findings.append(
+                        _finding(
+                            "PARAMETER_FIELD_MISSING",
+                            workflow=workflow,
+                            node=node_name,
+                            field=missing_field,
+                            detail="allowlisted field is absent from export",
+                        )
+                    )
         for missing_node in sorted(set(node_specs) - seen_nodes):
-            findings.append(_finding("PARAMETER_NODE_MISSING", workflow=workflow, node=missing_node, detail="allowlisted node is absent from export"))
+            findings.append(
+                _finding(
+                    "PARAMETER_NODE_MISSING",
+                    workflow=workflow,
+                    node=missing_node,
+                    detail="allowlisted node is absent from export",
+                )
+            )
 
     duplicate_literals: list[dict[str, Any]] = []
     for literal, locations in sorted(local_literals.items()):
         if len(locations) > 1:
-            allowed = all(location["duplicate_literal_allowed"] for location in locations)
-            duplicate_literals.append({"literal": literal, "allowed": allowed, "locations": locations})
+            allowed = all(
+                location["duplicate_literal_allowed"] for location in locations
+            )
+            duplicate_literals.append(
+                {"literal": literal, "allowed": allowed, "locations": locations}
+            )
             if allowed:
                 continue
             detail = json.dumps(locations, sort_keys=True, separators=(",", ":"))
             for location in locations:
-                findings.append(_finding("SHARED_LITERAL_COPIED", field=location["field"], workflow=location["workflow"], node=location["node"], detail=f"literal is repeated in workflow-local fields: {detail}"))
+                findings.append(
+                    _finding(
+                        "SHARED_LITERAL_COPIED",
+                        field=location["field"],
+                        workflow=location["workflow"],
+                        node=location["node"],
+                        detail=f"literal is repeated in workflow-local fields: {detail}",
+                    )
+                )
 
     for inventory in parameter_nodes:
         inventory["fields"].sort(key=lambda row: row["name"])
-    findings.sort(key=lambda row: (row["code"], row["workflow"], row["node"], row["field"], row["detail"]))
+    findings.sort(
+        key=lambda row: (
+            row["code"],
+            row["workflow"],
+            row["node"],
+            row["field"],
+            row["detail"],
+        )
+    )
     parameter_nodes.sort(key=lambda row: (row["workflow"], row["node"]))
     return {
         "schema_version": 1,
@@ -437,7 +730,11 @@ def scan(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="return non-zero when ownership findings exist")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="return non-zero when ownership findings exist",
+    )
     parser.parse_args(argv)
     report = scan()
     print(json.dumps(report, indent=2, sort_keys=True))

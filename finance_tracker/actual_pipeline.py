@@ -7,14 +7,23 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from .ingestion import stage_statement
-from .cashback import load_program_configuration, programs_from_config, purchase_type_from_config
+from .cashback import (
+    load_program_configuration,
+    programs_from_config,
+    purchase_type_from_config,
+)
 from .ai_rules import (
     AIEnrichmentEngine,
     AITrace,
     load_ai_policies,
     load_ai_provider,
 )
-from .history import HistoryDecision, HistoryTrace, apply_history_match, load_history_index
+from .history import (
+    HistoryDecision,
+    HistoryTrace,
+    apply_history_match,
+    load_history_index,
+)
 from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
@@ -68,13 +77,18 @@ def load_actual_config(path: str | Path) -> dict[str, Any]:
         raise ValueError("Actual bootstrap config requires a non-empty accounts list")
     for index, account in enumerate(accounts):
         if not isinstance(account, dict):
-            raise ValueError(f"Actual bootstrap config account {index} must be an object")
+            raise ValueError(
+                f"Actual bootstrap config account {index} must be an object"
+            )
         name = account.get("name")
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"Actual bootstrap config account {index} requires a name")
         if "type" in account:
             account_type = account["type"]
-            if not isinstance(account_type, str) or account_type not in _ACTUAL_ACCOUNT_TYPES:
+            if (
+                not isinstance(account_type, str)
+                or account_type not in _ACTUAL_ACCOUNT_TYPES
+            ):
                 raise ValueError(
                     f"Actual bootstrap config account {index} type must be one of "
                     f"{', '.join(sorted(_ACTUAL_ACCOUNT_TYPES))}"
@@ -86,7 +100,9 @@ def load_actual_config(path: str | Path) -> dict[str, Any]:
         for field in ("card_last4", "aliases"):
             values = account.get(field, [])
             if not isinstance(values, list):
-                raise ValueError(f"Actual bootstrap config account {index} {field} must be a list")
+                raise ValueError(
+                    f"Actual bootstrap config account {index} {field} must be a list"
+                )
             for value in values:
                 if not isinstance(value, str) or not value.strip():
                     raise ValueError(
@@ -108,7 +124,9 @@ def load_actual_config(path: str | Path) -> dict[str, Any]:
     if not isinstance(retired_accounts, list) or any(
         not isinstance(value, str) or not value.strip() for value in retired_accounts
     ):
-        raise ValueError("Actual bootstrap config retired_accounts must be a list of strings")
+        raise ValueError(
+            "Actual bootstrap config retired_accounts must be a list of strings"
+        )
     return payload
 
 
@@ -165,8 +183,12 @@ def load_compiled_rules(path: str | Path | None) -> list[StaticRule]:
         if isinstance(raw_rule_sets, str):
             raw_rule_sets = [raw_rule_sets]
         conditions: list[RuleCondition] = []
-        for group_index, group in enumerate(row.get("match", {}).get("any", []), start=1):
-            conditions.extend(_condition(item, group_index) for item in group.get("all", []))
+        for group_index, group in enumerate(
+            row.get("match", {}).get("any", []), start=1
+        ):
+            conditions.extend(
+                _condition(item, group_index) for item in group.get("all", [])
+            )
         actions = [
             RuleAction(
                 action=str(item["action"]),
@@ -192,6 +214,57 @@ def load_compiled_rules(path: str | Path | None) -> list[StaticRule]:
     return rules
 
 
+_REIMBURSEMENT_CATEGORY = "Refunds & Reimbursements"
+_UNIDENTIFIED_CREDIT_CATEGORY = "To categorise"
+
+
+def _apply_credit_category_fallback(transaction: Any) -> None:
+    """Keep unresolved positive credits visible without overriding locks."""
+
+    direction = (
+        str(
+            transaction.source_direction
+            or transaction.metadata.get("source_direction")
+            or transaction.metadata.get("statement_direction")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
+    if direction != "CREDIT":
+        return
+
+    topic = str(transaction.transaction_type or "").strip().upper()
+    locked = set(transaction.metadata.get("locked_fields", []))
+    category_missing = not str(transaction.category or "").strip()
+    category_writable = "category" not in locked
+    has_reimbursement_hint = "reimbursement" in {
+        str(tag).strip().casefold() for tag in transaction.tags
+    }
+
+    if topic == "REIMBURSEMENT":
+        if category_missing and category_writable:
+            transaction.category = _REIMBURSEMENT_CATEGORY
+        return
+    if topic not in {"REFUND", "REVERSAL"}:
+        return
+    if has_reimbursement_hint:
+        if category_missing and category_writable:
+            transaction.category = _REIMBURSEMENT_CATEGORY
+        transaction.review_required = True
+        transaction.tags.add("needs-review")
+        transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
+        return
+    if not category_missing or not category_writable:
+        return
+    if transaction.metadata.get("transaction_topic_reason") != "CREDIT_DEFAULT_REFUND":
+        return
+    transaction.category = _UNIDENTIFIED_CREDIT_CATEGORY
+    transaction.review_required = True
+    transaction.tags.add("needs-review")
+    transaction.metadata["category_resolution"] = "UNRESOLVED"
+
+
 def build_actual_statement_run(
     statement: NormalizedStatement,
     config: dict[str, Any],
@@ -205,7 +278,9 @@ def build_actual_statement_run(
 ) -> ActualStatementRun:
     card_by_last4, account_by_card = account_maps(config)
     owner_by_card = account_owner_map(config)
-    staged = stage_statement(statement, card_by_last4, source_message_id=source_message_id)
+    staged = stage_statement(
+        statement, card_by_last4, source_message_id=source_message_id
+    )
     missing = sorted(
         {
             str(row.metadata.get("statement_card_last4") or "unknown")
@@ -239,12 +314,15 @@ def build_actual_statement_run(
                 ),
             )
         )
-        if history_index and (history_trace := apply_history_match(transaction, history_index)):
+        if history_index and (
+            history_trace := apply_history_match(transaction, history_index)
+        ):
             history_traces.append(history_trace)
         if ai_engine and ai_resolver:
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
+        _apply_credit_category_fallback(transaction)
         enforce_transaction_invariants(transaction)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
@@ -273,14 +351,18 @@ def build_actual_statement_run(
         transaction_type = transaction.transaction_type.upper()
         if transaction_type not in CASHBACK_TOPICS:
             continue
-        purchase_type = str(
-            transaction.metadata.get("purchase_type")
-            or purchase_type_from_config(
-                cashback_config,
-                transaction.category,
-                transaction.vendor or transaction.merchant_raw,
+        purchase_type = (
+            str(
+                transaction.metadata.get("purchase_type")
+                or purchase_type_from_config(
+                    cashback_config,
+                    transaction.category,
+                    transaction.vendor or transaction.merchant_raw,
+                )
             )
-        ).upper().replace(" ", "_")
+            .upper()
+            .replace(" ", "_")
+        )
         cashback_rows.setdefault(transaction.card, []).append(
             {
                 "statement_transaction_id": transaction.transaction_id,
@@ -320,13 +402,27 @@ def build_actual_statement_run(
         bank=statement.bank,
         adapter=statement.adapter,
         statement={
-            "statement_date": statement.statement_date.isoformat() if statement.statement_date else None,
-            "period_start": statement.period_start.isoformat() if statement.period_start else None,
-            "period_end": statement.period_end.isoformat() if statement.period_end else None,
-            "payment_due_date": statement.payment_due_date.isoformat() if statement.payment_due_date else None,
-            "opening_balance_aed": None if statement.opening_balance_aed is None else str(statement.opening_balance_aed),
-            "closing_balance_aed": None if statement.closing_balance_aed is None else str(statement.closing_balance_aed),
-            "balance_difference_aed": None if statement.balance_difference_aed is None else str(statement.balance_difference_aed),
+            "statement_date": statement.statement_date.isoformat()
+            if statement.statement_date
+            else None,
+            "period_start": statement.period_start.isoformat()
+            if statement.period_start
+            else None,
+            "period_end": statement.period_end.isoformat()
+            if statement.period_end
+            else None,
+            "payment_due_date": statement.payment_due_date.isoformat()
+            if statement.payment_due_date
+            else None,
+            "opening_balance_aed": None
+            if statement.opening_balance_aed is None
+            else str(statement.opening_balance_aed),
+            "closing_balance_aed": None
+            if statement.closing_balance_aed is None
+            else str(statement.closing_balance_aed),
+            "balance_difference_aed": None
+            if statement.balance_difference_aed is None
+            else str(statement.balance_difference_aed),
             "balance_tied": statement.balance_tied,
             "transaction_count": len(statement.transactions),
             "warnings": list(statement.warnings),
@@ -335,7 +431,10 @@ def build_actual_statement_run(
         review_count=final_review_count,
         rule_trace=tuple(asdict(trace) for trace in traces),
         history_trace=tuple(asdict(trace) for trace in history_traces),
-        ai_trace=tuple({**asdict(trace), "decision_status": trace.decision_status} for trace in ai_traces),
+        ai_trace=tuple(
+            {**asdict(trace), "decision_status": trace.decision_status}
+            for trace in ai_traces
+        ),
         envelopes=tuple(asdict(envelope) for envelope in envelopes),
         cashback_reconciliation=reconciliation,
     )
@@ -395,7 +494,9 @@ def export_statement_for_actual(
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
     elif ai_policies_path or ai_provider_path:
         if not ai_policies_path or not ai_provider_path:
-            raise ValueError("AI enrichment requires both a policies file and provider configuration")
+            raise ValueError(
+                "AI enrichment requires both a policies file and provider configuration"
+            )
         ai_engine = AIEnrichmentEngine(load_ai_policies(ai_policies_path))
         resolved_ai_resolver = load_ai_provider(ai_provider_path)
     property_config = Path(config_path).parent / "properties.json"
@@ -408,7 +509,9 @@ def export_statement_for_actual(
         ai_engine=ai_engine,
         ai_resolver=resolved_ai_resolver,
         property_registry=(
-            load_property_registry(property_config) if property_config.is_file() else None
+            load_property_registry(property_config)
+            if property_config.is_file()
+            else None
         ),
     )
     destination = Path(output_path)

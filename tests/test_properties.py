@@ -218,6 +218,120 @@ class PropertyRegistryTests(TestCase):
 
             self.assertEqual("shared" in transaction.tags, should_share)
 
+    def test_approved_family_categories_and_vendors_default_shared(self) -> None:
+        categories = (
+            "Groceries",
+            "Dining Out",
+            "Food Delivery",
+            "Coffee & Snacks",
+            "Electricity & Water",
+            "District Cooling",
+            "Mobile & Internet",
+            "Service Charges",
+            "Furniture & Appliances",
+            "Maintenance & Repairs",
+            "Fuel",
+            "Parking & Tolls",
+            "Vehicle Maintenance",
+        )
+        for category in categories:
+            with self.subTest(category=category):
+                transaction = self.transaction()
+                transaction.category = category
+                project_property_tags(transaction, self.registry)
+                self.assertIn("shared", transaction.tags)
+
+        ikea = self.transaction()
+        ikea.vendor = "IKEA"
+        project_property_tags(ikea, self.registry)
+        self.assertIn("shared", ikea.tags)
+
+    def test_personal_property_and_manual_owner_override_shared_defaults(self) -> None:
+        for owner, property_code in (
+            ("Personal", "BLUEWATERS_B7_306"),
+            (None, "LT713"),
+        ):
+            with self.subTest(owner=owner, property_code=property_code):
+                transaction = self.transaction()
+                transaction.category = "Groceries"
+                transaction.property_code = property_code
+                if owner is not None:
+                    transaction.owner = owner
+                    transaction.metadata["locked_fields"] = ["owner"]
+                project_property_tags(transaction, self.registry)
+                self.assertNotIn("shared", transaction.tags)
+        stale = self.transaction()
+        stale.owner = "Personal"
+        stale.tags = {"shared"}
+        stale.metadata["locked_fields"] = ["owner"]
+        project_property_tags(stale, self.registry)
+        self.assertNotIn("shared", stale.tags)
+
+    def test_locked_ownership_conflict_fails_closed_to_review(self) -> None:
+        transaction = self.transaction()
+        transaction.category = "Groceries"
+        transaction.owner = "Personal"
+        transaction.metadata["property_ownership"] = "JOINT"
+        transaction.tags = {"shared"}
+        transaction.metadata["locked_fields"] = ["owner", "property_ownership"]
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+        self.assertTrue(transaction.review_required)
+        self.assertNotIn("shared", transaction.tags)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_locked_ownership_conflict_blocks_rule_and_history_defaults(self) -> None:
+        rule = StaticRule(
+            "generic-shared",
+            "Generic shared default",
+            "TAGGING",
+            10,
+            [RuleCondition("merchant_raw", "contains", "EMPOWER")],
+            [RuleAction("add_tag", value="shared")],
+        )
+        ruled = self.transaction()
+        ruled.owner = "Personal"
+        ruled.metadata["property_ownership"] = "JOINT"
+        ruled.metadata["locked_fields"] = ["owner", "property_ownership"]
+        RuleEngine([rule]).apply(ruled)
+        self.assertTrue(ruled.review_required)
+        self.assertNotIn("shared", ruled.tags)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            ruled.metadata["property_review_reasons"],
+        )
+
+        historical = self.transaction()
+        historical.owner = "Personal"
+        historical.metadata["property_ownership"] = "JOINT"
+        historical.metadata["locked_fields"] = ["owner", "property_ownership"]
+        apply_history_match(
+            historical,
+            {"EMPOWER": HistoryDecision("EMPOWER", 2, {}, ("shared",))},
+        )
+        self.assertTrue(historical.review_required)
+        self.assertNotIn("shared", historical.tags)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            historical.metadata["property_review_reasons"],
+        )
+
+    def test_locked_tags_and_unknown_categories_remain_unchanged(self) -> None:
+        locked = self.transaction()
+        locked.category = "Groceries"
+        locked.tags = {"manual"}
+        locked.metadata["locked_fields"] = ["tags"]
+        project_property_tags(locked, self.registry)
+        self.assertEqual(locked.tags, {"manual"})
+
+        unknown = self.transaction()
+        unknown.category = "Unknown Category"
+        project_property_tags(unknown, self.registry)
+        self.assertNotIn("shared", unknown.tags)
+
     def test_unknown_explicit_property_is_reviewable(self) -> None:
         transaction = self.transaction()
         transaction.metadata["property_name"] = "Unknown Tower"
@@ -228,3 +342,24 @@ class PropertyRegistryTests(TestCase):
             "UNKNOWN_CONFIGURED_PROPERTY",
             transaction.metadata["property_review_reasons"],
         )
+
+    def test_unknown_utility_reference_does_not_take_shared_default(self) -> None:
+        transaction = self.transaction()
+        transaction.category = "Electricity & Water"
+        transaction.metadata["utility_provider"] = "DEWA"
+        transaction.metadata["utility_account_reference"] = "not-configured"
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+        self.assertTrue(transaction.review_required)
+        self.assertNotIn("shared", transaction.tags)
+        self.assertIn(
+            "UNKNOWN_CONFIGURED_PROPERTY",
+            transaction.metadata["property_review_reasons"],
+        )
+
+        missing_provider = self.transaction()
+        missing_provider.category = "Electricity & Water"
+        missing_provider.metadata["utility_account_reference"] = "not-configured"
+        self.assertIsNone(project_property_tags(missing_provider, self.registry))
+        self.assertTrue(missing_provider.review_required)
+        self.assertNotIn("shared", missing_provider.tags)

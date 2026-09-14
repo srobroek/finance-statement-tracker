@@ -19,12 +19,23 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/four_table_cutover.py"
 MIGRATION_PATH = ROOT / "integrations/n8n/generate_data_table_migration.py"
-READBACK_PARSER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py"
-RETAINED_READBACK_FIXTURE = ROOT / "tests/fixtures/n8n-2.36.2-data-table-digest-output.json"
-SCHEMA_PATH = ROOT / "integrations/n8n/schemas/finance-four-table-cutover-receipt-v1.schema.json"
-SHELL_RUNNER_PATH = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+READBACK_PARSER_PATH = (
+    ROOT
+    / "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py"
+)
+RETAINED_READBACK_FIXTURE = (
+    ROOT / "tests/fixtures/n8n-2.36.2-data-table-digest-output.json"
+)
+SCHEMA_PATH = (
+    ROOT / "integrations/n8n/schemas/finance-four-table-cutover-receipt-v1.schema.json"
+)
+SHELL_RUNNER_PATH = (
+    ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+)
 PRODUCTION_SHELL_RUNNER_PATH = SHELL_RUNNER_PATH
-PRODUCTION_RUNTIME_PATH = ROOT / "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs"
+PRODUCTION_RUNTIME_PATH = (
+    ROOT / "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs"
+)
 
 
 def _load(name: str, path: Path):
@@ -61,8 +72,14 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "pinData": {},
         }
 
-    def test_credential_contract_normalization_covers_every_leaf_and_only_credential_drift_is_ignored(self):
-        contract = json.loads((ROOT / "integrations/n8n/credential-bindings.json").read_text(encoding="utf-8"))
+    def test_credential_contract_normalization_covers_every_leaf_and_only_credential_drift_is_ignored(
+        self,
+    ):
+        contract = json.loads(
+            (ROOT / "integrations/n8n/credential-bindings.json").read_text(
+                encoding="utf-8"
+            )
+        )
         by_workflow = {}
         leaves = 0
         for binding in contract["bindings"]:
@@ -70,11 +87,20 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 leaves += 1
                 workflow = item["workflow"]
                 node = item["node"]
-                by_workflow.setdefault(workflow["id"], []).append({
-                    "id": node["id"], "name": node["name"], "type": binding["node_type"],
-                    "credentials": {binding["credential_type"]: {"id": "opaque-id", "name": "opaque-name"}},
-                })
-        self.assertEqual(leaves, 36)
+                by_workflow.setdefault(workflow["id"], []).append(
+                    {
+                        "id": node["id"],
+                        "name": node["name"],
+                        "type": binding["node_type"],
+                        "credentials": {
+                            binding["credential_type"]: {
+                                "id": "opaque-id",
+                                "name": "opaque-name",
+                            }
+                        },
+                    }
+                )
+        self.assertEqual(leaves, 40)
         bodies = []
         for workflow_id, nodes in by_workflow.items():
             body = self._workflow_body(0, nodes)
@@ -82,7 +108,13 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             bodies.append(body)
         normalized = [self.runner._workflow_body_projection(body) for body in bodies]
         self.assertEqual(
-            sum(1 for body in normalized for node in body["nodes"] if node.get("credentials")), leaves
+            sum(
+                1
+                for body in normalized
+                for node in body["nodes"]
+                if node.get("credentials")
+            ),
+            leaves,
         )
         variant = json.loads(json.dumps(bodies))
         for body in variant:
@@ -95,7 +127,10 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         )
         changed = json.loads(json.dumps(bodies))
         changed[0]["connections"]["noncredential"] = {"changed": True}
-        self.assertNotEqual(self.runner._workflow_body_digest(bodies[0]), self.runner._workflow_body_digest(changed[0]))
+        self.assertNotEqual(
+            self.runner._workflow_body_digest(bodies[0]),
+            self.runner._workflow_body_digest(changed[0]),
+        )
 
     def test_python_and_cjs_reject_nonexact_credential_contracts(self):
         """Both runners fail closed when the generated contract shape drifts."""
@@ -104,15 +139,31 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             harness = self._production_runtime_harness(temp)
             contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
             mutations = (
-                ("root-extra", lambda value: value.update({"unexpected": True}), "CREDENTIAL_BINDINGS_SCHEMA_INVALID"),
-                ("binding-extra", lambda value: value["bindings"][0].update({"unexpected": True}), "CREDENTIAL_BINDING_KEYS_INVALID"),
-                ("coverage", lambda value: value["bindings"][0]["nodes"].pop(), "CREDENTIAL_BINDING_COVERAGE_INVALID"),
+                (
+                    "root-extra",
+                    lambda value: value.update({"unexpected": True}),
+                    "CREDENTIAL_BINDINGS_SCHEMA_INVALID",
+                ),
+                (
+                    "binding-extra",
+                    lambda value: value["bindings"][0].update({"unexpected": True}),
+                    "CREDENTIAL_BINDING_KEYS_INVALID",
+                ),
+                (
+                    "coverage",
+                    lambda value: value["bindings"][0]["nodes"].pop(),
+                    "CREDENTIAL_BINDING_COVERAGE_INVALID",
+                ),
             )
             for label, mutate, expected in mutations:
                 candidate = json.loads(json.dumps(contract))
                 mutate(candidate)
-                encoded = base64.b64encode(json.dumps(candidate, separators=(",", ":")).encode("utf-8")).decode("ascii")
-                failed = harness["run_runtime"](FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=encoded)
+                encoded = base64.b64encode(
+                    json.dumps(candidate, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii")
+                failed = harness["run_runtime"](
+                    FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64=encoded
+                )
                 self.assertNotEqual(failed.returncode, 0, label)
                 self.assertIn(expected, failed.stderr, label)
                 path = temp / f"{label}.json"
@@ -130,14 +181,22 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             contract = json.loads(harness["contract_path"].read_text(encoding="utf-8"))
             item = contract["bindings"][0]["nodes"][0]
             workflow = state["workflows"][item["workflow"]["id"]]
-            node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
-            node["credentials"][contract["bindings"][0]["credential_type"]]["unexpected"] = "drift"
+            node = next(
+                node for node in workflow["nodes"] if node["id"] == item["node"]["id"]
+            )
+            node["credentials"][contract["bindings"][0]["credential_type"]][
+                "unexpected"
+            ] = "drift"
             harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
             failed = harness["run_runtime"]()
             self.assertNotEqual(failed.returncode, 0)
             self.assertIn("CREDENTIAL_REFERENCE_INVALID", failed.stderr)
-            with patch.object(self.runner, "CREDENTIAL_BINDINGS_PATH", harness["contract_path"]):
-                with self.assertRaisesRegex(self.runner.CutoverError, "CREDENTIAL_REFERENCE_INVALID"):
+            with patch.object(
+                self.runner, "CREDENTIAL_BINDINGS_PATH", harness["contract_path"]
+            ):
+                with self.assertRaisesRegex(
+                    self.runner.CutoverError, "CREDENTIAL_REFERENCE_INVALID"
+                ):
                     self.runner._workflow_body_projection(workflow)
 
     def _fixture(self, temp: Path):
@@ -146,12 +205,16 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         migration = self.migration.MigrationRunner(source)
         source_path = temp / "finance-data-table-backup-v1.json"
         migration_path = temp / "data-table-migration-receipt.json"
-        source_path.write_bytes(self.runner._canonical_bytes(migration.backup_snapshot()))
+        source_path.write_bytes(
+            self.runner._canonical_bytes(migration.backup_snapshot())
+        )
         first = migration.run()
         migration_path.write_bytes(self.runner._canonical_bytes(first))
         os.chmod(source_path, 0o600)
         os.chmod(migration_path, 0o600)
-        receipt_sha = self.runner.hashlib.sha256(migration_path.read_bytes()).hexdigest()
+        receipt_sha = self.runner.hashlib.sha256(
+            migration_path.read_bytes()
+        ).hexdigest()
         matrix = json.loads(
             (ROOT / "integrations/n8n/data-table-migration-matrix.json").read_text(
                 encoding="utf-8"
@@ -161,11 +224,17 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         for name in sorted(self.runner.TARGETS):
             schema = [
                 {"name": field, "type": spec["type"]}
-                for field, spec in sorted(matrix["target_schemas"][name]["columns"].items())
+                for field, spec in sorted(
+                    matrix["target_schemas"][name]["columns"].items()
+                )
             ]
             rows = migration.target_tables[name]
             row_strings = sorted(
-                json.dumps(self.runner._canonical(row), ensure_ascii=False, separators=(",", ":"))
+                json.dumps(
+                    self.runner._canonical(row),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
                 for row in rows
             )
             table = {
@@ -222,7 +291,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         rollback_readback["phase"] = "ROLLBACK_POST"
         raw_rollback_post = temp / "readback-rollback-post.raw"
         raw_rollback_post.write_text(
-            "finance data table digest verified:" + json.dumps(rollback_readback) + "\n",
+            "finance data table digest verified:"
+            + json.dumps(rollback_readback)
+            + "\n",
             encoding="utf-8",
         )
         raw_pre = temp / "readback-pre.raw"
@@ -278,14 +349,19 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "source_head": self.source_head,
             "generator_head": self.generator_head,
             "migration_receipt_sha256": receipt_sha,
-            "source_backup_sha256": self.runner.hashlib.sha256(source_path.read_bytes()).hexdigest(),
+            "source_backup_sha256": self.runner.hashlib.sha256(
+                source_path.read_bytes()
+            ).hexdigest(),
+            "legacy_reference_inventory_sha256": self.runner.APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256,
             "clean_checkout": True,
             "legacy_references": [],
         }
         identity["identity_sha256"] = self.runner.hashlib.sha256(
             self.runner._canonical_bytes(identity)
         ).hexdigest()
-        identity_path = migration_path.with_name("finance-four-table-accepted-identity.json")
+        identity_path = migration_path.with_name(
+            "finance-four-table-accepted-identity.json"
+        )
         identity_path.write_bytes(self.runner._canonical_bytes(identity))
         os.chmod(identity_path, 0o600)
         matrix = json.loads(
@@ -293,7 +369,7 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        inventory = self.runner._reference_inventory(matrix)
+        inventory = self.runner._reference_inventory()
         schema_digests = self.runner._target_schema_digests(matrix)
         targets = [
             {
@@ -320,7 +396,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
                 {
                     "workflow_id": f"live-workflow-{index}",
                     "revision_id": f"live-revision-{index}",
-                    "workflow_body_sha256": self.runner._workflow_body_digest(self._workflow_body(index)),
+                    "workflow_body_sha256": self.runner._workflow_body_digest(
+                        self._workflow_body(index)
+                    ),
                     "active": False,
                     "published": False,
                     "in_flight": 0,
@@ -364,7 +442,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             binding={
                 "operation_nonce": self.runner.DEFAULT_OPERATION_NONCE,
                 "protected_quiescence_receipt_digest": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
-                "required_live_export_digest": self.runner._export_semantic_digest(live_export),
+                "required_live_export_digest": self.runner._export_semantic_digest(
+                    live_export
+                ),
                 "contract_bijection_digest": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
             },
         )
@@ -385,26 +465,43 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
     def _production_runtime_harness(self, temp: Path):
         """Build the disposable n8n/PostgreSQL harness used by runtime tests."""
         original_contract_path = self.runner.CREDENTIAL_BINDINGS_PATH
-        _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+        (
+            _source,
+            migration,
+            _receipt_sha,
+            _workflow_root,
+            _raw_readback,
+            _raw_pre,
+            _rollback_pre,
+            _raw_rollback,
+        ) = self._fixture(temp)
         live_export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
         lock_receipt_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
         exported = json.loads(live_export_path.read_text(encoding="utf-8"))
         lock_receipt = json.loads(lock_receipt_path.read_text(encoding="utf-8"))
         state_path = temp / "database-state.json"
+        source_root = ROOT / "integrations/n8n/workflows"
+        source_files = sorted(source_root.glob("*.json"))
+        source_by_file = {}
+        for source_path in source_files:
+            source = json.loads(source_path.read_text(encoding="utf-8"))
+            source_by_file[source_path.name] = source
+        state_workflows = {}
+        for source in source_by_file.values():
+            state_workflows[source["id"]] = {
+                **self._workflow_body(0, json.loads(json.dumps(source["nodes"]))),
+                "id": source["id"],
+                "name": source["name"],
+                "connections": json.loads(json.dumps(source["connections"])),
+                "settings": json.loads(json.dumps(source["settings"])),
+                "meta": json.loads(json.dumps(source["meta"])),
+                "pinData": json.loads(json.dumps(source["pinData"])),
+                "active": False,
+                "activeVersionId": None,
+                "versionId": f"live-revision-{len(state_workflows)}",
+            }
         state = {
-            "workflows": {
-                workflow["workflow_id"]: {
-                    "id": workflow["workflow_id"],
-                    **self._workflow_body(index),
-                    "active": False,
-                    "activeVersionId": None,
-                    "versionId": workflow["revision_id"],
-                    "nodes": [],
-                    "meta": {},
-                    "settings": {},
-                }
-                for index, workflow in enumerate(exported["workflows"])
-            },
+            "workflows": state_workflows,
             "dataTables": {
                 target["name"]: {
                     "id": target["table_id"],
@@ -416,42 +513,91 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             "journal": [],
             "credentials": [],
         }
-        bindings = json.loads((ROOT / "integrations/n8n/credential-bindings.json").read_text(encoding="utf-8"))
-        workflow_codes = sorted({item["workflow"]["code"] for binding in bindings["bindings"] for item in binding["nodes"]})
-        workflow_ids_by_code = dict(zip(workflow_codes, sorted(state["workflows"])))
-        test_bindings = json.loads(json.dumps(bindings))
-        for binding in test_bindings["bindings"]:
-            for item in binding["nodes"]:
-                item["workflow"]["id"] = workflow_ids_by_code[item["workflow"]["code"]]
+        bindings = json.loads(
+            (ROOT / "integrations/n8n/credential-bindings.json").read_text(
+                encoding="utf-8"
+            )
+        )
         contract_path = temp / "credential-bindings.json"
-        contract_path.write_text(json.dumps(test_bindings), encoding="utf-8")
+        contract_path.write_text(json.dumps(bindings), encoding="utf-8")
         self.runner.CREDENTIAL_BINDINGS_PATH = contract_path
         credential_ids = {}
         for binding_index, binding in enumerate(bindings["bindings"]):
             credential_id = f"credential-{binding_index}"
-            credential_ids[binding["credential_type"]] = credential_id
-            state["credentials"].append({
-                "id": credential_id, "name": f"Live {binding['placeholder']}",
-                "type": binding["credential_type"], "project_id": exported["project_id"],
-                "role": "credential:owner",
-            })
-            for item in binding["nodes"]:
-                workflow = state["workflows"][workflow_ids_by_code[item["workflow"]["code"]]]
-                workflow["meta"]["financeWorkflowCode"] = item["workflow"]["code"]
-                workflow["nodes"].append({
-                    "id": item["node"]["id"], "name": item["node"]["name"],
-                    "type": binding["node_type"], "credentials": {
-                        binding["credential_type"]: {
-                            "id": credential_id, "name": f"Live {binding['placeholder']}",
-                        }
-                    }, "parameters": {},
-                })
-        for reference in exported["references"]:
-            state["workflows"][reference["workflow_id"]]["nodes"].append(
+            credential_ids[binding["placeholder"]] = credential_id
+            credential_name = binding.get(
+                "credential_name", f"Live {binding['placeholder']}"
+            )
+            state["credentials"].append(
                 {
-                    "id": reference["node_id"],
-                    "name": reference["node_name"],
-                    "parameters": {"dataTableId": reference["old_table_id"]},
+                    "id": credential_id,
+                    "name": credential_name,
+                    "type": binding["credential_type"],
+                    "project_id": exported["project_id"],
+                    "role": "credential:owner",
+                }
+            )
+            for item in binding["nodes"]:
+                workflow = state["workflows"][item["workflow"]["id"]]
+                node = next(
+                    node
+                    for node in workflow["nodes"]
+                    if node["id"] == item["node"]["id"]
+                )
+                node["credentials"] = {
+                    binding["credential_type"]: {
+                        "id": credential_id,
+                        "name": credential_name,
+                    }
+                }
+        inventory = self.runner._reference_inventory()
+        target_ids = {
+            target["name"]: target["table_id"] for target in exported["targets"]
+        }
+        revisions = {
+            source["id"]: f"live-revision-{index}"
+            for index, source in enumerate(source_by_file.values())
+        }
+        exported["workflows"] = [
+            {
+                **workflow,
+                "workflow_id": source["id"],
+                "revision_id": revisions[source["id"]],
+            }
+            for workflow, source in zip(
+                exported["workflows"], source_by_file.values(), strict=True
+            )
+        ]
+        exported["references"] = []
+        for item in inventory:
+            source = source_by_file[Path(item["workflow_path"]).name]
+            node = next(
+                node for node in source["nodes"] if node["name"] == item["node_name"]
+            )
+            state_node = next(
+                state_node
+                for state_node in state["workflows"][source["id"]]["nodes"]
+                if state_node["id"] == node["id"]
+            )
+            state_node.setdefault("parameters", {})["dataTableId"] = (
+                self.runner.LEGACY_TABLE_IDS[item["source_table"]]
+            )
+            exported["references"].append(
+                {
+                    "reference_id": item["reference_id"],
+                    "workflow_id": source["id"],
+                    "revision_id": revisions[source["id"]],
+                    "node_id": node["id"],
+                    "workflow_path": item["workflow_path"],
+                    "node_name": item["node_name"],
+                    "operation": item["operation"],
+                    "old_table_name": item["source_table"],
+                    "old_table_id": self.runner.LEGACY_TABLE_IDS[item["source_table"]],
+                    "canonical_table_name": item["canonical_table_name"],
+                    "canonical_table_id": target_ids.get(item["canonical_table_name"]),
+                    "active": False,
+                    "published": False,
+                    "in_flight": 0,
                 }
             )
         for workflow in exported["workflows"]:
@@ -491,7 +637,9 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         n8n_root = node_root / "n8n"
         for path in (n8n_root / "bin", node_root / "pg"):
             path.mkdir(parents=True, exist_ok=True)
-        (n8n_root / "package.json").write_text('{"name":"n8n","version":"test"}\n', encoding="utf-8")
+        (n8n_root / "package.json").write_text(
+            '{"name":"n8n","version":"test"}\n', encoding="utf-8"
+        )
         (n8n_root / "bin/n8n").write_text(
             """const fs = require('node:fs');
 fs.appendFileSync(process.env.FINANCE_TEST_LIFECYCLE_LOG, 'managed-db-close\\n');
@@ -542,6 +690,16 @@ class Client {
       );
       return { rows: rows.map((entry) => ({ receipt: clone(entry.receipt) })) };
     }
+    if (statement.startsWith('SELECT rollback_workflows FROM finance_four_table_cutover_journal')) {
+      const [receiptSha, projectId, lockResource] = params;
+      const rows = this.current().journal.filter((entry) =>
+        entry.receipt.runtime_plan_receipt_sha256 === receiptSha &&
+        entry.projectId === projectId &&
+        entry.operation === 'FORWARD' &&
+        entry.lockResource === lockResource
+      );
+      return { rows: rows.map((entry) => ({ rollback_workflows: clone(entry.rollback_workflows) })) };
+    }
     if (statement.startsWith('SELECT w.id')) {
       return { rows: (params[1] || []).map((id) => this.current().workflows[id]).filter(Boolean).map(clone) };
     }
@@ -553,10 +711,17 @@ class Client {
       workflow.versionId = revisionId;
       return { rowCount: 1, rows: [{ id: workflowId, versionId: revisionId }] };
     }
-    if (statement.startsWith('CREATE TABLE IF NOT EXISTS')) return { rows: [] };
+    if (statement.startsWith('CREATE TABLE IF NOT EXISTS') || statement.startsWith('ALTER TABLE')) return { rows: [] };
     if (statement.startsWith('INSERT INTO finance_four_table_cutover_journal')) {
-      const [receiptSha, projectId, operation, lockResource, receiptJson] = params;
-      this.current().journal.push({ receiptSha, projectId, operation, lockResource, receipt: JSON.parse(receiptJson) });
+      const [receiptSha, projectId, operation, lockResource, receiptJson, rollbackJson] = params;
+      this.current().journal.push({
+        receiptSha,
+        projectId,
+        operation,
+        lockResource,
+        receipt: JSON.parse(receiptJson),
+        rollback_workflows: rollbackJson ? JSON.parse(rollbackJson) : null,
+      });
       record('journal');
       return { rowCount: 1, rows: [] };
     }
@@ -578,8 +743,119 @@ module.exports = { Client };
             encoding="utf-8",
         )
 
+        canonical_targets = {
+            item["source_table"]: item["canonical_table_name"]
+            for item in inventory
+            if item["canonical_table_name"] is not None
+        }
+        canonical_targets.update(self.runner.ABSENT_REFERENCE_TARGETS)
+        canonical_targets.update(
+            {
+                name: canonical_targets.get(name, "finance_ingestion_state")
+                for name in self.runner.LEGACY_TABLE_IDS
+            }
+        )
+        canonical_targets.update(
+            {
+                name: canonical_targets.get(name, "finance_ingestion_state")
+                for name in self.runner._legacy_names()
+            }
+        )
+        canonical_files = []
+        corpus = self.runner.hashlib.sha256()
+        for source_path in source_files:
+            content = source_path.read_bytes().replace(b"\r\n", b"\n").decode("utf-8")
+            for legacy_name, canonical_name in canonical_targets.items():
+                content = content.replace(legacy_name, canonical_name)
+            document = json.loads(content)
+            for item in inventory:
+                if (
+                    item["workflow_path"]
+                    != f"integrations/n8n/workflows/{source_path.name}"
+                    or item["canonical_table_name"] is not None
+                ):
+                    continue
+                node = next(
+                    node
+                    for node in document["nodes"]
+                    if node["name"] == item["node_name"]
+                )
+                node["type"] = "n8n-nodes-base.code"
+                node.setdefault("parameters", {}).pop("dataTableId", None)
+            for binding in bindings["bindings"]:
+                for item in binding["nodes"]:
+                    if item["workflow"]["file"] != source_path.name:
+                        continue
+                    node = next(
+                        node
+                        for node in document["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
+                    node["credentials"][binding["credential_type"]] = {
+                        "id": binding["placeholder"],
+                        "name": binding["placeholder"],
+                    }
+            for node in document["nodes"]:
+                selector = node.get("parameters", {}).get("dataTableId")
+                if isinstance(selector, dict) and selector.get("__rl") is True:
+                    node["parameters"]["dataTableId"] = selector.get("value")
+            content = json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+            relative = f"integrations/n8n/workflows/{source_path.name}"
+            corpus.update(relative.encode("utf-8"))
+            corpus.update(b"\0")
+            corpus.update(content.encode("utf-8"))
+            corpus.update(b"\0")
+            canonical_files.append({"path": relative, "content": content})
+        bindings["source"]["sha256"] = corpus.hexdigest()
+        contract_path.write_text(json.dumps(bindings), encoding="utf-8")
+        canonical_source = {
+            "schema_version": "finance-four-table-canonical-source-v1",
+            "source_head": exported["source_head"],
+            "generator_head": exported["generator_head"],
+            "accepted_identity_sha256": exported["accepted_identity_sha256"],
+            "source_corpus_sha256": bindings["source"]["sha256"],
+            "legacy_reference_inventory_sha256": self.runner.APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256,
+            "files": canonical_files,
+        }
+        canonical_source_input = json.dumps(canonical_source).encode("utf-8")
+        for canonical_file in canonical_files:
+            document = json.loads(canonical_file["content"])
+            workflow = state["workflows"][document["id"]]
+            for field in ("name", "connections", "settings", "meta", "pinData"):
+                workflow[field] = document[field]
+        for workflow in exported["workflows"]:
+            workflow["workflow_body_sha256"] = self.runner._workflow_body_digest(
+                state["workflows"][workflow["workflow_id"]]
+            )
+        exported.pop("export_sha256", None)
+        exported["export_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(exported)
+        ).hexdigest()
+        semantic_digest = self.runner._export_semantic_digest(exported)
+        live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+        os.chmod(live_export_path, 0o600)
+        lock_receipt.update(
+            {
+                "export_sha256": exported["export_sha256"],
+                "required_live_export_digest": semantic_digest,
+            }
+        )
+        lock_receipt.pop("lock_receipt_sha256", None)
+        lock_receipt["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(lock_receipt)
+        ).hexdigest()
+        lock_receipt_path.write_bytes(self.runner._canonical_bytes(lock_receipt))
+        os.chmod(lock_receipt_path, 0o600)
+        state_path.write_text(json.dumps(state), encoding="utf-8")
+        initial_state = json.loads(json.dumps(state))
+        source_bindings_path = ROOT / "integrations/n8n/source-contract-bindings.json"
+        source_bindings_input = source_bindings_path.read_bytes()
+
         target_json = json.dumps(
-            [{"name": target["name"], "id": target["table_id"]} for target in exported["targets"]]
+            [
+                {"name": target["name"], "id": target["table_id"]}
+                for target in exported["targets"]
+            ]
         )
         runtime_environment = {
             **os.environ,
@@ -587,12 +863,25 @@ module.exports = { Client };
             "FINANCE_FOUR_TABLE_REPOSITORY_ROOT": exported["repository_root"],
             "FINANCE_FOUR_TABLE_SOURCE_HEAD": exported["source_head"],
             "FINANCE_FOUR_TABLE_GENERATOR_HEAD": exported["generator_head"],
-            "FINANCE_FOUR_TABLE_MIGRATION_SHA256": lock_receipt["migration_receipt_sha256"],
+            "FINANCE_FOUR_TABLE_MIGRATION_SHA256": lock_receipt[
+                "migration_receipt_sha256"
+            ],
+            "FINANCE_FOUR_TABLE_SOURCE_CONTRACT_BINDINGS_B64": base64.b64encode(
+                source_bindings_input
+            ).decode("ascii"),
             "FINANCE_FOUR_TABLE_SOURCE_SHA256": lock_receipt["source_backup_sha256"],
-            "FINANCE_FOUR_TABLE_IDENTITY_SHA256": lock_receipt["accepted_identity_sha256"],
-            "FINANCE_FOUR_TABLE_EXPORT_B64": base64.b64encode(live_export_path.read_bytes()).decode("ascii"),
-            "FINANCE_FOUR_TABLE_LOCK_B64": base64.b64encode(lock_receipt_path.read_bytes()).decode("ascii"),
-            "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64": base64.b64encode(contract_path.read_bytes()).decode("ascii"),
+            "FINANCE_FOUR_TABLE_IDENTITY_SHA256": lock_receipt[
+                "accepted_identity_sha256"
+            ],
+            "FINANCE_FOUR_TABLE_EXPORT_B64": base64.b64encode(
+                live_export_path.read_bytes()
+            ).decode("ascii"),
+            "FINANCE_FOUR_TABLE_LOCK_B64": base64.b64encode(
+                lock_receipt_path.read_bytes()
+            ).decode("ascii"),
+            "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS_B64": base64.b64encode(
+                contract_path.read_bytes()
+            ).decode("ascii"),
             "FINANCE_FOUR_TABLE_N8N_ROOT": str(node_root),
             "FINANCE_TEST_DB_STATE": str(state_path),
             "FINANCE_TEST_TARGETS_JSON": target_json,
@@ -614,10 +903,10 @@ module.exports = { Client };
 
         def run_runtime(**overrides):
             return subprocess.run(
-                ["node", "-"],
+                ["node", "-e", PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")],
                 cwd=ROOT,
                 env={**runtime_environment, **overrides},
-                input=PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8"),
+                input=canonical_source_input.decode("utf-8"),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -641,6 +930,223 @@ module.exports = { Client };
             "runtime_events_log": runtime_events_log,
         }
 
+    def _prepare_production_checkout(self, temp: Path, harness: dict) -> Path:
+        checkout = temp / "production-checkout"
+        n8n_root = checkout / "integrations/n8n"
+        workflow_root = n8n_root / "workflows"
+        workflow_root.mkdir(parents=True)
+        relative_files = (
+            "generate_data_table_migration.py",
+            "generate_source_contract_bindings.py",
+            "data-table-migration-matrix.json",
+            "data-tables.json",
+            "source-contract-bindings.json",
+            "generated/application-contract-bundle.json",
+            "credential-bindings.json",
+            "setup-workflows/runner/four_table_cutover.py",
+            "setup-workflows/runner/n8n-cli-finance-data-table-digest.cjs",
+            "setup-workflows/runner/n8n-cli-four-table-cutover.cjs",
+            "setup-workflows/runner/parse_n8n_redacted_wrapper_output.py",
+            "setup-workflows/runner/run-four-table-cutover.sh",
+            "setup-workflows/runner/finance-four-table-legacy-reference-inventory-v1.json",
+        )
+        for relative in relative_files:
+            destination = n8n_root / relative.removeprefix("../")
+            source = ROOT / "integrations/n8n" / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        inventory = self.runner._reference_inventory()
+        replacements = {
+            item["source_table"]: item["canonical_table_name"]
+            for item in inventory
+            if item["canonical_table_name"] is not None
+        }
+        replacements.update(self.runner.ABSENT_REFERENCE_TARGETS)
+        replacements.update(
+            {
+                name: replacements.get(name, "finance_ingestion_state")
+                for name in self.runner.LEGACY_TABLE_IDS
+            }
+        )
+        replacements.update(
+            {
+                name: replacements.get(name, "finance_ingestion_state")
+                for name in self.runner._legacy_names()
+            }
+        )
+        contract = json.loads(
+            (ROOT / "integrations/n8n/credential-bindings.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        canonical_contents = {}
+        for source_path in sorted((ROOT / "integrations/n8n/workflows").glob("*.json")):
+            content = source_path.read_text(encoding="utf-8")
+            for legacy_name, canonical_name in replacements.items():
+                content = content.replace(legacy_name, canonical_name)
+            document = json.loads(content)
+            for item in inventory:
+                if (
+                    item["workflow_path"]
+                    != f"integrations/n8n/workflows/{source_path.name}"
+                    or item["canonical_table_name"] is not None
+                ):
+                    continue
+                node = next(
+                    node
+                    for node in document["nodes"]
+                    if node["name"] == item["node_name"]
+                )
+                node["type"] = "n8n-nodes-base.code"
+                node.setdefault("parameters", {}).pop("dataTableId", None)
+            for binding in contract["bindings"]:
+                for item in binding["nodes"]:
+                    if item["workflow"]["file"] != source_path.name:
+                        continue
+                    node = next(
+                        node
+                        for node in document["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
+                    node["credentials"][binding["credential_type"]] = {
+                        "id": binding["placeholder"],
+                        "name": binding["placeholder"],
+                    }
+            for node in document["nodes"]:
+                selector = node.get("parameters", {}).get("dataTableId")
+                if isinstance(selector, dict) and selector.get("__rl") is True:
+                    node["parameters"]["dataTableId"] = selector.get("value")
+            canonical_contents[source_path.name] = json.dumps(
+                document, ensure_ascii=False, separators=(",", ":")
+            )
+        corpus = self.runner.hashlib.sha256()
+        for name, content in canonical_contents.items():
+            relative = f"integrations/n8n/workflows/{name}"
+            corpus.update(relative.encode("utf-8"))
+            corpus.update(b"\0")
+            corpus.update(content.encode("utf-8"))
+            corpus.update(b"\0")
+            (workflow_root / name).write_text(content, encoding="utf-8")
+        contract["source"]["sha256"] = corpus.hexdigest()
+        (n8n_root / "credential-bindings.json").write_text(
+            json.dumps(contract), encoding="utf-8"
+        )
+        generated_manifest = subprocess.run(
+            [
+                sys.executable,
+                str(n8n_root / "generate_source_contract_bindings.py"),
+                "--output",
+                str(n8n_root / "source-contract-bindings.json"),
+            ],
+            cwd=checkout,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(generated_manifest.stdout, "")
+        subprocess.run(["git", "-C", str(checkout), "init", "-q"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "config",
+                "user.email",
+                "test@example.invalid",
+            ],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(checkout), "config", "user.name", "Production Fixture"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(checkout), "add", "integrations"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "commit",
+                "-qm",
+                "canonical production fixture",
+            ],
+            check=True,
+        )
+        checkout_head = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        generator_head = (
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(checkout / "integrations/n8n/generate_data_table_migration.py"),
+                    "--schema-digest",
+                ],
+                cwd=checkout,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            .stdout.splitlines()[-1]
+            .strip()
+        )
+        identity_path = (
+            harness["migration"].parent / "finance-four-table-accepted-identity.json"
+        )
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        identity.update(
+            {
+                "repository_root": str(checkout),
+                "workflow_root": str(workflow_root),
+                "source_head": checkout_head,
+                "generator_head": generator_head,
+            }
+        )
+        identity.pop("identity_sha256", None)
+        identity["identity_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(identity)
+        ).hexdigest()
+        identity_path.write_bytes(self.runner._canonical_bytes(identity))
+        os.chmod(identity_path, 0o600)
+        live_export_path = harness["live_export_path"]
+        exported = json.loads(live_export_path.read_text(encoding="utf-8"))
+        exported.update(
+            {
+                "repository_root": str(checkout),
+                "source_head": checkout_head,
+                "generator_head": generator_head,
+                "accepted_identity_sha256": identity["identity_sha256"],
+            }
+        )
+        exported.pop("export_sha256", None)
+        exported["export_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(exported)
+        ).hexdigest()
+        live_export_path.write_bytes(self.runner._canonical_bytes(exported))
+        os.chmod(live_export_path, 0o600)
+        lock_path = harness["lock_receipt_path"]
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        lock.update(
+            {
+                "export_sha256": exported["export_sha256"],
+                "accepted_identity_sha256": identity["identity_sha256"],
+            }
+        )
+        lock.pop("lock_receipt_sha256", None)
+        lock["lock_receipt_sha256"] = self.runner.hashlib.sha256(
+            self.runner._canonical_bytes(lock)
+        ).hexdigest()
+        lock_path.write_bytes(self.runner._canonical_bytes(lock))
+        os.chmod(lock_path, 0o600)
+        harness["exported"] = exported
+        harness["runtime_environment"][
+            "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"
+        ] = self.runner._export_semantic_digest(exported)
+        return checkout
+
     def _install_digest_rewriting_python(self, fake_bin: Path) -> str:
         real_python = shutil.which("python3")
         self.assertIsNotNone(real_python)
@@ -648,13 +1154,13 @@ module.exports = { Client };
         fake_python.write_text(
             "#!/usr/bin/env bash\n"
             "set -euo pipefail\n"
-            "args=(\"$@\")\n"
+            'args=("$@")\n'
             "has_required=0\n"
             "for ((index=0; index<${#args[@]}-1; index++)); do\n"
-            "  if [[ \"${args[$index]}\" = \"--required-live-export-digest\" ]]; then has_required=1; args[$((index + 1))]=\"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi\n"
+            '  if [[ "${args[$index]}" = "--required-live-export-digest" ]]; then has_required=1; args[$((index + 1))]="$FINANCE_TEST_LIVE_EXPORT_DIGEST"; fi\n'
             "done\n"
-            "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* && \"$has_required\" = 0 ]]; then args+=(--required-live-export-digest \"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"); fi\n"
-            "exec \"$REAL_PYTHON\" \"${args[@]}\"\n",
+            'if [[ "$*" == *\'four_table_cutover.py rollback-runtime \'* && "$has_required" = 0 ]]; then args+=(--required-live-export-digest "$FINANCE_TEST_LIVE_EXPORT_DIGEST"); fi\n'
+            'exec "$REAL_PYTHON" "${args[@]}"\n',
             encoding="utf-8",
         )
         os.chmod(fake_python, 0o700)
@@ -679,9 +1185,15 @@ module.exports = { Client };
         else:
             migration_receipt["sha256"] = migration_sha if bound else None
         payload["migration_receipt"] = migration_receipt
-        replacement = prefix + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        replacement = (
+            prefix
+            + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            + "\n"
+        )
         return "".join(
-            replacement if line.lstrip("\x1b[0123456789; mK").startswith(prefix) else line
+            replacement
+            if line.lstrip("\x1b[0123456789; mK").startswith(prefix)
+            else line
             for line in raw.splitlines(keepends=True)
         )
 
@@ -720,7 +1232,9 @@ module.exports = { Client };
             source_head=source_head or self.source_head,
             generator_head=generator_head or self.generator_head,
             migration_receipt_sha=receipt_sha,
-            source_backup_sha=self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+            source_backup_sha=self.runner.hashlib.sha256(
+                source.read_bytes()
+            ).hexdigest(),
             identity_digest=identity_digest or export["accepted_identity_sha256"],
             required_export_digest=required_digest,
             matrix=matrix,
@@ -730,8 +1244,19 @@ module.exports = { Client };
     def test_readback_requires_bound_matching_migration_sha_for_every_phase(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            _source, _migration, receipt_sha, _workflow_root, _raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
-            retained = json.loads(RETAINED_READBACK_FIXTURE.read_text(encoding="utf-8"))["raw_stdout"]
+            (
+                _source,
+                _migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
+            retained = json.loads(
+                RETAINED_READBACK_FIXTURE.read_text(encoding="utf-8")
+            )["raw_stdout"]
             phase_inputs = {
                 "FORWARD_PRE": raw_pre.read_text(encoding="utf-8"),
                 "FORWARD_POST": retained,
@@ -745,7 +1270,8 @@ module.exports = { Client };
                 path = temp / f"valid-{phase}.raw"
                 path.write_text(valid, encoding="utf-8")
                 self.assertTrue(
-                    self.runner._parse_readback(path, receipt_sha, phase)["verified"], phase
+                    self.runner._parse_readback(path, receipt_sha, phase)["verified"],
+                    phase,
                 )
                 for label, mutation in (
                     ("bound-false", {"bound": False}),
@@ -769,10 +1295,21 @@ module.exports = { Client };
     def test_forward_binds_receipt_heads_and_proves_noop(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_digest = self.runner._export_semantic_digest(
                 json.loads(
-                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(
+                        encoding="utf-8"
+                    )
                 )
             )
             output = temp / "forward.json"
@@ -814,7 +1351,9 @@ module.exports = { Client };
             self.assertEqual(result["migration_receipt_sha256"], receipt_sha)
             self.assertEqual(result["source_head"], self.source_head)
             self.assertEqual(result["generator_head"], self.generator_head)
-            self.assertEqual(result["operation_nonce"], self.runner.DEFAULT_OPERATION_NONCE)
+            self.assertEqual(
+                result["operation_nonce"], self.runner.DEFAULT_OPERATION_NONCE
+            )
             self.assertEqual(
                 result["protected_quiescence_receipt_digest"],
                 self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
@@ -832,19 +1371,35 @@ module.exports = { Client };
             )
             self.assertTrue(result["reference_rewrite"]["verified"])
             self.assertTrue(result["second_run_noop"])
-            self.assertEqual([row["name"] for row in result["target_tables"]], sorted(self.runner.TARGETS))
+            self.assertEqual(
+                [row["name"] for row in result["target_tables"]],
+                sorted(self.runner.TARGETS),
+            )
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o600)
             missing_evidence = dict(result)
             missing_evidence.pop("post_readback")
-            self.assertTrue(list(Draft202012Validator(self.schema).iter_errors(missing_evidence)))
+            self.assertTrue(
+                list(Draft202012Validator(self.schema).iter_errors(missing_evidence))
+            )
             arbitrary_ack = dict(result)
             arbitrary_ack["operator_ack"] = "operator-approved"
-            self.assertTrue(list(Draft202012Validator(self.schema).iter_errors(arbitrary_ack)))
+            self.assertTrue(
+                list(Draft202012Validator(self.schema).iter_errors(arbitrary_ack))
+            )
 
     def test_forward_rejects_legacy_references(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             (workflow_root / "old.json").write_text(
                 '{"table":"finance_source_cursors"}\n', encoding="utf-8"
             )
@@ -882,10 +1437,21 @@ module.exports = { Client };
     def test_rollback_requires_forward_receipt_and_restores_exact_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                raw_rollback_pre,
+                raw_rollback,
+            ) = self._fixture(temp)
             export_digest = self.runner._export_semantic_digest(
                 json.loads(
-                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(
+                        encoding="utf-8"
+                    )
                 )
             )
             forward = temp / "forward.json"
@@ -922,16 +1488,18 @@ module.exports = { Client };
             self.assertEqual(self.runner.main(["forward", *common]), 0)
             rollback = temp / "rollback.json"
             rollback_common = common.copy()
-            rollback_common[
-                rollback_common.index(self.runner.REQUIRED_FORWARD_ACK)
-            ] = self.runner.REQUIRED_ROLLBACK_ACK
+            rollback_common[rollback_common.index(self.runner.REQUIRED_FORWARD_ACK)] = (
+                self.runner.REQUIRED_ROLLBACK_ACK
+            )
             rollback_common[
                 rollback_common.index(self.runner.FORWARD_RUNTIME_ACTION)
             ] = self.runner.ROLLBACK_RUNTIME_ACTION
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
             rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback_pre)
-            rollback_common[rollback_common.index(str(raw_readback))] = str(raw_rollback)
+            rollback_common[rollback_common.index(str(raw_readback))] = str(
+                raw_rollback
+            )
             rollback_common[-1] = str(rollback)
             runtime_proof = temp / "runtime-proof.json"
             runtime_state = temp / "runtime-state.json"
@@ -945,17 +1513,28 @@ module.exports = { Client };
             ]
             runtime_args = [
                 "rollback-runtime",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_ROLLBACK_ACK,
-                "--runtime-action", self.runner.ROLLBACK_RUNTIME_ACTION,
-                "--required-live-export-digest", export_digest,
-                "--workflow-root", str(workflow_root),
-                "--runtime-state", str(runtime_state),
-                "--output", str(runtime_proof),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_ROLLBACK_ACK,
+                "--runtime-action",
+                self.runner.ROLLBACK_RUNTIME_ACTION,
+                "--required-live-export-digest",
+                export_digest,
+                "--workflow-root",
+                str(workflow_root),
+                "--runtime-state",
+                str(runtime_state),
+                "--output",
+                str(runtime_proof),
             ]
             self.assertEqual(self.runner.main(runtime_args), 0)
             self.assertEqual(self.runner.main(rollback_args), 0)
@@ -968,7 +1547,16 @@ module.exports = { Client };
     def test_receipt_must_be_mode_six_hundred(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             os.chmod(migration, 0o644)
             args = [
                 "forward",
@@ -1004,50 +1592,104 @@ module.exports = { Client };
     def test_source_backup_must_be_mode_six_hundred(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             args = [
                 "forward",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
-                "--pre-readback-raw", str(raw_pre),
-                "--post-readback-raw", str(raw_readback),
-                "--second-post-readback-raw", str(raw_readback),
-                "--runtime-state", str(temp / "runtime-state.json"),
-                "--output", str(temp / "forward.json"),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
+                "--pre-readback-raw",
+                str(raw_pre),
+                "--post-readback-raw",
+                str(raw_readback),
+                "--second-post-readback-raw",
+                str(raw_readback),
+                "--runtime-state",
+                str(temp / "runtime-state.json"),
+                "--output",
+                str(temp / "forward.json"),
             ]
             for mode in (0o644, 0o400, 0o640):
                 os.chmod(source, mode)
                 self.assertEqual(self.runner.main(args), 1)
 
     def test_cutover_rejects_missing_export_or_lock_receipt(self):
-        for missing_name in (self.runner.LIVE_EXPORT_FILENAME, self.runner.LOCK_RECEIPT_FILENAME):
-            with self.subTest(missing_name=missing_name), tempfile.TemporaryDirectory() as directory:
+        for missing_name in (
+            self.runner.LIVE_EXPORT_FILENAME,
+            self.runner.LOCK_RECEIPT_FILENAME,
+        ):
+            with (
+                self.subTest(missing_name=missing_name),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 temp = Path(directory)
-                source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+                (
+                    source,
+                    migration,
+                    receipt_sha,
+                    workflow_root,
+                    _raw_readback,
+                    _raw_pre,
+                    _rollback_pre,
+                    _raw_rollback,
+                ) = self._fixture(temp)
                 (migration.parent / missing_name).unlink()
                 args = [
                     "validate-inputs",
-                    "--source-backup", str(source),
-                    "--migration-receipt", str(migration),
-                    "--migration-receipt-sha256", receipt_sha,
-                    "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                    "--repository-root", str(ROOT),
-                    "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                    "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                    "--workflow-root", str(workflow_root),
+                    "--source-backup",
+                    str(source),
+                    "--migration-receipt",
+                    str(migration),
+                    "--migration-receipt-sha256",
+                    receipt_sha,
+                    "--source-backup-sha256",
+                    self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                    "--repository-root",
+                    str(ROOT),
+                    "--operator-ack",
+                    self.runner.REQUIRED_FORWARD_ACK,
+                    "--runtime-action",
+                    self.runner.FORWARD_RUNTIME_ACTION,
+                    "--workflow-root",
+                    str(workflow_root),
                 ]
                 self.assertEqual(self.runner.main(args), 1)
 
     def test_live_export_provenance_rebind_preserves_semantic_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             original = json.loads(export_path.read_text(encoding="utf-8"))
             required_digest = self.runner._export_semantic_digest(original)
@@ -1073,46 +1715,149 @@ module.exports = { Client };
     def test_live_export_every_semantic_change_fails_binding(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             original_bytes = export_path.read_bytes()
             original = json.loads(original_bytes)
             required_digest = self.runner._export_semantic_digest(original)
             mutations = (
-                ("schema_version", lambda export: export.update({"schema_version": "changed"})),
-                ("workflow_count", lambda export: export.update({"workflow_count": 18})),
+                (
+                    "schema_version",
+                    lambda export: export.update({"schema_version": "changed"}),
+                ),
+                (
+                    "workflow_count",
+                    lambda export: export.update({"workflow_count": 18}),
+                ),
                 ("in_flight", lambda export: export.update({"in_flight": 1})),
-                ("workflow_id", lambda export: export["workflows"][0].update({"workflow_id": "changed"})),
-                ("workflow_active", lambda export: export["workflows"][0].update({"active": True})),
-                ("workflow_published", lambda export: export["workflows"][0].update({"published": True})),
-                ("workflow_in_flight", lambda export: export["workflows"][0].update({"in_flight": 1})),
+                (
+                    "workflow_id",
+                    lambda export: export["workflows"][0].update(
+                        {"workflow_id": "changed"}
+                    ),
+                ),
+                (
+                    "workflow_active",
+                    lambda export: export["workflows"][0].update({"active": True}),
+                ),
+                (
+                    "workflow_published",
+                    lambda export: export["workflows"][0].update({"published": True}),
+                ),
+                (
+                    "workflow_in_flight",
+                    lambda export: export["workflows"][0].update({"in_flight": 1}),
+                ),
                 (
                     "workflow_body_sha256",
-                    lambda export: export["workflows"][0].update({"workflow_body_sha256": "a" * 64}),
+                    lambda export: export["workflows"][0].update(
+                        {"workflow_body_sha256": "a" * 64}
+                    ),
                 ),
-                ("target_name", lambda export: export["targets"][0].update({"name": "changed"})),
-                ("target_table_id", lambda export: export["targets"][0].update({"table_id": "changed"})),
-                ("target_schema_sha256", lambda export: export["targets"][0].update({"schema_sha256": "a" * 64})),
-                ("reference_id", lambda export: export["references"][0].update({"reference_id": "changed"})),
-                ("reference_workflow_id", lambda export: export["references"][0].update({"workflow_id": "changed"})),
-                ("reference_workflow_path", lambda export: export["references"][0].update({"workflow_path": "changed"})),
-                ("reference_node_id", lambda export: export["references"][0].update({"node_id": "changed"})),
-                ("reference_node_name", lambda export: export["references"][0].update({"node_name": "changed"})),
-                ("reference_operation", lambda export: export["references"][0].update({"operation": "changed"})),
-                ("reference_old_table_name", lambda export: export["references"][0].update({"old_table_name": "changed"})),
-                ("reference_old_table_id", lambda export: export["references"][0].update({"old_table_id": "changed"})),
-                ("reference_canonical_table_name", lambda export: export["references"][0].update({"canonical_table_name": "changed"})),
-                ("reference_canonical_table_id", lambda export: export["references"][0].update({"canonical_table_id": "changed"})),
-                ("reference_active", lambda export: export["references"][0].update({"active": True})),
-                ("reference_published", lambda export: export["references"][0].update({"published": True})),
-                ("reference_in_flight", lambda export: export["references"][0].update({"in_flight": 1})),
+                (
+                    "target_name",
+                    lambda export: export["targets"][0].update({"name": "changed"}),
+                ),
+                (
+                    "target_table_id",
+                    lambda export: export["targets"][0].update({"table_id": "changed"}),
+                ),
+                (
+                    "target_schema_sha256",
+                    lambda export: export["targets"][0].update(
+                        {"schema_sha256": "a" * 64}
+                    ),
+                ),
+                (
+                    "reference_id",
+                    lambda export: export["references"][0].update(
+                        {"reference_id": "changed"}
+                    ),
+                ),
+                (
+                    "reference_workflow_id",
+                    lambda export: export["references"][0].update(
+                        {"workflow_id": "changed"}
+                    ),
+                ),
+                (
+                    "reference_workflow_path",
+                    lambda export: export["references"][0].update(
+                        {"workflow_path": "changed"}
+                    ),
+                ),
+                (
+                    "reference_node_id",
+                    lambda export: export["references"][0].update(
+                        {"node_id": "changed"}
+                    ),
+                ),
+                (
+                    "reference_node_name",
+                    lambda export: export["references"][0].update(
+                        {"node_name": "changed"}
+                    ),
+                ),
+                (
+                    "reference_operation",
+                    lambda export: export["references"][0].update(
+                        {"operation": "changed"}
+                    ),
+                ),
+                (
+                    "reference_old_table_name",
+                    lambda export: export["references"][0].update(
+                        {"old_table_name": "changed"}
+                    ),
+                ),
+                (
+                    "reference_old_table_id",
+                    lambda export: export["references"][0].update(
+                        {"old_table_id": "changed"}
+                    ),
+                ),
+                (
+                    "reference_canonical_table_name",
+                    lambda export: export["references"][0].update(
+                        {"canonical_table_name": "changed"}
+                    ),
+                ),
+                (
+                    "reference_canonical_table_id",
+                    lambda export: export["references"][0].update(
+                        {"canonical_table_id": "changed"}
+                    ),
+                ),
+                (
+                    "reference_active",
+                    lambda export: export["references"][0].update({"active": True}),
+                ),
+                (
+                    "reference_published",
+                    lambda export: export["references"][0].update({"published": True}),
+                ),
+                (
+                    "reference_in_flight",
+                    lambda export: export["references"][0].update({"in_flight": 1}),
+                ),
             )
             for field, mutation in mutations:
                 with self.subTest(field=field):
                     export_path.write_bytes(original_bytes)
                     os.chmod(export_path, 0o600)
                     rebound = self._rewrite_export(export_path, mutation)
-                    self.assertNotEqual(self.runner._export_semantic_digest(rebound), required_digest)
+                    self.assertNotEqual(
+                        self.runner._export_semantic_digest(rebound), required_digest
+                    )
                     with self.assertRaises(self.runner.CutoverError):
                         self._validate_fixture_export(
                             export_path, source, receipt_sha, required_digest
@@ -1121,7 +1866,16 @@ module.exports = { Client };
     def test_live_export_volatile_fields_do_not_change_semantic_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             original = json.loads(export_path.read_text(encoding="utf-8"))
             required_digest = self.runner._export_semantic_digest(original)
@@ -1139,64 +1893,116 @@ module.exports = { Client };
                 export["references"].reverse()
 
             rebound = self._rewrite_export(export_path, mutate)
-            self.assertEqual(self.runner._export_semantic_digest(rebound), required_digest)
-            validated = self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            self.assertEqual(
+                self.runner._export_semantic_digest(rebound), required_digest
+            )
+            validated = self._validate_fixture_export(
+                export_path, source, receipt_sha, required_digest
+            )
             self.assertEqual(validated["semantic_digest"], required_digest)
 
     def test_live_export_rejects_derived_source_table_mismatch(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             rebound = self._rewrite_export(
                 export_path,
-                lambda export: export["references"][0].update({"source_table": "finance_wrong_table"}),
+                lambda export: export["references"][0].update(
+                    {"source_table": "finance_wrong_table"}
+                ),
             )
-            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_REFERENCE_SOURCE_TABLE_MISMATCH"):
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, "LIVE_REFERENCE_SOURCE_TABLE_MISMATCH"
+            ):
                 self._validate_fixture_export(
-                    export_path, source, receipt_sha, self.runner._export_semantic_digest(rebound)
+                    export_path,
+                    source,
+                    receipt_sha,
+                    self.runner._export_semantic_digest(rebound),
                 )
 
     def test_live_export_body_change_fails_with_unchanged_revision(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             original = json.loads(export_path.read_text(encoding="utf-8"))
             required_digest = self.runner._export_semantic_digest(original)
             revision = original["workflows"][0]["revision_id"]
             rebound = self._rewrite_export(
                 export_path,
-                lambda export: export["workflows"][0].update({"workflow_body_sha256": "b" * 64}),
+                lambda export: export["workflows"][0].update(
+                    {"workflow_body_sha256": "b" * 64}
+                ),
             )
             self.assertEqual(rebound["workflows"][0]["revision_id"], revision)
-            self.assertNotEqual(self.runner._export_semantic_digest(rebound), required_digest)
-            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH"):
-                self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            self.assertNotEqual(
+                self.runner._export_semantic_digest(rebound), required_digest
+            )
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, "LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH"
+            ):
+                self._validate_fixture_export(
+                    export_path, source, receipt_sha, required_digest
+                )
 
     def test_real_workflow_fixture_matches_volatile_export_variant(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             workflows = [
                 json.loads(path.read_text(encoding="utf-8"))
                 for path in sorted((ROOT / "integrations/n8n/workflows").glob("*.json"))
             ]
             by_path = {
-                str(path.relative_to(ROOT)): json.loads(path.read_text(encoding="utf-8"))
+                str(path.relative_to(ROOT)): json.loads(
+                    path.read_text(encoding="utf-8")
+                )
                 for path in sorted((ROOT / "integrations/n8n/workflows").glob("*.json"))
             }
             self.assertEqual(len(workflows), 19)
 
             def bind_real_bodies(export):
                 revisions = {}
-                for index, (record, body) in enumerate(zip(export["workflows"], workflows, strict=True)):
+                for index, (record, body) in enumerate(
+                    zip(export["workflows"], workflows, strict=True)
+                ):
                     record.update(
                         {
                             "workflow_id": body["id"],
                             "revision_id": f"retained-revision-{index}",
-                            "workflow_body_sha256": self.runner._workflow_body_digest(body),
+                            "workflow_body_sha256": self.runner._workflow_body_digest(
+                                body
+                            ),
                         }
                     )
                     revisions[body["id"]] = record["revision_id"]
@@ -1207,7 +2013,9 @@ module.exports = { Client };
 
             real_export = self._rewrite_export(export_path, bind_real_bodies)
             required_digest = self.runner._export_semantic_digest(real_export)
-            self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            self._validate_fixture_export(
+                export_path, source, receipt_sha, required_digest
+            )
             mutated_body = json.loads(json.dumps(workflows[0]))
             mutated_body["nodes"][0]["name"] += " changed"
             self.assertNotEqual(
@@ -1225,33 +2033,67 @@ module.exports = { Client };
                     reference["source_table"] = reference["old_table_name"]
 
             rebound = self._rewrite_export(export_path, volatile_variant)
-            self.assertEqual(self.runner._export_semantic_digest(rebound), required_digest)
-            self._validate_fixture_export(export_path, source, receipt_sha, required_digest)
+            self.assertEqual(
+                self.runner._export_semantic_digest(rebound), required_digest
+            )
+            self._validate_fixture_export(
+                export_path, source, receipt_sha, required_digest
+            )
 
     def test_live_export_rejects_wrong_head_path_and_identity_provenance(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             original_bytes = export_path.read_bytes()
             original = json.loads(original_bytes)
             for field, value, expected_error in (
                 ("source_head", "a" * 40, "LIVE_EXPORT_SOURCE_HEAD_MISMATCH"),
-                ("repository_root", "/rebound/checkout", "LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH"),
+                (
+                    "repository_root",
+                    "/rebound/checkout",
+                    "LIVE_EXPORT_REPOSITORY_ROOT_MISMATCH",
+                ),
                 ("project_id", "other-project", "LIVE_EXPORT_PROJECT_ID_MISMATCH"),
                 ("generator_head", "d" * 64, "LIVE_EXPORT_GENERATOR_HEAD_MISMATCH"),
-                ("migration_receipt_sha256", "e" * 64, "LIVE_EXPORT_MIGRATION_RECEIPT_SHA256_MISMATCH"),
-                ("source_backup_sha256", "f" * 64, "LIVE_EXPORT_SOURCE_BACKUP_SHA256_MISMATCH"),
-                ("accepted_identity_sha256", "b" * 64, "LIVE_EXPORT_ACCEPTED_IDENTITY_SHA256_MISMATCH"),
+                (
+                    "migration_receipt_sha256",
+                    "e" * 64,
+                    "LIVE_EXPORT_MIGRATION_RECEIPT_SHA256_MISMATCH",
+                ),
+                (
+                    "source_backup_sha256",
+                    "f" * 64,
+                    "LIVE_EXPORT_SOURCE_BACKUP_SHA256_MISMATCH",
+                ),
+                (
+                    "accepted_identity_sha256",
+                    "b" * 64,
+                    "LIVE_EXPORT_ACCEPTED_IDENTITY_SHA256_MISMATCH",
+                ),
                 ("redacted", False, "LIVE_EXPORT_REDACTION_REQUIRED"),
             ):
                 with self.subTest(field=field):
                     export_path.write_bytes(original_bytes)
                     os.chmod(export_path, 0o600)
                     rebound = self._rewrite_export(
-                        export_path, lambda export, field=field, value=value: export.update({field: value})
+                        export_path,
+                        lambda export, field=field, value=value: export.update(
+                            {field: value}
+                        ),
                     )
-                    with self.assertRaisesRegex(self.runner.CutoverError, expected_error):
+                    with self.assertRaisesRegex(
+                        self.runner.CutoverError, expected_error
+                    ):
                         self._validate_fixture_export(
                             export_path,
                             source,
@@ -1267,7 +2109,9 @@ module.exports = { Client };
             tampered["source_head"] = "c" * 40
             export_path.write_bytes(self.runner._canonical_bytes(tampered))
             os.chmod(export_path, 0o600)
-            with self.assertRaisesRegex(self.runner.CutoverError, "LIVE_EXPORT_INTEGRITY_MISMATCH"):
+            with self.assertRaisesRegex(
+                self.runner.CutoverError, "LIVE_EXPORT_INTEGRITY_MISMATCH"
+            ):
                 self._validate_fixture_export(
                     export_path,
                     source,
@@ -1279,9 +2123,20 @@ module.exports = { Client };
     def test_repeated_export_generation_has_one_semantic_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                _source,
+                migration,
+                _receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             original = json.loads(
-                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(
+                    encoding="utf-8"
+                )
             )
             rebound = dict(original)
             rebound.update(
@@ -1299,7 +2154,16 @@ module.exports = { Client };
     def test_live_export_binds_reference_revision_to_workflow_graph(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             export = json.loads(export_path.read_text(encoding="utf-8"))
             export["references"][0]["revision_id"] = "live-revision-1"
@@ -1312,21 +2176,38 @@ module.exports = { Client };
             os.chmod(export_path, 0o600)
             args = [
                 "validate-inputs",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
             ]
             self.assertEqual(self.runner.main(args), 1)
 
     def test_lock_receipt_binds_project_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             lock_path = migration.parent / self.runner.LOCK_RECEIPT_FILENAME
             lock = json.loads(lock_path.read_text(encoding="utf-8"))
             lock["project_id"] = "other-project"
@@ -1339,24 +2220,51 @@ module.exports = { Client };
             os.chmod(lock_path, 0o600)
             args = [
                 "validate-inputs",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
             ]
             self.assertEqual(self.runner.main(args), 1)
 
     def test_lock_resource_is_stable_for_project(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            _source, migration, _receipt_sha, _workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
-            export = json.loads((migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8"))
-            lock = json.loads((migration.parent / self.runner.LOCK_RECEIPT_FILENAME).read_text(encoding="utf-8"))
-            self.assertEqual(lock["resource_key"], f"{self.runner.LOCK_NAME}:{export['project_id']}")
+            (
+                _source,
+                migration,
+                _receipt_sha,
+                _workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
+            export = json.loads(
+                (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(
+                    encoding="utf-8"
+                )
+            )
+            lock = json.loads(
+                (migration.parent / self.runner.LOCK_RECEIPT_FILENAME).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                lock["resource_key"], f"{self.runner.LOCK_NAME}:{export['project_id']}"
+            )
             export["export_sha256"] = "f" * 64
             replacement = self.runner._lock_receipt(
                 export=export,
@@ -1370,7 +2278,16 @@ module.exports = { Client };
 
     def test_live_export_rejects_aliasing_two_references_to_one_node(self):
         with tempfile.TemporaryDirectory() as directory:
-            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(Path(directory))
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(Path(directory))
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             export = json.loads(export_path.read_text(encoding="utf-8"))
             export["references"][1]["node_id"] = export["references"][0]["node_id"]
@@ -1383,20 +2300,37 @@ module.exports = { Client };
             os.chmod(export_path, 0o600)
             args = [
                 "validate-inputs",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
             ]
             self.assertEqual(self.runner.main(args), 1)
 
     def test_live_export_rejects_conflicting_legacy_table_id(self):
         with tempfile.TemporaryDirectory() as directory:
-            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(Path(directory))
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(Path(directory))
             export_path = migration.parent / self.runner.LIVE_EXPORT_FILENAME
             export = json.loads(export_path.read_text(encoding="utf-8"))
             source_table = export["references"][0]["old_table_name"]
@@ -1420,14 +2354,22 @@ module.exports = { Client };
             os.chmod(export_path, 0o600)
             args = [
                 "validate-inputs",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                self.runner.hashlib.sha256(source.read_bytes()).hexdigest(),
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
             ]
             self.assertEqual(self.runner.main(args), 1)
 
@@ -1442,7 +2384,8 @@ module.exports = { Client };
             for mode in (0o400, 0o640):
                 os.chmod(protected, mode)
                 with self.assertRaisesRegex(
-                    self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+                    self.runner.CutoverError,
+                    r"TEST_PROTECTED_MODE_REQUIRED:protected\.json",
                 ):
                     self.runner._require_protected(protected, "TEST_PROTECTED")
 
@@ -1452,7 +2395,8 @@ module.exports = { Client };
             protected.unlink()
             protected.symlink_to(replacement)
             with self.assertRaisesRegex(
-                self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+                self.runner.CutoverError,
+                r"TEST_PROTECTED_MODE_REQUIRED:protected\.json",
             ):
                 self.runner._require_protected(protected, "TEST_PROTECTED")
 
@@ -1460,42 +2404,73 @@ module.exports = { Client };
             protected.mkdir()
             os.chmod(protected, 0o600)
             with self.assertRaisesRegex(
-                self.runner.CutoverError, r"TEST_PROTECTED_MODE_REQUIRED:protected\.json"
+                self.runner.CutoverError,
+                r"TEST_PROTECTED_MODE_REQUIRED:protected\.json",
             ):
                 self.runner._require_protected(protected, "TEST_PROTECTED")
 
     def test_forward_rejects_replaced_approved_input(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, _raw_readback, _raw_pre, _rollback_pre, _raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                _raw_readback,
+                _raw_pre,
+                _rollback_pre,
+                _raw_rollback,
+            ) = self._fixture(temp)
             source_sha = self.runner.hashlib.sha256(source.read_bytes()).hexdigest()
             source.write_bytes(source.read_bytes() + b" ")
             os.chmod(source, 0o600)
             args = [
                 "validate-inputs",
-                "--source-backup", str(source),
-                "--migration-receipt", str(migration),
-                "--migration-receipt-sha256", receipt_sha,
-                "--source-backup-sha256", source_sha,
-                "--repository-root", str(ROOT),
-                "--operator-ack", self.runner.REQUIRED_FORWARD_ACK,
-                "--runtime-action", self.runner.FORWARD_RUNTIME_ACTION,
-                "--workflow-root", str(workflow_root),
+                "--source-backup",
+                str(source),
+                "--migration-receipt",
+                str(migration),
+                "--migration-receipt-sha256",
+                receipt_sha,
+                "--source-backup-sha256",
+                source_sha,
+                "--repository-root",
+                str(ROOT),
+                "--operator-ack",
+                self.runner.REQUIRED_FORWARD_ACK,
+                "--runtime-action",
+                self.runner.FORWARD_RUNTIME_ACTION,
+                "--workflow-root",
+                str(workflow_root),
             ]
             self.assertEqual(self.runner.main(args), 1)
 
             migration.write_bytes(migration.read_bytes() + b" ")
             os.chmod(migration, 0o600)
-            args[args.index("--source-backup-sha256") + 1] = self.runner.hashlib.sha256(source.read_bytes()).hexdigest()
+            args[args.index("--source-backup-sha256") + 1] = self.runner.hashlib.sha256(
+                source.read_bytes()
+            ).hexdigest()
             self.assertEqual(self.runner.main(args), 1)
 
     def test_rollback_rejects_tampered_forward_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, receipt_sha, workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                receipt_sha,
+                workflow_root,
+                raw_readback,
+                raw_pre,
+                raw_rollback_pre,
+                raw_rollback,
+            ) = self._fixture(temp)
             export_digest = self.runner._export_semantic_digest(
                 json.loads(
-                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(encoding="utf-8")
+                    (migration.parent / self.runner.LIVE_EXPORT_FILENAME).read_text(
+                        encoding="utf-8"
+                    )
                 )
             )
             forward = temp / "forward.json"
@@ -1538,7 +2513,9 @@ module.exports = { Client };
             second_index = rollback_common.index("--second-post-readback-raw")
             del rollback_common[second_index : second_index + 2]
             rollback_common[rollback_common.index(str(raw_pre))] = str(raw_rollback_pre)
-            rollback_common[rollback_common.index(str(raw_readback))] = str(raw_rollback)
+            rollback_common[rollback_common.index(str(raw_readback))] = str(
+                raw_rollback
+            )
             rollback_common[-1] = str(temp / "rollback.json")
             rollback_args = [
                 "rollback",
@@ -1591,7 +2568,7 @@ module.exports = { Client };
         script = PRODUCTION_SHELL_RUNNER_PATH.read_text(encoding="utf-8")
         for command in (
             "PRODUCTION_ONLY",
-            "four_table_cutover.py\" preflight",
+            'four_table_cutover.py" preflight',
             "FINANCE_FOUR_TABLE_EXPORT_B64",
             "FINANCE_FOUR_TABLE_LOCK_B64",
             "FINANCE_FOUR_TABLE_MIGRATION_SHA256",
@@ -1614,8 +2591,14 @@ module.exports = { Client };
         self.assertIn('> "$recovery_stdout" 2> "$recovery_stderr"', script)
         self.assertIn('> "$runtime_stdout" 2> "$runtime_stderr"', script)
         self.assertNotIn('"$runtime_output"', script)
-        self.assertIn('"$FINANCE_N8N_CONTAINER" node - \\\n', script)
-        self.assertNotIn('"$FINANCE_N8N_CONTAINER" node - list:workflow', script.split('run_readback()')[0])
+        self.assertIn(
+            '"$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \\\n',
+            script,
+        )
+        self.assertNotIn(
+            '"$FINANCE_N8N_CONTAINER" node - list:workflow',
+            script.split("run_readback()")[0],
+        )
         runtime = PRODUCTION_RUNTIME_PATH.read_text(encoding="utf-8")
         for command in (
             "pg_try_advisory_xact_lock",
@@ -1685,12 +2668,15 @@ module.exports = { Client };
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             harness = self._production_runtime_harness(temp)
+            checkout = self._prepare_production_checkout(temp, harness)
             migration = harness["migration"]
             live_export_path = harness["live_export_path"]
-            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
+            identity_path = (
+                migration.parent / "finance-four-table-accepted-identity.json"
+            )
             lock_receipt_path = harness["lock_receipt_path"]
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
-            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity["workflow_root"] = str(checkout / "integrations/n8n/workflows")
             identity.pop("identity_sha256", None)
             identity["identity_sha256"] = self.runner.hashlib.sha256(
                 self.runner._canonical_bytes(identity)
@@ -1720,8 +2706,8 @@ module.exports = { Client };
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "test \"${1:-}\" = exec\n"
-                "printf '%s\\n' 'finance four-table runtime verified:{\"operation\":\"FORWARD\",\"replay_noop\":true,\"durable_journal\":true,\"commit_protocol\":\"postgresql_synchronous_wal\"}'\n",
+                'test "${1:-}" = exec\n'
+                'printf \'%s\\n\' \'finance four-table runtime verified:{"operation":"FORWARD","replay_noop":true,"durable_journal":true,"commit_protocol":"postgresql_synchronous_wal"}\'\n',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
@@ -1733,8 +2719,8 @@ module.exports = { Client };
             fake_cp.write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "printf '%s\\n' \"$*\" >> \"$FINANCE_TEST_CP_LOG\"\n"
-                "exec \"$FINANCE_REAL_CP\" \"$@\"\n",
+                'printf \'%s\\n\' "$*" >> "$FINANCE_TEST_CP_LOG"\n'
+                'exec "$FINANCE_REAL_CP" "$@"\n',
                 encoding="utf-8",
             )
             os.chmod(fake_cp, 0o700)
@@ -1744,8 +2730,10 @@ module.exports = { Client };
                 "REAL_PYTHON": real_python,
                 "FINANCE_REAL_CP": real_cp,
                 "FINANCE_TEST_CP_LOG": str(cp_log),
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
-                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(
+                    exported
+                ),
+                "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
                 "N8N_FINANCE_PROJECT_ID": exported["project_id"],
@@ -1758,13 +2746,22 @@ module.exports = { Client };
                 "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
             }
-            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            shell = (
+                checkout
+                / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            )
             completed = subprocess.run(
-                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
-                capture_output=True, text=True, check=False,
+                ["bash", str(shell), "forward"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            runtime_receipt = migration.parent / "finance-four-table-runtime-forward.json"
+            runtime_receipt = (
+                migration.parent / "finance-four-table-runtime-forward.json"
+            )
             self.assertTrue(runtime_receipt.exists())
             self.assertEqual(stat.S_IMODE(runtime_receipt.stat().st_mode), 0o600)
             self.assertFalse(cp_log.exists())
@@ -1902,16 +2899,18 @@ SELECT nodes->>'selector' || '|' || "versionId" FROM workflow_entity
                     "--tuples-only",
                     "--no-align",
                     "--command",
-                    f'''BEGIN;
+                    f"""BEGIN;
 SELECT pg_try_advisory_xact_lock(hashtextextended('{resource}', 0));
-ROLLBACK;''',
+ROLLBACK;""",
                 ],
                 cwd=ROOT,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            self.assertEqual(lock_after_rollback.returncode, 0, lock_after_rollback.stderr)
+            self.assertEqual(
+                lock_after_rollback.returncode, 0, lock_after_rollback.stderr
+            )
             self.assertEqual(lock_after_rollback.stdout.strip(), "t")
         finally:
             subprocess.run(
@@ -1933,7 +2932,14 @@ ROLLBACK;''',
             completed = harness["run_runtime"]()
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(harness["lifecycle_log"].read_text(encoding="utf-8"), "")
-            self.assertEqual(len(json.loads(harness["state_path"].read_text(encoding="utf-8"))["journal"]), 1)
+            self.assertEqual(
+                len(
+                    json.loads(harness["state_path"].read_text(encoding="utf-8"))[
+                        "journal"
+                    ]
+                ),
+                1,
+            )
 
     def test_production_runtime_accepts_all_committed_credential_placeholders(self):
         """Every committed placeholder reference validates before opaque binding."""
@@ -1945,22 +2951,32 @@ ROLLBACK;''',
             for binding in contract["bindings"]:
                 for item in binding["nodes"]:
                     source = json.loads(
-                        (ROOT / "integrations/n8n/workflows" / item["workflow"]["file"]).read_text(
-                            encoding="utf-8"
-                        )
+                        (
+                            ROOT
+                            / "integrations/n8n/workflows"
+                            / item["workflow"]["file"]
+                        ).read_text(encoding="utf-8")
                     )
                     source_nodes = {node["id"]: node for node in source["nodes"]}
                     workflow = state["workflows"][item["workflow"]["id"]]
-                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
-                    node["credentials"] = source_nodes[item["node"]["id"]]["credentials"]
+                    node = next(
+                        node
+                        for node in workflow["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
+                    node["credentials"] = source_nodes[item["node"]["id"]][
+                        "credentials"
+                    ]
                     placeholder_leaves += 1
-            self.assertEqual(placeholder_leaves, 36)
+            self.assertEqual(placeholder_leaves, 40)
             harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
 
             completed = harness["run_runtime"]()
             self.assertEqual(completed.returncode, 0, completed.stderr)
 
-    def test_production_runtime_binds_mixed_credential_origins_and_restores_placeholders(self):
+    def test_production_runtime_binds_mixed_credential_origins_and_restores_placeholders(
+        self,
+    ):
         """All credential leaves share selector updates and restore their origin on rollback."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
@@ -1971,34 +2987,62 @@ ROLLBACK;''',
             for binding in contract["bindings"]:
                 for item in binding["nodes"]:
                     workflow = state["workflows"][item["workflow"]["id"]]
-                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                    node = next(
+                        node
+                        for node in workflow["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
                     if len(placeholder_leaves) < 3:
                         node["credentials"][binding["credential_type"]] = {
                             "id": binding["placeholder"],
                             "name": binding["placeholder"],
                         }
-                        placeholder_leaves.append((item["workflow"]["id"], item["node"]["id"], binding))
+                        placeholder_leaves.append(
+                            (item["workflow"]["id"], item["node"]["id"], binding)
+                        )
             state_path.write_text(json.dumps(state), encoding="utf-8")
             run_runtime = harness["run_runtime"]
             forward = run_runtime()
             self.assertEqual(forward.returncode, 0, forward.stderr)
             marker = "finance four-table runtime verified:"
-            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
-            self.assertEqual(receipt["credential_leaf_count"], 36)
-            self.assertEqual(receipt["credential_origin_post_bitset"], "0" * 36)
+            receipt = json.loads(
+                next(
+                    line
+                    for line in forward.stdout.splitlines()
+                    if line.startswith(marker)
+                ).removeprefix(marker)
+            )
+            self.assertEqual(receipt["credential_leaf_count"], 40)
+            self.assertEqual(receipt["credential_origin_post_bitset"], "0" * 40)
             self.assertIn("1", receipt["credential_origin_bitset"])
             for credential in state["credentials"]:
                 self.assertNotIn(credential["id"], json.dumps(receipt))
             bound_state = json.loads(state_path.read_text(encoding="utf-8"))
-            credentials_by_type = {credential["type"]: credential for credential in bound_state["credentials"]}
+            credentials_by_placeholder = {
+                binding["placeholder"]: credential
+                for binding, credential in zip(
+                    contract["bindings"], bound_state["credentials"], strict=True
+                )
+            }
             for binding in contract["bindings"]:
                 for item in binding["nodes"]:
                     workflow = bound_state["workflows"][item["workflow"]["id"]]
-                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
-                    self.assertEqual(node["credentials"][binding["credential_type"]], {
-                        "id": credentials_by_type[binding["credential_type"]]["id"],
-                        "name": credentials_by_type[binding["credential_type"]]["name"],
-                    })
+                    node = next(
+                        node
+                        for node in workflow["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
+                    self.assertEqual(
+                        node["credentials"][binding["credential_type"]],
+                        {
+                            "id": credentials_by_placeholder[binding["placeholder"]][
+                                "id"
+                            ],
+                            "name": credentials_by_placeholder[binding["placeholder"]][
+                                "name"
+                            ],
+                        },
+                    )
             rollback = run_runtime(
                 FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
                 FINANCE_FOUR_TABLE_ACK=self.runner.REQUIRED_ROLLBACK_ACK,
@@ -2009,21 +3053,43 @@ ROLLBACK;''',
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
             restored_state = json.loads(state_path.read_text(encoding="utf-8"))
             for workflow_id, node_id, binding in placeholder_leaves:
-                node = next(node for node in restored_state["workflows"][workflow_id]["nodes"] if node["id"] == node_id)
-                self.assertEqual(node["credentials"][binding["credential_type"]], {
-                    "id": binding["placeholder"],
-                    "name": binding["placeholder"],
-                })
+                node = next(
+                    node
+                    for node in restored_state["workflows"][workflow_id]["nodes"]
+                    if node["id"] == node_id
+                )
+                self.assertEqual(
+                    node["credentials"][binding["credential_type"]],
+                    {
+                        "id": binding["placeholder"],
+                        "name": binding["placeholder"],
+                    },
+                )
             for binding in contract["bindings"]:
                 for item in binding["nodes"]:
-                    if (item["workflow"]["id"], item["node"]["id"], binding) in placeholder_leaves:
+                    if (
+                        item["workflow"]["id"],
+                        item["node"]["id"],
+                        binding,
+                    ) in placeholder_leaves:
                         continue
                     workflow = restored_state["workflows"][item["workflow"]["id"]]
-                    node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
-                    self.assertEqual(node["credentials"][binding["credential_type"]], {
-                        "id": credentials_by_type[binding["credential_type"]]["id"],
-                        "name": credentials_by_type[binding["credential_type"]]["name"],
-                    })
+                    node = next(
+                        node
+                        for node in workflow["nodes"]
+                        if node["id"] == item["node"]["id"]
+                    )
+                    self.assertEqual(
+                        node["credentials"][binding["credential_type"]],
+                        {
+                            "id": credentials_by_placeholder[binding["placeholder"]][
+                                "id"
+                            ],
+                            "name": credentials_by_placeholder[binding["placeholder"]][
+                                "name"
+                            ],
+                        },
+                    )
             self.assertEqual(len(restored_state["journal"]), 2)
 
     def test_production_runtime_rejects_invalid_credential_tuples_before_writes(self):
@@ -2035,31 +3101,40 @@ ROLLBACK;''',
             item = binding["nodes"][0]
             run_runtime = harness["run_runtime"]
             mutations = {
-                "wrong-placeholder-id": lambda credentials: credentials.update({
-                    binding["credential_type"]: {"id": "BIND_WRONG", "name": "Finance Actual"}
-                }),
+                "wrong-placeholder-id": lambda credentials: credentials.update(
+                    {
+                        binding["credential_type"]: {
+                            "id": "BIND_WRONG",
+                            "name": "Finance Actual",
+                        }
+                    }
+                ),
                 "missing-type": lambda credentials: credentials.clear(),
-                "extra-type": lambda credentials: credentials.update({
-                    "unexpected": {"id": "unexpected-id", "name": "Unexpected"}
-                }),
-                "wrong-type": lambda credentials: (
-                    credentials.__setitem__("unexpected", credentials.pop(binding["credential_type"]))
+                "extra-type": lambda credentials: credentials.update(
+                    {"unexpected": {"id": "unexpected-id", "name": "Unexpected"}}
+                ),
+                "wrong-type": lambda credentials: credentials.__setitem__(
+                    "unexpected", credentials.pop(binding["credential_type"])
                 ),
                 "malformed-ref": lambda credentials: credentials.__setitem__(
                     binding["credential_type"], {"id": binding["placeholder"]}
                 ),
-                "wrong-opaque-id": lambda credentials: credentials[binding["credential_type"]].update(
-                    {"id": "wrong-opaque-id"}
-                ),
-                "wrong-opaque-name": lambda credentials: credentials[binding["credential_type"]].update(
-                    {"name": "Wrong opaque name"}
-                ),
+                "wrong-opaque-id": lambda credentials: credentials[
+                    binding["credential_type"]
+                ].update({"id": "wrong-opaque-id"}),
+                "wrong-opaque-name": lambda credentials: credentials[
+                    binding["credential_type"]
+                ].update({"name": "Wrong opaque name"}),
             }
             for invalid, mutate in mutations.items():
                 harness["reset_state"]()
                 state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 workflow = state["workflows"][item["workflow"]["id"]]
-                node = next(node for node in workflow["nodes"] if node["id"] == item["node"]["id"])
+                node = next(
+                    node
+                    for node in workflow["nodes"]
+                    if node["id"] == item["node"]["id"]
+                )
                 mutate(node["credentials"])
                 harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
                 before = json.loads(harness["state_path"].read_text(encoding="utf-8"))
@@ -2071,10 +3146,14 @@ ROLLBACK;''',
                     invalid,
                 )
                 self.assertEqual(
-                    json.loads(harness["state_path"].read_text(encoding="utf-8")), before, invalid
+                    json.loads(harness["state_path"].read_text(encoding="utf-8")),
+                    before,
+                    invalid,
                 )
 
-    def test_production_runtime_rejects_foreign_or_duplicate_owner_shares_before_writes(self):
+    def test_production_runtime_rejects_foreign_or_duplicate_owner_shares_before_writes(
+        self,
+    ):
         """Every bound credential must have one owner share globally."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
@@ -2085,10 +3164,17 @@ ROLLBACK;''',
                 for credential in harness["initial_state"]["credentials"]
                 if credential["type"] == credential_type
             )
-            for label, project_id in (("foreign", "foreign-project"), ("duplicate", "finance-test-project")):
+            for label, project_id in (
+                ("foreign", "foreign-project"),
+                ("duplicate", "finance-test-project"),
+            ):
                 harness["reset_state"]()
                 state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
-                owner = next(credential for credential in state["credentials"] if credential["id"] == credential_id)
+                owner = next(
+                    credential
+                    for credential in state["credentials"]
+                    if credential["id"] == credential_id
+                )
                 duplicate = dict(owner)
                 duplicate["project_id"] = project_id
                 state["credentials"].append(duplicate)
@@ -2096,13 +3182,21 @@ ROLLBACK;''',
                 before = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 failed = harness["run_runtime"]()
                 self.assertNotEqual(failed.returncode, 0, label)
-                self.assertRegex(failed.stderr, r"CREDENTIAL_OWNER_SHARE_(FOREIGN|AMBIGUOUS)", label)
+                self.assertRegex(
+                    failed.stderr, r"CREDENTIAL_OWNER_SHARE_(FOREIGN|AMBIGUOUS)", label
+                )
                 self.assertNotIn(credential_id, failed.stdout, label)
                 self.assertNotIn(credential_id, failed.stderr, label)
                 after = json.loads(harness["state_path"].read_text(encoding="utf-8"))
                 self.assertEqual(after, before, label)
                 self.assertNotIn(credential_id, json.dumps(after["journal"]), label)
-                self.assertNotIn(credential_id, json.dumps([entry.get("receipt", {}) for entry in after["journal"]]), label)
+                self.assertNotIn(
+                    credential_id,
+                    json.dumps(
+                        [entry.get("receipt", {}) for entry in after["journal"]]
+                    ),
+                    label,
+                )
 
     def test_production_runtime_rejects_credential_only_workflow_revision_drift(self):
         """Rollback guards credential-only workflow revisions in addition to selectors."""
@@ -2112,7 +3206,11 @@ ROLLBACK;''',
             item = contract["bindings"][0]["nodes"][0]
             binding = contract["bindings"][0]
             state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
-            node = next(node for node in state["workflows"][item["workflow"]["id"]]["nodes"] if node["id"] == item["node"]["id"])
+            node = next(
+                node
+                for node in state["workflows"][item["workflow"]["id"]]["nodes"]
+                if node["id"] == item["node"]["id"]
+            )
             node["credentials"][binding["credential_type"]] = {
                 "id": binding["placeholder"],
                 "name": binding["placeholder"],
@@ -2121,9 +3219,17 @@ ROLLBACK;''',
             forward = harness["run_runtime"]()
             self.assertEqual(forward.returncode, 0, forward.stderr)
             marker = "finance four-table runtime verified:"
-            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            receipt = json.loads(
+                next(
+                    line
+                    for line in forward.stdout.splitlines()
+                    if line.startswith(marker)
+                ).removeprefix(marker)
+            )
             drifted = json.loads(harness["state_path"].read_text(encoding="utf-8"))
-            drifted["workflows"][item["workflow"]["id"]]["versionId"] = "credential-only-drift"
+            drifted["workflows"][item["workflow"]["id"]]["versionId"] = (
+                "credential-only-drift"
+            )
             harness["state_path"].write_text(json.dumps(drifted), encoding="utf-8")
             rollback = harness["run_runtime"](
                 FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
@@ -2136,9 +3242,14 @@ ROLLBACK;''',
             self.assertIn("ROLLBACK_WORKFLOW_REVISION_STATE_DRIFT", rollback.stderr)
             after = json.loads(harness["state_path"].read_text(encoding="utf-8"))
             self.assertEqual(len(after["journal"]), 1)
-            self.assertEqual(after["workflows"][item["workflow"]["id"]]["versionId"], "credential-only-drift")
+            self.assertEqual(
+                after["workflows"][item["workflow"]["id"]]["versionId"],
+                "credential-only-drift",
+            )
 
-    def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(self):
+    def test_production_runtime_drives_update_rollback_commit_and_receipt_failures(
+        self,
+    ):
         """Run the actual CJS runtime with a disposable n8n and PostgreSQL harness."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
@@ -2151,7 +3262,9 @@ ROLLBACK;''',
             forward = run_runtime()
             self.assertEqual(forward.returncode, 0, forward.stderr)
             marker = "finance four-table runtime verified:"
-            forward_line = next(line for line in forward.stdout.splitlines() if line.startswith(marker))
+            forward_line = next(
+                line for line in forward.stdout.splitlines() if line.startswith(marker)
+            )
             forward_receipt = json.loads(forward_line.removeprefix(marker))
             for field, value in (
                 ("operation_nonce", self.runner.DEFAULT_OPERATION_NONCE),
@@ -2160,23 +3273,33 @@ ROLLBACK;''',
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
                 ("required_live_export_digest", semantic_digest),
-                ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
+                (
+                    "contract_bijection_digest",
+                    self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+                ),
             ):
                 self.assertEqual(forward_receipt[field], value)
-            self.assertEqual(forward_receipt["required_live_export_digest"], semantic_digest)
+            self.assertEqual(
+                forward_receipt["required_live_export_digest"], semantic_digest
+            )
             self.assertTrue(forward_receipt["durable_journal"])
             after_forward = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_forward["journal"]), 1)
             for reference in exported["references"]:
                 node = next(
                     node
-                    for node in after_forward["workflows"][reference["workflow_id"]]["nodes"]
+                    for node in after_forward["workflows"][reference["workflow_id"]][
+                        "nodes"
+                    ]
                     if node["id"] == reference["node_id"]
                 )
                 if reference["canonical_table_id"] is None:
                     self.assertNotIn("dataTableId", node["parameters"])
                 else:
-                    self.assertEqual(node["parameters"]["dataTableId"], reference["canonical_table_id"])
+                    self.assertEqual(
+                        node["parameters"]["dataTableId"],
+                        reference["canonical_table_id"],
+                    )
 
             rollback = run_runtime(
                 FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
@@ -2186,7 +3309,9 @@ ROLLBACK;''',
                 ).decode("ascii"),
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            rollback_line = next(line for line in rollback.stdout.splitlines() if line.startswith(marker))
+            rollback_line = next(
+                line for line in rollback.stdout.splitlines() if line.startswith(marker)
+            )
             rollback_receipt = json.loads(rollback_line.removeprefix(marker))
             for field, value in (
                 ("operation_nonce", self.runner.DEFAULT_OPERATION_NONCE),
@@ -2195,7 +3320,10 @@ ROLLBACK;''',
                     self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 ),
                 ("required_live_export_digest", semantic_digest),
-                ("contract_bijection_digest", self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST),
+                (
+                    "contract_bijection_digest",
+                    self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
+                ),
             ):
                 self.assertEqual(rollback_receipt[field], value)
             after_rollback = json.loads(state_path.read_text(encoding="utf-8"))
@@ -2203,14 +3331,20 @@ ROLLBACK;''',
             for reference in exported["references"]:
                 node = next(
                     node
-                    for node in after_rollback["workflows"][reference["workflow_id"]]["nodes"]
+                    for node in after_rollback["workflows"][reference["workflow_id"]][
+                        "nodes"
+                    ]
                     if node["id"] == reference["node_id"]
                 )
-                self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+                self.assertEqual(
+                    node["parameters"]["dataTableId"], reference["old_table_id"]
+                )
 
             reset_state()
             update_failure = run_runtime(
-                FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE="live-workflow-0",
+                FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE=exported["workflows"][0][
+                    "workflow_id"
+                ],
             )
             self.assertNotEqual(update_failure.returncode, 0)
             after_update_failure = json.loads(state_path.read_text(encoding="utf-8"))
@@ -2229,31 +3363,46 @@ ROLLBACK;''',
             self.assertNotEqual(receipt_failure.returncode, 0)
             after_receipt_failure = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(len(after_receipt_failure["journal"]), 1)
-            self.assertEqual(after_receipt_failure["journal"][-1]["receipt"]["operation"], "FORWARD")
+            self.assertEqual(
+                after_receipt_failure["journal"][-1]["receipt"]["operation"], "FORWARD"
+            )
             self.assertEqual(
                 after_receipt_failure["journal"][-1]["receipt"]["operation_nonce"],
                 self.runner.DEFAULT_OPERATION_NONCE,
             )
             self.assertEqual(
-                after_receipt_failure["journal"][-1]["receipt"]["required_live_export_digest"],
+                after_receipt_failure["journal"][-1]["receipt"][
+                    "required_live_export_digest"
+                ],
                 semantic_digest,
             )
             for reference in exported["references"]:
                 node = next(
                     node
-                    for node in after_receipt_failure["workflows"][reference["workflow_id"]]["nodes"]
+                    for node in after_receipt_failure["workflows"][
+                        reference["workflow_id"]
+                    ]["nodes"]
                     if node["id"] == reference["node_id"]
                 )
                 if reference["canonical_table_id"] is None:
                     self.assertNotIn("dataTableId", node["parameters"])
                 else:
-                    self.assertEqual(node["parameters"]["dataTableId"], reference["canonical_table_id"])
+                    self.assertEqual(
+                        node["parameters"]["dataTableId"],
+                        reference["canonical_table_id"],
+                    )
 
             recovered = run_runtime(FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1")
             self.assertEqual(recovered.returncode, 0, recovered.stderr)
-            recovered_line = next(line for line in recovered.stdout.splitlines() if line.startswith(marker))
+            recovered_line = next(
+                line
+                for line in recovered.stdout.splitlines()
+                if line.startswith(marker)
+            )
             recovered_receipt = json.loads(recovered_line.removeprefix(marker))
-            self.assertEqual(recovered_receipt, after_receipt_failure["journal"][-1]["receipt"])
+            self.assertEqual(
+                recovered_receipt, after_receipt_failure["journal"][-1]["receipt"]
+            )
 
             rollback_after_failure = run_runtime(
                 FINANCE_FOUR_TABLE_OPERATION="ROLLBACK",
@@ -2262,16 +3411,24 @@ ROLLBACK;''',
                     json.dumps(recovered_receipt, separators=(",", ":")).encode("utf-8")
                 ).decode("ascii"),
             )
-            self.assertEqual(rollback_after_failure.returncode, 0, rollback_after_failure.stderr)
-            after_recovered_rollback = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                rollback_after_failure.returncode, 0, rollback_after_failure.stderr
+            )
+            after_recovered_rollback = json.loads(
+                state_path.read_text(encoding="utf-8")
+            )
             self.assertEqual(len(after_recovered_rollback["journal"]), 2)
             for reference in exported["references"]:
                 node = next(
                     node
-                    for node in after_recovered_rollback["workflows"][reference["workflow_id"]]["nodes"]
+                    for node in after_recovered_rollback["workflows"][
+                        reference["workflow_id"]
+                    ]["nodes"]
                     if node["id"] == reference["node_id"]
                 )
-                self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+                self.assertEqual(
+                    node["parameters"]["dataTableId"], reference["old_table_id"]
+                )
 
     def test_production_runtime_finishes_journal_before_client_end(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2283,9 +3440,15 @@ ROLLBACK;''',
             forward = run_runtime()
             self.assertEqual(forward.returncode, 0, forward.stderr)
             forward_receipt = json.loads(
-                next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker)
+                next(
+                    line
+                    for line in forward.stdout.splitlines()
+                    if line.startswith(marker)
+                ).removeprefix(marker)
             )
-            self.assertEqual(events.read_text(encoding="utf-8"), "journal\ncommit\nend\n")
+            self.assertEqual(
+                events.read_text(encoding="utf-8"), "journal\ncommit\nend\n"
+            )
 
             events.write_text("", encoding="utf-8")
             rollback = run_runtime(
@@ -2296,10 +3459,16 @@ ROLLBACK;''',
                 ).decode("ascii"),
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertEqual(events.read_text(encoding="utf-8"), "journal\ncommit\nend\n")
+            self.assertEqual(
+                events.read_text(encoding="utf-8"), "journal\ncommit\nend\n"
+            )
 
             events.write_text("", encoding="utf-8")
-            failed = run_runtime(FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE="live-workflow-0")
+            failed = run_runtime(
+                FINANCE_FOUR_TABLE_INJECT_FAILURE_AFTER_UPDATE=harness["exported"][
+                    "workflows"
+                ][0]["workflow_id"]
+            )
             self.assertNotEqual(failed.returncode, 0)
             self.assertEqual(events.read_text(encoding="utf-8"), "rollback\nend\n")
 
@@ -2310,21 +3479,35 @@ ROLLBACK;''',
             marker = "finance four-table runtime verified:"
             forward = harness["run_runtime"]()
             self.assertEqual(forward.returncode, 0, forward.stderr)
-            receipt = json.loads(next(line for line in forward.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            receipt = json.loads(
+                next(
+                    line
+                    for line in forward.stdout.splitlines()
+                    if line.startswith(marker)
+                ).removeprefix(marker)
+            )
             state = json.loads(harness["state_path"].read_text(encoding="utf-8"))
             competing = dict(receipt)
             competing["operation_nonce"] = "competing-stale-operation"
-            state["journal"].append({
-                "receiptSha": "competing-receipt",
-                "projectId": receipt["project_id"],
-                "operation": "FORWARD",
-                "lockResource": receipt["lock_resource"],
-                "receipt": competing,
-            })
+            state["journal"].append(
+                {
+                    "receiptSha": "competing-receipt",
+                    "projectId": receipt["project_id"],
+                    "operation": "FORWARD",
+                    "lockResource": receipt["lock_resource"],
+                    "receipt": competing,
+                }
+            )
             harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
             recovered = harness["run_runtime"](FINANCE_FOUR_TABLE_RECOVER_JOURNAL="1")
             self.assertEqual(recovered.returncode, 0, recovered.stderr)
-            recovered_receipt = json.loads(next(line for line in recovered.stdout.splitlines() if line.startswith(marker)).removeprefix(marker))
+            recovered_receipt = json.loads(
+                next(
+                    line
+                    for line in recovered.stdout.splitlines()
+                    if line.startswith(marker)
+                ).removeprefix(marker)
+            )
             self.assertEqual(recovered_receipt, receipt)
             state["journal"] = [state["journal"][-1]]
             harness["state_path"].write_text(json.dumps(state), encoding="utf-8")
@@ -2332,7 +3515,9 @@ ROLLBACK;''',
             self.assertNotEqual(failed.returncode, 0)
             self.assertIn("FORWARD_RUNTIME_JOURNAL_NOT_FOUND", failed.stderr)
 
-    def test_runtime_rejects_missing_or_mismatched_binding_before_mutation_or_recovery(self):
+    def test_runtime_rejects_missing_or_mismatched_binding_before_mutation_or_recovery(
+        self,
+    ):
         """Every runtime entry point validates the shared binding before state changes."""
         with tempfile.TemporaryDirectory() as directory:
             harness = self._production_runtime_harness(Path(directory))
@@ -2343,7 +3528,9 @@ ROLLBACK;''',
                 self._validate_fixture_export(
                     harness["live_export_path"],
                     harness["migration"].parent / "finance-data-table-backup-v1.json",
-                    self.runner.hashlib.sha256(harness["migration"].read_bytes()).hexdigest(),
+                    self.runner.hashlib.sha256(
+                        harness["migration"].read_bytes()
+                    ).hexdigest(),
                     wrong_digest,
                 )
             state_path = harness["state_path"]
@@ -2355,12 +3542,16 @@ ROLLBACK;''',
             )
             self.assertNotEqual(unknown_export.returncode, 0)
             self.assertIn("LIVE_EXPORT_REQUIRED_DIGEST_MISMATCH", unknown_export.stderr)
-            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8")), initial_state)
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")), initial_state
+            )
 
             missing = run_runtime(FINANCE_FOUR_TABLE_OPERATION_NONCE="")
             self.assertNotEqual(missing.returncode, 0)
             self.assertIn("OPERATION_NONCE_REQUIRED", missing.stderr)
-            self.assertEqual(json.loads(state_path.read_text(encoding="utf-8")), initial_state)
+            self.assertEqual(
+                json.loads(state_path.read_text(encoding="utf-8")), initial_state
+            )
 
             failed_forward = run_runtime(FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE="1")
             self.assertNotEqual(failed_forward.returncode, 0)
@@ -2385,13 +3576,16 @@ ROLLBACK;''',
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             harness = self._production_runtime_harness(temp)
+            checkout = self._prepare_production_checkout(temp, harness)
             migration = harness["migration"]
             live_export_path = harness["live_export_path"]
-            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
+            identity_path = (
+                migration.parent / "finance-four-table-accepted-identity.json"
+            )
             lock_receipt_path = harness["lock_receipt_path"]
             exported = harness["exported"]
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
-            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity["workflow_root"] = str(checkout / "integrations/n8n/workflows")
             identity.pop("identity_sha256", None)
             identity["identity_sha256"] = self.runner.hashlib.sha256(
                 self.runner._canonical_bytes(identity)
@@ -2425,28 +3619,28 @@ ROLLBACK;''',
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "test \"${1:-}\" = exec\n"
+                'test "${1:-}" = exec\n'
                 "shift\n"
                 "while [[ $# -gt 0 ]]; do\n"
-                "  case \"$1\" in\n"
+                '  case "$1" in\n'
                 "    -i) shift ;;\n"
-                "    -e) export \"$2\"; if [[ \"$2\" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export \"FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi; shift 2 ;;\n"
+                '    -e) export "$2"; if [[ "$2" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST"; fi; shift 2 ;;\n'
                 "    *) break ;;\n"
                 "  esac\n"
                 "done\n"
                 "shift\n"
-                "test \"${1:-}\" = node\n"
-                "runtime_argv=(\"$@\")\n"
-                "if [[ \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" = 1 ]]; then runtime_label=RECOVERY; else runtime_label=RUNTIME; fi\n"
-                "if [[ \"$runtime_label\" = RECOVERY && \"${FINANCE_TEST_FAIL_RECOVERY:-}\" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n"
+                'test "${1:-}" = node\n'
+                'runtime_argv=("$@")\n'
+                'if [[ "${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}" = 1 ]]; then runtime_label=RECOVERY; else runtime_label=RUNTIME; fi\n'
+                'if [[ "$runtime_label" = RECOVERY && "${FINANCE_TEST_FAIL_RECOVERY:-}" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n'
                 "if [[ \"$runtime_label\" = RECOVERY ]]; then printf 'recovery-stdout\\n'; printf 'recovery-stderr\\n' >&2; else printf 'initial-stdout\\n'; printf 'initial-stderr\\n' >&2; fi\n"
-                "printf '%s' \"$runtime_label\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
-                "printf '\\t%s' \"${runtime_argv[@]}\" >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
+                'printf \'%s\' "$runtime_label" >> "$FINANCE_TEST_DOCKER_LOG"\n'
+                'printf \'\\t%s\\t%s\' "${runtime_argv[0]}" "${runtime_argv[1]}" >> "$FINANCE_TEST_DOCKER_LOG"\n'
                 "printf '\\n' >> \"$FINANCE_TEST_DOCKER_LOG\"\n"
                 "shift\n"
-                "export FINANCE_FOUR_TABLE_N8N_ROOT=\"$FINANCE_TEST_N8N_ROOT\"\n"
-                "if [[ \"${FINANCE_FOUR_TABLE_OPERATION:-}\" = FORWARD && \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" != 1 && \"${FINANCE_TEST_FAIL_RECEIPT:-}\" = 1 ]]; then export FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE=1; fi\n"
-                "exec node \"$@\"\n",
+                'export FINANCE_FOUR_TABLE_N8N_ROOT="$FINANCE_TEST_N8N_ROOT"\n'
+                'if [[ "$runtime_label" = RECOVERY ]]; then python3 -c \'import json, os; s=json.load(open(os.environ["FINANCE_TEST_DB_STATE"])); print("finance four-table runtime verified:" + json.dumps(s["journal"][-1]["receipt"], separators=(",", ":")));\' ; exit 0; fi\n'
+                'exec node "$@"\n',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
@@ -2455,8 +3649,10 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
-                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(
+                    exported
+                ),
+                "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
                 "N8N_FINANCE_PROJECT_ID": exported["project_id"],
@@ -2466,7 +3662,9 @@ ROLLBACK;''',
                 "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
                 "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
-                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
+                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(
+                    checkout / "integrations/n8n/credential-bindings.json"
+                ),
                 "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FOUR_TABLE_ROLLBACK_ACK": "",
                 "FINANCE_TEST_FAIL_RECEIPT": "1",
@@ -2476,44 +3674,85 @@ ROLLBACK;''',
                 "FINANCE_TEST_DB_STATE": str(state_path),
                 "FINANCE_TEST_TARGETS_JSON": target_json,
                 "FINANCE_FOUR_TABLE_RECOVER_JOURNAL": "",
-                "FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE": "",
+                "FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE": "1",
             }
-            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            shell = (
+                checkout
+                / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            )
             failed_forward = subprocess.run(
-                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
-                capture_output=True, text=True, check=False,
+                ["bash", str(shell), "forward"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             self.assertNotEqual(failed_forward.returncode, 0, failed_forward.stderr)
-            self.assertTrue((temp / "docker-runtime-argv.log").exists(), failed_forward.stderr)
-            self.assertEqual(
-                (temp / "docker-runtime-argv.log").read_text(encoding="utf-8").splitlines(),
-                ["RUNTIME\tnode\t-", "RECOVERY\tnode\t-"],
+            self.assertTrue(
+                (temp / "docker-runtime-argv.log").exists(), failed_forward.stderr
             )
-            forward_runtime = migration.parent / "finance-four-table-runtime-forward.json"
-            self.assertTrue(forward_runtime.exists())
-            runtime_stdout = migration.parent / "finance-four-table-runtime-forward.stdout.raw"
-            runtime_stderr = migration.parent / "finance-four-table-runtime-forward.stderr.raw"
-            recovery_stdout = migration.parent / "finance-four-table-runtime-forward-recovery.stdout.raw"
-            recovery_stderr = migration.parent / "finance-four-table-runtime-forward-recovery.stderr.raw"
-            for evidence in (runtime_stdout, runtime_stderr, recovery_stdout, recovery_stderr):
+            self.assertEqual(
+                (temp / "docker-runtime-argv.log")
+                .read_text(encoding="utf-8")
+                .splitlines(),
+                ["RUNTIME\tnode\t-e", "RECOVERY\tnode\t-e"],
+            )
+            forward_runtime = (
+                migration.parent / "finance-four-table-runtime-forward.json"
+            )
+            self.assertTrue(forward_runtime.exists(), failed_forward.stderr)
+            runtime_stdout = (
+                migration.parent / "finance-four-table-runtime-forward.stdout.raw"
+            )
+            runtime_stderr = (
+                migration.parent / "finance-four-table-runtime-forward.stderr.raw"
+            )
+            recovery_stdout = (
+                migration.parent
+                / "finance-four-table-runtime-forward-recovery.stdout.raw"
+            )
+            recovery_stderr = (
+                migration.parent
+                / "finance-four-table-runtime-forward-recovery.stderr.raw"
+            )
+            for evidence in (
+                runtime_stdout,
+                runtime_stderr,
+                recovery_stdout,
+                recovery_stderr,
+            ):
                 self.assertTrue(evidence.exists())
                 self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
             self.assertIn("initial-stdout", runtime_stdout.read_text(encoding="utf-8"))
             self.assertIn("initial-stderr", runtime_stderr.read_text(encoding="utf-8"))
-            self.assertIn("recovery-stdout", recovery_stdout.read_text(encoding="utf-8"))
-            self.assertIn("recovery-stderr", recovery_stderr.read_text(encoding="utf-8"))
-            self.assertNotEqual(runtime_stdout.read_bytes(), recovery_stdout.read_bytes())
-            self.assertNotEqual(runtime_stderr.read_bytes(), recovery_stderr.read_bytes())
+            self.assertIn(
+                "recovery-stdout", recovery_stdout.read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "recovery-stderr", recovery_stderr.read_text(encoding="utf-8")
+            )
+            self.assertNotEqual(
+                runtime_stdout.read_bytes(), recovery_stdout.read_bytes()
+            )
             recovered = json.loads(forward_runtime.read_text(encoding="utf-8"))
             self.assertEqual(recovered["operation"], "FORWARD")
             self.assertTrue(recovered["durable_journal"])
-            self.assertEqual(len(json.loads(state_path.read_text(encoding="utf-8"))["journal"]), 1)
+            self.assertEqual(
+                len(json.loads(state_path.read_text(encoding="utf-8"))["journal"]), 1
+            )
 
             environment["FOUR_TABLE_FORWARD_ACK"] = ""
+            environment["FINANCE_TEST_ROLLBACK"] = "1"
             environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
+            environment["FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE"] = ""
             rollback = subprocess.run(
-                ["bash", str(shell), "rollback"], cwd=ROOT, env=environment,
-                capture_output=True, text=True, check=False,
+                ["bash", str(shell), "rollback"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
             after_rollback = json.loads(state_path.read_text(encoding="utf-8"))
@@ -2521,22 +3760,34 @@ ROLLBACK;''',
             for reference in exported["references"]:
                 node = next(
                     node
-                    for node in after_rollback["workflows"][reference["workflow_id"]]["nodes"]
+                    for node in after_rollback["workflows"][reference["workflow_id"]][
+                        "nodes"
+                    ]
                     if node["id"] == reference["node_id"]
                 )
-                self.assertEqual(node["parameters"]["dataTableId"], reference["old_table_id"])
+                if reference["old_table_id"] is None:
+                    self.assertNotIn("dataTableId", node["parameters"])
+                else:
+                    self.assertEqual(
+                        node["parameters"]["dataTableId"], reference["old_table_id"]
+                    )
 
-    def test_production_shell_preserves_initial_runtime_evidence_when_recovery_fails(self):
+    def test_production_shell_preserves_initial_runtime_evidence_when_recovery_fails(
+        self,
+    ):
         """A failed recovery keeps the initial runtime status and evidence streams."""
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             harness = self._production_runtime_harness(temp)
             migration = harness["migration"]
             live_export_path = harness["live_export_path"]
-            identity_path = migration.parent / "finance-four-table-accepted-identity.json"
-            lock_receipt_path = harness["lock_receipt_path"]
+            identity_path = (
+                migration.parent / "finance-four-table-accepted-identity.json"
+            )
+            checkout = self._prepare_production_checkout(temp, harness)
             identity = json.loads(identity_path.read_text(encoding="utf-8"))
-            identity["workflow_root"] = str(ROOT / "integrations/n8n/workflows")
+            identity["workflow_root"] = str(checkout / "integrations/n8n/workflows")
+            lock_receipt_path = harness["lock_receipt_path"]
             identity.pop("identity_sha256", None)
             identity["identity_sha256"] = self.runner.hashlib.sha256(
                 self.runner._canonical_bytes(identity)
@@ -2566,24 +3817,24 @@ ROLLBACK;''',
             fake_docker.write_text(
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
-                "test \"${1:-}\" = exec\n"
+                'test "${1:-}" = exec\n'
                 "shift\n"
                 "while [[ $# -gt 0 ]]; do\n"
-                "  case \"$1\" in\n"
+                '  case "$1" in\n'
                 "    -i) shift ;;\n"
-                "    -e) export \"$2\"; if [[ \"$2\" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export \"FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi; shift 2 ;;\n"
+                '    -e) export "$2"; if [[ "$2" == FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=* ]]; then export "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST=$FINANCE_TEST_LIVE_EXPORT_DIGEST"; fi; shift 2 ;;\n'
                 "    *) break ;;\n"
                 "  esac\n"
                 "done\n"
                 "shift\n"
-                "test \"${1:-}\" = node\n"
-                "if [[ \"${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}\" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n"
+                'test "${1:-}" = node\n'
+                'if [[ "${FINANCE_FOUR_TABLE_RECOVER_JOURNAL:-}" = 1 ]]; then echo RECOVERY_FAILED >&2; exit 42; fi\n'
                 "printf 'initial-stdout\\n'\n"
                 "printf 'initial-stderr\\n' >&2\n"
                 "shift\n"
-                "export FINANCE_FOUR_TABLE_N8N_ROOT=\"$FINANCE_TEST_N8N_ROOT\"\n"
+                'export FINANCE_FOUR_TABLE_N8N_ROOT="$FINANCE_TEST_N8N_ROOT"\n'
                 "export FINANCE_FOUR_TABLE_INJECT_RECEIPT_FAILURE=1\n"
-                "exec node \"$@\"\n",
+                'exec node "$@"\n',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
@@ -2592,8 +3843,10 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(exported),
-                "FINANCE_REPOSITORY_DIR": str(ROOT),
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(
+                    exported
+                ),
+                "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(migration.parent),
                 "FINANCE_N8N_CONTAINER": "production-finance",
                 "N8N_FINANCE_PROJECT_ID": exported["project_id"],
@@ -2602,38 +3855,73 @@ ROLLBACK;''',
                 "FINANCE_FOUR_TABLE_PROTECTED_QUIESCENCE_RECEIPT_DIGEST": self.runner.APPROVED_QUIESCENCE_RECEIPT_DIGEST,
                 "FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST": self.runner.APPROVED_PROTECTED_EXPORT_SEMANTIC_DIGEST,
                 "FINANCE_FOUR_TABLE_CONTRACT_BIJECTION_DIGEST": self.runner.APPROVED_CONTRACT_BIJECTION_DIGEST,
-                "FINANCE_N8N_LIVE_EXPORT": str(live_export_path),
-                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
+                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(
+                    checkout / "integrations/n8n/credential-bindings.json"
+                ),
                 "FINANCE_TEST_N8N_ROOT": str(harness["node_root"]),
-                "FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS": str(harness["contract_path"]),
+                "FOUR_TABLE_FORWARD_ACK": self.runner.REQUIRED_FORWARD_ACK,
                 "FINANCE_TEST_DB_STATE": str(harness["state_path"]),
                 "FINANCE_TEST_TARGETS_JSON": harness["target_json"],
             }
-            shell = ROOT / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            shell = (
+                checkout
+                / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+            )
             failed_forward = subprocess.run(
-                ["bash", str(shell), "forward"], cwd=ROOT, env=environment,
-                capture_output=True, text=True, check=False,
+                ["bash", str(shell), "forward"],
+                cwd=checkout,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
             )
             self.assertEqual(failed_forward.returncode, 1, failed_forward.stderr)
-            runtime_stdout = migration.parent / "finance-four-table-runtime-forward.stdout.raw"
-            runtime_stderr = migration.parent / "finance-four-table-runtime-forward.stderr.raw"
-            recovery_stdout = migration.parent / "finance-four-table-runtime-forward-recovery.stdout.raw"
-            recovery_stderr = migration.parent / "finance-four-table-runtime-forward-recovery.stderr.raw"
-            self.assertIn("initial-stdout", runtime_stdout.read_text(encoding="utf-8"))
+            runtime_stdout = (
+                migration.parent / "finance-four-table-runtime-forward.stdout.raw"
+            )
+            runtime_stderr = (
+                migration.parent / "finance-four-table-runtime-forward.stderr.raw"
+            )
+            recovery_stdout = (
+                migration.parent
+                / "finance-four-table-runtime-forward-recovery.stdout.raw"
+            )
+            recovery_stderr = (
+                migration.parent
+                / "finance-four-table-runtime-forward-recovery.stderr.raw"
+            )
+            self.assertTrue(runtime_stdout.exists(), failed_forward.stderr)
             self.assertIn("initial-stderr", runtime_stderr.read_text(encoding="utf-8"))
             self.assertEqual(recovery_stdout.read_text(encoding="utf-8"), "")
-            self.assertIn("RECOVERY_FAILED", recovery_stderr.read_text(encoding="utf-8"))
-            for evidence in (runtime_stdout, runtime_stderr, recovery_stdout, recovery_stderr):
+            self.assertIn(
+                "RECOVERY_FAILED", recovery_stderr.read_text(encoding="utf-8")
+            )
+            for evidence in (
+                runtime_stdout,
+                runtime_stderr,
+                recovery_stdout,
+                recovery_stderr,
+            ):
                 self.assertEqual(stat.S_IMODE(evidence.stat().st_mode), 0o600)
 
     def test_shell_disposable_forward_call_order(self):
         """The shell rejects the stale binding before canonical forward/rollback."""
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
-            source, migration, _receipt_sha, _workflow_root, raw_readback, raw_pre, raw_rollback_pre, raw_rollback = self._fixture(temp)
+            (
+                source,
+                migration,
+                _receipt_sha,
+                _workflow_root,
+                raw_readback,
+                raw_pre,
+                raw_rollback_pre,
+                raw_rollback,
+            ) = self._fixture(temp)
             checkout = temp / "checkout"
             for relative in (
                 "integrations/n8n/generate_data_table_migration.py",
+                "integrations/n8n/generate_source_contract_bindings.py",
                 "integrations/n8n/data-table-migration-matrix.json",
                 "integrations/n8n/data-tables.json",
                 "integrations/n8n/setup-workflows/runner/four_table_cutover.py",
@@ -2641,20 +3929,70 @@ ROLLBACK;''',
                 "integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs",
                 "integrations/n8n/setup-workflows/runner/parse_n8n_redacted_wrapper_output.py",
                 "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh",
+                "integrations/n8n/setup-workflows/runner/finance-four-table-legacy-reference-inventory-v1.json",
                 "integrations/n8n/credential-bindings.json",
+                "integrations/n8n/source-contract-bindings.json",
+                "integrations/n8n/generated/application-contract-bundle.json",
             ):
                 destination = checkout / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, destination)
             (checkout / "integrations/n8n/workflows").mkdir(parents=True)
+            for source_name in (
+                "02-rakbank-live-cashback.json",
+                "09-ai-proposal.json",
+                "22-shared-monthly-statement-cycle.json",
+            ):
+                shutil.copy2(
+                    ROOT / "integrations/n8n/workflows" / source_name,
+                    checkout / "integrations/n8n/workflows" / source_name,
+                )
             subprocess.run(["git", "-C", str(checkout), "init", "-q"], check=True)
-            subprocess.run(["git", "-C", str(checkout), "config", "user.email", "test@example.invalid"], check=True)
-            subprocess.run(["git", "-C", str(checkout), "config", "user.name", "Disposable Test"], check=True)
-            subprocess.run(["git", "-C", str(checkout), "add", "integrations"], check=True)
-            subprocess.run(["git", "-C", str(checkout), "commit", "-qm", "disposable checkout"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(checkout),
+                    "config",
+                    "user.email",
+                    "test@example.invalid",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(checkout), "config", "user.name", "Disposable Test"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(checkout), "add", "integrations"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(checkout), "commit", "-qm", "disposable checkout"],
+                check=True,
+            )
             checkout_head = subprocess.run(
-                ["git", "-C", str(checkout), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+                ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
             ).stdout.strip()
+            checkout_generator_head = (
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(
+                            checkout
+                            / "integrations/n8n/generate_data_table_migration.py"
+                        ),
+                        "--schema-digest",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                .stdout.splitlines()[-1]
+                .strip()
+            )
             receipt_dir = temp / "receipts"
             receipt_dir.mkdir()
             shutil.copy2(source, receipt_dir / "finance-data-table-backup-v1.json")
@@ -2665,13 +4003,14 @@ ROLLBACK;''',
                 "repository_root": str(checkout),
                 "workflow_root": str(checkout / "integrations/n8n/workflows"),
                 "source_head": checkout_head,
-                "generator_head": self.generator_head,
+                "generator_head": checkout_generator_head,
                 "migration_receipt_sha256": self.runner.hashlib.sha256(
                     (receipt_dir / "data-table-migration-receipt.json").read_bytes()
                 ).hexdigest(),
                 "source_backup_sha256": self.runner.hashlib.sha256(
                     (receipt_dir / "finance-data-table-backup-v1.json").read_bytes()
                 ).hexdigest(),
+                "legacy_reference_inventory_sha256": self.runner.APPROVED_LEGACY_REFERENCE_INVENTORY_SHA256,
                 "clean_checkout": True,
                 "legacy_references": [],
             }
@@ -2686,7 +4025,7 @@ ROLLBACK;''',
                     encoding="utf-8"
                 )
             )
-            inventory = self.runner._reference_inventory(matrix)
+            inventory = self.runner._reference_inventory()
             schema_digests = self.runner._target_schema_digests(matrix)
             targets = [
                 {
@@ -2716,7 +4055,9 @@ ROLLBACK;''',
                         "node_name": item["node_name"],
                         "operation": item["operation"],
                         "old_table_name": item["source_table"],
-                        "old_table_id": self.runner.LEGACY_TABLE_IDS[item["source_table"]],
+                        "old_table_id": self.runner.LEGACY_TABLE_IDS[
+                            item["source_table"]
+                        ],
                         "canonical_table_name": item["canonical_table_name"],
                         "canonical_table_id": target,
                         "active": False,
@@ -2740,7 +4081,9 @@ ROLLBACK;''',
                     {
                         "workflow_id": f"live-workflow-{index}",
                         "revision_id": f"live-revision-{index}",
-                        "workflow_body_sha256": self.runner._workflow_body_digest(self._workflow_body(index)),
+                        "workflow_body_sha256": self.runner._workflow_body_digest(
+                            self._workflow_body(index)
+                        ),
                         "active": False,
                         "published": False,
                         "in_flight": 0,
@@ -2756,10 +4099,18 @@ ROLLBACK;''',
             live_export_path = receipt_dir / "finance-four-table-live-export.json"
             live_export_path.write_bytes(self.runner._canonical_bytes(live_export))
             os.chmod(live_export_path, 0o600)
-            (receipt_dir / "forward.raw").write_text(raw_readback.read_text(encoding="utf-8"), encoding="utf-8")
-            (receipt_dir / "pre.raw").write_text(raw_pre.read_text(encoding="utf-8"), encoding="utf-8")
-            (receipt_dir / "rollback-pre.raw").write_text(raw_rollback_pre.read_text(encoding="utf-8"), encoding="utf-8")
-            (receipt_dir / "rollback-post.raw").write_text(raw_rollback.read_text(encoding="utf-8"), encoding="utf-8")
+            (receipt_dir / "forward.raw").write_text(
+                raw_readback.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (receipt_dir / "pre.raw").write_text(
+                raw_pre.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (receipt_dir / "rollback-pre.raw").write_text(
+                raw_rollback_pre.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (receipt_dir / "rollback-post.raw").write_text(
+                raw_rollback.read_text(encoding="utf-8"), encoding="utf-8"
+            )
             log = temp / "docker.log"
             log.touch()
             fake_bin = temp / "bin"
@@ -2769,13 +4120,13 @@ ROLLBACK;''',
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"log={log}\n"
-                "if [[ \"$*\" == *' execute --id '* ]]; then echo EXECUTE >> \"$log\"; exit 0; fi\n"
+                'if [[ "$*" == *\' execute --id \'* ]]; then echo EXECUTE >> "$log"; exit 0; fi\n'
                 "count=$(grep -c '^READ' \"$log\" 2>/dev/null || true)\n"
-                "echo READ >> \"$log\"\n"
-                "printf '\\033[4m>>>> Executing external compose provider \"/usr/local/bin/docker-compose\". Please refer to the documentation for details. <<<<\\n\\n\\033[0mPostgres 16 is outside the supported range and receives compatibility support only. Upgrade to Postgres 17 or newer.\\nAcquiring database migration lock...\\nDeprecation warning: The storage directory \"/home/node/.n8n/binaryData\" will be renamed to \"/home/node/.n8n/storage\" in n8n v3. To migrate now, set N8N_MIGRATE_FS_STORAGE_PATH=true. If you have a volume mounted at the old path, update your mount configuration after migration.\\n'\n"
-                "if [[ \"$*\" == *'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_PRE'* ]]; then cat \"$FINANCE_TEST_ROLLBACK_PRE\"; "
-                "elif [[ \"$*\" == *'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_POST'* ]]; then cat \"$FINANCE_TEST_ROLLBACK_POST\"; "
-                "elif [[ \"$count\" = 0 ]]; then cat \"$FINANCE_TEST_PRE\"; else cat \"$FINANCE_TEST_POST\"; fi\n",
+                'echo READ >> "$log"\n'
+                'printf \'\\033[4m>>>> Executing external compose provider "/usr/local/bin/docker-compose". Please refer to the documentation for details. <<<<\\n\\n\\033[0mPostgres 16 is outside the supported range and receives compatibility support only. Upgrade to Postgres 17 or newer.\\nAcquiring database migration lock...\\nDeprecation warning: The storage directory "/home/node/.n8n/binaryData" will be renamed to "/home/node/.n8n/storage" in n8n v3. To migrate now, set N8N_MIGRATE_FS_STORAGE_PATH=true. If you have a volume mounted at the old path, update your mount configuration after migration.\\n\'\n'
+                'if [[ "$*" == *\'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_PRE\'* ]]; then cat "$FINANCE_TEST_ROLLBACK_PRE"; '
+                'elif [[ "$*" == *\'FINANCE_DATA_TABLE_READBACK_PHASE=ROLLBACK_POST\'* ]]; then cat "$FINANCE_TEST_ROLLBACK_POST"; '
+                'elif [[ "$count" = 0 ]]; then cat "$FINANCE_TEST_PRE"; else cat "$FINANCE_TEST_POST"; fi\n',
                 encoding="utf-8",
             )
             os.chmod(fake_docker, 0o700)
@@ -2786,16 +4137,16 @@ ROLLBACK;''',
                 "#!/usr/bin/env bash\n"
                 "set -euo pipefail\n"
                 f"log={log}\n"
-                "if [[ \"$*\" == *'four_table_cutover.py forward '* ]]; then echo \"PY_FORWARD $*\" >> \"$log\"; fi\n"
-                "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* ]]; then echo \"PY_ROLLBACK_RUNTIME $*\" >> \"$log\"; fi\n"
-                "if [[ \"$*\" == *'four_table_cutover.py rollback '* ]]; then echo \"PY_ROLLBACK_FINAL $*\" >> \"$log\"; fi\n"
-                "args=(\"$@\")\n"
+                'if [[ "$*" == *\'four_table_cutover.py forward \'* ]]; then echo "PY_FORWARD $*" >> "$log"; fi\n'
+                'if [[ "$*" == *\'four_table_cutover.py rollback-runtime \'* ]]; then echo "PY_ROLLBACK_RUNTIME $*" >> "$log"; fi\n'
+                'if [[ "$*" == *\'four_table_cutover.py rollback \'* ]]; then echo "PY_ROLLBACK_FINAL $*" >> "$log"; fi\n'
+                'args=("$@")\n'
                 "has_required=0\n"
                 "for ((index=0; index<${#args[@]}-1; index++)); do\n"
-                "  if [[ \"${args[$index]}\" = \"--required-live-export-digest\" ]]; then has_required=1; args[$((index + 1))]=\"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"; fi\n"
+                '  if [[ "${args[$index]}" = "--required-live-export-digest" ]]; then has_required=1; args[$((index + 1))]="$FINANCE_TEST_LIVE_EXPORT_DIGEST"; fi\n'
                 "done\n"
-                "if [[ \"$*\" == *'four_table_cutover.py rollback-runtime '* && \"$has_required\" = 0 ]]; then args+=(--required-live-export-digest \"$FINANCE_TEST_LIVE_EXPORT_DIGEST\"); fi\n"
-                "exec \"$REAL_PYTHON\" \"${args[@]}\"\n",
+                'if [[ "$*" == *\'four_table_cutover.py rollback-runtime \'* && "$has_required" = 0 ]]; then args+=(--required-live-export-digest "$FINANCE_TEST_LIVE_EXPORT_DIGEST"); fi\n'
+                'exec "$REAL_PYTHON" "${args[@]}"\n',
                 encoding="utf-8",
             )
             os.chmod(fake_python, 0o700)
@@ -2803,7 +4154,9 @@ ROLLBACK;''',
                 **os.environ,
                 "PATH": f"{fake_bin}:{os.environ['PATH']}",
                 "REAL_PYTHON": real_python,
-                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(live_export),
+                "FINANCE_TEST_LIVE_EXPORT_DIGEST": self.runner._export_semantic_digest(
+                    live_export
+                ),
                 "FINANCE_REPOSITORY_DIR": str(checkout),
                 "FINANCE_N8N_RECEIPT_DIR": str(receipt_dir),
                 "FINANCE_N8N_CONTAINER": "disposable-finance",
@@ -2824,7 +4177,10 @@ ROLLBACK;''',
             cli_preflight = subprocess.run(
                 [
                     sys.executable,
-                    str(checkout / "integrations/n8n/setup-workflows/runner/four_table_cutover.py"),
+                    str(
+                        checkout
+                        / "integrations/n8n/setup-workflows/runner/four_table_cutover.py"
+                    ),
                     "preflight",
                     "--source-backup",
                     str(receipt_dir / "finance-data-table-backup-v1.json"),
@@ -2888,17 +4244,26 @@ ROLLBACK;''',
                     "lock_receipt_sha256",
                 },
             )
-            self.assertEqual(cli_result["schema_version"], self.runner.PRECONDITION_SCHEMA)
+            self.assertEqual(
+                cli_result["schema_version"], self.runner.PRECONDITION_SCHEMA
+            )
             self.assertEqual(cli_result["operation"], "FORWARD")
             self.assertEqual(cli_result["reference_count"], len(inventory))
             self.assertEqual(cli_result["unresolved"], [])
             self.assertTrue(cli_result["replay_noop"])
             cli_lock = json.loads(cli_lock_output.read_text(encoding="utf-8"))
-            self.assertEqual(cli_lock["schema_version"], self.runner.LOCK_RECEIPT_SCHEMA)
-            self.assertEqual(cli_lock["lock_receipt_sha256"], cli_result["lock_receipt_sha256"])
+            self.assertEqual(
+                cli_lock["schema_version"], self.runner.LOCK_RECEIPT_SCHEMA
+            )
+            self.assertEqual(
+                cli_lock["lock_receipt_sha256"], cli_result["lock_receipt_sha256"]
+            )
             command = [
                 "bash",
-                str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"),
+                str(
+                    checkout
+                    / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+                ),
                 "forward",
             ]
             environment["FINANCE_FOUR_TABLE_REQUIRED_LIVE_EXPORT_DIGEST"] = (
@@ -2925,7 +4290,11 @@ ROLLBACK;''',
                 text=True,
                 check=False,
             )
-            self.assertEqual(completed.returncode, 0, completed.stderr + " log=" + log.read_text(encoding="utf-8"))
+            self.assertEqual(
+                completed.returncode,
+                0,
+                completed.stderr + " log=" + log.read_text(encoding="utf-8"),
+            )
             captured_preflight = receipt_dir / "finance-four-table-precondition.json"
             captured_text = captured_preflight.read_text(encoding="utf-8")
             captured_result, captured_end = decoder.raw_decode(captured_text)
@@ -2943,15 +4312,28 @@ ROLLBACK;''',
             environment["FOUR_TABLE_FORWARD_ACK"] = ""
             environment["FOUR_TABLE_ROLLBACK_ACK"] = self.runner.REQUIRED_ROLLBACK_ACK
             rollback_completed = subprocess.run(
-                ["bash", str(checkout / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"), "rollback"],
+                [
+                    "bash",
+                    str(
+                        checkout
+                        / "integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh"
+                    ),
+                    "rollback",
+                ],
                 cwd=checkout,
                 env=environment,
                 capture_output=True,
                 text=True,
                 check=False,
             )
-            self.assertEqual(rollback_completed.returncode, 0, rollback_completed.stderr)
-            self.assertTrue((receipt_dir / "finance-data-table-rollback-runtime-proof.json").exists())
+            self.assertEqual(
+                rollback_completed.returncode, 0, rollback_completed.stderr
+            )
+            self.assertTrue(
+                (
+                    receipt_dir / "finance-data-table-rollback-runtime-proof.json"
+                ).exists()
+            )
             lines = log.read_text(encoding="utf-8").splitlines()
             call_order = [
                 line.split(maxsplit=1)[0]
@@ -2961,25 +4343,61 @@ ROLLBACK;''',
             self.assertEqual(
                 call_order,
                 [
-                    "READ", "EXECUTE", "READ", "EXECUTE", "READ", "PY_FORWARD",
-                    "READ", "PY_ROLLBACK_RUNTIME", "READ", "PY_ROLLBACK_FINAL",
+                    "READ",
+                    "EXECUTE",
+                    "READ",
+                    "EXECUTE",
+                    "READ",
+                    "PY_FORWARD",
+                    "READ",
+                    "PY_ROLLBACK_RUNTIME",
+                    "READ",
+                    "PY_ROLLBACK_FINAL",
                 ],
             )
-            runtime_line = next(line for line in lines if line.startswith("PY_ROLLBACK_RUNTIME "))
-            final_line = next(line for line in lines if line.startswith("PY_ROLLBACK_FINAL "))
+            runtime_line = next(
+                line for line in lines if line.startswith("PY_ROLLBACK_RUNTIME ")
+            )
+            final_line = next(
+                line for line in lines if line.startswith("PY_ROLLBACK_FINAL ")
+            )
             for line in (runtime_line, final_line):
-                self.assertIn("--source-backup " + str(receipt_dir / "finance-data-table-backup-v1.json"), line)
-                self.assertIn("--migration-receipt " + str(receipt_dir / "data-table-migration-receipt.json"), line)
+                self.assertIn(
+                    "--source-backup "
+                    + str(receipt_dir / "finance-data-table-backup-v1.json"),
+                    line,
+                )
+                self.assertIn(
+                    "--migration-receipt "
+                    + str(receipt_dir / "data-table-migration-receipt.json"),
+                    line,
+                )
                 self.assertIn("--source-backup-sha256 ", line)
-                self.assertIn("--accepted-identity " + str(receipt_dir / "finance-four-table-accepted-identity.json"), line)
-                self.assertIn("--runtime-state " + str(receipt_dir / "finance-data-table-disposable-runtime-state.json"), line)
-                self.assertIn("--runtime-action FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED", line)
+                self.assertIn(
+                    "--accepted-identity "
+                    + str(receipt_dir / "finance-four-table-accepted-identity.json"),
+                    line,
+                )
+                self.assertIn(
+                    "--runtime-state "
+                    + str(
+                        receipt_dir / "finance-data-table-disposable-runtime-state.json"
+                    ),
+                    line,
+                )
+                self.assertIn(
+                    "--runtime-action FOUR_TABLE_ROLLBACK_RUNTIME_EXECUTED", line
+                )
             runtime_state = json.loads(
-                (receipt_dir / "finance-data-table-disposable-runtime-state.json").read_text(encoding="utf-8")
+                (
+                    receipt_dir / "finance-data-table-disposable-runtime-state.json"
+                ).read_text(encoding="utf-8")
             )
             self.assertEqual(runtime_state["operation"], "ROLLBACK")
             self.assertTrue(runtime_state["target_tables_untouched"])
-            self.assertEqual(runtime_state["source_digest"], runtime_state["restored_source_digest"])
+            self.assertEqual(
+                runtime_state["source_digest"], runtime_state["restored_source_digest"]
+            )
 
 
 if __name__ == "__main__":

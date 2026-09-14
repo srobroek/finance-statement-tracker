@@ -40,13 +40,14 @@ CANONICAL_EXPORT_PATH = (
 CANONICAL_EXPORT_RELATIVE_PATH = (
     "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json"
 )
-CANONICAL_EXPORT_SHA256 = (
-    "0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1"
-)
+# Generated together with the cutover SQL by generate_workflow_folder_sql.py.
+# Refresh requires an externally reviewed --expected-canonical-export-sha256;
+# ordinary validation and generation must never re-pin the observed source.
+CANONICAL_EXPORT_SHA256 = "750c6163859ffbdd453bfd4ba916453c0c2c3f851627fda09dabb98287a1696c"
+CANONICAL_PERSISTED_BODY_MD5 = "1e8f90ceea460e400db0b8f39be81b69"
 # These are the workflow_entity fields that make up the imported workflow body.
 # Keep mutable name, runtime/version, and folder columns out of this digest;
 # those are normalized or guarded independently by the cutover contract.
-CANONICAL_PERSISTED_BODY_MD5 = "4f413c5986362dee47db7e1fd39e128d"
 PERSISTED_BODY_FIELDS = (
     "id",
     "nodes",

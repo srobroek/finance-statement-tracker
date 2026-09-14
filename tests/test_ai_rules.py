@@ -20,7 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class AIRuleTests(TestCase):
     def setUp(self) -> None:
-        self.engine = AIEnrichmentEngine(load_ai_policies(ROOT / "config" / "ai-policies.json"))
+        self.engine = AIEnrichmentEngine(
+            load_ai_policies(ROOT / "config" / "ai-policies.json")
+        )
         self.transaction = Transaction(
             "ai-1",
             datetime(2026, 8, 16),
@@ -43,16 +45,22 @@ class AIRuleTests(TestCase):
 
         traces = engine.enrich(
             self.transaction,
-            lambda _request: {"provider": "test", "model": "fake", "proposals": [{
-                "field": "category_recommendation",
-                "value": {
-                    "name": "Photography",
-                    "group": "Hobbies",
-                    "reason": "Repeated specialist vendor",
-                },
-                "confidence": 0.96,
-                "rationale": "Merchant evidence",
-            }]},
+            lambda _request: {
+                "provider": "test",
+                "model": "fake",
+                "proposals": [
+                    {
+                        "field": "category_recommendation",
+                        "value": {
+                            "name": "Photography",
+                            "group": "Hobbies",
+                            "reason": "Repeated specialist vendor",
+                        },
+                        "confidence": 0.96,
+                        "rationale": "Merchant evidence",
+                    }
+                ],
+            },
         )
 
         self.assertTrue(traces[0].accepted)
@@ -67,10 +75,24 @@ class AIRuleTests(TestCase):
     def test_ai_accepts_allowed_unresolved_category_and_tag(self) -> None:
         def resolver(request):
             if request["policy_id"] == "classify-unresolved":
-                return {"provider": "test", "model": "fake-model", "proposals": [
-                    {"field": "category", "value": "Online Shopping", "confidence": 0.93, "rationale": "Marketplace descriptor"},
-                    {"field": "tags", "value": ["online"], "confidence": 0.91, "rationale": "Online marketplace"},
-                ]}
+                return {
+                    "provider": "test",
+                    "model": "fake-model",
+                    "proposals": [
+                        {
+                            "field": "category",
+                            "value": "Online Shopping",
+                            "confidence": 0.93,
+                            "rationale": "Marketplace descriptor",
+                        },
+                        {
+                            "field": "tags",
+                            "value": ["online"],
+                            "confidence": 0.91,
+                            "rationale": "Online marketplace",
+                        },
+                    ],
+                }
             return {"proposals": []}
 
         traces = self.engine.enrich(self.transaction, resolver)
@@ -80,14 +102,23 @@ class AIRuleTests(TestCase):
         self.assertTrue(all(trace.accepted for trace in traces))
         self.assertTrue(self.transaction.metadata["ai_trace"])
         self.assertEqual(self.transaction.metadata["ai_trace"][0]["provider"], "test")
-        self.assertEqual(self.transaction.metadata["ai_trace"][0]["model"], "fake-model")
+        self.assertEqual(
+            self.transaction.metadata["ai_trace"][0]["model"], "fake-model"
+        )
         self.assertEqual(self.transaction.metadata["ai_trace"][0]["policy_version"], 2)
 
     def test_ai_cannot_modify_protected_facts(self) -> None:
         def resolver(request):
-            return {"proposals": [
-                {"field": "amount_aed", "value": "1", "confidence": 1, "rationale": "unsafe"}
-            ]}
+            return {
+                "proposals": [
+                    {
+                        "field": "amount_aed",
+                        "value": "1",
+                        "confidence": 1,
+                        "rationale": "unsafe",
+                    }
+                ]
+            }
 
         traces = self.engine.enrich(self.transaction, resolver)
 
@@ -115,9 +146,16 @@ class AIRuleTests(TestCase):
     def test_low_confidence_proposal_is_rejected_for_review(self) -> None:
         def resolver(request):
             if request["policy_id"] == "classify-unresolved":
-                return {"proposals": [
-                    {"field": "category", "value": "General Retail", "confidence": 0.4, "rationale": "guess"}
-                ]}
+                return {
+                    "proposals": [
+                        {
+                            "field": "category",
+                            "value": "General Retail",
+                            "confidence": 0.4,
+                            "rationale": "guess",
+                        }
+                    ]
+                }
             return {"proposals": []}
 
         traces = self.engine.enrich(self.transaction, resolver)
@@ -128,13 +166,29 @@ class AIRuleTests(TestCase):
         self.assertIsNone(self.transaction.category)
         self.assertTrue(self.transaction.review_required)
 
-    def test_ai_can_enrich_unresolved_channel_and_bucket_without_reward_math(self) -> None:
+    def test_ai_can_enrich_unresolved_channel_and_bucket_without_reward_math(
+        self,
+    ) -> None:
         def resolver(request):
             if request["policy_id"] == "enrich-cashback-classification":
-                return {"provider": "test", "model": "fake-model", "proposals": [
-                    {"field": "channel", "value": "ONLINE", "confidence": 0.98, "rationale": "Explicit online marker"},
-                    {"field": "reward_bucket", "value": "SC_ONLINE", "confidence": 0.99, "rationale": "Configured card and online channel"},
-                ]}
+                return {
+                    "provider": "test",
+                    "model": "fake-model",
+                    "proposals": [
+                        {
+                            "field": "channel",
+                            "value": "ONLINE",
+                            "confidence": 0.98,
+                            "rationale": "Explicit online marker",
+                        },
+                        {
+                            "field": "reward_bucket",
+                            "value": "SC_ONLINE",
+                            "confidence": 0.99,
+                            "rationale": "Configured card and online channel",
+                        },
+                    ],
+                }
             return {"proposals": []}
 
         self.engine.enrich(self.transaction, resolver)
@@ -154,7 +208,9 @@ class AIRuleTests(TestCase):
         )
         requests = []
 
-        self.engine.enrich(transaction, lambda request: requests.append(request) or {"proposals": []})
+        self.engine.enrich(
+            transaction, lambda request: requests.append(request) or {"proposals": []}
+        )
 
         self.assertEqual([], requests)
 
@@ -170,22 +226,24 @@ class AIRuleTests(TestCase):
 
         def resolver(request):
             if request["policy_id"] == "enrich-property":
-                return {"proposals": [
-                    {
-                        "field": "property_code",
-                        "value": "LT713",
-                        "confidence": 0.99,
-                        "rationale": "Explicit account reference in linked bill",
-                        "source_refs": ["outlook-message"],
-                    },
-                    {
-                        "field": "rental_unit",
-                        "value": "LT713",
-                        "confidence": 0.99,
-                        "rationale": "Explicit unit in linked bill",
-                        "source_refs": ["outlook-message"],
-                    },
-                ]}
+                return {
+                    "proposals": [
+                        {
+                            "field": "property_code",
+                            "value": "LT713",
+                            "confidence": 0.99,
+                            "rationale": "Explicit account reference in linked bill",
+                            "source_refs": ["outlook-message"],
+                        },
+                        {
+                            "field": "rental_unit",
+                            "value": "LT713",
+                            "confidence": 0.99,
+                            "rationale": "Explicit unit in linked bill",
+                            "source_refs": ["outlook-message"],
+                        },
+                    ]
+                }
             return {"proposals": []}
 
         traces = self.engine.enrich(transaction, resolver)
@@ -206,14 +264,20 @@ class AIRuleTests(TestCase):
 
         traces = self.engine.enrich(
             transaction,
-            lambda request: {
-                "proposals": [{
-                    "field": "rental_unit",
-                    "value": "Invented99",
-                    "confidence": 1,
-                    "rationale": "Unsupported",
-                }]
-            } if request["policy_id"] == "enrich-property" else {"proposals": []},
+            lambda request: (
+                {
+                    "proposals": [
+                        {
+                            "field": "rental_unit",
+                            "value": "Invented99",
+                            "confidence": 1,
+                            "rationale": "Unsupported",
+                        }
+                    ]
+                }
+                if request["policy_id"] == "enrich-property"
+                else {"proposals": []}
+            ),
         )
 
         rejected = next(trace for trace in traces if trace.field == "rental_unit")
@@ -221,7 +285,9 @@ class AIRuleTests(TestCase):
         self.assertEqual(rejected.reason, "value_not_allowed")
         self.assertIsNone(transaction.rental_unit)
 
-    def test_high_value_unresolved_purchase_requests_only_relevant_policies(self) -> None:
+    def test_high_value_unresolved_purchase_requests_only_relevant_policies(
+        self,
+    ) -> None:
         transaction = Transaction(
             "ai-adcb-high-value",
             datetime(2026, 8, 16),
@@ -231,7 +297,9 @@ class AIRuleTests(TestCase):
         )
         requests = []
 
-        self.engine.enrich(transaction, lambda request: requests.append(request) or {"proposals": []})
+        self.engine.enrich(
+            transaction, lambda request: requests.append(request) or {"proposals": []}
+        )
 
         self.assertEqual(
             ["classify-unresolved", "recommend-category", "find-purchase-evidence"],
@@ -239,19 +307,25 @@ class AIRuleTests(TestCase):
         )
 
     def test_trigger_fields_must_be_policy_targets(self) -> None:
-        with self.assertRaisesRegex(ValueError, "trigger fields must also be target fields"):
-            validate_policy(AIPolicy(
-                policy_id="bad-trigger",
-                name="Bad trigger",
-                priority=1,
-                instruction="Do nothing",
-                target_fields=("category",),
-                trigger_fields=("vendor",),
-            ))
+        with self.assertRaisesRegex(
+            ValueError, "trigger fields must also be target fields"
+        ):
+            validate_policy(
+                AIPolicy(
+                    policy_id="bad-trigger",
+                    name="Bad trigger",
+                    priority=1,
+                    instruction="Do nothing",
+                    target_fields=("category",),
+                    trigger_fields=("vendor",),
+                )
+            )
 
     def test_agent_profile_is_loaded_and_forwarded_to_resolver(self) -> None:
         policies = load_ai_policies(ROOT / "config" / "ai-policies.json")
-        policy = next(item for item in policies if item.policy_id == "recommend-category")
+        policy = next(
+            item for item in policies if item.policy_id == "recommend-category"
+        )
         self.assertEqual("SOL_MEDIUM", policy.agent_profile)
 
         transaction = Transaction(
@@ -270,14 +344,16 @@ class AIRuleTests(TestCase):
 
     def test_unknown_agent_profile_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "agent_profile"):
-            validate_policy(AIPolicy(
-                policy_id="bad-profile",
-                name="Bad profile",
-                priority=1,
-                instruction="Do nothing",
-                target_fields=("category",),
-                agent_profile="gpt-5-mini",
-            ))
+            validate_policy(
+                AIPolicy(
+                    policy_id="bad-profile",
+                    name="Bad profile",
+                    priority=1,
+                    instruction="Do nothing",
+                    target_fields=("category",),
+                    agent_profile="gpt-5-mini",
+                )
+            )
 
     def test_human_correction_is_recorded_and_locked(self) -> None:
         review = record_ai_review(
@@ -293,8 +369,102 @@ class AIRuleTests(TestCase):
         self.assertEqual(self.transaction.category, "Groceries")
         self.assertIn("category", self.transaction.metadata["locked_fields"])
 
-    def test_openai_compatible_resolver_uses_runtime_secret_and_validates_json(self) -> None:
+    def test_human_correction_clears_stale_category_review_state(self) -> None:
+        transaction = self.transaction
+        transaction.review_required = True
+        transaction.tags.update({"needs-review", "category-review"})
+        transaction.metadata.update(
+            {
+                "category_resolution": "UNRESOLVED",
+                "category_recommendations": [{"name": "Groceries"}],
+                "classification_review_reasons": ["CATEGORY_UNRESOLVED"],
+            }
+        )
+
+        review = record_ai_review(
+            transaction,
+            policy_id="classify-unresolved",
+            field="category",
+            final_value="Groceries",
+            reviewer="owner",
+            reason="Known merchant",
+        )
+
+        self.assertEqual(review["decision_status"], "CORRECTED")
+        self.assertEqual(transaction.metadata["category_resolution"], "RESOLVED")
+        self.assertFalse(transaction.review_required)
+        self.assertNotIn("needs-review", transaction.tags)
+        self.assertNotIn("category_recommendations", transaction.metadata)
+
+    def test_locked_human_correction_rejects_different_value(self) -> None:
+        transaction = self.transaction
+        transaction.category = "Groceries"
+        transaction.metadata["locked_fields"] = ["category"]
+
+        review = record_ai_review(
+            transaction,
+            policy_id="classify-unresolved",
+            field="category",
+            final_value="Dining",
+            reviewer="owner",
+            reason="Conflicting correction",
+        )
+
+        self.assertEqual(review["decision_status"], "REJECTED")
+        self.assertEqual(transaction.category, "Groceries")
+        self.assertNotEqual(review["decision_status"], "CORRECTED")
+
+    def test_locked_review_tag_and_queue_survive_category_correction(self) -> None:
+        transaction = self.transaction
+        transaction.review_required = True
+        record_ai_review(
+            transaction,
+            policy_id="review-tags",
+            field="tags",
+            final_value=["needs-review"],
+            reviewer="owner",
+            reason="Keep queue marker",
+        )
+
+        review = record_ai_review(
+            transaction,
+            policy_id="classify-unresolved",
+            field="category",
+            final_value="Groceries",
+            reviewer="owner",
+            reason="Known merchant",
+        )
+
+        self.assertEqual(review["decision_status"], "CORRECTED")
+        self.assertIn("tags", transaction.metadata["locked_fields"])
+        self.assertIn("needs-review", transaction.tags)
+        self.assertTrue(transaction.review_required)
+
+    def test_locked_category_resolution_marker_is_not_overwritten(self) -> None:
+        transaction = self.transaction
+        transaction.metadata.update(
+            {
+                "locked_fields": ["category_resolution"],
+                "category_resolution": "PENDING",
+            }
+        )
+
+        record_ai_review(
+            transaction,
+            policy_id="classify-unresolved",
+            field="category",
+            final_value="Groceries",
+            reviewer="owner",
+            reason="Known merchant",
+        )
+
+        self.assertEqual(transaction.metadata["category_resolution"], "PENDING")
+
+    def test_openai_compatible_resolver_uses_runtime_secret_and_validates_json(
+        self,
+    ) -> None:
         import os
+
         response = b'{"choices":[{"message":{"content":"{\\"proposals\\":[]}"}}]}'
         captured = {}
 

@@ -171,7 +171,7 @@ recover_forward_runtime_receipt() {
   recovery_env+=(-e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1")
   local recovery_status
   if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
-    <"$canonical_source" >"$recovery_stdout" 2>"$recovery_stderr"; then
+    < "$canonical_source" > "$recovery_stdout" 2> "$recovery_stderr"; then
     recovery_status=0
   else
     recovery_status=$?
@@ -240,7 +240,7 @@ run_production_runtime() {
 
   local runtime_status
   if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
-    <"$runtime_input" >"$runtime_stdout" 2>"$runtime_stderr"; then
+    < "$runtime_input" > "$runtime_stdout" 2> "$runtime_stderr"; then
     runtime_status=0
   else
     runtime_status=$?

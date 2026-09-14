@@ -160,7 +160,7 @@ function credentialBindingsFromEnvironment() {
       leaves.set(key, { ...binding, workflow, node });
     }
   }
-  if (contract.bindings.length !== 9 || leaves.size !== 37) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
+  if (contract.bindings.length !== 9 || leaves.size !== 40) throw new Error('CREDENTIAL_BINDING_COVERAGE_INVALID');
   return contract.bindings;
 }
 
@@ -593,6 +593,7 @@ function validateCanonicalGraph(workflow, targetIds) {
     if (node.type !== 'n8n-nodes-base.dataTable') continue;
     const parameters = node.parameters || {};
     if (parameters.resource === 'table') {
+      if (parameters.operation === 'list') continue;
       if (parameters.operation !== 'create' || !targetIds.has(parameters.tableName)) throw new Error('CANONICAL_SOURCE_TABLE_OPERATION_INVALID');
       continue;
     }

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": 1,
+  "base_currency": "AED",
+  "quote_contract": {
+    "quote_basis": "BASE_PER_QUOTE",
+    "units": "AED per 1 foreign-currency unit",
+    "sell_basis": "DISPLAYED_SELL",
+    "uncertainty": "ESTIMATE",
+    "max_age_seconds": 86400,
+    "settlement_guarantee": false
+  },
+  "provider_order": [
+    "rakbank",
+    "adcb"
+  ],
+  "optional_fallbacks": [
+    "fab"
+  ],
+  "challenge_policy": "STOP_PROVIDER_CHAIN",
+  "providers": [
+    {
+      "id": "rakbank",
+      "display_name": "RAKBANK public issuer FX rate",
+      "kind": "PUBLIC_JSON",
+      "priority": 1,
+      "enabled_by_default": true,
+      "method": "POST",
+      "endpoint": "https://www.rakbank.ae/api/forex/rate",
+      "endpoint_version": "v1",
+      "request": {},
+      "response": {
+        "wrapper_field": "responseContent",
+        "rates_field": "forexRates",
+        "currency_field": "fixedCurrencyCode",
+        "rate_field": "sellRate",
+        "date_field": "fileDate",
+        "units": "AED per 1 foreign-currency unit",
+        "sell_basis": "DISPLAYED_SELL"
+      },
+      "source_identity": "rakbank-public-forex-rate-v1",
+      "authentication": "NONE",
+      "credential_free": true,
+      "uncertainty": "ESTIMATE"
+    },
+    {
+      "id": "adcb",
+      "display_name": "ADCB public accounts FX rates (main/ASP)",
+      "kind": "PUBLIC_HTML",
+      "priority": 2,
+      "enabled_by_default": true,
+      "method": "GET",
+      "segment": "ASP_JsonD",
+      "segment_identity": {
+        "accepted_variables": [
+          "ASP_JsonD",
+          "Main_JsonD",
+          "STANDARD_JsonD"
+        ],
+        "table_attributes": [
+          "data-segment",
+          "data-section",
+          "id",
+          "name"
+        ],
+        "requires_explicit_match": true
+      },
+      "request": {
+        "authentication": "NONE"
+      },
+      "response": {
+        "from_currency_field": "FromCurrency",
+        "to_currency_field": "ToCurrency",
+        "rate_field": "SellRate",
+        "date_field": "As of Date",
+        "premium_segments": [
+          "PCL_JsonD",
+          "EXC_JsonD",
+          "EMI_JsonD",
+          "EME_JsonD"
+        ]
+      },
+      "source_identity": "adcb-public-fx-main-asp-v1",
+      "authentication": "NONE",
+      "credential_free": true,
+      "uncertainty": "ESTIMATE",
+      "historical_coverage": "UNKNOWN"
+    },
+    {
+      "id": "fab",
+      "display_name": "FAB public latest-only FX rate",
+      "kind": "PUBLIC_HTML",
+      "priority": 3,
+      "enabled_by_default": false,
+      "optional": true,
+      "method": "GET",
+      "endpoint": "https://www.bankfab.com/en-ae/personal/fx-rate",
+      "endpoint_version": "latest-only-v1",
+      "request": {
+        "authentication": "NONE"
+      },
+      "response": {
+        "rate_field": "Selling",
+        "date_field": "Last updated date",
+        "units": "AED per 1 foreign-currency unit (inferred)",
+        "sell_basis": "DISPLAYED_SELL"
+      },
+      "source_identity": "fab-public-fx-latest-v1",
+      "authentication": "NONE",
+      "credential_free": true,
+      "uncertainty": "ESTIMATE",
+      "historical_coverage": "UNKNOWN",
+      "direction_status": "INFERRED"
+    }
+  ]
+}

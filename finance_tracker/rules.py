@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Iterable
 
 from .models import Transaction, money
+from .properties import locked_ownership_conflict
 
 
 SCHEMA_VERSION = 1
@@ -345,6 +346,8 @@ def rule_matches(transaction: Transaction, rule: StaticRule) -> bool:
 
 
 def _manual_ownership(transaction: Transaction) -> str | None:
+    if locked_ownership_conflict(transaction):
+        return None
     metadata = transaction.metadata
     locked = set(metadata.get("locked_fields", []))
     if "owner" in locked:
@@ -369,6 +372,18 @@ def _manual_ownership(transaction: Transaction) -> str | None:
     return None
 
 
+def _mark_ownership_conflict(transaction: Transaction) -> None:
+    reasons = transaction.metadata.setdefault("property_review_reasons", [])
+    if not isinstance(reasons, list):
+        reasons = list(reasons) if isinstance(reasons, (tuple, set)) else [str(reasons)]
+        transaction.metadata["property_review_reasons"] = reasons
+    if "LOCKED_OWNERSHIP_CONFLICT" not in reasons:
+        reasons.append("LOCKED_OWNERSHIP_CONFLICT")
+    if "tags" not in set(transaction.metadata.get("locked_fields", [])):
+        transaction.tags.discard("shared")
+    transaction.review_required = True
+
+
 def _tag_lock_reason(
     transaction: Transaction, tag: object, *, removing: bool = False
 ) -> str | None:
@@ -376,6 +391,8 @@ def _tag_lock_reason(
     if "tags" in locked:
         return "tags"
     normalized = str(tag).strip().casefold()
+    if normalized == "shared" and locked_ownership_conflict(transaction):
+        return "ownership_conflict"
     if normalized in {"subscription", "recurring"} and "is_subscription" in locked:
         if (not transaction.is_subscription and not removing) or (
             transaction.is_subscription and removing
@@ -468,6 +485,8 @@ class RuleEngine:
         stages: Iterable[str] | None = None,
     ) -> list[RuleTrace]:
         selected = None if stages is None else {str(stage).upper() for stage in stages}
+        if locked_ownership_conflict(transaction):
+            _mark_ownership_conflict(transaction)
         traces: list[RuleTrace] = []
         stopped_stages: set[str] = set()
         for rule in self.rules:

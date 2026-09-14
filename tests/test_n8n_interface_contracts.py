@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -13,6 +15,15 @@ SUBWORKFLOW_TYPES = {
     "n8n-nodes-base.executeWorkflow",
     "@n8n/n8n-nodes-langchain.toolWorkflow",
 }
+CANONICAL_DATA_TABLES = frozenset(
+    {
+        "finance_ingestion_state",
+        "finance_documents",
+        "finance_actual_batches",
+        "finance_ai_reviews",
+        "finance_mcp_requests",
+    }
+)
 
 
 def load_json(path: Path) -> dict:
@@ -211,6 +222,31 @@ CURSOR_COMMIT_CONTEXT = (
     "receipt_readback_verified",
 )
 
+SOURCE_CURSOR_ROW_FIELDS = frozenset(
+    {
+        "cursor_value",
+        "committed_run_id",
+        "run_upper_bound",
+        "overlap_seconds",
+        "scanned_count",
+        "matched_count",
+        "cursor_version",
+        "readback_verified",
+    }
+)
+ACQUISITION_RECEIPT_ROW_FIELDS = frozenset(
+    {
+        "receipt_run_id",
+        "receipt_run_upper_bound",
+        "last_window_start",
+        "last_terminal_state",
+        "archive_receipt_sha256",
+        "archive_readback_verified",
+        "downstream_receipt_sha256",
+    }
+)
+
+
 # Every direct executeWorkflow edge is represented once. EI and WIO share
 # reviewed contracts, so aliases keep the fixture list small without hiding
 # either caller from the observed topology check.
@@ -322,7 +358,10 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
     ),
     boundary_case(
         "artifact handoff to statement pipeline",
-        ("INTERACTIVE_ARTIFACT_HANDOFF", "Dispatch Browser Capture to Headless Pipeline"),
+        (
+            "INTERACTIVE_ARTIFACT_HANDOFF",
+            "Dispatch Browser Capture to Headless Pipeline",
+        ),
         "SHARED_STATEMENT_PIPELINE",
         (
             "run_id",
@@ -622,6 +661,48 @@ class N8nInterfaceContractTests(unittest.TestCase):
                         f"{fixture['name']} consumer field {field} missing from {fixture['target']}",
                     )
 
+    def test_connected_row_data_tables_use_canonical_selectors_and_state_keys(
+        self,
+    ) -> None:
+        for filename, workflow in self.workflows.items():
+            connected = set(workflow.get("connections", {}))
+            for branches in workflow.get("connections", {}).values():
+                for outputs in branches.values():
+                    for group in outputs:
+                        connected.update(edge["node"] for edge in group)
+            for node in workflow["nodes"]:
+                parameters = node.get("parameters", {})
+                if (
+                    node.get("type") != "n8n-nodes-base.dataTable"
+                    or parameters.get("resource") != "row"
+                    or node["name"] not in connected
+                ):
+                    continue
+                selector = parameters.get("dataTableId")
+                with self.subTest(workflow=filename, node=node["name"]):
+                    self.assertIsInstance(selector, dict)
+                    self.assertIs(selector.get("__rl"), True)
+                    self.assertEqual(selector.get("mode"), "name")
+                    self.assertIn(selector.get("value"), CANONICAL_DATA_TABLES)
+                    if selector["value"] != "finance_ingestion_state":
+                        continue
+                    conditions = parameters.get("filters", {}).get("conditions", [])
+                    condition_names = {
+                        condition.get("keyName") for condition in conditions
+                    }
+                    if parameters.get("operation") == "insert":
+                        columns = parameters.get("columns", {}).get("value", {})
+                        self.assertTrue(
+                            {"record_type", "record_key", "record_payload_json"}
+                            <= set(columns)
+                        )
+                    else:
+                        self.assertTrue(
+                            {"record_type", "record_key"} <= condition_names
+                        )
+
+            self.assertNotIn("finance_source_cursors", json.dumps(workflow))
+
     def test_attachment_alias_requires_explicit_adapter(self) -> None:
         producer = self._document("OUTLOOK_FINANCE_ACQUISITION")
         consumer = self._document("SHARED_STATEMENT_PIPELINE")
@@ -682,6 +763,232 @@ class N8nInterfaceContractTests(unittest.TestCase):
         )
         for operation in ("ACQUIRE", "ASSERT", "RELEASE"):
             self.assertIn(operation, lease_code)
+
+    def _run_lifecycle_node(
+        self, node_name: str, json_input: dict, references: dict[str, dict]
+    ) -> dict:
+        node = self.workflow_for_code("OUTLOOK_MESSAGE_SWEEP")["nodes"]
+        code = next(item for item in node if item["name"] == node_name)["parameters"][
+            "jsCode"
+        ]
+        script = f"""
+const code = {json.dumps(code)};
+const jsonInput = {json.dumps(json_input)};
+const references = {json.dumps({name: {"json": value} for name, value in references.items()})};
+const lookup = name => ({{ first: () => references[name] }});
+try {{
+  process.stdout.write(JSON.stringify({{ ok: true, output: new Function('$json', '$', 'require', code)(jsonInput, lookup, require) }}));
+}} catch (error) {{
+  process.stdout.write(JSON.stringify({{ ok: false, error: String(error.message || error) }}));
+}}
+"""
+        node_binary = shutil.which("node")
+        self.assertIsNotNone(
+            node_binary, "Node.js is required for lifecycle contract execution"
+        )
+        result = subprocess.run(
+            [node_binary, "-e", script],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout, result.stderr)
+        return json.loads(result.stdout)
+
+    def test_typed_ingestion_rows_keep_cursor_and_receipt_ownership(self) -> None:
+        workflow = self.workflow_for_code("OUTLOOK_MESSAGE_SWEEP")
+        for node in workflow["nodes"]:
+            parameters = node.get("parameters", {})
+            conditions = parameters.get("filters", {}).get("conditions", [])
+            record_types = {
+                condition.get("keyValue")
+                for condition in conditions
+                if condition.get("keyName") == "record_type"
+            }
+            fields = {condition.get("keyName") for condition in conditions}
+            fields.update(parameters.get("columns", {}).get("value", {}))
+            if "SOURCE_CURSOR" in record_types:
+                with self.subTest(node=node["name"], row="SOURCE_CURSOR"):
+                    self.assertFalse(
+                        fields & ACQUISITION_RECEIPT_ROW_FIELDS,
+                        f"cursor row carries receipt fields: {fields & ACQUISITION_RECEIPT_ROW_FIELDS}",
+                    )
+            if "ACQUISITION_RECEIPT" in record_types:
+                with self.subTest(node=node["name"], row="ACQUISITION_RECEIPT"):
+                    self.assertNotIn("committed_run_id", fields)
+                    self.assertFalse(
+                        fields & {"cursor_value", "cursor_version"},
+                        f"receipt row carries cursor fields: {fields & {'cursor_value', 'cursor_version'}}",
+                    )
+
+        for name in (
+            "Mark Acquisition DOWNSTREAM_VERIFIED",
+            "Mark Recovered Acquisition DOWNSTREAM_VERIFIED",
+        ):
+            transition = next(
+                item for item in workflow["nodes"] if item["name"] == name
+            )
+            conditions = transition["parameters"]["filters"]["conditions"]
+            condition_names = {condition["keyName"] for condition in conditions}
+            self.assertNotIn("downstream_receipt_sha256", condition_names)
+            self.assertTrue(
+                {
+                    "record_type",
+                    "record_key",
+                    "last_terminal_state",
+                    "receipt_run_id",
+                    "receipt_run_upper_bound",
+                    "readback_verified",
+                }
+                <= condition_names
+            )
+            self.assertEqual(
+                transition["parameters"]["columns"]["value"][
+                    "downstream_receipt_sha256"
+                ],
+                "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}",
+            )
+
+    def test_two_row_cursor_receipt_commit_replay_and_mismatch(self) -> None:
+        archive_hash = "a" * 64
+        downstream_hash = "b" * 64
+        proof = {
+            "run_id": "run-2",
+            "source_code": "OUTLOOK",
+            "window_start": "2026-09-01T00:00:00Z",
+            "run_upper_bound": "2026-09-02T00:00:00Z",
+            "expected_cursor_version": 2,
+            "terminal_state": "ARCHIVED",
+            "readback_verified": True,
+            "archive_receipt_sha256": archive_hash,
+            "archive_readback_verified": True,
+            "downstream_receipt_sha256": downstream_hash,
+        }
+        prior_cursor = {
+            "source_code": "OUTLOOK",
+            "cursor_value": "2026-09-01T00:00:00Z",
+            "run_upper_bound": "2026-09-01T00:00:00Z",
+            "committed_run_id": "run-1",
+            "cursor_version": 2,
+            "readback_verified": True,
+        }
+        detected = self._run_lifecycle_node(
+            "Determine Existing Cursor Commit",
+            prior_cursor,
+            {"Verify Downstream Persistence Proof": proof},
+        )
+        self.assertTrue(detected["ok"])
+        self.assertFalse(detected["output"][0]["json"]["cursor_recovery"])
+
+        interrupted_cursor = {
+            **prior_cursor,
+            "committed_run_id": "run-2",
+            "cursor_value": proof["run_upper_bound"],
+            "run_upper_bound": proof["run_upper_bound"],
+            "cursor_version": 3,
+            "readback_verified": False,
+        }
+        interrupted = self._run_lifecycle_node(
+            "Determine Existing Cursor Commit",
+            interrupted_cursor,
+            {"Verify Downstream Persistence Proof": proof},
+        )
+        self.assertTrue(interrupted["ok"])
+        interrupted_state = interrupted["output"][0]["json"]
+        self.assertTrue(interrupted_state["cursor_recovery"])
+        self.assertEqual(interrupted_state["resume_path"], "CURSOR_READBACK_PENDING")
+        recovered_cursor = self._run_lifecycle_node(
+            "Verify Source Cursor Readback",
+            {**interrupted_cursor, "readback_verified": True},
+            {
+                "Verify Downstream Persistence Proof": proof,
+                "Determine Existing Cursor Commit": interrupted_state,
+            },
+        )
+        self.assertTrue(recovered_cursor["ok"])
+        self.assertFalse(recovered_cursor["output"][0]["json"]["cursor_recovery"])
+        self.assertTrue(recovered_cursor["output"][0]["json"]["cursor_readback_stage"])
+
+        terminal_proof = {**proof, "terminal_state": "DOWNSTREAM_VERIFIED"}
+        terminal_receipt = {
+            "source_code": "OUTLOOK",
+            "receipt_run_id": "run-2",
+            "receipt_run_upper_bound": terminal_proof["run_upper_bound"],
+            "last_window_start": terminal_proof["window_start"],
+            "archive_receipt_sha256": archive_hash,
+            "archive_readback_verified": True,
+            "downstream_receipt_sha256": downstream_hash,
+            "last_terminal_state": "DOWNSTREAM_VERIFIED",
+            "readback_verified": True,
+        }
+        committed_cursor = {
+            "source_code": "OUTLOOK",
+            "cursor_value": terminal_proof["run_upper_bound"],
+            "run_upper_bound": terminal_proof["run_upper_bound"],
+            "committed_run_id": "run-2",
+            "cursor_version": 3,
+            "readback_verified": True,
+        }
+        returned = self._run_lifecycle_node(
+            "Return Verified Cursor Commit",
+            committed_cursor,
+            {
+                "Verify Downstream Persistence Proof": terminal_proof,
+                "Read Back Verified Terminal Acquisition Receipt": terminal_receipt,
+                "Determine Existing Cursor Commit": {"cursor_recovery": False},
+            },
+        )
+        self.assertTrue(returned["ok"])
+        self.assertEqual(returned["output"][0]["json"]["cursor_version"], 3)
+
+        replay = self._run_lifecycle_node(
+            "Verify Replayed Terminal Acquisition Receipt",
+            {
+                **terminal_receipt,
+                "run_id": "run-2",
+                "window_start": terminal_proof["window_start"],
+                "run_upper_bound": terminal_proof["run_upper_bound"],
+                "terminal_state": "DOWNSTREAM_VERIFIED",
+            },
+            {
+                "Verify Downstream Persistence Proof": terminal_proof,
+                "Determine Existing Cursor Commit": {
+                    **committed_cursor,
+                    "cursor_recovery": True,
+                    "cursor_readback_verified": True,
+                },
+            },
+        )
+        self.assertTrue(replay["ok"])
+        self.assertTrue(replay["output"][0]["json"]["replay_verified"])
+
+        mismatched_receipt = {**terminal_receipt, "archive_receipt_sha256": "c" * 64}
+        mismatch = self._run_lifecycle_node(
+            "Return Verified Cursor Commit",
+            committed_cursor,
+            {
+                "Verify Downstream Persistence Proof": terminal_proof,
+                "Read Back Verified Terminal Acquisition Receipt": mismatched_receipt,
+                "Determine Existing Cursor Commit": {"cursor_recovery": False},
+            },
+        )
+        self.assertFalse(mismatch["ok"])
+        self.assertIn("ACQUISITION_TERMINAL_READBACK_MISMATCH", mismatch["error"])
+
+        stale_cursor = {**committed_cursor, "committed_run_id": "run-stale"}
+        stale = self._run_lifecycle_node(
+            "Return Verified Cursor Commit",
+            stale_cursor,
+            {
+                "Verify Downstream Persistence Proof": terminal_proof,
+                "Read Back Verified Terminal Acquisition Receipt": terminal_receipt,
+                "Determine Existing Cursor Commit": {"cursor_recovery": False},
+            },
+        )
+        self.assertFalse(stale["ok"])
+        self.assertIn("SOURCE_CURSOR_TERMINAL_JOIN_MISMATCH", stale["error"])
 
     def _document(self, code: str) -> str:
         return json.dumps(self.workflow_for_code(code), ensure_ascii=True).replace(

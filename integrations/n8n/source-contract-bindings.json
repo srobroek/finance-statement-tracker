@@ -37,14 +37,14 @@
       "path": "integrations/n8n/workflows/09-ai-proposal.json",
       "workflow_id": "10000000-0000-4000-8000-000000000009",
       "workflow_code": "AI_PROPOSAL",
-      "source_sha256": "2541b0cf5bfd61ffd539a02eb6f15df039d54b06f48a114196c1ae0311f7104e",
+      "source_sha256": "60d684a72829ba7148038508aaa5bd1f55b0528417a8cc02d96f7275baafd5f9",
       "slot_metadata_key": "financeSourceBindingSlots"
     },
     {
       "path": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
       "workflow_id": "10000000-0000-4000-8000-000000000024",
       "workflow_code": "SHARED_MONTHLY_STATEMENT_CYCLE",
-      "source_sha256": "dc1d35abd58a8ce9cda732311e4b366958ffa048b88373432d2c6da6cb83b359",
+      "source_sha256": "750c6163859ffbdd453bfd4ba916453c0c2c3f851627fda09dabb98287a1696c",
       "slot_metadata_key": "financeSourceBindingSlots"
     }
   ],
@@ -127,5 +127,5 @@
     }
   },
   "activation_prerequisites": [],
-  "manifest_sha256": "47a9fbb4040bbd061b917e5e75f09909b8675ba14bac0b0512414d71686dd228"
+  "manifest_sha256": "7657176ad2c87c3c25ec30ab98c7b133ffb3b02c8a0d88d1399f56c21c2ee88c"
 }

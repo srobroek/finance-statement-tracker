@@ -165,7 +165,7 @@ def build_archive_fixture() -> dict:
             "attachment_identity_keys:attachments,attachments_verified:attachments.length,"
             "email_evidence_receipt_barrier:'VERIFIED',email_evidence_receipts_verified:emails.length,"
             "email_evidence_identity_keys:emails,archive_identity_keys:[...attachments,...emails].sort(),"
-            "archive_readback_verified:false,cursor_commit_eligible:false}}];"
+            "archive_readback_verified:true,cursor_commit_eligible:false}}];"
         ),
         [0, 0],
     )
@@ -185,6 +185,12 @@ def build_archive_fixture() -> dict:
             "disposableOnly": True,
             "productionImportForbidden": True,
             "externalNodeReplacement": "Synthetic archive barrier",
+            "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID",
+            "archiveReceiptIdentity": [
+                "source_message_id",
+                "source_attachment_id",
+            ],
+            "archiveReceiptHashEvidence": "source_sha256",
         },
     }
 

@@ -173,9 +173,19 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "source_sha256",
+              "keyName": "source_code",
               "condition": "eq",
-              "keyValue": "={{ $json.email_evidence_sha256 }}"
+              "keyValue": "={{ $json.source_code }}"
+            },
+            {
+              "keyName": "source_message_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.source_message_id }}"
+            },
+            {
+              "keyName": "source_attachment_id",
+              "condition": "eq",
+              "keyValue": "INLINE_BODY"
             },
             {
               "keyName": "document_profile",
@@ -522,9 +532,19 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "source_sha256",
+              "keyName": "source_code",
               "condition": "eq",
-              "keyValue": "={{ $json.document_sha256 }}"
+              "keyValue": "={{ $json.source_code }}"
+            },
+            {
+              "keyName": "source_message_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.source_message_id }}"
+            },
+            {
+              "keyName": "source_attachment_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.source_attachment_id }}"
             },
             {
               "keyName": "document_profile",
@@ -588,29 +608,24 @@
             {
               "keyName": "source_code",
               "condition": "eq",
-              "keyValue": "={{ $json.source_code }}"
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_code }}"
             },
             {
               "keyName": "source_message_id",
               "condition": "eq",
-              "keyValue": "={{ $json.source_message_id }}"
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_message_id }}"
             },
             {
               "keyName": "source_attachment_id",
               "condition": "eq",
-              "keyValue": "={{ $json.source_attachment_id }}"
-            },
-            {
-              "keyName": "source_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $json.document_sha256 }}"
+              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_attachment_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, $json.source_attachment_id, $json.document_sha256]) }}",
+            "archive_receipt_id": "={{ JSON.stringify([$json.source_code, $json.source_message_id, $json.source_attachment_id]) }}",
             "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
             "source_code": "={{ $json.source_code }}",
             "source_message_id": "={{ $json.source_message_id }}",
@@ -677,11 +692,6 @@
               "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.source_attachment_id }}"
             },
             {
-              "keyName": "source_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Enumerated Attachment Archive').item.json.document_sha256 }}"
-            },
-            {
               "keyName": "archive_state",
               "condition": "eq",
               "keyValue": "HASH_VERIFIED"
@@ -701,7 +711,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Enumerated Attachment Archive').item.json, receipt = $json, identity = expected.source_message_id + ':' + expected.source_attachment_id;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== expected.source_attachment_id || receipt.source_sha256 !== expected.document_sha256)\n    throw new Error('ARCHIVE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, attachment_identity: identity, attachment_verified: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
+        "jsCode": "// Purpose: Verify Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst expected = $('Verify Enumerated Attachment Archive').item.json, receipt = $json, identity = expected.source_message_id + ':' + expected.source_attachment_id;\nif (receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== expected.source_message_id || receipt.source_attachment_id !== expected.source_attachment_id || receipt.source_sha256 !== expected.document_sha256)\n    throw new Error('ARCHIVE_RECEIPT_READBACK_MISMATCH');\nreturn [{ json: { ...expected, ...receipt, attachment_identity: identity, attachment_verified: true, replay_noop_key: identity } }];\n"
       }
     },
     {
@@ -741,7 +751,7 @@
         1900
       ],
       "parameters": {
-        "jsCode": "// Purpose: Attachment Verification Barrier. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nconst expected = Array.isArray(request.messages)\n    ? request.messages.flatMap(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        const messageId = String(row?.message_id || message?.id || '').trim();\n        return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n            .map(attachment => messageId + ':' + attachment.id);\n    })\n    : [];\nconst safeRows = name => {\n    try {\n        return $(name).all().map(item => item.json);\n    }\n    catch {\n        return [];\n    }\n};\nconst attachmentRows = [\n    ...safeRows('Verify Enumerated Attachment Archive'),\n    ...safeRows('Verify Existing Enumerated Archive Receipt'),\n].filter(row => row.attachment_verified === true && !row.attachment_empty);\nconst observed = attachmentRows.map(row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id);\nif (new Set(observed).size !== expected.length) {\n    throw new Error('ATTACHMENT_ARCHIVE_COUNT_MISMATCH');\n}\nfor (const identity of expected) {\n    if (!observed.includes(identity)) {\n        throw new Error('ATTACHMENT_ARCHIVE_MISSING:' + identity);\n    }\n}\nconst emailRows = [\n    ...safeRows('Verify Durable Email Evidence Receipt'),\n    ...safeRows('Verify Existing Email Evidence Receipt'),\n].filter(row => row.email_evidence_receipt_verified === true);\nconst expectedEmail = Array.isArray(request.messages)\n    ? request.messages.map(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        return String(row?.message_id || message?.id) + ':INLINE_BODY';\n    })\n    : [];\nconst observedEmail = emailRows.map(row => row.email_evidence_identity || row.source_message_id + ':INLINE_BODY');\nif (new Set(observedEmail).size !== expectedEmail.length\n    || expectedEmail.some(identity => !observedEmail.includes(identity))) {\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');\n}\nconst emailArchiveProof = emailRows\n    .map(row => ({\n    source_message_id: String(row.source_message_id || ''),\n    email_evidence_sha256: String(row.email_evidence_sha256 || ''),\n    onedrive_item_id: String(row.onedrive_item_id || ''),\n    email_evidence_identity: String(row.email_evidence_identity || row.source_message_id + ':INLINE_BODY'),\n}))\n    .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));\nconst archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();\nconst archiveItemIds = [...new Set(emailArchiveProof.map(row => row.onedrive_item_id).filter(Boolean))].sort();\nconst first = attachmentRows[0] || emailRows[0] || {};\nreturn [{\n        json: {\n            status: 'ARCHIVED',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            onedrive_parent_id: request.onedrive_parent_id,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            matched_count: request.messages.length,\n            onedrive_item_id: first.onedrive_item_id || null,\n            source_message_id: first.source_message_id || null,\n            source_attachment_id: first.source_attachment_id || null,\n            attachment_verification_barrier: 'VERIFIED',\n            attachment_ids_verified: true,\n            attachment_identity_keys: observed,\n            attachments_verified: attachmentRows.length,\n            email_evidence_receipt_barrier: 'VERIFIED',\n            email_evidence_receipts_verified: emailRows.length,\n            email_evidence_identity_keys: observedEmail,\n            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n            email_evidence_archive_proof: emailArchiveProof,\n            archive_ready: true,\n            cursor_commit_eligible: false,\n        },\n    }];\n"
+        "jsCode": "// Purpose: Attachment Verification Barrier. Keep this deterministic and fail closed.\nconst request = $('Validate Bounded Source Request').first().json;\nconst expected = Array.isArray(request.messages)\n    ? request.messages.flatMap(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        const messageId = String(row?.message_id || message?.id || '').trim();\n        return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n            .map(attachment => messageId + ':' + attachment.id);\n    })\n    : [];\nconst safeRows = name => {\n    try {\n        return $(name).all().map(item => item.json);\n    }\n    catch {\n        return [];\n    }\n};\nconst attachmentRows = [\n    ...safeRows('Verify Enumerated Attachment Archive'),\n    ...safeRows('Verify Existing Enumerated Archive Receipt'),\n].filter(row => row.attachment_verified === true && !row.attachment_empty);\nconst observed = attachmentRows.map(row => row.attachment_identity || row.source_message_id + ':' + row.source_attachment_id);\nif (new Set(observed).size !== expected.length) {\n    throw new Error('ATTACHMENT_ARCHIVE_COUNT_MISMATCH');\n}\nfor (const identity of expected) {\n    if (!observed.includes(identity)) {\n        throw new Error('ATTACHMENT_ARCHIVE_MISSING:' + identity);\n    }\n}\nconst emailRows = [\n    ...safeRows('Verify Durable Email Evidence Receipt'),\n    ...safeRows('Verify Existing Email Evidence Receipt'),\n].filter(row => row.email_evidence_receipt_verified === true);\nconst expectedEmail = Array.isArray(request.messages)\n    ? request.messages.map(row => {\n        const message = row?.message && typeof row.message === 'object' ? row.message : row;\n        return String(row?.message_id || message?.id) + ':INLINE_BODY';\n    })\n    : [];\nconst observedEmail = emailRows.map(row => row.email_evidence_identity || row.source_message_id + ':INLINE_BODY');\nif (new Set(observedEmail).size !== expectedEmail.length\n    || expectedEmail.some(identity => !observedEmail.includes(identity))) {\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH');\n}\nconst archiveReadbackVerifiedRows = [...attachmentRows, ...emailRows];\nif (archiveReadbackVerifiedRows.some(row => row.archive_readback_verified !== true)) {\n    throw new Error('ARCHIVE_READBACK_VERIFICATION_REQUIRED');\n}\nconst emailArchiveProof = emailRows\n    .map(row => ({\n    source_message_id: String(row.source_message_id || ''),\n    email_evidence_sha256: String(row.email_evidence_sha256 || ''),\n    onedrive_item_id: String(row.onedrive_item_id || ''),\n    email_evidence_identity: String(row.email_evidence_identity || row.source_message_id + ':INLINE_BODY'),\n}))\n    .sort((left, right) => left.source_message_id.localeCompare(right.source_message_id));\nconst archiveIdentityKeys = [...new Set([...observed, ...observedEmail])].sort();\nconst archiveItemIds = [...new Set(emailArchiveProof.map(row => row.onedrive_item_id).filter(Boolean))].sort();\nconst first = attachmentRows[0] || emailRows[0] || {};\nreturn [{\n        json: {\n            status: 'ARCHIVED',\n            run_id: request.run_id,\n            source_code: request.source_code,\n            folder_id: request.folder_id,\n            senders: request.senders,\n            subjects: request.subjects,\n            onedrive_parent_id: request.onedrive_parent_id,\n            window_start: request.window_start,\n            run_upper_bound: request.run_upper_bound,\n            matched_count: request.messages.length,\n            onedrive_item_id: first.onedrive_item_id || null,\n            source_message_id: first.source_message_id || null,\n            source_attachment_id: first.source_attachment_id || null,\n            attachment_verification_barrier: 'VERIFIED',\n            attachment_ids_verified: true,\n            attachment_identity_keys: observed,\n            attachments_verified: attachmentRows.length,\n            email_evidence_receipt_barrier: 'VERIFIED',\n            email_evidence_receipts_verified: emailRows.length,\n            email_evidence_identity_keys: observedEmail,\n            archive_identity_keys: archiveIdentityKeys,\n            archive_item_ids: archiveItemIds,\n            email_evidence_archive_proof: emailArchiveProof,\n            archive_ready: true,\n            archive_readback_verified: true,\n            cursor_commit_eligible: false,\n        },\n    }];\n"
       }
     },
     {
@@ -888,7 +898,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Existing Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_archive_receipt, identity = row.source_message_id + ':' + row.source_attachment_id;\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== row.source_attachment_id || !/^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || '')))\n    throw new Error('ARCHIVE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, attachment_identity: identity, attachment_verified: true, archive_readback_verified: true, replay_noop: true, replay_noop_key: identity + ':' + receipt.source_sha256 } }];\n"
+        "jsCode": "// Purpose: Verify Existing Enumerated Archive Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_archive_receipt, identity = row.source_message_id + ':' + row.source_attachment_id;\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== row.source_attachment_id || !/^[a-f0-9]{64}$/i.test(String(receipt.source_sha256 || '')))\n    throw new Error('ARCHIVE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, attachment_identity: identity, attachment_verified: true, archive_readback_verified: true, replay_noop: true, replay_noop_key: identity } }];\n"
       }
     },
     {
@@ -941,11 +951,6 @@
               "keyName": "source_attachment_id",
               "condition": "eq",
               "keyValue": "INLINE_BODY"
-            },
-            {
-              "keyName": "source_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $json.email_evidence_sha256 }}"
             },
             {
               "keyName": "archive_state",
@@ -1010,7 +1015,7 @@
         1520
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Existing Email Evidence Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_email_receipt, identity = row.source_message_id + ':INLINE_BODY';\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== row.email_evidence_sha256)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, email_evidence_identity: identity, email_evidence_receipt_verified: true, email_evidence_sha256: receipt.source_sha256, replay_noop: true } }];\n"
+        "jsCode": "// Purpose: Verify Existing Email Evidence Receipt. Keep this deterministic and fail closed.\nconst row = $json, receipt = row.existing_email_receipt, identity = row.source_message_id + ':INLINE_BODY';\nif (!receipt || receipt.archive_state !== 'HASH_VERIFIED' || receipt.source_message_id !== row.source_message_id || receipt.source_attachment_id !== 'INLINE_BODY' || receipt.source_sha256 !== row.email_evidence_sha256)\n    throw new Error('EMAIL_EVIDENCE_RECEIPT_REPLAY_NOT_SAFE');\nreturn [{ json: { ...row, ...receipt, email_evidence_identity: identity, email_evidence_receipt_verified: true, archive_readback_verified: true, email_evidence_sha256: receipt.source_sha256, replay_noop: true } }];\n"
       }
     },
     {
@@ -1036,29 +1041,24 @@
             {
               "keyName": "source_code",
               "condition": "eq",
-              "keyValue": "={{ $json.source_code }}"
+              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.source_code }}"
             },
             {
               "keyName": "source_message_id",
               "condition": "eq",
-              "keyValue": "={{ $json.source_message_id }}"
+              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.source_message_id }}"
             },
             {
               "keyName": "source_attachment_id",
               "condition": "eq",
               "keyValue": "INLINE_BODY"
-            },
-            {
-              "keyName": "source_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $json.email_evidence_sha256 }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "archive_receipt_id": "={{ JSON.stringify([$('Validate Bounded Source Request').first().json.run_id, $json.source_code, $json.source_message_id, 'INLINE_BODY', $json.email_evidence_sha256]) }}",
+            "archive_receipt_id": "={{ JSON.stringify([$json.source_code, $json.source_message_id, 'INLINE_BODY']) }}",
             "run_id": "={{ $('Validate Bounded Source Request').first().json.run_id }}",
             "source_code": "={{ $json.source_code }}",
             "source_message_id": "={{ $json.source_message_id }}",
@@ -1122,11 +1122,6 @@
               "keyName": "source_attachment_id",
               "condition": "eq",
               "keyValue": "INLINE_BODY"
-            },
-            {
-              "keyName": "source_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Email Evidence Readback').item.json.email_evidence_sha256 }}"
             },
             {
               "keyName": "archive_state",
@@ -1652,7 +1647,12 @@
     "terminalReceiptTable": "finance_documents",
     "terminalReceiptReadback": true,
     "immutableEnumerationInputRequired": true,
-    "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID_AND_HASH",
+    "attachmentArchiveReplay": "NO_OP_BY_SOURCE_ID",
+    "archiveReceiptIdentity": [
+      "source_message_id",
+      "source_attachment_id"
+    ],
+    "archiveReceiptHashEvidence": "source_sha256",
     "attachmentVerificationBarrier": "REQUIRED",
     "archivedOnlyDisposition": [
       "INLINE",

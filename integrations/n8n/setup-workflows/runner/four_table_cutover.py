@@ -452,6 +452,8 @@ REFERENCE_SEMANTIC_FIELDS = (
     "in_flight",
 )
 WORKFLOW_BODY_FIELDS = ("name", "nodes", "connections", "settings", "meta", "pinData")
+
+
 def _source_binding_manifest() -> dict[str, Any]:
     spec = importlib.util.spec_from_file_location(
         "finance_source_contract_bindings", SOURCE_BINDINGS_GENERATOR_PATH
@@ -465,15 +467,15 @@ def _source_binding_manifest() -> dict[str, Any]:
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise CutoverError(str(error)) from error
     manifest, _ = _read_json(SOURCE_BINDINGS_MANIFEST_PATH)
-    if manifest.get("contract_status") != "READY" or manifest.get("activation_prerequisites"):
+    if manifest.get("contract_status") != "READY" or manifest.get(
+        "activation_prerequisites"
+    ):
         raise CutoverError("SOURCE_BINDINGS_ACTIVATION_REQUIRED")
     return manifest
 
 
 def _validate_source_binding_manifest() -> None:
     _source_binding_manifest()
-
-
 
 
 def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
@@ -516,7 +518,10 @@ def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
             or not credential_type
             or not isinstance(node_type, str)
             or not node_type
-            or (credential_name is not None and (not isinstance(credential_name, str) or not credential_name))
+            or (
+                credential_name is not None
+                and (not isinstance(credential_name, str) or not credential_name)
+            )
             or not isinstance(binding.get("nodes"), list)
             or not binding["nodes"]
         ):
@@ -550,7 +555,7 @@ def _credential_binding_leaves() -> dict[tuple[str, str], tuple[str, str]]:
             if key in leaves:
                 raise CutoverError("CREDENTIAL_BINDING_AMBIGUOUS")
             leaves[key] = (binding["placeholder"], binding["credential_type"])
-    if len(contract["bindings"]) != 9 or len(leaves) != 37:
+    if len(contract["bindings"]) != 9 or len(leaves) != 40:
         raise CutoverError("CREDENTIAL_BINDING_COVERAGE_INVALID")
     return leaves
 

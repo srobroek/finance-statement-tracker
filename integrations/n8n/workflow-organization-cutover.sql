@@ -76,11 +76,13 @@ INSERT INTO finance_workflow_contract VALUES
   ('10000000-0000-4000-8000-000000000021', 'Finance · Subscription Agent Adapter · Setup Required', 'Subscription Agent Adapter', 'f1000000-0000-4000-8000-000000000103'),
   ('10000000-0000-4000-8000-000000000024', 'Finance · Shared Monthly Statement Cycle', 'Shared Monthly Statement Cycle', 'f1000000-0000-4000-8000-000000000103');
 
--- Bind the database precondition to the checked-in 024 export.  The Python
--- rehearsal checks the source bytes; SQL checks the import identity, persisted
--- body digest, and shape before it can retire 115.  expected_body_md5 follows
--- PostgreSQL jsonb text ordering over id/nodes/connections/settings/pinData/meta;
--- the mutable display name is guarded separately.
+-- Bind the database precondition to the current checked-in 024 export, not the
+-- frozen migration inventory.  The generator refreshes these pins and the Python
+-- rehearsal pins together only against an externally reviewed source SHA256.
+-- The rehearsal checks raw source bytes; SQL checks the import identity, body
+-- digest, and shape before retiring 115.  expected_body_md5 follows PostgreSQL
+-- jsonb text ordering over id/nodes/connections/settings/pinData/meta; the mutable
+-- display name is guarded separately.
 CREATE TEMP TABLE finance_canonical_source_contract (
   workflow_id varchar(36) PRIMARY KEY,
   source_path text NOT NULL,
@@ -94,8 +96,8 @@ CREATE TEMP TABLE finance_canonical_source_contract (
 INSERT INTO finance_canonical_source_contract VALUES (
   '10000000-0000-4000-8000-000000000024',
   'integrations/n8n/workflows/22-shared-monthly-statement-cycle.json',
-  '0a94f7b7d8a6665f7ac115e6caff42d274fd416ac02b8657db92be18fa966fc1',
-  '4f413c5986362dee47db7e1fd39e128d',
+  '750c6163859ffbdd453bfd4ba916453c0c2c3f851627fda09dabb98287a1696c',
+  '1e8f90ceea460e400db0b8f39be81b69',
   'Finance · Shared Monthly Statement Cycle',
   'Shared Monthly Statement Cycle',
   'SHARED_MONTHLY_STATEMENT_CYCLE',

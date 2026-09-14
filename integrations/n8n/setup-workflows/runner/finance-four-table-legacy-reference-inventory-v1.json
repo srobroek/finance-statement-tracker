@@ -1,0 +1,681 @@
+{
+  "schema_version": "finance-four-table-legacy-reference-inventory-v1",
+  "source_matrix": {
+    "revision": "7aa50d783b492a5ea2d351a11aebe7b09d423670",
+    "path": "integrations/n8n/data-table-migration-matrix.json",
+    "sha256": "e0be0a3a2e0bdc90d6e77afa714d583389622a377bedd17569e98cb39ca5058c"
+  },
+  "source_contract": "integrations/n8n/data-tables.json@schema_version=4",
+  "source_snapshot": {
+    "finance_commit": "a89ca26c6809a8f4d2c498b2b8a10907e8f175d3",
+    "data_tables_sha256": "66047a23525aa49db9b34016278e1797c52c5bbd77c2409f4de7c6cad0255d02",
+    "node_scan_corpus_sha256": "2463941fdb7e617d1004dc06f2c350a620b9a5cb94417a6dd6b81654dec8439c",
+    "source_ref_selection": "Content-derived Git-compatible identity over normalized data-tables.json and the scan-root directories; commit topology and generated outputs are excluded to keep provenance stable across source commits.",
+    "node_scan_digest_method": "Normalize CRLF to LF, hash each JSON file under scan_roots, sort the complete hash-and-relative-path lines bytewise, then hash that stream."
+  },
+  "tables": [
+    {
+      "source_table": "finance_source_contracts",
+      "target_table": null,
+      "node_references": [
+        {
+          "table": "finance_source_contracts",
+          "file": "integrations/n8n/workflows/02-rakbank-live-cashback.json",
+          "node": "Load Trusted Mail Contract",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "enabled"
+          ]
+        },
+        {
+          "table": "finance_source_contracts",
+          "file": "integrations/n8n/workflows/09-ai-proposal.json",
+          "node": "Load Trusted Proposal Archive Contract",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "enabled"
+          ]
+        },
+        {
+          "table": "finance_source_contracts",
+          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+          "node": "Load Trusted Source Contract",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "enabled"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_source_cursors",
+      "target_table": "finance_ingestion_state",
+      "node_references": [
+        {
+          "table": "finance_source_cursors",
+          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+          "node": "Read Source Cursor Before Commit",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_acquisition_receipts",
+      "target_table": "finance_ingestion_state",
+      "node_references": []
+    },
+    {
+      "source_table": "finance_archive_receipts",
+      "target_table": "finance_documents",
+      "node_references": [
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Back Durable Email Evidence Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "archive_receipt_id",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Back Enumerated Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "archive_receipt_id",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Existing Email Evidence Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Read Existing Enumerated Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "archive_state"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Upsert Durable Email Evidence Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "archive_receipt_id",
+            "archive_state",
+            "onedrive_etag",
+            "onedrive_item_id",
+            "run_id",
+            "source_attachment_id",
+            "source_code",
+            "source_message_id",
+            "source_sha256",
+            "updated_at",
+            "verified_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256"
+          ]
+        },
+        {
+          "table": "finance_archive_receipts",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Upsert Enumerated Archive Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "archive_receipt_id",
+            "archive_state",
+            "onedrive_etag",
+            "onedrive_item_id",
+            "run_id",
+            "source_attachment_id",
+            "source_code",
+            "source_message_id",
+            "source_sha256",
+            "updated_at",
+            "verified_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "source_message_id",
+            "source_attachment_id",
+            "source_sha256"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_document_operations",
+      "target_table": "finance_documents",
+      "node_references": [
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Record Email PDF Render Requirement",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "onedrive_item_id",
+            "requested_schema_version",
+            "source_attachment_id",
+            "source_message_id",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "source_sha256",
+            "document_profile",
+            "requested_schema_version"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/01-outlook-finance-acquisition.json",
+          "node": "Record Enumerated Attachment Disposition",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "onedrive_item_id",
+            "requested_schema_version",
+            "source_attachment_id",
+            "source_code",
+            "source_message_id",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "source_sha256",
+            "document_profile",
+            "requested_schema_version"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Load Existing Browser Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Load MCP Reviewed Document Record",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Read Back Durable Browser Archive Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/11-interactive-artifact-handoff.json",
+          "node": "Upsert Durable Browser Archive Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "onedrive_item_id",
+            "output_sha256",
+            "requested_schema_version",
+            "source_code",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
+          "node": "Load Immutable Document Record",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
+          "node": "Read Back Redacted Extraction Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "document_id",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_document_operations",
+          "file": "integrations/n8n/workflows/13-document-extraction-request.json",
+          "node": "Upsert Redacted Extraction Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "attempt_count",
+            "document_id",
+            "document_profile",
+            "error_class",
+            "error_detail_redacted",
+            "last_execution_id",
+            "output_sha256",
+            "parser_version",
+            "requested_schema_version",
+            "source_sha256",
+            "state",
+            "updated_at"
+          ],
+          "filter_keys": [
+            "document_id"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_pipeline_runs",
+      "target_table": null,
+      "node_references": [
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Mark Terminal Readback Verified",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "run_id",
+            "terminal_readback_verified",
+            "updated_at",
+            "workflow_code"
+          ],
+          "filter_keys": [
+            "run_id",
+            "workflow_code"
+          ]
+        },
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Read Back Terminal Pipeline Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "workflow_code",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Read Back Verified Terminal Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "workflow_code",
+            "terminal_readback_verified"
+          ]
+        },
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Upsert Terminal Pipeline Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "completed_at",
+            "config_version",
+            "receipt_sha256",
+            "run_id",
+            "source_code",
+            "state",
+            "terminal_readback_verified",
+            "trigger_kind",
+            "updated_at",
+            "workflow_code"
+          ],
+          "filter_keys": [
+            "run_id",
+            "workflow_code"
+          ]
+        },
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+          "node": "Read Back Waiting or Deadline Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "run_id",
+            "workflow_code"
+          ]
+        },
+        {
+          "table": "finance_pipeline_runs",
+          "file": "integrations/n8n/workflows/22-shared-monthly-statement-cycle.json",
+          "node": "Upsert Waiting or Deadline Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "config_version",
+            "run_id",
+            "source_code",
+            "state",
+            "terminal_readback_verified",
+            "trigger_kind",
+            "updated_at",
+            "workflow_code"
+          ],
+          "filter_keys": [
+            "run_id",
+            "workflow_code"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_actual_outbox",
+      "target_table": "finance_actual_batches",
+      "node_references": []
+    },
+    {
+      "source_table": "finance_actual_verifications",
+      "target_table": "finance_actual_batches",
+      "node_references": []
+    },
+    {
+      "source_table": "finance_reconciliations",
+      "target_table": "finance_actual_batches",
+      "node_references": [
+        {
+          "table": "finance_reconciliations",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Read Back Reconciliation Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "source_code",
+            "period_key",
+            "state",
+            "reconciliation_version",
+            "statement_sha256",
+            "actual_verification_sha256"
+          ]
+        },
+        {
+          "table": "finance_reconciliations",
+          "file": "integrations/n8n/workflows/03-shared-statement-pipeline.json",
+          "node": "Upsert Reconciliation Receipt",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "actual_verification_sha256",
+            "cashback_close_id",
+            "difference_minor",
+            "period_key",
+            "reconciliation_version",
+            "source_code",
+            "state",
+            "statement_sha256",
+            "updated_at",
+            "verified_at"
+          ],
+          "filter_keys": [
+            "source_code",
+            "period_key",
+            "reconciliation_version"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_config_versions",
+      "target_table": null,
+      "node_references": []
+    },
+    {
+      "source_table": "finance_provider_circuits",
+      "target_table": null,
+      "node_references": []
+    },
+    {
+      "source_table": "finance_execution_failures",
+      "target_table": null,
+      "node_references": []
+    },
+    {
+      "source_table": "finance_mcp_requests",
+      "target_table": null,
+      "node_references": [
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Mark MCP Receipt Verified",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "readback_verified"
+          ],
+          "filter_keys": [
+            "request_id",
+            "result_sha256"
+          ]
+        },
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Read Back ACCEPTED MCP Request",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "request_id",
+            "state"
+          ]
+        },
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Read Back Terminal MCP Request",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "request_id",
+            "result_sha256"
+          ]
+        },
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Read Verified MCP Receipt",
+          "operation": "get",
+          "read_columns": [
+            "*"
+          ],
+          "write_columns": [],
+          "filter_keys": [
+            "request_id",
+            "readback_verified"
+          ]
+        },
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Upsert ACCEPTED MCP Request",
+          "operation": "upsert",
+          "read_columns": [],
+          "write_columns": [
+            "caller_subject_hash",
+            "created_at",
+            "error_class",
+            "error_message_redacted",
+            "operation_code",
+            "readback_verified",
+            "request_id",
+            "request_sha256",
+            "result_sha256",
+            "state",
+            "target_workflow_code"
+          ],
+          "filter_keys": [
+            "request_id"
+          ]
+        },
+        {
+          "table": "finance_mcp_requests",
+          "file": "integrations/n8n/workflows/10-finance-operations-status.json",
+          "node": "Upsert Terminal MCP Request",
+          "operation": "update",
+          "read_columns": [],
+          "write_columns": [
+            "completed_at",
+            "error_class",
+            "error_message_redacted",
+            "readback_verified",
+            "result_sha256",
+            "state"
+          ],
+          "filter_keys": [
+            "request_id",
+            "request_sha256",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "source_table": "finance_agent_jobs",
+      "target_table": "finance_ai_reviews",
+      "node_references": []
+    },
+    {
+      "source_table": "finance_ai_policy_contracts",
+      "target_table": null,
+      "node_references": []
+    }
+  ]
+}

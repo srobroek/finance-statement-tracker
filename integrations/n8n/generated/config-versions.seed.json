@@ -6,7 +6,7 @@
       "config_name": "ai-policies",
       "version": "1",
       "source_path": "config/ai-policies.json",
-      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
+      "content_sha256": "c95b2c3d44da795d82a91490bbd3b1a281b676c2e42ab30fbae184ed2d452510",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -42,7 +42,7 @@
       "config_name": "statement-sources",
       "version": "1",
       "source_path": "config/statement-sources.json",
-      "content_sha256": "90c8588bc0cdde326648cea61f350bb96ad6bc01026afe2ba6317de8f0cefc62",
+      "content_sha256": "8e03b6d566af1e1f4803c57fab8462c99f4108d66daa844e01bb093a6fb90727",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -60,7 +60,7 @@
       "config_name": "cashback-programs",
       "version": "2",
       "source_path": "config/cashback-programs.json",
-      "content_sha256": "6cf341b7173a24a5373a5da8b658e8bd3a876c6121e734589126352938277b4c",
+      "content_sha256": "542da4c825772cb939099404618e776340032a5b163cfc90c49af5b4f766ec0f",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

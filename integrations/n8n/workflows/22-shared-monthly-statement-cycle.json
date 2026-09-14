@@ -56,7 +56,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst bindings = $json;\nconst sourceContract = bindings[context.source_code];\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nif (!sourceContract || typeof sourceContract !== 'object')\n    throw new Error('SOURCE_BINDING_MISSING:' + context.source_code);\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
+        "jsCode": "// Purpose: Assemble Trusted Acquisition Contract. Keep this deterministic and fail closed.\nconst input = $('Monthly Cycle Context').first().json;\nconst context = input.cycle_context;\nconst deadline = input.deadline_policy;\nconst bindings = $json || {};\nif (!context || !deadline || !input.execution_id)\n    throw new Error('MONTHLY_CYCLE_CONTEXT_REQUIRED');\nconst sourceContract = bindings[context.source_code]\n    || (bindings.source_code === context.source_code ? bindings : null);\nif (!sourceContract || typeof sourceContract !== 'object')\n    throw new Error('SOURCE_BINDING_MISSING:' + context.source_code);\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'cycle_day', 'period_key', 'trigger_kind']) {\n    if (context[field] === undefined || context[field] === null || context[field] === '')\n        throw new Error(`MONTHLY_CYCLE_FIELD_REQUIRED:${field}`);\n}\nfor (const field of ['deadline_at', 'deadline_days']) {\n    if (deadline[field] === undefined || deadline[field] === null || deadline[field] === '')\n        throw new Error(`MONTHLY_DEADLINE_FIELD_REQUIRED:${field}`);\n}\nif (!['EI_AMAZON', 'WIO_CREDIT'].includes(String(context.source_code)))\n    throw new Error('MONTHLY_SOURCE_NOT_ALLOWLISTED');\nif (sourceContract.source_code !== context.source_code || sourceContract.enabled !== true)\n    throw new Error('TRUSTED_SOURCE_CONTRACT_MISMATCH');\nreturn [{ json: {\n            ...context,\n            ...deadline,\n            execution_id: String(input.execution_id),\n            ...sourceContract,\n            source_code: sourceContract.source_code,\n            operation: 'ENUMERATE',\n            onedrive_parent_id: sourceContract.manifest_onedrive_parent_id,\n            senders: JSON.parse(sourceContract.senders_json),\n            subjects: JSON.parse(sourceContract.subjects_json),\n        } }];\n"
       }
     },
     {
@@ -238,6 +238,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Assemble Trusted Acquisition Contract').item.json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",

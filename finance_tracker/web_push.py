@@ -11,12 +11,26 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 from urllib.parse import urlsplit
 
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 _KEY = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _check_time_label(value: object, zone: ZoneInfo) -> str:
+    if not value:
+        return "never"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return "unknown"
+        local = parsed.astimezone(zone)
+        return f"{local.day:02d} {local:%b}, {local:%H:%M}"
+    except (TypeError, ValueError):
+        return "unknown"
 
 
 def _subscription(source: dict[str, Any]) -> dict[str, str]:
@@ -85,7 +99,9 @@ class WebPushStore:
         connection.row_factory = sqlite3.Row
         return connection
 
-    def upsert_subscription(self, source: dict[str, Any], user_agent: str | None = None) -> dict[str, Any]:
+    def upsert_subscription(
+        self, source: dict[str, Any], user_agent: str | None = None
+    ) -> dict[str, Any]:
         item = _subscription(source)
         now = _now()
         with closing(self._connect()) as connection:
@@ -104,7 +120,14 @@ class WebPushStore:
                         failure_count=0,
                         updated_at=excluded.updated_at
                     """,
-                    (item["endpoint"], item["p256dh"], item["auth"], user_agent, now, now),
+                    (
+                        item["endpoint"],
+                        item["p256dh"],
+                        item["auth"],
+                        user_agent,
+                        now,
+                        now,
+                    ),
                 )
         return {"endpoint": item["endpoint"], "enabled": True}
 
@@ -120,7 +143,9 @@ class WebPushStore:
         return {"endpoint": value, "removed": bool(deleted)}
 
     def subscriptions(self, endpoint: str | None = None) -> list[dict[str, Any]]:
-        query = "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE enabled = 1"
+        query = (
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE enabled = 1"
+        )
         parameters: tuple[object, ...] = ()
         if endpoint:
             query += " AND endpoint = ?"
@@ -128,7 +153,10 @@ class WebPushStore:
         with closing(self._connect()) as connection:
             rows = connection.execute(query, parameters).fetchall()
         return [
-            {"endpoint": row["endpoint"], "keys": {"p256dh": row["p256dh"], "auth": row["auth"]}}
+            {
+                "endpoint": row["endpoint"],
+                "keys": {"p256dh": row["p256dh"], "auth": row["auth"]},
+            }
             for row in rows
         ]
 
@@ -248,10 +276,14 @@ def notification_candidates(
 ) -> tuple[list[PushCandidate], str]:
     cards = {str(card["card"]): card for card in dashboard.get("cards") or []}
     card_names = {
-        code: str(card.get("short_name") or card.get("name") or code.replace("_", " ").title())
+        code: str(
+            card.get("short_name") or card.get("name") or code.replace("_", " ").title()
+        )
         for code, card in cards.items()
     }
-    acknowledged = set((dashboard.get("data_status") or {}).get("acknowledged_alerts") or [])
+    acknowledged = set(
+        (dashboard.get("data_status") or {}).get("acknowledged_alerts") or []
+    )
     candidates: list[PushCandidate] = []
     for alert in dashboard.get("alerts") or []:
         key = str(alert.get("key") or "")
@@ -261,33 +293,61 @@ def notification_candidates(
             parts = key.split(":")
             card = cards.get(parts[1]) or {}
             period = f"{card.get('period_start')}:{card.get('period_end')}"
-            candidates.append(PushCandidate(
-                key=f"{key}:{period}",
-                title=str(alert["title"]),
-                body=str(alert["detail"]),
-                screen="cards",
-            ))
+            candidates.append(
+                PushCandidate(
+                    key=f"{key}:{period}",
+                    title=str(alert["title"]),
+                    body=str(alert["detail"]),
+                    screen="cards",
+                )
+            )
         elif key.startswith("close:"):
-            candidates.append(PushCandidate(
-                key=key,
-                title=str(alert["title"]),
-                body=str(alert["detail"]),
-                screen="cards",
-            ))
+            candidates.append(
+                PushCandidate(
+                    key=key,
+                    title=str(alert["title"]),
+                    body=str(alert["detail"]),
+                    screen="cards",
+                )
+            )
 
     data_status = dashboard.get("data_status") or {}
     if data_status.get("is_stale") and "feed:stale" not in acknowledged:
-        last_success = str(data_status.get("last_successful_ingest_at") or "never")
-        stale_after = int(data_status.get("stale_after_minutes") or 90)
-        candidates.append(PushCandidate(
-            key=f"feed:stale:{last_success}",
-            title="Cashback feed is stale",
-            body=(
-                f"No successful transaction scan was recorded within {stale_after} minutes. "
-                "Live card routing may be incomplete."
-            ),
-            screen="routing",
-        ))
+        check_status = str(data_status.get("check_status") or "SCHEDULE_ERROR")
+        last_success = data_status.get("last_successful_check_at") or data_status.get(
+            "last_successful_ingest_at"
+        )
+        key_suffix = str(last_success or check_status)
+        if check_status == "OVERDUE":
+            timezone_name = str(data_status.get("check_timezone") or "UTC")
+            try:
+                zone = ZoneInfo(timezone_name)
+            except (ZoneInfoNotFoundError, ValueError):
+                zone = ZoneInfo("UTC")
+                timezone_name = "UTC"
+            due = _check_time_label(
+                data_status.get("expected_due_at") or data_status.get("due_at"),
+                zone,
+            )
+            last = _check_time_label(last_success, zone)
+            title = "Cashback check overdue"
+            body = f"Due {due}; last checked {last} ({timezone_name})."
+        else:
+            title = "Cashback sync needs attention"
+            body = {
+                "NEVER_CHECKED": "No successful scheduled feed check has been recorded.",
+                "INVALID_CHECK_TIMESTAMP": "The last scheduled feed check timestamp is invalid.",
+                "SCHEDULE_UNCONFIGURED": "No active check schedule is configured.",
+                "SCHEDULE_ERROR": "The scheduled feed check could not be evaluated.",
+            }.get(check_status, "The scheduled feed check needs attention.")
+        candidates.append(
+            PushCandidate(
+                key=f"feed:stale:{key_suffix}",
+                title=title,
+                body=body,
+                screen="routing",
+            )
+        )
 
     routing = _routing_map(dashboard)
     routing_json = json.dumps(routing, sort_keys=True, separators=(",", ":"))
@@ -300,12 +360,14 @@ def notification_candidates(
         ]
         if changes:
             digest = hashlib.sha256(routing_json.encode("utf-8")).hexdigest()[:16]
-            candidates.append(PushCandidate(
-                key=f"routing:{digest}",
-                title="Card routing changed",
-                body=" · ".join(changes[:3]),
-                screen="routing",
-            ))
+            candidates.append(
+                PushCandidate(
+                    key=f"routing:{digest}",
+                    title="Card routing changed",
+                    body=" · ".join(changes[:3]),
+                    screen="routing",
+                )
+            )
     return candidates, routing_json
 
 
@@ -329,7 +391,9 @@ class WebPushDispatcher:
 
     @property
     def enabled(self) -> bool:
-        return bool(self.public_key and self.private_key and self.subject and self.public_url)
+        return bool(
+            self.public_key and self.private_key and self.subject and self.public_url
+        )
 
     def config(self) -> dict[str, Any]:
         # Subscription counts and delivery state are operational metadata, not
@@ -337,7 +401,9 @@ class WebPushDispatcher:
         return {"enabled": self.enabled, "public_key": self.public_key}
 
     def evaluate(self, dashboard: dict[str, Any]) -> dict[str, int]:
-        routing_json = json.dumps(_routing_map(dashboard), sort_keys=True, separators=(",", ":"))
+        routing_json = json.dumps(
+            _routing_map(dashboard), sort_keys=True, separators=(",", ":")
+        )
         previous = self.store.swap_state("routing-map", routing_json)
         candidates, _ = notification_candidates(dashboard, previous)
         return self.send(candidates)
@@ -346,32 +412,39 @@ class WebPushDispatcher:
         timestamp = int(datetime.now(timezone.utc).timestamp())
         endpoint_hash = hashlib.sha256(endpoint.encode()).hexdigest()[:12]
         return self.send(
-            [PushCandidate(
-                f"test:{endpoint_hash}:{timestamp}",
-                "Cashback alerts enabled",
-                "Live bucket, cycle and routing notifications are active.",
-                "routing",
-            )],
+            [
+                PushCandidate(
+                    f"test:{endpoint_hash}:{timestamp}",
+                    "Cashback alerts enabled",
+                    "Live bucket, cycle and routing notifications are active.",
+                    "routing",
+                )
+            ],
             endpoint=endpoint,
         )
 
-    def send(self, candidates: Iterable[PushCandidate], endpoint: str | None = None) -> dict[str, int]:
+    def send(
+        self, candidates: Iterable[PushCandidate], endpoint: str | None = None
+    ) -> dict[str, int]:
         if not self.enabled:
             return {"sent": 0, "failed": 0, "skipped": 0}
         subscriptions = self.store.subscriptions(endpoint)
         sent = failed = skipped = 0
         for candidate in candidates:
-            payload = json.dumps({
-                "web_push": 8030,
-                "notification": {
-                    "title": candidate.title,
-                    "body": candidate.body,
-                    "navigate": f"{self.public_url}/?screen={candidate.screen}",
-                    "tag": candidate.key,
-                    "silent": False,
-                    "app_badge": "1",
+            payload = json.dumps(
+                {
+                    "web_push": 8030,
+                    "notification": {
+                        "title": candidate.title,
+                        "body": candidate.body,
+                        "navigate": f"{self.public_url}/?screen={candidate.screen}",
+                        "tag": candidate.key,
+                        "silent": False,
+                        "app_badge": "1",
+                    },
                 },
-            }, separators=(",", ":"))
+                separators=(",", ":"),
+            )
             for subscription in subscriptions:
                 target = str(subscription["endpoint"])
                 if self.store.delivered(candidate.key, target):
@@ -384,7 +457,9 @@ class WebPushDispatcher:
                     status_code = getattr(response, "status_code", None)
                     disable = status_code in {404, 410}
                     detail = f"{type(error).__name__}: {error}"[:500]
-                    self.store.record_delivery(candidate.key, target, payload, "FAILED", detail)
+                    self.store.record_delivery(
+                        candidate.key, target, payload, "FAILED", detail
+                    )
                     self.store.record_failure(target, disable=disable)
                     failed += 1
                 else:

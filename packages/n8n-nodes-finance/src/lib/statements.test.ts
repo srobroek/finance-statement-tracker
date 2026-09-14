@@ -96,7 +96,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
 });
 
 test('EI resolves December and January row years within statement bounds', () => {
-  const statement = parseStatement(`Statement of Card Account
+  const text = `Statement of Card Account
 From: 15th Dec 2025
 14th Jan 2026
 To:
@@ -105,7 +105,9 @@ PRIMARY CARD NO:5424XXXXXXXX0082
 31 DEC 02 JAN CROSS-YEAR PURCHASE 10.00
 02 JAN 03 JAN PAYMENT RECEIVED THANK YOU 5.00CR
 Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges (AED) Current Balance (AED)
-50,000.00 49,966.84 100.00 25/02/26 5.00 0.00 5.00`, 'emirates_islamic_v1');
+50,000.00 49,966.84 100.00 25/02/26 5.00 0.00 5.00`;
+  const statement = parseStatement(text, 'emirates_islamic_v1');
+  const repeated = parseStatement(text, 'emirates_islamic_v1');
   assert.equal(statement.period_start, '2025-12-15');
   assert.equal(statement.period_end, '2026-01-14');
   assert.equal(statement.transactions[0].transaction_date, '2026-01-02');
@@ -115,6 +117,11 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
   assert.equal(statement.transactions[0].card_last4, '0082');
   assert.equal(statement.transactions[1].transaction_date, '2026-01-03');
   assert.equal(statement.transactions[1].post_date, '2026-01-02');
+  assert.deepEqual(
+    repeated.transactions.map(row => row.transaction_id),
+    statement.transactions.map(row => row.transaction_id),
+  );
+  assert.deepEqual(projectStatementToActual(statement).map(row => row.date), ['2026-01-02', '2026-01-03']);
 });
 
 test('EI rejects rows whose date cannot be resolved from authoritative bounds', () => {

@@ -13,7 +13,9 @@ from finance_tracker.web_push import (
 )
 
 
-def _subscription(endpoint: str = "https://push.example/subscription-1") -> dict[str, object]:
+def _subscription(
+    endpoint: str = "https://push.example/subscription-1",
+) -> dict[str, object]:
     return {
         "endpoint": endpoint,
         "keys": {"p256dh": "valid_public_key-1", "auth": "valid_auth-1"},
@@ -22,11 +24,13 @@ def _subscription(endpoint: str = "https://push.example/subscription-1") -> dict
 
 def _dashboard(*, grocery_card: str = "RAK_WORLD") -> dict[str, object]:
     return {
-        "cards": [{
-            "card": "RAK_WORLD",
-            "period_start": "2026-08-01",
-            "period_end": "2026-08-31",
-        }],
+        "cards": [
+            {
+                "card": "RAK_WORLD",
+                "period_start": "2026-08-01",
+                "period_end": "2026-08-31",
+            }
+        ],
         "alerts": [
             {
                 "key": "bucket:RAK_WORLD:RAK_GROCERY:full",
@@ -39,12 +43,14 @@ def _dashboard(*, grocery_card: str = "RAK_WORLD") -> dict[str, object]:
                 "detail": "AED 500 remains with 7 days until cycle close.",
             },
         ],
-        "routing_graphs": [{
-            "label": "Groceries",
-            "channel": "PHYSICAL_POS",
-            "currency": "AED",
-            "use_card": grocery_card,
-        }],
+        "routing_graphs": [
+            {
+                "label": "Groceries",
+                "channel": "PHYSICAL_POS",
+                "currency": "AED",
+                "use_card": grocery_card,
+            }
+        ],
         "data_status": {"acknowledged_alerts": [], "is_stale": False},
     }
 
@@ -64,7 +70,9 @@ class WebPushStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "HTTPS"):
                 store.upsert_subscription(_subscription("http://push.example/insecure"))
 
-    def test_candidates_cover_full_bucket_close_warning_and_routing_change(self) -> None:
+    def test_candidates_cover_full_bucket_close_warning_and_routing_change(
+        self,
+    ) -> None:
         initial = _dashboard(grocery_card="RAK_WORLD")
         candidates, routing = notification_candidates(initial, None)
         self.assertEqual(
@@ -74,7 +82,9 @@ class WebPushStoreTests(unittest.TestCase):
 
         changed = _dashboard(grocery_card="SC_PLATINUM_X")
         candidates, _ = notification_candidates(changed, routing)
-        routing_candidate = next(item for item in candidates if item.title == "Card routing changed")
+        routing_candidate = next(
+            item for item in candidates if item.title == "Card routing changed"
+        )
         self.assertIn("Groceries", routing_candidate.body)
         self.assertIn("Sc Platinum X", routing_candidate.body)
 
@@ -102,12 +112,19 @@ class WebPushStoreTests(unittest.TestCase):
                 "cards",
             )
 
-            self.assertEqual(dispatcher.send([candidate]), {"sent": 1, "failed": 0, "skipped": 0})
-            self.assertEqual(dispatcher.send([candidate]), {"sent": 0, "failed": 0, "skipped": 1})
+            self.assertEqual(
+                dispatcher.send([candidate]), {"sent": 1, "failed": 0, "skipped": 0}
+            )
+            self.assertEqual(
+                dispatcher.send([candidate]), {"sent": 0, "failed": 0, "skipped": 1}
+            )
             self.assertEqual(len(calls), 1)
             payload = json.loads(str(calls[0]["data"]))
             self.assertEqual(payload["web_push"], 8030)
-            self.assertEqual(payload["notification"]["navigate"], "https://cashback.example/?screen=cards")
+            self.assertEqual(
+                payload["notification"]["navigate"],
+                "https://cashback.example/?screen=cards",
+            )
             self.assertEqual(payload["notification"]["tag"], candidate.key)
             self.assertEqual(calls[0]["headers"], {"Urgency": "high"})
 
@@ -128,7 +145,9 @@ class WebPushStoreTests(unittest.TestCase):
                 {"enabled": True, "public_key": "vapid-public"},
             )
 
-    def test_first_dashboard_does_not_create_a_routing_change_notification(self) -> None:
+    def test_first_dashboard_does_not_create_a_routing_change_notification(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             calls: list[dict[str, object]] = []
             store = WebPushStore(Path(temporary) / "cashback.sqlite3")
@@ -142,32 +161,94 @@ class WebPushStoreTests(unittest.TestCase):
                 sender=lambda **kwargs: calls.append(kwargs),
             )
 
-            result = dispatcher.evaluate({
-                "cards": [],
-                "alerts": [],
-                "routing_graphs": _dashboard()["routing_graphs"],
-                "data_status": {},
-            })
+            result = dispatcher.evaluate(
+                {
+                    "cards": [],
+                    "alerts": [],
+                    "routing_graphs": _dashboard()["routing_graphs"],
+                    "data_status": {},
+                }
+            )
             self.assertEqual(result["sent"], 0)
             self.assertEqual(calls, [])
 
-    def test_stale_feed_notification_is_episode_scoped_and_acknowledgeable(self) -> None:
+    def test_stale_feed_notification_is_episode_scoped_and_acknowledgeable(
+        self,
+    ) -> None:
         dashboard = _dashboard()
         dashboard["alerts"] = []
         dashboard["data_status"] = {
             "acknowledged_alerts": [],
             "is_stale": True,
-            "stale_after_minutes": 90,
-            "last_successful_ingest_at": "2026-08-17T13:06:03+00:00",
+            "check_status": "OVERDUE",
+            "check_timezone": "UTC",
+            "expected_due_at": "2026-08-18T08:05:00+00:00",
+            "last_successful_check_at": "2026-08-17T13:06:03+00:00",
         }
         candidates, _ = notification_candidates(dashboard, None)
-        stale = next(item for item in candidates if item.title == "Cashback feed is stale")
+        stale = next(
+            item for item in candidates if item.title == "Cashback check overdue"
+        )
         self.assertEqual(stale.key, "feed:stale:2026-08-17T13:06:03+00:00")
-        self.assertIn("90 minutes", stale.body)
+        self.assertEqual(
+            stale.body, "Due 18 Aug, 08:05; last checked 17 Aug, 13:06 (UTC)."
+        )
 
         dashboard["data_status"]["acknowledged_alerts"] = ["feed:stale"]
         candidates, _ = notification_candidates(dashboard, None)
-        self.assertNotIn("Cashback feed is stale", {item.title for item in candidates})
+        self.assertNotIn("Cashback check overdue", {item.title for item in candidates})
+
+    def test_schedule_errors_do_not_claim_a_missed_run(self) -> None:
+        for status, expected in (
+            ("SCHEDULE_UNCONFIGURED", "No active check schedule is configured."),
+            (
+                "INVALID_CHECK_TIMESTAMP",
+                "The last scheduled feed check timestamp is invalid.",
+            ),
+        ):
+            dashboard = _dashboard()
+            dashboard["alerts"] = []
+            dashboard["data_status"] = {"is_stale": True, "check_status": status}
+            candidates, _ = notification_candidates(dashboard, None)
+            check = next(
+                item for item in candidates if item.key.startswith("feed:stale:")
+            )
+            self.assertEqual(check.title, "Cashback sync needs attention")
+            self.assertEqual(check.body, expected)
+
+    def test_malformed_check_timezone_is_fail_closed_for_push_health(self) -> None:
+        for timezone_name in ("/Asia/Dubai", "Asia/Dubai/"):
+            dashboard = _dashboard()
+            dashboard["alerts"] = []
+            dashboard["data_status"] = {
+                "is_stale": True,
+                "check_status": "SCHEDULE_ERROR",
+                "check_timezone": timezone_name,
+            }
+            candidates, _ = notification_candidates(dashboard, None)
+            check = next(
+                item for item in candidates if item.key.startswith("feed:stale:")
+            )
+            self.assertEqual(check.title, "Cashback sync needs attention")
+            self.assertEqual(
+                check.body, "The scheduled feed check could not be evaluated."
+            )
+
+            dashboard["data_status"].update(
+                {
+                    "check_status": "OVERDUE",
+                    "expected_due_at": "2026-08-18T08:05:00+00:00",
+                    "last_successful_check_at": "2026-08-17T13:06:03+00:00",
+                }
+            )
+            candidates, _ = notification_candidates(dashboard, None)
+            overdue = next(
+                item for item in candidates if item.title == "Cashback check overdue"
+            )
+            self.assertEqual(
+                overdue.body,
+                "Due 18 Aug, 08:05; last checked 17 Aug, 13:06 (UTC).",
+            )
 
 
 if __name__ == "__main__":

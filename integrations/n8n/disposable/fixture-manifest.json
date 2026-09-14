@@ -4,105 +4,105 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "01-outlook-finance-acquisition.json": "9a9031b3fe3b5e48643e030637efdfd0d25090c18c54dcf3566261aaa2829011",
-    "09-ai-proposal.json": "2541b0cf5bfd61ffd539a02eb6f15df039d54b06f48a114196c1ae0311f7104e",
-    "12-outlook-message-sweep.json": "c3e8f71111286ac54a0ffdede858e12a4732152880651f14fe0d9111bc5d5d7e",
-    "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
-    "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
-    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7",
-    "20-actual-outbox-apply.json": "e25e3b0adbaa6ae27207b8e643df0321d46fdf27f8c87ffbf5b90d882e4a44ac",
+    "01-outlook-finance-acquisition.json": "48a832427e54fa8b8a127ac7692828f320e7c7232a0f8b8d968c945d81982968",
+    "09-ai-proposal.json": "60d684a72829ba7148038508aaa5bd1f55b0528417a8cc02d96f7275baafd5f9",
+    "12-outlook-message-sweep.json": "f06d49c0818c5a03bc9b1ec28190656300e6729e4509d9928e044970938b0fa8",
+    "16-operations-error-handler.json": "6883dc69c9a02d0cd58d16da0b42bcd5de98e7141ad81e90c7205cb491991cf3",
+    "17-actual-outbox-recovery.json": "3f9ab7b7d0936a29fd4c6d8a925846d9ad3e99a4b58e978840185e6628698eb3",
+    "18-finance-writer-lease.json": "e9f11bc178f613ed70b56e3911e02cdf979860a3dd357eb1ab16694f0c652d19",
+    "20-actual-outbox-apply.json": "52b1d66d41a4372febf5ec21e93801acc3359d4e6c2e53966c7cfd42d78a0166",
     "21-subscription-agent-adapter.json": "ebcfce8b11cc96ade245ad9ca1ddb6e894f88144a9eff438fee9844ee2f2bfba"
   },
   "workflows": [
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "fb6aa0de81a0f2b90c927ede4c1da14b798bccebea5bf29cac44901574cc8757"
+      "sha256": "ef166fd5bcba2b01d0a1a35ea662ff89e5fff15bc2efb60dfca05cd273574ad1"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "0b193cff8cb59689c7dff17425a9a32966f9a7996c3a71c99e13a98ea3a84c72"
+      "sha256": "6a216502de5713a8566d87ad53ebcee5112d48dc669f4cb7fcfdf6eb0ff4891f"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "cf265dde89dc76a09c160d0cf6da3a83d152ef4c79ace7628341b9d517dc3052"
+      "sha256": "c614f36288450a421b3af470b7fa63c152463cde3b6996b687ea8c3eae2fc7be"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "d4de6b1f72d7e68344047b10fbb28bb4ddac460d10cf2a7776d993ce02415f6c"
+      "sha256": "0e34dbab340847bed6931ec24b68b5f0da6ff4747c56b7ed24931d4922f95416"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "4bed800f672fa99aa90ca8410aa2cfdd5f9baa0429a209412bcce1b2bcf59aa5"
+      "sha256": "42224a027ae8aa7185ef6ccff9a0a53fae06f8fa8fd63f701b8205b87f55ee3a"
     },
     {
       "file": "95-lease-acquire-a.json",
       "id": "90000000-0000-4000-8000-000000000905",
-      "sha256": "9d335da26056c667538f3d108f933182e3c59edaf1162047500172f1ac4fe116"
+      "sha256": "1e87944386483f76c92dc5a99736c19d6c0dafa1dcf9aa9397ebc337e442239d"
     },
     {
       "file": "96-lease-acquire-b.json",
       "id": "90000000-0000-4000-8000-000000000906",
-      "sha256": "f0338a34e776072525a0f58a7fce840278b56bd0c9f82f6bbd0b18012c87a15d"
+      "sha256": "f2690ee887f2823b2e30767e70b897fd90ed1e048bcc66ff99ad914fe9c7b85b"
     },
     {
       "file": "97-lease-stale-assert.json",
       "id": "90000000-0000-4000-8000-000000000907",
-      "sha256": "faf87b6a025ada10b0831b7f804493e3b0c24b29de88236a5e4ab48ea9aa2f70"
+      "sha256": "40e5f97e3e82f7a41886c6c0e33a5bcfbf3c82dbeca39b765418f4cddf698064"
     },
     {
       "file": "98-ai-caller-model-rejected.json",
       "id": "90000000-0000-4000-8000-000000000908",
-      "sha256": "d0f4da7452e6c991acbef39473a9c3b7aa250eb7263965293e2f75b01663ecde"
+      "sha256": "c1ea6db751db6adc3f9e6f7289632b6a45a7a6c6231cd0bb139210009e15409c"
     },
     {
       "file": "99-ai-locked-field-rejected.json",
       "id": "90000000-0000-4000-8000-000000000909",
-      "sha256": "d444e9979eb6cd1c0f55c9d064009758c8f9b1204c83de68f9cbace37425ad0c"
+      "sha256": "e870d2858a0970ce685f519e5d96adf5b07f66225034a8fc3578550cf17c3cc6"
     },
     {
       "file": "100-ai-missing-policy-rejected.json",
       "id": "90000000-0000-4000-8000-000000000910",
-      "sha256": "dede8c83f8bb048b8f693e2068b72553b0b54db03e826f6233d292a8a8fe30bd"
+      "sha256": "8593331c95ab77d4cf9afb8059784c87d4d6e8d222cc945ea672970431883b17"
     },
     {
       "file": "106-ai-positive-luna.json",
       "id": "90000000-0000-4000-8000-000000000911",
-      "sha256": "f149c72562e59cb93c25664b71df43d5e6f4231ed103f0966e81943d2a025959"
+      "sha256": "f9e5c9ffda233844801542dd4c4733e4e199993e5e4bd20f486df701a8f59922"
     },
     {
       "file": "107-ai-positive-sol-gated.json",
       "id": "90000000-0000-4000-8000-000000000912",
-      "sha256": "35f42252d26c78b6b9c59f294dff00ee184c1dc29a0f5605b036e538fe3df74d"
+      "sha256": "34b5c75c54ea25f70b0d597d58bdcffbe9f6c9477ac811eaee52034feb2837da"
     },
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "fef6a536a8ded59ee177dc542c4be7b9cf062b9781c618859e9873091634c15d"
+      "sha256": "5268322ede52af1685bb98063ed65f295feff563539e2a71dae096822efe3cd2"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "f4b45e5f4476cf353105ff0be4b5435cbcff26a3ac847ebcac5cbd78e167258c"
+      "sha256": "a5aeef7495e8856546afe6a323d1737c8e993686b1fec1f4b012efe61149ec61"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "90cd50007db092b373c8ec3eb80fb5eb0732187bd421436af1b24987b00fd01b"
+      "sha256": "1c6224b60337a8a343bca049057781aa9ecf73a94ec4e34dfe9f53d4ebce980e"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "d8ea98fc1705b20bc75f3fa82bb94196fb598d5c360465f6c83f68227d735bd0"
+      "sha256": "d1235699099cb4f9058a5c3aa3a7940f97c68c95b91a7aceed53ee200349b4c5"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "58aec2387fb20bc6cd6e593466de6eb85adca9379038647d1d44c268530824ba"
+      "sha256": "30de506202a166375d6b9509207e77c13ab1dcf810fd74e897111cf802975f9a"
     }
   ],
   "scenario_contract": {

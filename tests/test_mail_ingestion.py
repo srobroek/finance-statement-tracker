@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import subprocess
@@ -35,10 +36,12 @@ class MailIngestionTests(unittest.TestCase):
             }
         }
 
-    def execute_code_node(self, workflow, name, json_value=None, input_items=None, refs=None):
+    def execute_code_node(
+        self, workflow, name, json_value=None, input_items=None, refs=None
+    ):
         """Execute a Code node with the small n8n context used by these contracts."""
         node = next(node for node in workflow["nodes"] if node["name"] == name)
-        runner = r'''
+        runner = r"""
 const fs = require('fs');
 const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
 const refs = payload.refs || {};
@@ -59,14 +62,16 @@ try {
 } catch (error) {
   process.stdout.write(JSON.stringify({ok: false, error: String(error.message || error)}));
 }
-'''.replace("nodeCode", json.dumps(node["parameters"]["jsCode"]))
+""".replace("nodeCode", json.dumps(node["parameters"]["jsCode"]))
         completed = subprocess.run(
             ["node", "-e", runner],
-            input=json.dumps({
-                "json": json_value or {},
-                "input_items": input_items or [],
-                "refs": refs or {},
-            }),
+            input=json.dumps(
+                {
+                    "json": json_value or {},
+                    "input_items": input_items or [],
+                    "refs": refs or {},
+                }
+            ),
             cwd=self.ROOT,
             text=True,
             capture_output=True,
@@ -74,6 +79,46 @@ try {
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(completed.stdout)
+
+    def evaluate_expression(self, expression, json_value, refs=None):
+        if not (isinstance(expression, str) and expression.startswith("={{")):
+            return expression
+        inner = expression[3:-2].strip()
+        runner = r"""
+const fs = require('fs');
+const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
+const refs = payload.refs || {};
+const rows = value => Array.isArray(value) ? value : [value];
+const item = json => ({json});
+const $ = name => {
+  if (!(name in refs)) throw new Error(`UNEXECUTED:${name}`);
+  const values = rows(refs[name]);
+  return {first: () => item(values[0]), all: () => values.map(item), item: item(values[0])};
+};
+const $now = {toISO: () => '2026-08-20T00:00:00.000Z'};
+try {
+  const output = new Function('$json', '$', '$now', `return (${payload.expression});`)(
+    payload.json, $, $now
+  );
+  process.stdout.write(JSON.stringify({ok: true, output}));
+} catch (error) {
+  process.stdout.write(JSON.stringify({ok: false, error: String(error.message || error)}));
+}
+"""
+        completed = subprocess.run(
+            ["node", "-e", runner],
+            input=json.dumps(
+                {"expression": inner, "json": json_value, "refs": refs or {}}
+            ),
+            cwd=self.ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertTrue(result["ok"], result)
+        return result["output"]
 
     def assert_code_error(self, workflow, name, message, **kwargs):
         result = self.execute_code_node(workflow, name, **kwargs)
@@ -175,13 +220,15 @@ try {
     def test_mismatched_service_receipt_is_rejected_by_companion_cursor_contract(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
-            receipt = store.create_ingest_receipt({
-                "source": "outlook",
-                "completed_at": "2026-08-17T19:50:00+00:00",
-                "scanned_count": 0,
-                "accepted_count": 0,
-                "cursor": "2026-08-17T19:50:00+00:00",
-            })
+            receipt = store.create_ingest_receipt(
+                {
+                    "source": "outlook",
+                    "completed_at": "2026-08-17T19:50:00+00:00",
+                    "scanned_count": 0,
+                    "accepted_count": 0,
+                    "cursor": "2026-08-17T19:50:00+00:00",
+                }
+            )
             envelope = {
                 "source": "outlook",
                 "completed_at": receipt["completed_at"],
@@ -207,13 +254,15 @@ try {
     def test_exact_service_receipt_replay_is_a_cursor_noop(self):
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
-            receipt = store.create_ingest_receipt({
-                "source": "outlook",
-                "completed_at": "2026-08-17T19:50:00+00:00",
-                "scanned_count": 0,
-                "accepted_count": 0,
-                "cursor": "2026-08-17T19:50:00+00:00",
-            })
+            receipt = store.create_ingest_receipt(
+                {
+                    "source": "outlook",
+                    "completed_at": "2026-08-17T19:50:00+00:00",
+                    "scanned_count": 0,
+                    "accepted_count": 0,
+                    "cursor": "2026-08-17T19:50:00+00:00",
+                }
+            )
             envelope = {
                 "source": "outlook",
                 "completed_at": receipt["completed_at"],
@@ -332,26 +381,156 @@ try {
             nodes["List Immutable Message Attachments"]["parameters"]["resource"],
             "messageAttachment",
         )
-        self.assertIn("IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE", nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"])
-        self.assertIn("DUPLICATE_MESSAGE_ATTACHMENT_ID", nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"])
+        self.assertIn(
+            "IMMUTABLE_MESSAGE_ID_MISSING_OR_DUPLICATE",
+            nodes["Shape Immutable Message Inventory"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "DUPLICATE_MESSAGE_ATTACHMENT_ID",
+            nodes["Aggregate Immutable Archive Inventory"]["parameters"]["jsCode"],
+        )
         self.assertIn(
             "attachment_identity_keys_json",
             nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"]["value"],
         )
+        fresh_messages = [
+            {
+                "message_id": "fresh-message",
+                "message": {"id": "fresh-message", "subject": "Fixture"},
+                "attachment_inventory": [{"id": "fresh-attachment"}],
+                "attachment_identity_keys": ["fresh-message:fresh-attachment"],
+            }
+        ]
+        fresh_inventory = {
+            "run_id": "fixture:fresh-upsert",
+            "source_code": "FIXTURE",
+            "window_start": "2026-08-19T00:00:00.000Z",
+            "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "pages_fetched": None,
+            "pagination_exhausted": True,
+            "scanned_count": 1,
+            "matched_count": 1,
+            "heartbeat": False,
+            "messages": fresh_messages,
+            "attachment_identity_keys": ["fresh-message:fresh-attachment"],
+            "attachment_ids_verified": True,
+        }
+        fresh = self.execute_code_node(
+            workflow,
+            "Close Outlook Circuit",
+            json_value=fresh_inventory,
+        )
+        self.assertTrue(fresh["ok"], fresh)
+        fresh_row = fresh["output"][0]["json"]
+        absent = self.execute_code_node(
+            workflow,
+            "Project Enumeration Receipt Fields for Existing Gate",
+            json_value={},
+            refs={
+                "Freeze Trusted Cursor Window": {
+                    key: fresh_inventory[key]
+                    for key in (
+                        "run_id",
+                        "source_code",
+                        "window_start",
+                        "run_upper_bound",
+                    )
+                }
+            },
+        )
+        self.assertTrue(absent["ok"], absent)
+        self.assertTrue(absent["output"][0]["json"]["receipt_absent"])
+        upsert_values = nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"][
+            "value"
+        ]
+        expression_refs = {
+            "Close Outlook Circuit": fresh_row,
+            "Aggregate Exact Window Heartbeat": fresh_inventory,
+            "Aggregate Immutable Archive Inventory": fresh_inventory,
+        }
+        mapped = {
+            field: self.evaluate_expression(expression, fresh_row, refs=expression_refs)
+            for field, expression in upsert_values.items()
+        }
+        fresh_readback = dict(mapped)
+        fresh_replay = self.execute_code_node(
+            workflow,
+            "Project Enumeration Receipt Fields for Existing Gate",
+            json_value=fresh_readback,
+            refs={"Freeze Trusted Cursor Window": fresh_inventory},
+        )
+        self.assertTrue(fresh_replay["ok"], fresh_replay)
+        self.assertEqual(fresh_replay["output"][0]["json"]["messages"], fresh_messages)
+        fresh_projected = fresh_replay["output"][0]["json"]
+        present_condition = nodes["Existing ENUMERATED Receipt Present"]["parameters"][
+            "conditions"
+        ]["conditions"][0]["leftValue"]
+        self.assertTrue(self.evaluate_expression(present_condition, fresh_projected))
         self.assertEqual(
-            workflow["connections"]["Freeze Trusted Cursor Window"]["main"][0][0]["node"],
+            workflow["connections"]["Existing ENUMERATED Receipt Present"]["main"][0][
+                0
+            ]["node"],
+            "Return Existing ENUMERATED Receipt",
+        )
+        empty_projected = absent["output"][0]["json"]
+        self.assertFalse(self.evaluate_expression(present_condition, empty_projected))
+        self.assertEqual(
+            workflow["connections"]["Existing ENUMERATED Receipt Present"]["main"][1][
+                0
+            ]["node"],
+            "Read Outlook Circuit",
+        )
+        self.assert_code_error(
+            workflow,
+            "Project Enumeration Receipt Fields for Existing Gate",
+            "ENUMERATED_INVENTORY_HASH_MISMATCH",
+            json_value=dict(mapped, inventory_sha256="0" * 64),
+            refs={"Freeze Trusted Cursor Window": fresh_inventory},
+        )
+        self.assertEqual(
+            json.loads(fresh_row["record_payload_json"])["messages"],
+            fresh_messages,
+        )
+        self.assertEqual(
+            fresh_row["email_evidence_identity_keys"],
+            ["fresh-message:INLINE_BODY"],
+        )
+        self.assertEqual(fresh_row["email_evidence_receipts_verified"], 1)
+        for field in (
+            "record_payload_json",
+            "inventory_sha256",
+            "inventory_run_id",
+            "inventory_schema_version",
+            "inventory_length_bytes",
+            "email_evidence_identity_keys_json",
+            "email_evidence_receipts_verified",
+        ):
+            self.assertIn(
+                field,
+                nodes["Upsert ENUMERATED Receipt"]["parameters"]["columns"]["value"],
+            )
+        self.assertEqual(
+            workflow["connections"]["Freeze Trusted Cursor Window"]["main"][0][0][
+                "node"
+            ],
             "Read Existing ENUMERATED Receipt",
         )
         self.assertEqual(
-            workflow["connections"]["Existing ENUMERATED Receipt Present"]["main"][0][0]["node"],
+            workflow["connections"]["Existing ENUMERATED Receipt Present"]["main"][0][
+                0
+            ]["node"],
             "Return Existing ENUMERATED Receipt",
         )
         self.assertEqual(
-            workflow["connections"]["Verify Receipt and Return Sweep"]["main"][0][0]["node"],
+            workflow["connections"]["Verify Receipt and Return Sweep"]["main"][0][0][
+                "node"
+            ],
             "Attach Immutable Inventory to Sweep",
         )
         self.assertEqual(
-            workflow["connections"]["Attach Immutable Inventory to Sweep"]["main"][0][0]["node"],
+            workflow["connections"]["Attach Immutable Inventory to Sweep"]["main"][0][
+                0
+            ]["node"],
             "Archive Enumerated Messages in W01",
         )
 
@@ -392,18 +571,21 @@ try {
                 acquire = nodes["Acquire Archive and Read Back"]
                 target = acquire["parameters"]["workflowId"]
                 self.assertEqual(
-                    target["value"], w12["id"],
+                    target["value"],
+                    w12["id"],
                     "cycle must delegate enumeration to W12, never call W01 directly",
                 )
-                self.assertEqual(
-                    target["cachedResultName"], w12["name"]
-                )
+                self.assertEqual(target["cachedResultName"], w12["name"])
                 caller_execute = [
-                    node for node in caller["nodes"]
+                    node
+                    for node in caller["nodes"]
                     if node["type"] == "n8n-nodes-base.executeWorkflow"
                 ]
                 self.assertEqual(len(caller_execute), 1)
-                self.assertEqual(caller_execute[0]["parameters"]["workflowId"]["value"], workflow["id"])
+                self.assertEqual(
+                    caller_execute[0]["parameters"]["workflowId"]["value"],
+                    workflow["id"],
+                )
                 self.assertTrue(acquire["parameters"]["options"]["waitForSubWorkflow"])
                 for node_name in (
                     "Read Source Cursor Before Commit",
@@ -413,19 +595,27 @@ try {
                 ):
                     self.assertIn(node_name, nodes)
                 self.assertEqual(
-                    workflow["connections"]["Run Shared Statement Pipeline"]["main"][0][0]["node"],
+                    workflow["connections"]["Run Shared Statement Pipeline"]["main"][0][
+                        0
+                    ]["node"],
                     "Read Source Cursor Before Commit",
                 )
                 self.assertEqual(
-                    workflow["connections"]["Read Source Cursor Before Commit"]["main"][0][0]["node"],
+                    workflow["connections"]["Read Source Cursor Before Commit"]["main"][
+                        0
+                    ][0]["node"],
                     "Build W12 COMMIT Request",
                 )
                 self.assertEqual(
-                    workflow["connections"]["Build W12 COMMIT Request"]["main"][0][0]["node"],
+                    workflow["connections"]["Build W12 COMMIT Request"]["main"][0][0][
+                        "node"
+                    ],
                     "Commit Source Cursor via W12",
                 )
                 self.assertEqual(
-                    workflow["connections"]["Commit Source Cursor via W12"]["main"][0][0]["node"],
+                    workflow["connections"]["Commit Source Cursor via W12"]["main"][0][
+                        0
+                    ]["node"],
                     "Verify W12 COMMIT Terminal Readback",
                 )
                 commit = nodes["Commit Source Cursor via W12"]
@@ -440,9 +630,20 @@ try {
                     "receipt_readback_verified",
                 ):
                     self.assertIn(field, commit_inputs)
-                self.assertIn("DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED", nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"])
-                self.assertIn("ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT", nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"])
-                self.assertIn("SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH", nodes["Verify W12 COMMIT Terminal Readback"]["parameters"]["jsCode"])
+                self.assertIn(
+                    "DOWNSTREAM_TERMINAL_RECEIPT_REQUIRED",
+                    nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"],
+                )
+                self.assertIn(
+                    "ARCHIVE_BARRIER_REQUIRED_BEFORE_CURSOR_COMMIT",
+                    nodes["Build W12 COMMIT Request"]["parameters"]["jsCode"],
+                )
+                self.assertIn(
+                    "SOURCE_CURSOR_COMMIT_TERMINAL_READBACK_MISMATCH",
+                    nodes["Verify W12 COMMIT Terminal Readback"]["parameters"][
+                        "jsCode"
+                    ],
+                )
                 self.assertEqual(
                     workflow["settings"]["errorWorkflow"],
                     "10000000-0000-4000-8000-000000000016",
@@ -456,14 +657,19 @@ try {
                 self.assertEqual(
                     sum(
                         node["type"] == "n8n-nodes-base.executeWorkflow"
-                        and node.get("parameters", {}).get("workflowId", {}).get("value")
+                        and node.get("parameters", {})
+                        .get("workflowId", {})
+                        .get("value")
                         == w01["id"]
                         for node in workflow["nodes"]
                     ),
                     0,
                 )
                 self.assertFalse(
-                    any(node["type"] == "n8n-nodes-base.microsoftOutlook" for node in workflow["nodes"])
+                    any(
+                        node["type"] == "n8n-nodes-base.microsoftOutlook"
+                        for node in workflow["nodes"]
+                    )
                 )
 
                 run = {
@@ -501,8 +707,13 @@ try {
                             "cycle_context": {
                                 key: run[key]
                                 for key in (
-                                    "run_id", "source_code", "window_start", "run_upper_bound",
-                                    "cycle_day", "period_key", "trigger_kind",
+                                    "run_id",
+                                    "source_code",
+                                    "window_start",
+                                    "run_upper_bound",
+                                    "cycle_day",
+                                    "period_key",
+                                    "trigger_kind",
                                 )
                             },
                             "deadline_policy": {
@@ -530,7 +741,9 @@ try {
                 )
                 self.assertTrue(frozen["ok"], frozen)
                 frozen_request = frozen["output"][0]["json"]
-                self.assertEqual(frozen_request["run_upper_bound"], run["run_upper_bound"])
+                self.assertEqual(
+                    frozen_request["run_upper_bound"], run["run_upper_bound"]
+                )
                 for sender in source["senders"]:
                     self.assertIn(
                         "from/emailAddress/address eq '" + sender + "'",
@@ -552,9 +765,14 @@ try {
 
                 cardinalities = {
                     "zero": [],
-                    "one": [message(1, [{"id": "statement-001", "name": "statement.pdf"}])],
+                    "one": [
+                        message(1, [{"id": "statement-001", "name": "statement.pdf"}])
+                    ],
                     "one-hundred-one": [
-                        message(index, [{"id": f"statement-{index:03d}", "name": "statement.pdf"}])
+                        message(
+                            index,
+                            [{"id": f"statement-{index:03d}", "name": "statement.pdf"}],
+                        )
                         for index in range(1, 102)
                     ],
                     "mixed": [
@@ -562,7 +780,11 @@ try {
                             1,
                             [
                                 {"id": "statement-001", "name": "statement.pdf"},
-                                {"id": "inline-001", "name": "logo.png", "isInline": True},
+                                {
+                                    "id": "inline-001",
+                                    "name": "logo.png",
+                                    "isInline": True,
+                                },
                             ],
                         ),
                         message(2, []),
@@ -608,7 +830,9 @@ try {
                             w12,
                             "Attach Immutable Inventory to Sweep",
                             json_value={**sweep, "pagination_exhausted": True},
-                            refs={"Aggregate Immutable Archive Inventory": aggregate_inventory},
+                            refs={
+                                "Aggregate Immutable Archive Inventory": aggregate_inventory
+                            },
                         )
                         self.assertTrue(attached["ok"], attached)
                         w01_request = attached["output"][0]["json"]
@@ -621,12 +845,19 @@ try {
                         archive_input = self.execute_code_node(
                             w01,
                             "Shape Immutable Archive Input",
-                            refs={"Validate Bounded Source Request": validated["output"][0]["json"]},
+                            refs={
+                                "Validate Bounded Source Request": validated["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(archive_input["ok"], archive_input)
-                        shaped_archive = [item["json"] for item in archive_input["output"]]
+                        shaped_archive = [
+                            item["json"] for item in archive_input["output"]
+                        ]
                         self.assertEqual(
-                            len(shaped_archive), max(1, len(messages)),
+                            len(shaped_archive),
+                            max(1, len(messages)),
                             "W01 receives every message, including an explicit empty inventory",
                         )
                         if messages:
@@ -641,7 +872,10 @@ try {
                             self.assertEqual(
                                 [row["attachment_inventory"] for row in shaped_archive],
                                 [
-                                    sorted(row["attachment_inventory"], key=lambda item: item["id"])
+                                    sorted(
+                                        row["attachment_inventory"],
+                                        key=lambda item: item["id"],
+                                    )
                                     for row in expected_messages
                                 ],
                             )
@@ -668,7 +902,10 @@ try {
                             "message_id": row["message_id"],
                             "message": row,
                             "attachment_inventory": row["attachment_inventory"],
-                            "attachment_ids": [attachment["id"] for attachment in row["attachment_inventory"]],
+                            "attachment_ids": [
+                                attachment["id"]
+                                for attachment in row["attachment_inventory"]
+                            ],
                             "attachment_identity_keys": [
                                 row["message_id"] + ":" + attachment["id"]
                                 for attachment in row["attachment_inventory"]
@@ -685,20 +922,77 @@ try {
                     "immutable_inventory": True,
                     "attachment_ids_verified": True,
                 }
+                replay_payload = {
+                    "schema_version": 1,
+                    "run_id": replay_sweep["run_id"],
+                    "source_code": replay_sweep["source_code"],
+                    "window_start": replay_sweep["window_start"],
+                    "run_upper_bound": replay_sweep["run_upper_bound"],
+                    "pages_fetched": replay_sweep.get("pages_fetched"),
+                    "pagination_exhausted": True,
+                    "scanned_count": replay_sweep["scanned_count"],
+                    "matched_count": replay_sweep["matched_count"],
+                    "heartbeat": replay_sweep["heartbeat"],
+                    "messages": replay_inventory["messages"],
+                    "attachment_identity_keys": replay_inventory[
+                        "attachment_identity_keys"
+                    ],
+                    "email_evidence_identity_keys": [
+                        f"{row['message_id']}:INLINE_BODY"
+                        for row in replay_inventory["messages"]
+                    ],
+                }
+                replay_payload_json = json.dumps(replay_payload, separators=(",", ":"))
                 replay_receipt = {
                     **{
                         key: replay_sweep[key]
-                        for key in ("run_id", "source_code", "window_start", "run_upper_bound")
+                        for key in (
+                            "run_id",
+                            "source_code",
+                            "window_start",
+                            "run_upper_bound",
+                            "scanned_count",
+                            "matched_count",
+                            "heartbeat",
+                        )
                     },
-                    "matched_count": len(replay_messages),
-                    "terminal_state": "ENUMERATED",
+                    "record_type": "ACQUISITION_RECEIPT",
+                    "record_key": json.dumps(
+                        [replay_sweep["run_id"], replay_sweep["source_code"]],
+                        separators=(",", ":"),
+                    ),
+                    "receipt_run_id": replay_sweep["run_id"],
+                    "receipt_run_upper_bound": replay_sweep["run_upper_bound"],
+                    "last_window_start": replay_sweep["window_start"],
+                    "last_heartbeat": replay_sweep["heartbeat"],
+                    "last_pagination_exhausted": True,
                     "pagination_exhausted": True,
+                    "terminal_state": "ENUMERATED",
                     "cursor_commit_eligible": False,
                     "attachment_ids_verified": True,
                     "attachment_identity_keys_json": json.dumps(
-                        replay_inventory["attachment_identity_keys"], separators=(",", ":")
+                        replay_inventory["attachment_identity_keys"],
+                        separators=(",", ":"),
                     ),
-                    "attachments_verified": len(replay_inventory["attachment_identity_keys"]),
+                    "attachments_verified": len(
+                        replay_inventory["attachment_identity_keys"]
+                    ),
+                    "email_evidence_receipt_barrier": "VERIFIED",
+                    "email_evidence_receipts_verified": len(
+                        replay_payload["email_evidence_identity_keys"]
+                    ),
+                    "email_evidence_identity_keys_json": json.dumps(
+                        replay_payload["email_evidence_identity_keys"],
+                        separators=(",", ":"),
+                    ),
+                    "record_payload_json": replay_payload_json,
+                    "inventory_run_id": replay_sweep["run_id"],
+                    "inventory_fence": 0,
+                    "inventory_sha256": hashlib.sha256(
+                        replay_payload_json.encode("utf-8")
+                    ).hexdigest(),
+                    "inventory_schema_version": "inventory-v1",
+                    "inventory_length_bytes": len(replay_payload_json.encode("utf-8")),
                 }
                 replay = self.execute_code_node(
                     w12,
@@ -709,7 +1003,9 @@ try {
                 self.assertTrue(replay["ok"], replay)
                 replay_request = replay["output"][0]["json"]
                 self.assertTrue(replay_request["replay_noop"])
-                self.assertEqual(replay_request["messages"], [])
+                self.assertEqual(
+                    replay_request["messages"], replay_inventory["messages"]
+                )
                 replay_validated = self.execute_code_node(
                     w01,
                     "Validate Bounded Source Request",
@@ -791,8 +1087,13 @@ try {
                         "cycle_context": {
                             key: run[key]
                             for key in (
-                                "run_id", "source_code", "window_start", "run_upper_bound",
-                                "cycle_day", "period_key", "trigger_kind",
+                                "run_id",
+                                "source_code",
+                                "window_start",
+                                "run_upper_bound",
+                                "cycle_day",
+                                "period_key",
+                                "trigger_kind",
                             )
                         },
                         "deadline_policy": {
@@ -854,12 +1155,45 @@ try {
             )
             self.assertTrue(inventory["ok"], inventory)
             aggregate_inventory = inventory["output"][0]["json"]
+            persisted_payload = {
+                "schema_version": 1,
+                "run_id": sweep["run_id"],
+                "source_code": sweep["source_code"],
+                "window_start": sweep["window_start"],
+                "run_upper_bound": sweep["run_upper_bound"],
+                "pages_fetched": sweep.get("pages_fetched"),
+                "pagination_exhausted": True,
+                "scanned_count": sweep["scanned_count"],
+                "matched_count": sweep["matched_count"],
+                "heartbeat": sweep["heartbeat"],
+                "messages": aggregate_inventory["messages"],
+                "attachment_identity_keys": aggregate_inventory[
+                    "attachment_identity_keys"
+                ],
+                "email_evidence_identity_keys": [
+                    f"{row['message_id']}:INLINE_BODY"
+                    for row in aggregate_inventory["messages"]
+                ],
+            }
+            persisted_payload_json = json.dumps(
+                persisted_payload, separators=(",", ":")
+            )
             persisted = {
                 "messages": aggregate_inventory["messages"],
-                "attachment_identity_keys": aggregate_inventory["attachment_identity_keys"],
+                "attachment_identity_keys": aggregate_inventory[
+                    "attachment_identity_keys"
+                ],
                 "empty_inventory": aggregate_inventory["empty_inventory"],
                 "immutable_inventory": True,
                 "attachment_ids_verified": True,
+                "record_payload_json": persisted_payload_json,
+                "inventory_run_id": sweep["run_id"],
+                "inventory_fence": 0,
+                "inventory_sha256": hashlib.sha256(
+                    persisted_payload_json.encode("utf-8")
+                ).hexdigest(),
+                "inventory_schema_version": "inventory-v1",
+                "inventory_length_bytes": len(persisted_payload_json.encode("utf-8")),
             }
             receipt = {
                 **{
@@ -882,6 +1216,29 @@ try {
                     persisted["attachment_identity_keys"], separators=(",", ":")
                 ),
                 "attachments_verified": len(persisted["attachment_identity_keys"]),
+                "record_type": "ACQUISITION_RECEIPT",
+                "record_key": json.dumps(
+                    [sweep["run_id"], sweep["source_code"]], separators=(",", ":")
+                ),
+                "receipt_run_id": sweep["run_id"],
+                "receipt_run_upper_bound": sweep["run_upper_bound"],
+                "last_window_start": sweep["window_start"],
+                "last_heartbeat": sweep["heartbeat"],
+                "last_pagination_exhausted": True,
+                "email_evidence_receipt_barrier": "VERIFIED",
+                "email_evidence_receipts_verified": len(
+                    persisted_payload["email_evidence_identity_keys"]
+                ),
+                "email_evidence_identity_keys_json": json.dumps(
+                    persisted_payload["email_evidence_identity_keys"],
+                    separators=(",", ":"),
+                ),
+                "record_payload_json": persisted["record_payload_json"],
+                "inventory_run_id": persisted["inventory_run_id"],
+                "inventory_fence": persisted["inventory_fence"],
+                "inventory_sha256": persisted["inventory_sha256"],
+                "inventory_schema_version": persisted["inventory_schema_version"],
+                "inventory_length_bytes": persisted["inventory_length_bytes"],
             }
             verified = self.execute_code_node(
                 w12,
@@ -902,12 +1259,24 @@ try {
         for filename, source_code, senders, subjects, cycle_day in cases:
             with self.subTest(workflow=filename):
                 workflow = self.workflow("22-shared-monthly-statement-cycle.json")
-                request = cycle_request(workflow, source_code, senders, subjects, cycle_day)
+                request = cycle_request(
+                    workflow, source_code, senders, subjects, cycle_day
+                )
                 cardinalities = {
                     "zero": [],
-                    "one": [message(request, 1, [{"id": "statement-001", "name": "statement.pdf"}])],
+                    "one": [
+                        message(
+                            request,
+                            1,
+                            [{"id": "statement-001", "name": "statement.pdf"}],
+                        )
+                    ],
                     "one-hundred-one": [
-                        message(request, index, [{"id": f"statement-{index:03d}", "name": "statement.pdf"}])
+                        message(
+                            request,
+                            index,
+                            [{"id": f"statement-{index:03d}", "name": "statement.pdf"}],
+                        )
                         for index in range(1, 102)
                     ],
                     "mixed": [
@@ -916,7 +1285,11 @@ try {
                             1,
                             [
                                 {"id": "statement-001", "name": "statement.pdf"},
-                                {"id": "inline-001", "name": "logo.png", "isInline": True},
+                                {
+                                    "id": "inline-001",
+                                    "name": "logo.png",
+                                    "isInline": True,
+                                },
                             ],
                         ),
                         message(request, 2, []),
@@ -925,7 +1298,9 @@ try {
                 committed = None
                 for cardinality, messages in cardinalities.items():
                     with self.subTest(cardinality=cardinality):
-                        frozen, w01_request, persisted = inventory_for(request, messages)
+                        frozen, w01_request, persisted = inventory_for(
+                            request, messages
+                        )
                         validated = self.execute_code_node(
                             w01,
                             "Validate Bounded Source Request",
@@ -935,7 +1310,11 @@ try {
                         archive_input = self.execute_code_node(
                             w01,
                             "Shape Immutable Archive Input",
-                            refs={"Validate Bounded Source Request": validated["output"][0]["json"]},
+                            refs={
+                                "Validate Bounded Source Request": validated["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(archive_input["ok"], archive_input)
                         archive_rows = [
@@ -967,13 +1346,17 @@ try {
                             for archive_item in archive_input["output"]:
                                 archive_message = archive_item["json"]
                                 message_id = archive_message["message_id"]
-                                for attachment in archive_message["attachment_inventory"]:
+                                for attachment in archive_message[
+                                    "attachment_inventory"
+                                ]:
                                     attachment_id = attachment["id"]
                                     attachment_hash = "a" * 64
                                     archive_readback = self.execute_code_node(
                                         w01,
                                         "Verify Enumerated Attachment Archive",
-                                        json_value={"archive_readback_sha256": attachment_hash},
+                                        json_value={
+                                            "archive_readback_sha256": attachment_hash
+                                        },
                                         refs={
                                             "SHA-256 Enumerated Attachment": {
                                                 "document_sha256": attachment_hash,
@@ -985,7 +1368,9 @@ try {
                                             },
                                         },
                                     )
-                                    self.assertTrue(archive_readback["ok"], archive_readback)
+                                    self.assertTrue(
+                                        archive_readback["ok"], archive_readback
+                                    )
                                     archive_receipt = self.execute_code_node(
                                         w01,
                                         "Verify Enumerated Archive Receipt",
@@ -997,12 +1382,17 @@ try {
                                             "onedrive_item_id": f"drive:{message_id}:{attachment_id}",
                                         },
                                         refs={
-                                            "Verify Enumerated Attachment Archive":
-                                                archive_readback["output"][0]["json"],
+                                            "Verify Enumerated Attachment Archive": archive_readback[
+                                                "output"
+                                            ][0]["json"],
                                         },
                                     )
-                                    self.assertTrue(archive_receipt["ok"], archive_receipt)
-                                    verified_archive_rows.append(archive_receipt["output"][0]["json"])
+                                    self.assertTrue(
+                                        archive_receipt["ok"], archive_receipt
+                                    )
+                                    verified_archive_rows.append(
+                                        archive_receipt["output"][0]["json"]
+                                    )
 
                                 built_email = self.execute_code_node(
                                     w01,
@@ -1023,8 +1413,9 @@ try {
                                         "Archive Email Evidence in OneDrive": {
                                             "id": f"drive-email:{message_id}",
                                         },
-                                        "Build Original Email Evidence":
-                                            built_email["output"][0]["json"],
+                                        "Build Original Email Evidence": built_email[
+                                            "output"
+                                        ][0]["json"],
                                     },
                                 )
                                 self.assertTrue(email_readback["ok"], email_readback)
@@ -1039,37 +1430,50 @@ try {
                                         "onedrive_item_id": f"drive-email:{message_id}",
                                     },
                                     refs={
-                                        "Verify Email Evidence Readback":
-                                            email_readback["output"][0]["json"],
+                                        "Verify Email Evidence Readback": email_readback[
+                                            "output"
+                                        ][0]["json"],
                                     },
                                 )
                                 self.assertTrue(email_receipt["ok"], email_receipt)
-                                verified_email_rows.append(email_receipt["output"][0]["json"])
+                                verified_email_rows.append(
+                                    email_receipt["output"][0]["json"]
+                                )
                             archive_rows = verified_archive_rows
                             email_rows = verified_email_rows
                         barrier = self.execute_code_node(
                             w01,
                             "Attachment Verification Barrier",
                             refs={
-                                "Validate Bounded Source Request": validated["output"][0]["json"],
+                                "Validate Bounded Source Request": validated["output"][
+                                    0
+                                ]["json"],
                                 "Verify Enumerated Attachment Archive": archive_rows,
                                 "Verify Durable Email Evidence Receipt": email_rows,
                             },
                         )
                         self.assertTrue(barrier["ok"], barrier)
                         downstream = barrier["output"][0]["json"]
-                        self.assertEqual(downstream["attachments_verified"], len(archive_rows))
-                        self.assertEqual(downstream["email_evidence_receipts_verified"], len(messages))
+                        self.assertEqual(
+                            downstream["attachments_verified"], len(archive_rows)
+                        )
+                        self.assertEqual(
+                            downstream["email_evidence_receipts_verified"],
+                            len(messages),
+                        )
                         downstream.update(
                             pagination_exhausted=True,
                             scanned_count=len(messages),
                             heartbeat=not messages,
                             archive_ready=True,
+                            archive_receipt_sha256="b" * 64,
                             receipt_readback_verified=True,
+                            archive_readback_verified=True,
                         )
                         pipeline_receipt = {
                             "run_id": frozen["run_id"],
                             "source_code": source_code,
+                            "workflow_code": "SHARED_STATEMENT_PIPELINE",
                             "state": "SUCCEEDED",
                             "receipt_sha256": "c" * 64,
                             "terminal_readback_verified": True,
@@ -1098,16 +1502,22 @@ try {
                         )
                         self.assertTrue(validated_commit["ok"], validated_commit)
                         archived_receipt = {
-                            **commit_request,
+                            **{
+                                key: value
+                                for key, value in commit_request.items()
+                                if key != "downstream_receipt_sha256"
+                            },
                             "terminal_state": "ARCHIVED",
                             "readback_verified": True,
                             "pagination_exhausted": True,
                             "cursor_commit_eligible": False,
                             "attachment_identity_keys_json": json.dumps(
-                                commit_request["attachment_identity_keys"], separators=(",", ":")
+                                commit_request["attachment_identity_keys"],
+                                separators=(",", ":"),
                             ),
                             "email_evidence_identity_keys_json": json.dumps(
-                                commit_request["email_evidence_identity_keys"], separators=(",", ":")
+                                commit_request["email_evidence_identity_keys"],
+                                separators=(",", ":"),
                             ),
                         }
                         resumed_commit = self.execute_code_node(
@@ -1121,7 +1531,11 @@ try {
                             w12,
                             "Verify Downstream Persistence Proof",
                             json_value=resumed_commit["output"][0]["json"],
-                            refs={"Validate Sweep or Commit": validated_commit["output"][0]["json"]},
+                            refs={
+                                "Validate Sweep or Commit": validated_commit["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(proof["ok"], proof)
                         cursor_row = {
@@ -1136,15 +1550,25 @@ try {
                             w12,
                             "Determine Existing Cursor Commit",
                             json_value=cursor_row,
-                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                            refs={
+                                "Verify Downstream Persistence Proof": proof["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(determined["ok"], determined)
-                        self.assertEqual(determined["output"][0]["json"]["resume_path"], "CAS")
+                        self.assertEqual(
+                            determined["output"][0]["json"]["resume_path"], "CAS"
+                        )
                         cas = self.execute_code_node(
                             w12,
                             "Build Cursor CAS Update",
                             json_value=cursor_row,
-                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                            refs={
+                                "Verify Downstream Persistence Proof": proof["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(cas["ok"], cas)
                         cas_row = cas["output"][0]["json"]
@@ -1154,9 +1578,12 @@ try {
                             w12,
                             "Compare CAS Cursor Readback",
                             json_value={
+                                "source_code": source_code,
                                 "cursor_value": frozen["run_upper_bound"],
+                                "run_upper_bound": frozen["run_upper_bound"],
                                 "cursor_version": 1,
                                 "committed_run_id": frozen["run_id"],
+                                "readback_verified": False,
                             },
                             refs={"Build Cursor CAS Update": cas_row},
                         )
@@ -1170,20 +1597,54 @@ try {
                                 "cursor_commit_eligible": True,
                                 "readback_verified": False,
                             },
-                            refs={"Verify Downstream Persistence Proof": proof["output"][0]["json"]},
+                            refs={
+                                "Verify Downstream Persistence Proof": proof["output"][
+                                    0
+                                ]["json"]
+                            },
                         )
                         self.assertTrue(verified_terminal["ok"], verified_terminal)
+                        terminal_receipt = {
+                            **proof["output"][0]["json"],
+                            "receipt_run_id": proof["output"][0]["json"]["run_id"],
+                            "receipt_run_upper_bound": proof["output"][0]["json"][
+                                "run_upper_bound"
+                            ],
+                            "last_window_start": proof["output"][0]["json"][
+                                "window_start"
+                            ],
+                            "last_terminal_state": "DOWNSTREAM_VERIFIED",
+                            "readback_verified": True,
+                            "archive_readback_verified": True,
+                        }
                         terminal = self.execute_code_node(
                             w12,
                             "Return Verified Cursor Commit",
+                            json_value={
+                                "source_code": source_code,
+                                "cursor_value": frozen["run_upper_bound"],
+                                "run_upper_bound": frozen["run_upper_bound"],
+                                "cursor_version": 1,
+                                "committed_run_id": frozen["run_id"],
+                                "readback_verified": True,
+                            },
                             refs={
-                                "Verify Downstream Persistence Proof": proof["output"][0]["json"],
-                                "Determine Existing Cursor Commit": determined["output"][0]["json"],
-                                "Verify Terminal Acquisition Receipt": verified_terminal["output"][0]["json"],
+                                "Verify Downstream Persistence Proof": proof["output"][
+                                    0
+                                ]["json"],
+                                "Determine Existing Cursor Commit": determined[
+                                    "output"
+                                ][0]["json"],
+                                "Verify Terminal Acquisition Receipt": verified_terminal[
+                                    "output"
+                                ][0]["json"],
+                                "Read Back Verified Terminal Acquisition Receipt": terminal_receipt,
                             },
                         )
                         self.assertTrue(terminal["ok"], terminal)
-                        self.assertEqual(terminal["output"][0]["json"]["status"], "CURSOR_COMMITTED")
+                        self.assertEqual(
+                            terminal["output"][0]["json"]["status"], "CURSOR_COMMITTED"
+                        )
                         if cardinality == "one-hundred-one":
                             committed = (frozen, persisted, archive_rows, email_rows)
 
@@ -1192,9 +1653,25 @@ try {
                 replay_receipt = {
                     **{
                         key: frozen[key]
-                        for key in ("run_id", "source_code", "window_start", "run_upper_bound")
+                        for key in (
+                            "run_id",
+                            "source_code",
+                            "window_start",
+                            "run_upper_bound",
+                        )
                     },
+                    "record_type": "ACQUISITION_RECEIPT",
+                    "record_key": json.dumps(
+                        [frozen["run_id"], frozen["source_code"]], separators=(",", ":")
+                    ),
+                    "receipt_run_id": frozen["run_id"],
+                    "receipt_run_upper_bound": frozen["run_upper_bound"],
+                    "last_window_start": frozen["window_start"],
+                    "scanned_count": 101,
                     "matched_count": 101,
+                    "heartbeat": False,
+                    "last_heartbeat": False,
+                    "last_pagination_exhausted": True,
                     "terminal_state": "ENUMERATED",
                     "pagination_exhausted": True,
                     "cursor_commit_eligible": False,
@@ -1203,6 +1680,21 @@ try {
                         persisted["attachment_identity_keys"], separators=(",", ":")
                     ),
                     "attachments_verified": len(persisted["attachment_identity_keys"]),
+                    "email_evidence_receipt_barrier": "VERIFIED",
+                    "email_evidence_receipts_verified": 101,
+                    "email_evidence_identity_keys_json": json.dumps(
+                        [
+                            f"{row['message_id']}:INLINE_BODY"
+                            for row in persisted["messages"]
+                        ],
+                        separators=(",", ":"),
+                    ),
+                    "record_payload_json": persisted["record_payload_json"],
+                    "inventory_run_id": persisted["inventory_run_id"],
+                    "inventory_fence": persisted["inventory_fence"],
+                    "inventory_sha256": persisted["inventory_sha256"],
+                    "inventory_schema_version": persisted["inventory_schema_version"],
+                    "inventory_length_bytes": persisted["inventory_length_bytes"],
                 }
                 replay = self.execute_code_node(
                     w12,
@@ -1233,6 +1725,8 @@ try {
                     scanned_count=101,
                     heartbeat=False,
                     archive_ready=True,
+                    archive_receipt_sha256="b" * 64,
+                    archive_readback_verified=True,
                     receipt_readback_verified=True,
                 )
                 replay_built_commit = self.execute_code_node(
@@ -1251,6 +1745,7 @@ try {
                         "Run Shared Statement Pipeline": {
                             "run_id": frozen["run_id"],
                             "source_code": source_code,
+                            "workflow_code": "SHARED_STATEMENT_PIPELINE",
                             "state": "SUCCEEDED",
                             "receipt_sha256": "c" * 64,
                             "terminal_readback_verified": True,
@@ -1272,10 +1767,12 @@ try {
                     "pagination_exhausted": True,
                     "cursor_commit_eligible": True,
                     "attachment_identity_keys_json": json.dumps(
-                        replay_commit_request["attachment_identity_keys"], separators=(",", ":")
+                        replay_commit_request["attachment_identity_keys"],
+                        separators=(",", ":"),
                     ),
                     "email_evidence_identity_keys_json": json.dumps(
-                        replay_commit_request["email_evidence_identity_keys"], separators=(",", ":")
+                        replay_commit_request["email_evidence_identity_keys"],
+                        separators=(",", ":"),
                     ),
                 }
                 replay_resumed_commit = self.execute_code_node(
@@ -1289,7 +1786,9 @@ try {
                     w12,
                     "Verify Downstream Persistence Proof",
                     json_value=replay_resumed_commit["output"][0]["json"],
-                    refs={"Validate Sweep or Commit": replay_commit["output"][0]["json"]},
+                    refs={
+                        "Validate Sweep or Commit": replay_commit["output"][0]["json"]
+                    },
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)
                 self.assert_code_error(
@@ -1303,7 +1802,11 @@ try {
                         "run_upper_bound": frozen["run_upper_bound"],
                         "committed_run_id": frozen["run_id"],
                     },
-                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
+                    refs={
+                        "Verify Downstream Persistence Proof": replay_proof["output"][
+                            0
+                        ]["json"]
+                    },
                 )
 
         self.assertEqual(
@@ -1311,9 +1814,10 @@ try {
                 node["name"]
                 for node in w12["nodes"]
                 if (
-                node["type"] == "n8n-nodes-base.dataTable"
-                and node["parameters"].get("dataTableId", {}).get("value") == "finance_ingestion_state"
-                and node["parameters"].get("operation") == "update"
+                    node["type"] == "n8n-nodes-base.dataTable"
+                    and node["parameters"].get("dataTableId", {}).get("value")
+                    == "finance_ingestion_state"
+                    and node["parameters"].get("operation") == "update"
                 )
             },
             {
@@ -1331,7 +1835,8 @@ try {
             self.assertEqual(
                 sum(
                     node["type"] == "n8n-nodes-base.dataTable"
-                    and node["parameters"].get("dataTableId", {}).get("value") == "finance_ingestion_state"
+                    and node["parameters"].get("dataTableId", {}).get("value")
+                    == "finance_ingestion_state"
                     and node["parameters"].get("operation") == "update"
                     for node in self.workflow(filename)["nodes"]
                 ),
@@ -1361,18 +1866,84 @@ try {
             "Read Existing Enumerated Archive Receipt",
         )
         self.assertEqual(
-            connections["Existing Email Evidence Receipt Present"]["main"][0][0]["node"],
+            connections["Existing Email Evidence Receipt Present"]["main"][0][0][
+                "node"
+            ],
             "Verify Existing Email Evidence Receipt",
         )
-        self.assertIn("attachment_inventory", nodes["Expand Enumerated Attachment Items"]["parameters"]["jsCode"])
-        self.assertIn("ARCHIVED_ONLY", nodes["Record Enumerated Attachment Disposition"]["parameters"]["columns"]["value"]["error_class"])
-        self.assertIn("source_message_id", nodes["Upsert Enumerated Archive Receipt"]["parameters"]["filters"]["conditions"][1]["keyValue"])
-        self.assertIn("replay_noop_key", nodes["Verify Enumerated Archive Receipt"]["parameters"]["jsCode"])
+        self.assertIn(
+            "attachment_inventory",
+            nodes["Expand Enumerated Attachment Items"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "ARCHIVED_ONLY",
+            nodes["Record Enumerated Attachment Disposition"]["parameters"]["columns"][
+                "value"
+            ]["error_class"],
+        )
+        receipt_upsert = nodes["Upsert Enumerated Archive Receipt"]["parameters"]
+        self.assertEqual(
+            [row["keyName"] for row in receipt_upsert["filters"]["conditions"]],
+            ["source_code", "source_message_id", "source_attachment_id"],
+        )
+        self.assertNotIn(
+            "document_sha256", receipt_upsert["columns"]["value"]["archive_receipt_id"]
+        )
+        receipt_readback = nodes["Read Back Enumerated Archive Receipt"]["parameters"]
+        self.assertEqual(
+            [row["keyName"] for row in receipt_readback["filters"]["conditions"]],
+            [
+                "archive_receipt_id",
+                "source_code",
+                "source_message_id",
+                "source_attachment_id",
+                "archive_state",
+            ],
+        )
+        self.assertNotIn(
+            "source_sha256",
+            [row["keyName"] for row in receipt_readback["filters"]["conditions"]],
+        )
+        existing_email_read = nodes["Read Existing Email Evidence Receipt"][
+            "parameters"
+        ]
+        self.assertEqual(
+            [row["keyName"] for row in existing_email_read["filters"]["conditions"]],
+            [
+                "source_code",
+                "source_message_id",
+                "source_attachment_id",
+                "archive_state",
+            ],
+        )
+
+        for operation_name in (
+            "Record Enumerated Attachment Disposition",
+            "Record Email PDF Render Requirement",
+        ):
+            operation = nodes[operation_name]["parameters"]
+            self.assertEqual(
+                [row["keyName"] for row in operation["filters"]["conditions"]],
+                [
+                    "source_code",
+                    "source_message_id",
+                    "source_attachment_id",
+                    "document_profile",
+                    "requested_schema_version",
+                ],
+            )
+            self.assertIn("source_sha256", operation["columns"]["value"])
+        self.assertIn(
+            "replay_noop_key",
+            nodes["Verify Enumerated Archive Receipt"]["parameters"]["jsCode"],
+        )
         barrier_code = nodes["Attachment Verification Barrier"]["parameters"]["jsCode"]
         self.assertIn("ATTACHMENT_ARCHIVE_MISSING", barrier_code)
         self.assertIn("ATTACHMENT_ARCHIVE_COUNT_MISMATCH", barrier_code)
         self.assertEqual(
-            connections["Record Enumerated Attachment Disposition"]["main"][0][0]["node"],
+            connections["Record Enumerated Attachment Disposition"]["main"][0][0][
+                "node"
+            ],
             "Merge Archive Verification Inputs",
         )
         self.assertEqual(
@@ -1380,59 +1951,421 @@ try {
             "Merge Archive Verification Inputs",
         )
         self.assertIn("EMAIL_EVIDENCE_RECEIPT_BARRIER_MISMATCH", barrier_code)
-        self.assertIn("source_message_id + ':' + row.source_attachment_id", barrier_code)
+        self.assertIn(
+            "source_message_id + ':' + row.source_attachment_id", barrier_code
+        )
+
+    def test_w01_archive_identity_uses_source_ids_and_generated_fixture_agrees(self):
+        workflow = self.workflow("01-outlook-finance-acquisition.json")
+        self.assertEqual(
+            workflow["meta"]["attachmentArchiveReplay"], "NO_OP_BY_SOURCE_ID"
+        )
+        self.assertEqual(
+            workflow["meta"]["archiveReceiptIdentity"],
+            ["source_message_id", "source_attachment_id"],
+        )
+        self.assertEqual(
+            workflow["meta"]["archiveReceiptHashEvidence"], "source_sha256"
+        )
+        shared_hash = "a" * 64
+        nodes = {node["name"]: node for node in workflow["nodes"]}
+        self.assertEqual(
+            nodes["Upsert Enumerated Archive Receipt"]["parameters"]["columns"][
+                "value"
+            ]["archive_receipt_id"],
+            "={{ JSON.stringify([$json.source_code, $json.source_message_id, $json.source_attachment_id]) }}",
+        )
+        self.assertEqual(
+            nodes["Upsert Durable Email Evidence Receipt"]["parameters"]["columns"][
+                "value"
+            ]["archive_receipt_id"],
+            "={{ JSON.stringify([$json.source_code, $json.source_message_id, 'INLINE_BODY']) }}",
+        )
+
+        def canonical_document_id(*components):
+            encoded = b"".join(
+                len(value.encode()).to_bytes(8, "big") + value.encode()
+                for value in ("document-identity-v1", "MAIL_LINKED", *components)
+            )
+            digest = base64.urlsafe_b64encode(hashlib.sha256(encoded).digest()).decode()
+            return "document-identity-v1_" + digest.rstrip("=")
+
+        def verify_attachment(message_id, attachment_id, drive_id):
+            expected = {
+                "source_message_id": message_id,
+                "source_attachment_id": attachment_id,
+                "document_sha256": shared_hash,
+            }
+            return self.execute_code_node(
+                workflow,
+                "Verify Enumerated Attachment Archive",
+                json_value={"archive_readback_sha256": shared_hash},
+                refs={
+                    "SHA-256 Enumerated Attachment": expected,
+                    "Archive Enumerated Attachment in OneDrive": {
+                        "id": drive_id,
+                        "eTag": f"etag:{drive_id}",
+                    },
+                },
+            )
+
+        first = verify_attachment("message-a", "attachment-a", "drive-a")
+        second = verify_attachment("message-b", "attachment-b", "drive-b")
+        self.assertTrue(first["ok"], first)
+        self.assertTrue(second["ok"], second)
+        first_row = first["output"][0]["json"]
+        second_row = second["output"][0]["json"]
+        self.assertEqual(first_row["archive_readback_sha256"], shared_hash)
+        self.assertEqual(second_row["archive_readback_sha256"], shared_hash)
+        self.assertNotEqual(
+            first_row["canonical_document_id"], second_row["canonical_document_id"]
+        )
+        self.assertNotEqual(
+            first_row["attachment_identity"], second_row["attachment_identity"]
+        )
+        self.assertEqual(
+            first_row["canonical_document_id"],
+            canonical_document_id(shared_hash, "message-a", "attachment-a"),
+        )
+        self.assertEqual(
+            second_row["canonical_document_id"],
+            canonical_document_id(shared_hash, "message-b", "attachment-b"),
+        )
+        email_readback = self.execute_code_node(
+            workflow,
+            "Verify Email Evidence Readback",
+            json_value={"email_readback_sha256": shared_hash},
+            refs={
+                "SHA-256 Email Evidence": {
+                    "email_evidence_sha256": shared_hash,
+                },
+                "Archive Email Evidence in OneDrive": {
+                    "id": "drive-email-a",
+                    "eTag": "etag:drive-email-a",
+                },
+                "Build Original Email Evidence": {
+                    "source_message_id": "message-a",
+                    "source_code": "FIXTURE",
+                },
+            },
+        )
+        self.assertTrue(email_readback["ok"], email_readback)
+        self.assertEqual(
+            email_readback["output"][0]["json"]["canonical_document_id"],
+            canonical_document_id(shared_hash, "message-a", "INLINE_BODY"),
+        )
+
+        def verify_receipt(row):
+            return self.execute_code_node(
+                workflow,
+                "Verify Enumerated Archive Receipt",
+                json_value={
+                    "archive_receipt_id": json.dumps(
+                        [
+                            "FIXTURE",
+                            row["source_message_id"],
+                            row["source_attachment_id"],
+                        ]
+                    ),
+                    "source_message_id": row["source_message_id"],
+                    "source_attachment_id": row["source_attachment_id"],
+                    "source_sha256": shared_hash,
+                    "archive_state": "HASH_VERIFIED",
+                },
+                refs={"Verify Enumerated Attachment Archive": row},
+            )
+
+        first_receipt = verify_receipt(first_row)
+        second_receipt = verify_receipt(second_row)
+        self.assertTrue(first_receipt["ok"], first_receipt)
+        self.assertTrue(second_receipt["ok"], second_receipt)
+        first_key = first_receipt["output"][0]["json"]["replay_noop_key"]
+        second_key = second_receipt["output"][0]["json"]["replay_noop_key"]
+        self.assertEqual(first_key, "message-a:attachment-a")
+        self.assertEqual(second_key, "message-b:attachment-b")
+        self.assertNotEqual(first_key, second_key)
+        self.assertNotIn(shared_hash, first_key)
+        self.assertNotIn(shared_hash, second_key)
+
+        def verify_existing_receipt(row):
+            return self.execute_code_node(
+                workflow,
+                "Verify Existing Enumerated Archive Receipt",
+                json_value={
+                    "source_message_id": row["source_message_id"],
+                    "source_attachment_id": row["source_attachment_id"],
+                    "existing_archive_receipt": {
+                        "source_message_id": row["source_message_id"],
+                        "source_attachment_id": row["source_attachment_id"],
+                        "source_sha256": shared_hash,
+                        "archive_state": "HASH_VERIFIED",
+                    },
+                },
+            )
+
+        first_existing = verify_existing_receipt(first_row)
+        second_existing = verify_existing_receipt(second_row)
+        self.assertTrue(first_existing["ok"], first_existing)
+        self.assertTrue(second_existing["ok"], second_existing)
+        self.assertEqual(
+            first_existing["output"][0]["json"]["replay_noop_key"],
+            first_key,
+        )
+        self.assertEqual(
+            second_existing["output"][0]["json"]["replay_noop_key"],
+            second_key,
+        )
+
+        generated = json.loads(
+            (
+                self.ROOT
+                / "integrations"
+                / "n8n"
+                / "disposable"
+                / "generated"
+                / "90-derived-outlook-sweep-core.json"
+            ).read_text(encoding="utf-8")
+        )
+        archive_call = next(
+            node
+            for node in generated["nodes"]
+            if node["name"] == "Archive Enumerated Messages in W01"
+        )
+        generated_w01 = json.loads(archive_call["parameters"]["workflowJson"])
+        self.assertEqual(
+            generated_w01["meta"]["archiveReceiptIdentity"],
+            workflow["meta"]["archiveReceiptIdentity"],
+        )
+        self.assertEqual(
+            generated_w01["meta"]["attachmentArchiveReplay"],
+            workflow["meta"]["attachmentArchiveReplay"],
+        )
+        fixture_input = {
+            "immutable_inventory": True,
+            "matched_count": 2,
+            "messages": [
+                {
+                    "message_id": "message-a",
+                    "attachment_inventory": [
+                        {"id": "attachment-a", "source_sha256": shared_hash}
+                    ],
+                },
+                {
+                    "message_id": "message-b",
+                    "attachment_inventory": [
+                        {"id": "attachment-b", "source_sha256": shared_hash}
+                    ],
+                },
+            ],
+            "attachment_identity_keys": [
+                "message-a:attachment-a",
+                "message-b:attachment-b",
+            ],
+        }
+        generated_result = self.execute_code_node(
+            generated_w01,
+            "Emit Synthetic Archive Barrier",
+            json_value=fixture_input,
+        )
+        self.assertTrue(generated_result["ok"], generated_result)
+        self.assertEqual(
+            generated_result["output"][0]["json"]["attachment_identity_keys"],
+            fixture_input["attachment_identity_keys"],
+        )
+        self.assertTrue(
+            generated_result["output"][0]["json"]["archive_readback_verified"]
+        )
+
+    def test_w01_archive_barrier_propagates_verified_readback_only(self):
+        workflow = self.workflow("01-outlook-finance-acquisition.json")
+        request = {
+            "run_id": "run-1",
+            "source_code": "FIXTURE",
+            "folder_id": "folder-1",
+            "senders": ["fixture@example.test"],
+            "subjects": ["Statement"],
+            "onedrive_parent_id": "drive-parent",
+            "window_start": "2026-08-20T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "messages": [
+                {
+                    "message_id": "message-a",
+                    "attachment_inventory": [{"id": "attachment-a"}],
+                }
+            ],
+        }
+        attachment = {
+            "source_message_id": "message-a",
+            "source_attachment_id": "attachment-a",
+            "attachment_identity": "message-a:attachment-a",
+            "attachment_verified": True,
+            "attachment_empty": False,
+            "archive_readback_verified": True,
+            "onedrive_item_id": "drive-attachment-a",
+        }
+        email = {
+            "source_message_id": "message-a",
+            "email_evidence_identity": "message-a:INLINE_BODY",
+            "email_evidence_receipt_verified": True,
+            "archive_readback_verified": True,
+            "email_evidence_sha256": "a" * 64,
+            "onedrive_item_id": "drive-email-a",
+        }
+        verified = self.execute_code_node(
+            workflow,
+            "Attachment Verification Barrier",
+            refs={
+                "Validate Bounded Source Request": request,
+                "Verify Enumerated Attachment Archive": attachment,
+                "Verify Existing Enumerated Archive Receipt": [],
+                "Verify Durable Email Evidence Receipt": email,
+                "Verify Existing Email Evidence Receipt": [],
+            },
+        )
+        self.assertTrue(verified["ok"], verified)
+        self.assertTrue(verified["output"][0]["json"]["archive_readback_verified"])
+
+        unverified_attachment = dict(attachment, archive_readback_verified=False)
+        rejected = self.execute_code_node(
+            workflow,
+            "Attachment Verification Barrier",
+            refs={
+                "Validate Bounded Source Request": request,
+                "Verify Enumerated Attachment Archive": unverified_attachment,
+                "Verify Existing Enumerated Archive Receipt": [],
+                "Verify Durable Email Evidence Receipt": email,
+                "Verify Existing Email Evidence Receipt": [],
+            },
+        )
+        self.assertFalse(rejected["ok"])
+        self.assertIn("ARCHIVE_READBACK_VERIFICATION_REQUIRED", rejected["error"])
+
+    def test_w01_archive_barrier_accepts_explicit_empty_inventory(self):
+        workflow = self.workflow("01-outlook-finance-acquisition.json")
+        request = {
+            "run_id": "run-empty",
+            "source_code": "FIXTURE",
+            "folder_id": "folder-empty",
+            "senders": ["fixture@example.test"],
+            "subjects": ["Statement"],
+            "onedrive_parent_id": "drive-parent",
+            "window_start": "2026-08-20T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "messages": [],
+        }
+        verified = self.execute_code_node(
+            workflow,
+            "Attachment Verification Barrier",
+            refs={
+                "Validate Bounded Source Request": request,
+                "Verify Enumerated Attachment Archive": [],
+                "Verify Existing Enumerated Archive Receipt": [],
+                "Verify Durable Email Evidence Receipt": [],
+                "Verify Existing Email Evidence Receipt": [],
+            },
+        )
+        self.assertTrue(verified["ok"], verified)
+        result = verified["output"][0]["json"]
+        self.assertTrue(result["archive_ready"])
+        self.assertTrue(result["archive_readback_verified"])
+        self.assertEqual(result["attachment_identity_keys"], [])
+        self.assertEqual(result["email_evidence_identity_keys"], [])
+        self.assertEqual(result["attachments_verified"], 0)
+        self.assertEqual(result["email_evidence_receipts_verified"], 0)
+        self.assertFalse(result["cursor_commit_eligible"])
 
     def test_replay_and_failure_barriers_keep_cursor_after_archive_proof(self):
         w12 = self.workflow("12-outlook-message-sweep.json")
         w01 = self.workflow("01-outlook-finance-acquisition.json")
         w12_nodes = {node["name"]: node for node in w12["nodes"]}
         w01_nodes = {node["name"]: node for node in w01["nodes"]}
-        self.assertEqual(w12["meta"]["attachmentVerificationBarrier"], "REQUIRED_BEFORE_CURSOR_COMMIT")
         self.assertEqual(
-            w12["connections"]["Verify Downstream Persistence Proof"]["main"][0][0]["node"],
+            w12["meta"]["attachmentVerificationBarrier"],
+            "REQUIRED_BEFORE_CURSOR_COMMIT",
+        )
+        self.assertEqual(
+            w12["connections"]["Verify Downstream Persistence Proof"]["main"][0][0][
+                "node"
+            ],
             "Require Verified Attachment Barrier",
         )
         self.assertEqual(
-            w12["connections"]["Read Acquisition Receipt for Commit Resume"]["main"][0][0]["node"],
+            w12["connections"]["Read Acquisition Receipt for Commit Resume"]["main"][0][
+                0
+            ]["node"],
             "Project Enumeration Receipt Fields for Commit Resume",
         )
         self.assertEqual(
-            w12["connections"]["Project Enumeration Receipt Fields for Commit Resume"]["main"][0][0]["node"],
+            w12["connections"]["Project Enumeration Receipt Fields for Commit Resume"][
+                "main"
+            ][0][0]["node"],
             "Validate Commit Resume State",
         )
         self.assertEqual(
             w12["connections"]["Validate Commit Resume State"]["main"][0][0]["node"],
-            "Verify Downstream Persistence Proof",
+            "Read Verified Downstream Terminal Receipt",
         )
         self.assertIn(
             "ACQUISITION_RESUME_CONTEXT_MISMATCH",
             w12_nodes["Validate Commit Resume State"]["parameters"]["jsCode"],
         )
-        self.assertIn("DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING", w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"])
-        self.assertIn("EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH", w12_nodes["Verify Attachment Archive Barrier"]["parameters"]["jsCode"])
-        self.assertIn("SOURCE_CURSOR_VERSION_CONFLICT", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
-        self.assertIn("SOURCE_CURSOR_ALREADY_COMMITTED", w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"])
-        cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"]["conditions"]
-        self.assertEqual([row["keyName"] for row in cas_filters], ["source_code", "cursor_version"])
-        commit_read_filters = w12_nodes["Read Acquisition Receipt for Commit Resume"]["parameters"]["filters"]["conditions"]
+        self.assertIn(
+            "DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING",
+            w12_nodes["Require Verified Attachment Barrier"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "EMAIL_EVIDENCE_RECEIPT_COUNT_MISMATCH",
+            w12_nodes["Verify Attachment Archive Barrier"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "SOURCE_CURSOR_VERSION_CONFLICT",
+            w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "SOURCE_CURSOR_ALREADY_COMMITTED",
+            w12_nodes["Build Cursor CAS Update"]["parameters"]["jsCode"],
+        )
+        cas_filters = w12_nodes["CAS Update Source Cursor"]["parameters"]["filters"][
+            "conditions"
+        ]
+        self.assertEqual(
+            [row["keyName"] for row in cas_filters],
+            ["record_type", "record_key", "source_code", "cursor_version"],
+        )
+        commit_read_filters = w12_nodes["Read Acquisition Receipt for Commit Resume"][
+            "parameters"
+        ]["filters"]["conditions"]
         self.assertEqual(
             [row["keyName"] for row in commit_read_filters],
-            ["source_code"],
+            [
+                "record_type",
+                "record_key",
+                "source_code",
+                "receipt_run_id",
+                "receipt_run_upper_bound",
+                "last_window_start",
+            ],
         )
         self.assertEqual(
             w12["connections"]["Route Operation"]["main"][1][0]["node"],
             "Read Acquisition Receipt for Commit Resume",
         )
         self.assertEqual(
-            w12["connections"]["Verify Attachment Archive Barrier"]["main"][0][0]["node"],
+            w12["connections"]["Verify Attachment Archive Barrier"]["main"][0][0][
+                "node"
+            ],
             "Build Durable Archive Barrier Receipt",
         )
         self.assertEqual(
-            w12["connections"]["Read Authoritative Source Cursor"]["main"][0][0]["node"],
+            w12["connections"]["Read Authoritative Source Cursor"]["main"][0][0][
+                "node"
+            ],
             "Determine Existing Cursor Commit",
         )
         self.assertEqual(
-            w12["connections"]["Determine Existing Cursor Commit"]["main"][0][0]["node"],
+            w12["connections"]["Determine Existing Cursor Commit"]["main"][0][0][
+                "node"
+            ],
             "Source Cursor Recovery Readback Needed",
         )
         self.assertEqual(
@@ -1448,22 +2381,48 @@ try {
             "Read Back DOWNSTREAM_VERIFIED Receipt for Replay",
         )
         self.assertEqual(
-            w12["connections"]["Verify Terminal Acquisition Receipt"]["main"][0][0]["node"],
+            w12["connections"]["Verify Terminal Acquisition Receipt"]["main"][0][0][
+                "node"
+            ],
             "Mark DOWNSTREAM_VERIFIED Receipt Readback Verified",
         )
         self.assertFalse(
-            w12_nodes["Mark Acquisition DOWNSTREAM_VERIFIED"]["parameters"]["columns"]["value"]["readback_verified"]
+            w12_nodes["Mark Acquisition DOWNSTREAM_VERIFIED"]["parameters"]["columns"][
+                "value"
+            ]["readback_verified"]
         )
         self.assertTrue(
-            w12_nodes["Mark DOWNSTREAM_VERIFIED Receipt Readback Verified"]["parameters"]["columns"]["value"]["readback_verified"]
+            w12_nodes["Mark DOWNSTREAM_VERIFIED Receipt Readback Verified"][
+                "parameters"
+            ]["columns"]["value"]["readback_verified"]
         )
-        self.assertIn("ACQUISITION_RESUME_STATE_UNSUPPORTED", w12_nodes["Validate Commit Resume State"]["parameters"]["jsCode"])
-        self.assertIn("downstream_receipt_sha256", w12_nodes["Validate Sweep or Commit"]["parameters"]["jsCode"])
-        self.assertIn("SOURCE_CURSOR_TERMINAL_COMMIT_MISSING", w12_nodes["Determine Existing Cursor Commit"]["parameters"]["jsCode"])
-        self.assertIn("NO_OP_BY_SOURCE_ID_AND_HASH", w01["meta"]["attachmentArchiveReplay"])
-        self.assertIn("ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH", w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"])
-        self.assertIn("ARCHIVE_RECEIPT_REPLAY_NOT_SAFE", w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"]["jsCode"])
-        self.assertIn("EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH", w01_nodes["Verify Durable Email Evidence Receipt"]["parameters"]["jsCode"])
+        self.assertIn(
+            "ACQUISITION_RESUME_STATE_UNSUPPORTED",
+            w12_nodes["Validate Commit Resume State"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "downstream_receipt_sha256",
+            w12_nodes["Validate Sweep or Commit"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "SOURCE_CURSOR_TERMINAL_COMMIT_MISSING",
+            w12_nodes["Determine Existing Cursor Commit"]["parameters"]["jsCode"],
+        )
+        self.assertEqual("NO_OP_BY_SOURCE_ID", w01["meta"]["attachmentArchiveReplay"])
+        self.assertIn(
+            "ARCHIVE_ATTACHMENT_READBACK_HASH_MISMATCH",
+            w01_nodes["Verify Enumerated Attachment Archive"]["parameters"]["jsCode"],
+        )
+        self.assertIn(
+            "ARCHIVE_RECEIPT_REPLAY_NOT_SAFE",
+            w01_nodes["Verify Existing Enumerated Archive Receipt"]["parameters"][
+                "jsCode"
+            ],
+        )
+        self.assertIn(
+            "EMAIL_EVIDENCE_RECEIPT_READBACK_MISMATCH",
+            w01_nodes["Verify Durable Email Evidence Receipt"]["parameters"]["jsCode"],
+        )
         self.assertIn("Archive Enumerated Attachment in OneDrive", w01["connections"])
 
     def test_w12_archive_return_has_canonical_post_update_readback(self):
@@ -1477,15 +2436,21 @@ try {
         ):
             self.assertIn(name, nodes)
         self.assertEqual(
-            workflow["connections"]["Mark ARCHIVED Receipt Readback Verified"]["main"][0][0]["node"],
+            workflow["connections"]["Mark ARCHIVED Receipt Readback Verified"]["main"][
+                0
+            ][0]["node"],
             "Read Back Verified ARCHIVED Receipt",
         )
         self.assertEqual(
-            workflow["connections"]["Read Back Verified ARCHIVED Receipt"]["main"][0][0]["node"],
+            workflow["connections"]["Read Back Verified ARCHIVED Receipt"]["main"][0][
+                0
+            ]["node"],
             "Project Enumeration Receipt Fields for Verified Archive",
         )
         self.assertEqual(
-            workflow["connections"]["Project Enumeration Receipt Fields for Verified Archive"]["main"][0][0]["node"],
+            workflow["connections"][
+                "Project Enumeration Receipt Fields for Verified Archive"
+            ]["main"][0][0]["node"],
             "Return Verified ARCHIVED Receipt",
         )
         self.assertIn(
@@ -1511,9 +2476,13 @@ try {
             "email_evidence_receipt_barrier": "VERIFIED",
             "cursor_commit_eligible": False,
             "readback_verified": True,
-            "email_evidence_receipts_verified": 0,
+            "receipt_readback_verified": True,
+            "archive_receipt_sha256": "b" * 64,
         }
         pipeline = {
+            "run_id": source["run_id"],
+            "source_code": source["source_code"],
+            "workflow_code": "SHARED_STATEMENT_PIPELINE",
             "state": "SUCCEEDED",
             "terminal_readback_verified": True,
             "receipt_sha256": "a" * 64,
@@ -1541,8 +2510,13 @@ try {
         workflow = self.workflow("12-outlook-message-sweep.json")
         for count in (0, 1, 101):
             with self.subTest(matched_count=count):
-                keys = [f"message-{index:03d}:attachment-{index:03d}" for index in range(1, count + 1)]
-                email_keys = [f"message-{index:03d}:INLINE_BODY" for index in range(1, count + 1)]
+                keys = [
+                    f"message-{index:03d}:attachment-{index:03d}"
+                    for index in range(1, count + 1)
+                ]
+                email_keys = [
+                    f"message-{index:03d}:INLINE_BODY" for index in range(1, count + 1)
+                ]
                 contract = {
                     "run_id": f"fixture:barrier:{count}",
                     "source_code": "FIXTURE",
@@ -1577,11 +2551,14 @@ try {
                 )
                 self.assertTrue(built["ok"], built)
                 built_row = built["output"][0]["json"]
-                digest = hashlib.sha256(built_row["barrier_receipt_json"].encode()).hexdigest()
+                digest = hashlib.sha256(
+                    built_row["barrier_receipt_json"].encode()
+                ).hexdigest()
                 persisted = {
                     **built_row,
                     "terminal_state": "ARCHIVED",
-                    "downstream_receipt_sha256": digest,
+                    "archive_receipt_sha256": digest,
+                    "archive_readback_verified": False,
                     "readback_verified": False,
                 }
                 readback = self.execute_code_node(
@@ -1590,23 +2567,35 @@ try {
                     json_value=persisted,
                     refs={
                         "Build Durable Archive Barrier Receipt": built_row,
-                        "SHA-256 Durable Archive Barrier Receipt": {"downstream_receipt_sha256": digest},
+                        "SHA-256 Durable Archive Barrier Receipt": {
+                            "archive_receipt_sha256": digest
+                        },
                     },
                 )
                 self.assertTrue(readback["ok"], readback)
-                archived = readback["output"][0]["json"]
+                archived = dict(
+                    readback["output"][0]["json"],
+                    archive_readback_verified=True,
+                    readback_verified=True,
+                )
                 proof = self.execute_code_node(
                     workflow,
                     "Verify Downstream Persistence Proof",
                     json_value=archived,
-                    refs={"Validate Sweep or Commit": {
-                        **contract,
-                        "operation": "COMMIT",
-                        "expected_cursor_version": 0,
-                    }},
+                    refs={
+                        "Validate Sweep or Commit": {
+                            **contract,
+                            "operation": "COMMIT",
+                            "expected_cursor_version": 0,
+                            "archive_receipt_sha256": digest,
+                            "downstream_receipt_sha256": digest,
+                        }
+                    },
                 )
                 self.assertTrue(proof["ok"], proof)
-                self.assertEqual(proof["output"][0]["json"]["downstream_receipt_sha256"], digest)
+                self.assertEqual(
+                    proof["output"][0]["json"]["downstream_receipt_sha256"], digest
+                )
 
                 missing = dict(archived, email_evidence_receipt_barrier="")
                 self.assert_code_error(
@@ -1614,11 +2603,15 @@ try {
                     "Verify Downstream Persistence Proof",
                     "DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING",
                     json_value=missing,
-                    refs={"Validate Sweep or Commit": {
-                        **contract,
-                        "operation": "COMMIT",
-                        "expected_cursor_version": 0,
-                    }},
+                    refs={
+                        "Validate Sweep or Commit": {
+                            **contract,
+                            "operation": "COMMIT",
+                            "expected_cursor_version": 0,
+                            "archive_receipt_sha256": digest,
+                            "downstream_receipt_sha256": digest,
+                        }
+                    },
                 )
 
     def test_executable_attachment_cardinality_and_composite_identity(self):
@@ -1637,11 +2630,13 @@ try {
             "immutable_inventory": True,
             "pagination_exhausted": True,
             "cursor_commit_eligible": False,
-            "messages": [{
-                "message_id": "message-1",
-                "message": {"id": "message-1", "subject": "Fixture"},
-                "attachment_inventory": [],
-            }],
+            "messages": [
+                {
+                    "message_id": "message-1",
+                    "message": {"id": "message-1", "subject": "Fixture"},
+                    "attachment_inventory": [],
+                }
+            ],
         }
         shaped = self.execute_code_node(
             workflow,
@@ -1651,7 +2646,10 @@ try {
         self.assertTrue(shaped["ok"], shaped)
         for count in (0, 1, 101):
             attachments = [
-                {"message_id": "message-1", "attachment": {"id": f"attachment-{index:03d}"}}
+                {
+                    "message_id": "message-1",
+                    "attachment": {"id": f"attachment-{index:03d}"},
+                }
                 for index in range(1, count + 1)
             ]
             result = self.execute_code_node(
@@ -1668,17 +2666,26 @@ try {
             self.assertTrue(result["ok"], result)
             inventory = result["output"][0]["json"]
             self.assertEqual(len(inventory["messages"]), 1)
-            self.assertEqual(len(inventory["messages"][0]["attachment_inventory"]), count)
             self.assertEqual(
-                len(inventory["attachment_identity_keys"]), count
+                len(inventory["messages"][0]["attachment_inventory"]), count
             )
+            self.assertEqual(len(inventory["attachment_identity_keys"]), count)
             self.assertEqual(
                 inventory["attachment_identity_keys"][:1],
                 ["message-1:attachment-001"] if count else [],
             )
 
     def test_executable_generated_fixtures_preserve_zero_one_and_101_paths(self):
-        fixture = json.loads((self.ROOT / "integrations" / "n8n" / "disposable" / "generated" / "90-derived-outlook-sweep-core.json").read_text(encoding="utf-8"))
+        fixture = json.loads(
+            (
+                self.ROOT
+                / "integrations"
+                / "n8n"
+                / "disposable"
+                / "generated"
+                / "90-derived-outlook-sweep-core.json"
+            ).read_text(encoding="utf-8")
+        )
 
         def exhaust(case):
             context = {
@@ -1703,26 +2710,34 @@ try {
             fixture,
             "Aggregate Exact Window Heartbeat",
             input_items=[item["json"] for item in zero["output"]],
-            refs={"Freeze Trusted Cursor Window": {
-                "run_id": "fixture:zero",
-                "source_code": "FIXTURE",
-                "folder_id": "fixture-folder",
-                "senders": ["fixture@example.test"],
-                "subjects": ["Fixture transaction"],
-                "window_start": "2026-08-19T00:00:00.000Z",
-                "run_upper_bound": "2026-08-20T00:00:00.000Z",
-                "onedrive_parent_id": "fixture-parent",
-                "max_messages": 500,
-            }},
+            refs={
+                "Freeze Trusted Cursor Window": {
+                    "run_id": "fixture:zero",
+                    "source_code": "FIXTURE",
+                    "folder_id": "fixture-folder",
+                    "senders": ["fixture@example.test"],
+                    "subjects": ["Fixture transaction"],
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "onedrive_parent_id": "fixture-parent",
+                    "max_messages": 500,
+                }
+            },
         )
         self.assertTrue(zero_aggregate["ok"], zero_aggregate)
         zero_context = zero_aggregate["output"][0]["json"]
         self.assertEqual(zero_context["scanned_count"], 0)
         self.assertTrue(zero_context["heartbeat"])
         self.assertEqual(
-            {key: zero_context[key] for key in (
-                "folder_id", "senders", "subjects", "onedrive_parent_id",
-            )},
+            {
+                key: zero_context[key]
+                for key in (
+                    "folder_id",
+                    "senders",
+                    "subjects",
+                    "onedrive_parent_id",
+                )
+            },
             {
                 "folder_id": "fixture-folder",
                 "senders": ["fixture@example.test"],
@@ -1740,15 +2755,17 @@ try {
             fixture,
             "Aggregate Exact Window Heartbeat",
             input_items=[item["json"] for item in one_messages],
-            refs={"Freeze Trusted Cursor Window": {
-                "run_id": "fixture:one-no-attachments",
-                "source_code": "FIXTURE",
-                "senders": ["fixture@example.test"],
-                "subjects": ["Fixture transaction"],
-                "window_start": "2026-08-19T00:00:00.000Z",
-                "run_upper_bound": "2026-08-20T00:00:00.000Z",
-                "max_messages": 500,
-            }},
+            refs={
+                "Freeze Trusted Cursor Window": {
+                    "run_id": "fixture:one-no-attachments",
+                    "source_code": "FIXTURE",
+                    "senders": ["fixture@example.test"],
+                    "subjects": ["Fixture transaction"],
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "max_messages": 500,
+                }
+            },
         )
         self.assertTrue(one_aggregate["ok"], one_aggregate)
         self.assertEqual(one_aggregate["output"][0]["json"]["matched_count"], 1)
@@ -1760,15 +2777,17 @@ try {
             fixture,
             "Aggregate Exact Window Heartbeat",
             input_items=[item["json"] for item in hundred_one["output"]],
-            refs={"Freeze Trusted Cursor Window": {
-                "run_id": "fixture:one-hundred-one",
-                "source_code": "FIXTURE",
-                "senders": ["fixture@example.test"],
-                "subjects": ["Fixture transaction"],
-                "window_start": "2026-08-19T00:00:00.000Z",
-                "run_upper_bound": "2026-08-20T00:00:00.000Z",
-                "max_messages": 500,
-            }},
+            refs={
+                "Freeze Trusted Cursor Window": {
+                    "run_id": "fixture:one-hundred-one",
+                    "source_code": "FIXTURE",
+                    "senders": ["fixture@example.test"],
+                    "subjects": ["Fixture transaction"],
+                    "window_start": "2026-08-19T00:00:00.000Z",
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                    "max_messages": 500,
+                }
+            },
         )
         self.assertTrue(aggregate["ok"], aggregate)
         sweep = {
@@ -1823,10 +2842,12 @@ try {
             {
                 "message_id": f"message-{index:03d}",
                 "message": {"id": f"message-{index:03d}", "subject": "Fixture"},
-                "attachment_inventory": [{
-                    "id": f"attachment-{index:03d}",
-                    "name": "statement.pdf",
-                }],
+                "attachment_inventory": [
+                    {
+                        "id": f"attachment-{index:03d}",
+                        "name": "statement.pdf",
+                    }
+                ],
                 "attachment_ids": [f"attachment-{index:03d}"],
                 "attachment_identity_keys": [
                     f"message-{index:03d}:attachment-{index:03d}"
@@ -1835,28 +2856,62 @@ try {
             for index in range(1, 102)
         ]
         identities = [
-            f"message-{index:03d}:attachment-{index:03d}"
-            for index in range(1, 102)
+            f"message-{index:03d}:attachment-{index:03d}" for index in range(1, 102)
         ]
-        persisted = json.dumps({
-            "messages": messages,
-            "attachment_identity_keys": identities,
-            "empty_inventory": False,
-            "immutable_inventory": True,
-            "attachment_ids_verified": True,
-        }, separators=(",", ":"))
-        receipt = {
+        payload = {
+            "schema_version": 1,
             "run_id": "fixture:restart",
             "source_code": "FIXTURE",
             "window_start": "2026-08-19T00:00:00.000Z",
             "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "pages_fetched": None,
+            "pagination_exhausted": True,
+            "scanned_count": 101,
             "matched_count": 101,
+            "heartbeat": False,
+            "messages": messages,
+            "attachment_identity_keys": identities,
+            "email_evidence_identity_keys": [
+                f"message-{index:03d}:INLINE_BODY" for index in range(1, 102)
+            ],
+        }
+        persisted = json.dumps(payload, separators=(",", ":"))
+        inventory_hash = hashlib.sha256(persisted.encode("utf-8")).hexdigest()
+        receipt = {
+            "record_type": "ACQUISITION_RECEIPT",
+            "record_key": json.dumps(
+                ["fixture:restart", "FIXTURE"], separators=(",", ":")
+            ),
+            "run_id": "fixture:restart",
+            "source_code": "FIXTURE",
+            "receipt_run_id": "fixture:restart",
+            "receipt_run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "last_window_start": "2026-08-19T00:00:00.000Z",
+            "window_start": "2026-08-19T00:00:00.000Z",
+            "run_upper_bound": "2026-08-20T00:00:00.000Z",
+            "scanned_count": 101,
+            "matched_count": 101,
+            "last_heartbeat": False,
+            "last_pagination_exhausted": True,
             "terminal_state": "ENUMERATED",
             "pagination_exhausted": True,
             "cursor_commit_eligible": False,
             "attachment_ids_verified": True,
-            "attachment_identity_keys_json": json.dumps(identities, separators=(",", ":")),
+            "attachment_identity_keys_json": json.dumps(
+                identities, separators=(",", ":")
+            ),
             "attachments_verified": len(identities),
+            "email_evidence_receipt_barrier": "VERIFIED",
+            "email_evidence_receipts_verified": 101,
+            "email_evidence_identity_keys_json": json.dumps(
+                payload["email_evidence_identity_keys"], separators=(",", ":")
+            ),
+            "record_payload_json": persisted,
+            "inventory_run_id": "fixture:restart",
+            "inventory_fence": 0,
+            "inventory_sha256": inventory_hash,
+            "inventory_schema_version": "inventory-v1",
+            "inventory_length_bytes": len(persisted.encode("utf-8")),
         }
         trusted = {
             key: receipt[key]
@@ -1870,14 +2925,38 @@ try {
         )
         self.assertTrue(result["ok"], result)
         replay = result["output"][0]["json"]
-        # The canonical ingestion-state row persists identity and archive
-        # pointers; replay deliberately returns no in-memory message payload.
-        self.assertEqual(replay["messages"], [])
+        # Replay returns the exact immutable inventory; it never re-lists the provider.
+        self.assertEqual(replay["messages"], messages)
         self.assertEqual(replay["attachment_identity_keys"], identities)
+        self.assertTrue(replay["inventory_replay_verified"])
         self.assertTrue(replay["replay_noop"])
         self.assertFalse(replay["cursor_commit_eligible"])
+        for bad_receipt, error in (
+            (
+                dict(receipt, record_payload_json=""),
+                "ENUMERATED_INVENTORY_PAYLOAD_MISSING",
+            ),
+            (
+                dict(receipt, inventory_sha256="0" * 64),
+                "ENUMERATED_INVENTORY_HASH_MISMATCH",
+            ),
+            (dict(receipt, matched_count=100), "ENUMERATED_INVENTORY_BINDING_MISMATCH"),
+            (
+                dict(receipt, attachment_identity_keys_json="[]"),
+                "ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH",
+            ),
+        ):
+            self.assert_code_error(
+                w12,
+                "Return Existing ENUMERATED Receipt",
+                error,
+                json_value=bad_receipt,
+                refs={"Freeze Trusted Cursor Window": trusted},
+            )
         self.assertEqual(
-            w12["connections"]["Return Existing ENUMERATED Receipt"]["main"][0][0]["node"],
+            w12["connections"]["Return Existing ENUMERATED Receipt"]["main"][0][0][
+                "node"
+            ],
             "Archive Enumerated Messages in W01",
         )
 
@@ -1905,6 +2984,7 @@ try {
                 "window_start": "2026-08-19T00:00:00.000Z",
                 "run_upper_bound": "2026-08-20T00:00:00.000Z",
                 "expected_cursor_version": 0,
+                "archive_receipt_sha256": "a" * 64,
             },
         )
         self.assert_code_error(
@@ -1932,22 +3012,26 @@ try {
                 "source_sha256": "wrong",
                 "onedrive_item_id": "drive-item",
             },
-            refs={"Verify Email Evidence Readback": {
-                "source_message_id": "message-1",
-                "email_evidence_sha256": "expected",
-            }},
+            refs={
+                "Verify Email Evidence Readback": {
+                    "source_message_id": "message-1",
+                    "email_evidence_sha256": "expected",
+                }
+            },
         )
         self.assert_code_error(
             w12,
             "Build Cursor CAS Update",
             "SOURCE_CURSOR_VERSION_CONFLICT",
             json_value={"source_code": "FIXTURE", "cursor_version": 8},
-            refs={"Verify Downstream Persistence Proof": {
-                "run_id": "fixture:cas",
-                "source_code": "FIXTURE",
-                "expected_cursor_version": 7,
-                "run_upper_bound": "2026-08-20T00:00:00.000Z",
-            }},
+            refs={
+                "Verify Downstream Persistence Proof": {
+                    "run_id": "fixture:cas",
+                    "source_code": "FIXTURE",
+                    "expected_cursor_version": 7,
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                }
+            },
         )
         self.assert_code_error(
             w12,
@@ -1960,12 +3044,14 @@ try {
                 "run_upper_bound": "2026-08-21T00:00:00.000Z",
                 "committed_run_id": "fixture:cas",
             },
-            refs={"Verify Downstream Persistence Proof": {
-                "run_id": "fixture:cas",
-                "source_code": "FIXTURE",
-                "expected_cursor_version": 7,
-                "run_upper_bound": "2026-08-20T00:00:00.000Z",
-            }},
+            refs={
+                "Verify Downstream Persistence Proof": {
+                    "run_id": "fixture:cas",
+                    "source_code": "FIXTURE",
+                    "expected_cursor_version": 7,
+                    "run_upper_bound": "2026-08-20T00:00:00.000Z",
+                }
+            },
         )
 
     def test_w12_initializes_empty_source_cursor_v0_once_with_collision_readback(self):
@@ -2027,7 +3113,9 @@ try {
         )
         self.assertTrue(existing["ok"], existing)
         self.assertFalse(existing["output"][0]["json"]["initialized"])
-        self.assertEqual(existing["output"][0]["json"]["status"], "CURSOR_ALREADY_INITIALIZED")
+        self.assertEqual(
+            existing["output"][0]["json"]["status"], "CURSOR_ALREADY_INITIALIZED"
+        )
         existing_terminal = self.execute_code_node(
             w12,
             "Return Existing Cursor Initialization Readback",
@@ -2070,15 +3158,21 @@ try {
                 "INITIALIZE",
             )
             self.assertEqual(
-                initializer["parameters"]["workflowInputs"]["value"]["initial_cursor_source"],
+                initializer["parameters"]["workflowInputs"]["value"][
+                    "initial_cursor_source"
+                ],
                 "statement-sources",
             )
             self.assertEqual(
-                workflow["connections"]["Assemble Trusted Acquisition Contract"]["main"][0][0]["node"],
+                workflow["connections"]["Assemble Trusted Acquisition Contract"][
+                    "main"
+                ][0][0]["node"],
                 "Initialize Source Cursor via W12",
             )
             self.assertEqual(
-                workflow["connections"]["Initialize Source Cursor via W12"]["main"][0][0]["node"],
+                workflow["connections"]["Initialize Source Cursor via W12"]["main"][0][
+                    0
+                ]["node"],
                 "Restore Enumeration Request After Cursor Init",
             )
             restored = self.execute_code_node(
@@ -2125,7 +3219,12 @@ try {
             "subjects": ["Fixture"],
             "window_start": "2026-08-19T00:00:00.000Z",
             "run_upper_bound": "2026-08-20T00:00:00.000Z",
-            "messages": [{"message_id": "message-1", "attachment_inventory": [{"id": "attachment-001"}]}],
+            "messages": [
+                {
+                    "message_id": "message-1",
+                    "attachment_inventory": [{"id": "attachment-001"}],
+                }
+            ],
         }
         result = self.execute_code_node(
             w01,
@@ -2137,16 +3236,20 @@ try {
                     "attachment_identity": "message-1:attachment-001",
                     "source_message_id": "message-1",
                     "source_attachment_id": "attachment-001",
+                    "archive_readback_verified": True,
                 },
                 "Verify Existing Email Evidence Receipt": {
                     "email_evidence_receipt_verified": True,
                     "email_evidence_identity": "message-1:INLINE_BODY",
+                    "archive_readback_verified": True,
                 },
             },
         )
         self.assertTrue(result["ok"], result)
         output = result["output"][0]["json"]
-        self.assertEqual(output["attachment_identity_keys"], ["message-1:attachment-001"])
+        self.assertEqual(
+            output["attachment_identity_keys"], ["message-1:attachment-001"]
+        )
         self.assertEqual(output["email_evidence_receipts_verified"], 1)
 
     def test_executable_mixed_inline_and_non_pdf_disposition(self):
@@ -2167,13 +3270,17 @@ try {
         self.assertTrue(expanded["ok"], expanded)
         rows = [item["json"] for item in expanded["output"]]
         self.assertEqual(
-            [(row["source_attachment_id"], row["is_inline"], row["is_pdf"]) for row in rows],
+            [
+                (row["source_attachment_id"], row["is_inline"], row["is_pdf"])
+                for row in rows
+            ],
             [("inline-image", True, False), ("receipt-csv", False, False)],
         )
         self.assertEqual(
             ["INLINE_ATTACHMENT_ARCHIVED_ONLY", "NON_PDF_ARCHIVED_ONLY"],
             [
-                "INLINE_ATTACHMENT_ARCHIVED_ONLY" if row["is_inline"]
+                "INLINE_ATTACHMENT_ARCHIVED_ONLY"
+                if row["is_inline"]
                 else "NON_PDF_ARCHIVED_ONLY"
                 for row in rows
             ],
@@ -2188,13 +3295,15 @@ try {
             "onedrive_parent_id": "parent",
             "window_start": "2026-08-19T00:00:00.000Z",
             "run_upper_bound": "2026-08-20T00:00:00.000Z",
-            "messages": [{
-                "message_id": "message-mixed",
-                "attachment_inventory": [
-                    {"id": "inline-image"},
-                    {"id": "receipt-csv"},
-                ],
-            }],
+            "messages": [
+                {
+                    "message_id": "message-mixed",
+                    "attachment_inventory": [
+                        {"id": "inline-image"},
+                        {"id": "receipt-csv"},
+                    ],
+                }
+            ],
         }
         barrier = self.execute_code_node(
             w01,
@@ -2207,12 +3316,14 @@ try {
                         "attachment_identity": f"message-mixed:{attachment_id}",
                         "source_message_id": "message-mixed",
                         "source_attachment_id": attachment_id,
+                        "archive_readback_verified": True,
                     }
                     for attachment_id in ("inline-image", "receipt-csv")
                 ],
                 "Verify Durable Email Evidence Receipt": {
                     "email_evidence_receipt_verified": True,
                     "email_evidence_identity": "message-mixed:INLINE_BODY",
+                    "archive_readback_verified": True,
                 },
             },
         )
@@ -2226,14 +3337,20 @@ try {
             "source_code": "FIXTURE",
             "window_start": "2026-08-19T00:00:00.000Z",
             "run_upper_bound": "2026-08-20T00:00:00.000Z",
-            "operation": "COMMIT",
             "expected_cursor_version": 0,
+            "archive_receipt_sha256": "b" * 64,
             "downstream_receipt_sha256": "a" * 64,
         }
         receipt = {
-            **{key: request[key] for key in (
-                "run_id", "source_code", "window_start", "run_upper_bound",
-            )},
+            **{
+                key: request[key]
+                for key in (
+                    "run_id",
+                    "source_code",
+                    "window_start",
+                    "run_upper_bound",
+                )
+            },
             "folder_id": "folder",
             "senders": ["sender@example.test"],
             "subjects": ["Fixture"],
@@ -2253,7 +3370,8 @@ try {
             "cursor_commit_eligible": False,
             "terminal_state": "ARCHIVED",
             "readback_verified": True,
-            "downstream_receipt_sha256": "a" * 64,
+            "archive_receipt_sha256": "b" * 64,
+            "archive_readback_verified": True,
         }
 
         class PersistedDataTables:
@@ -2277,13 +3395,15 @@ try {
 
             def compare_and_swap(self, cas_row):
                 self.assert_cas_preconditions(cas_row)
-                self.cursor.update({
-                    "cursor_version": cas_row["next_cursor_version"],
-                    "cursor_value": cas_row["run_upper_bound"],
-                    "committed_run_id": cas_row["run_id"],
-                    "run_upper_bound": cas_row["run_upper_bound"],
-                    "readback_verified": False,
-                })
+                self.cursor.update(
+                    {
+                        "cursor_version": cas_row["next_cursor_version"],
+                        "cursor_value": cas_row["run_upper_bound"],
+                        "committed_run_id": cas_row["run_id"],
+                        "run_upper_bound": cas_row["run_upper_bound"],
+                        "readback_verified": False,
+                    }
+                )
                 self.cas_writes += 1
 
             def assert_cas_preconditions(self, cas_row):
@@ -2293,11 +3413,16 @@ try {
                     raise AssertionError("CAS source changed before write")
 
             def transition_receipt(self, terminal_state, *, readback_verified):
-                self.receipt.update({
-                    "terminal_state": terminal_state,
-                    "cursor_commit_eligible": terminal_state == "DOWNSTREAM_VERIFIED",
-                    "readback_verified": readback_verified,
-                })
+                self.receipt.update(
+                    {
+                        "terminal_state": terminal_state,
+                        "cursor_commit_eligible": terminal_state
+                        == "DOWNSTREAM_VERIFIED",
+                        "readback_verified": readback_verified,
+                    }
+                )
+                if terminal_state == "DOWNSTREAM_VERIFIED":
+                    self.receipt["downstream_receipt_sha256"] = "a" * 64
 
             def mark_cursor_readback_verified(self):
                 if self.cursor["readback_verified"] is not False:
@@ -2344,10 +3469,10 @@ try {
         self.assertTrue(cas["ok"], cas)
         tables.compare_and_swap(cas["output"][0]["json"])
         self.assertEqual(tables.cas_writes, 1)
-
         # Crash after CAS leaves ARCHIVED/true and a pending source-cursor readback.
+        # The source cursor readback remains pending until its post-CAS marker is verified.
         proof, detected = enter_commit()
-        self.assertEqual(detected["resume_path"], "ARCHIVED_RECOVERY")
+        self.assertEqual(detected["resume_path"], "CURSOR_READBACK_PENDING")
         self.assertFalse(detected["cursor_readback_verified"])
         tables.mark_cursor_readback_verified()
         source_readback = self.execute_code_node(
@@ -2394,13 +3519,17 @@ try {
             refs={
                 "Verify Downstream Persistence Proof": proof,
                 "Determine Existing Cursor Commit": detected,
-                "Verify Replayed Terminal Acquisition Receipt": replay["output"][0]["json"],
+                "Verify Replayed Terminal Acquisition Receipt": replay["output"][0][
+                    "json"
+                ],
             },
         )
         self.assertTrue(returned["ok"], returned)
         self.assertTrue(returned["output"][0]["json"]["replayed"])
         self.assertEqual(returned["output"][0]["json"]["cursor_version"], 1)
-        self.assertEqual(returned["output"][0]["json"]["downstream_receipt_sha256"], "a" * 64)
+        self.assertEqual(
+            returned["output"][0]["json"]["downstream_receipt_sha256"], "a" * 64
+        )
         self.assertEqual(tables.cas_writes, 1)
 
     def test_monthly_cycles_whole_restart_replays_after_exactly_one_cas(self):
@@ -2439,11 +3568,16 @@ try {
                     "email_evidence_receipt_barrier": "VERIFIED",
                     "email_evidence_receipts_verified": 1,
                     "email_evidence_identity_keys": ["message-1:INLINE_BODY"],
+                    "archive_receipt_sha256": "b" * 64,
+                    "archive_readback_verified": True,
                     "archive_ready": True,
                     "receipt_readback_verified": True,
                     "cursor_commit_eligible": False,
                 }
                 pipeline = {
+                    "run_id": run_id,
+                    "source_code": source_code,
+                    "workflow_code": "SHARED_STATEMENT_PIPELINE",
                     "state": "SUCCEEDED",
                     "receipt_sha256": "a" * 64,
                     "terminal_readback_verified": True,
@@ -2531,7 +3665,11 @@ try {
                 first_request = build_request(cursor_v0)
                 self.assertEqual(first_request["expected_cursor_version"], 0)
                 archived_receipt = {
-                    **first_request,
+                    **{
+                        key: value
+                        for key, value in first_request.items()
+                        if key != "downstream_receipt_sha256"
+                    },
                     "terminal_state": "ARCHIVED",
                     "readback_verified": True,
                     "cursor_commit_eligible": False,
@@ -2575,10 +3713,11 @@ try {
                     "terminal_state": "DOWNSTREAM_VERIFIED",
                     "readback_verified": True,
                     "cursor_commit_eligible": True,
+                    "downstream_receipt_sha256": restarted_request[
+                        "downstream_receipt_sha256"
+                    ],
                 }
-                restarted_proof = persistence_proof(
-                    restarted_request, terminal_receipt
-                )
+                restarted_proof = persistence_proof(restarted_request, terminal_receipt)
                 replay_path = self.execute_code_node(
                     w12,
                     "Determine Existing Cursor Commit",
@@ -2587,7 +3726,9 @@ try {
                 )
                 self.assertTrue(replay_path["ok"], replay_path)
                 replay_row = replay_path["output"][0]["json"]
-                self.assertEqual(replay_row["resume_path"], "DOWNSTREAM_VERIFIED_REPLAY")
+                self.assertEqual(
+                    replay_row["resume_path"], "DOWNSTREAM_VERIFIED_REPLAY"
+                )
                 replay = self.execute_code_node(
                     w12,
                     "Verify Replayed Terminal Acquisition Receipt",
@@ -2604,7 +3745,9 @@ try {
                     refs={
                         "Verify Downstream Persistence Proof": restarted_proof,
                         "Determine Existing Cursor Commit": replay_row,
-                        "Verify Replayed Terminal Acquisition Receipt": replay["output"][0]["json"],
+                        "Verify Replayed Terminal Acquisition Receipt": replay[
+                            "output"
+                        ][0]["json"],
                     },
                 )
                 self.assertTrue(terminal["ok"], terminal)
@@ -2668,8 +3811,13 @@ try {
             def read(self):
                 return dict(self.row)
 
-            def compare_and_swap(self, source_code, expected_version, cursor_value, run_id):
-                if self.row["source_code"] != source_code or self.row["cursor_version"] != expected_version:
+            def compare_and_swap(
+                self, source_code, expected_version, cursor_value, run_id
+            ):
+                if (
+                    self.row["source_code"] != source_code
+                    or self.row["cursor_version"] != expected_version
+                ):
                     raise AssertionError("CAS stub rejected stale version")
                 self.row = {
                     "source_code": source_code,
@@ -2698,17 +3846,18 @@ try {
                 "from": {"emailAddress": {"address": "sender@example.test"}},
                 "subject": "Fixture",
                 "body": {"contentType": "text", "content": f"Body {index}"},
-                "attachment_inventory": [{
-                    "id": f"attachment-{index:03d}",
-                    "name": "statement.pdf",
-                    "isInline": False,
-                }],
+                "attachment_inventory": [
+                    {
+                        "id": f"attachment-{index:03d}",
+                        "name": "statement.pdf",
+                        "isInline": False,
+                    }
+                ],
             }
             for index in range(1, 102)
         ]
         identities = [
-            f"message-{index:03d}:attachment-{index:03d}"
-            for index in range(1, 102)
+            f"message-{index:03d}:attachment-{index:03d}" for index in range(1, 102)
         ]
         attachment_hashes = {
             message["message_id"]: f"{index:064x}"
@@ -2765,7 +3914,9 @@ try {
 
                 if mode == "all-new":
                     archive_receipt = onedrive.archive_attachment(
-                        message_id, attachment_id, attachment_hashes[message_id],
+                        message_id,
+                        attachment_id,
+                        attachment_hashes[message_id],
                     )
                     archive_readback = self.execute_code_node(
                         w01,
@@ -2788,8 +3939,9 @@ try {
                         "Verify Enumerated Archive Receipt",
                         json_value=archive_receipt,
                         refs={
-                            "Verify Enumerated Attachment Archive":
-                                archive_readback["output"][0]["json"],
+                            "Verify Enumerated Attachment Archive": archive_readback[
+                                "output"
+                            ][0]["json"],
                         },
                     )
                     self.assertTrue(verified_archive["ok"], verified_archive)
@@ -2798,7 +3950,8 @@ try {
                     attachment_rows.append(archive_row)
 
                     email_receipt = onedrive.archive_email(
-                        message_id, email_hashes[message_id],
+                        message_id,
+                        email_hashes[message_id],
                     )
                     email_readback = self.execute_code_node(
                         w01,
@@ -2809,8 +3962,7 @@ try {
                         refs={
                             "SHA-256 Email Evidence": email_expected,
                             "Archive Email Evidence in OneDrive": email_receipt,
-                            "Build Original Email Evidence":
-                                built["output"][0]["json"],
+                            "Build Original Email Evidence": built["output"][0]["json"],
                         },
                     )
                     self.assertTrue(email_readback["ok"], email_readback)
@@ -2819,8 +3971,9 @@ try {
                         "Verify Durable Email Evidence Receipt",
                         json_value=email_receipt,
                         refs={
-                            "Verify Email Evidence Readback":
-                                email_readback["output"][0]["json"],
+                            "Verify Email Evidence Readback": email_readback["output"][
+                                0
+                            ]["json"],
                         },
                     )
                     self.assertTrue(verified_email["ok"], verified_email)
@@ -2852,8 +4005,7 @@ try {
                         json_value=email_receipt,
                         refs={
                             "SHA-256 Email Evidence": email_expected,
-                            "Build Original Email Evidence":
-                                built["output"][0]["json"],
+                            "Build Original Email Evidence": built["output"][0]["json"],
                             "Convert Email Evidence to File": {},
                         },
                     )
@@ -2894,14 +4046,19 @@ try {
 
             if mode == "all-new":
                 inventory = {
-                    "messages": [{
-                        "message_id": message["message_id"],
-                        "message": message,
-                        "attachment_inventory": message["attachment_inventory"],
-                        "attachment_identity_keys": [(
-                            f"{message['message_id']}:{message['attachment_inventory'][0]['id']}"
-                        )],
-                    } for message in messages],
+                    "messages": [
+                        {
+                            "message_id": message["message_id"],
+                            "message": message,
+                            "attachment_inventory": message["attachment_inventory"],
+                            "attachment_identity_keys": [
+                                (
+                                    f"{message['message_id']}:{message['attachment_inventory'][0]['id']}"
+                                )
+                            ],
+                        }
+                        for message in messages
+                    ],
                     "attachment_identity_keys": identities,
                     "empty_inventory": False,
                 }
@@ -2923,16 +4080,22 @@ try {
                     w12,
                     "Verify Attachment Archive Barrier",
                     json_value=barrier_result,
-                    refs={"Attach Immutable Inventory to Sweep":
-                          attached["output"][0]["json"]},
+                    refs={
+                        "Attach Immutable Inventory to Sweep": attached["output"][0][
+                            "json"
+                        ]
+                    },
                 )
                 self.assertTrue(verified["ok"], verified)
                 durable = self.execute_code_node(
                     w12,
                     "Build Durable Archive Barrier Receipt",
                     json_value=verified["output"][0]["json"],
-                    refs={"Attach Immutable Inventory to Sweep":
-                          attached["output"][0]["json"]},
+                    refs={
+                        "Attach Immutable Inventory to Sweep": attached["output"][0][
+                            "json"
+                        ]
+                    },
                 )
                 self.assertTrue(durable["ok"], durable)
                 durable_row = durable["output"][0]["json"]
@@ -2945,22 +4108,29 @@ try {
                     json_value={
                         **durable_row,
                         "terminal_state": "ARCHIVED",
-                        "downstream_receipt_sha256": durable_hash,
+                        "archive_receipt_sha256": durable_hash,
+                        "archive_readback_verified": False,
                         "readback_verified": False,
                     },
                     refs={
                         "Build Durable Archive Barrier Receipt": durable_row,
                         "SHA-256 Durable Archive Barrier Receipt": {
-                            "downstream_receipt_sha256": durable_hash,
+                            "archive_receipt_sha256": durable_hash,
                         },
                     },
                 )
                 self.assertTrue(archived["ok"], archived)
-                archived_receipt = archived["output"][0]["json"]
+                archived_receipt = dict(
+                    archived["output"][0]["json"],
+                    archive_readback_verified=True,
+                    readback_verified=True,
+                )
                 validation = {
                     **request(),
                     "operation": "COMMIT",
                     "expected_cursor_version": cursor["cursor_version"],
+                    "archive_receipt_sha256": durable_hash,
+                    "downstream_receipt_sha256": "d" * 64,
                 }
                 proof = self.execute_code_node(
                     w12,
@@ -2994,7 +4164,9 @@ try {
                     request()["run_upper_bound"],
                     request()["run_id"],
                 )
-                self.assertEqual(cursor["cursor_version"], cas_row["next_cursor_version"])
+                self.assertEqual(
+                    cursor["cursor_version"], cas_row["next_cursor_version"]
+                )
                 readback = self.execute_code_node(
                     w12,
                     "Compare CAS Cursor Readback",
@@ -3017,26 +4189,37 @@ try {
                     w12,
                     "Verify Attachment Archive Barrier",
                     json_value=barrier_result,
-                    refs={"Attach Immutable Inventory to Sweep":
-                          attached["output"][0]["json"]},
+                    refs={
+                        "Attach Immutable Inventory to Sweep": attached["output"][0][
+                            "json"
+                        ]
+                    },
                 )
                 self.assertTrue(replay_verified["ok"], replay_verified)
                 replay_proof = self.execute_code_node(
                     w12,
                     "Verify Downstream Persistence Proof",
                     json_value=archived_receipt,
-                    refs={"Validate Sweep or Commit": {
-                        **request(),
-                        "operation": "COMMIT",
-                        "expected_cursor_version": 0,
-                    }},
+                    refs={
+                        "Validate Sweep or Commit": {
+                            **request(),
+                            "operation": "COMMIT",
+                            "expected_cursor_version": 0,
+                            "archive_receipt_sha256": durable_hash,
+                            "downstream_receipt_sha256": "d" * 64,
+                        }
+                    },
                 )
                 self.assertTrue(replay_proof["ok"], replay_proof)
                 recovered = self.execute_code_node(
                     w12,
                     "Determine Existing Cursor Commit",
                     json_value=cursor,
-                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
+                    refs={
+                        "Verify Downstream Persistence Proof": replay_proof["output"][
+                            0
+                        ]["json"]
+                    },
                 )
                 self.assertTrue(recovered["ok"], recovered)
                 recovered_row = recovered["output"][0]["json"]
@@ -3049,19 +4232,47 @@ try {
                         "source_code": "FIXTURE",
                         "terminal_state": "DOWNSTREAM_VERIFIED",
                         "cursor_commit_eligible": True,
-                        "downstream_receipt_sha256": durable_hash,
+                        "archive_receipt_sha256": durable_hash,
+                        "downstream_receipt_sha256": "d" * 64,
+                        "archive_readback_verified": True,
                         "readback_verified": False,
                     },
-                    refs={"Verify Downstream Persistence Proof": replay_proof["output"][0]["json"]},
+                    refs={
+                        "Verify Downstream Persistence Proof": replay_proof["output"][
+                            0
+                        ]["json"]
+                    },
                 )
                 self.assertTrue(terminal_readback["ok"], terminal_readback)
+                terminal_receipt = {
+                    **replay_proof["output"][0]["json"],
+                    "receipt_run_id": request()["run_id"],
+                    "receipt_run_upper_bound": request()["run_upper_bound"],
+                    "last_window_start": request()["window_start"],
+                    "last_terminal_state": "DOWNSTREAM_VERIFIED",
+                    "archive_readback_verified": True,
+                    "readback_verified": True,
+                }
                 terminal = self.execute_code_node(
                     w12,
                     "Return Verified Cursor Commit",
+                    json_value={
+                        "source_code": "FIXTURE",
+                        "cursor_value": request()["run_upper_bound"],
+                        "run_upper_bound": request()["run_upper_bound"],
+                        "cursor_version": 1,
+                        "committed_run_id": request()["run_id"],
+                        "readback_verified": True,
+                    },
                     refs={
-                        "Verify Downstream Persistence Proof": replay_proof["output"][0]["json"],
+                        "Verify Downstream Persistence Proof": replay_proof["output"][
+                            0
+                        ]["json"],
                         "Determine Existing Cursor Commit": recovered_row,
-                        "Verify Terminal Acquisition Receipt": terminal_readback["output"][0]["json"],
+                        "Verify Terminal Acquisition Receipt": terminal_readback[
+                            "output"
+                        ][0]["json"],
+                        "Read Back Verified Terminal Acquisition Receipt": terminal_receipt,
                     },
                 )
                 self.assertTrue(terminal["ok"], terminal)
@@ -3080,46 +4291,95 @@ try {
     def test_generic_evidence_matches_order_and_preserves_only_immutable_identity(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         request = {
-            "operation": "EVIDENCE", "run_id": "email:order-1", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"],
-            "transactions": [{"transaction_id": "actual:1", "transaction_date": "2026-08-20", "amount_minor": 12345, "currency": "AED", "merchant": "Amazon", "kind": "ORDER"}],
+            "operation": "EVIDENCE",
+            "run_id": "email:order-1",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
+            "transactions": [
+                {
+                    "transaction_id": "actual:1",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 12345,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                }
+            ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=request)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=request
+        )
         self.assertTrue(validated["ok"], validated)
         message = {
-            "id": "message-1", "receivedDateTime": "2026-08-20T09:00:00Z",
+            "id": "message-1",
+            "receivedDateTime": "2026-08-20T09:00:00Z",
             "from": {"emailAddress": {"address": "orders@example.test"}},
-            "subject": "Amazon order confirmation", "body": "Order total AED 123.45", "internetMessageId": "<opaque@example.test>",
+            "subject": "Amazon order confirmation",
+            "body": "Order total AED 123.45",
+            "internetMessageId": "<opaque@example.test>",
         }
         matched = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[message],
             refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(matched["ok"], matched)
         evidence = matched["output"][0]["json"]
-        self.assertEqual(evidence["matched"][0]["identity"]["source_message_id"], "message-1")
+        self.assertEqual(
+            evidence["matched"][0]["identity"]["source_message_id"], "message-1"
+        )
         self.assertEqual(evidence["matched"][0]["facts"]["amount_minor"], 12345)
         self.assertNotIn("body", evidence["matched"][0])
         self.assertEqual(evidence["messages"][0]["id"], "message-1")
         self.assertEqual(evidence["replay_keys"], ["GENERIC_EMAIL:actual:1:message-1"])
 
-    def test_generic_evidence_no_match_and_ambiguous_cases_fail_closed_without_guessing(self):
+    def test_generic_evidence_no_match_and_ambiguous_cases_fail_closed_without_guessing(
+        self,
+    ):
         workflow = self.workflow("12-outlook-message-sweep.json")
         base = {
-            "operation": "EVIDENCE", "run_id": "email:negative", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"],
-            "transactions": [{"transaction_id": "actual:1", "transaction_date": "2026-08-20", "amount_minor": 12345, "currency": "AED", "merchant": "Amazon", "kind": "REFUND"}],
+            "operation": "EVIDENCE",
+            "run_id": "email:negative",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
+            "transactions": [
+                {
+                    "transaction_id": "actual:1",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 12345,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "REFUND",
+                }
+            ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=base)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=base
+        )
         no_match = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[{
-                "id": "message-no", "receivedDateTime": "2026-08-20T09:00:00Z",
-                "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 9.99",
-            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[
+                {
+                    "id": "message-no",
+                    "receivedDateTime": "2026-08-20T09:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Order total AED 9.99",
+                }
+            ],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(no_match["ok"], no_match)
         self.assertEqual(no_match["output"][0]["json"]["evidence_status"], "NO_MATCH")
@@ -3131,10 +4391,27 @@ try {
             workflow, "Validate Evidence Request", json_value=ambiguous_request
         )
         ambiguous = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[
-                {"id": "message-a", "receivedDateTime": "2026-08-20T09:00:00Z", "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 123.45"},
-                {"id": "message-b", "receivedDateTime": "2026-08-20T10:00:00Z", "from": {"emailAddress": {"address": "orders@example.test"}}, "subject": "Amazon order", "body": "Order total AED 123.45"},
-            ], refs={"Validate Evidence Request": ambiguous_validated["output"][0]["json"]},
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[
+                {
+                    "id": "message-a",
+                    "receivedDateTime": "2026-08-20T09:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Order total AED 123.45",
+                },
+                {
+                    "id": "message-b",
+                    "receivedDateTime": "2026-08-20T10:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Order total AED 123.45",
+                },
+            ],
+            refs={
+                "Validate Evidence Request": ambiguous_validated["output"][0]["json"]
+            },
         )
         self.assertTrue(ambiguous["ok"], ambiguous)
         result = ambiguous["output"][0]["json"]
@@ -3143,39 +4420,83 @@ try {
         self.assertEqual(result["unresolved"][0]["candidate_count"], 2)
 
     def test_generic_evidence_handoff_schema_and_replay_key_are_deterministic(self):
-        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
+        schema = json.loads(
+            (
+                self.ROOT
+                / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
         matched = {
-            "transaction_id": "actual:1", "replay_key": "GENERIC_EMAIL:actual:1:message-1",
-            "identity": {"source_message_id": "message-1", "internet_message_id": None, "received_at": "2026-08-20T09:00:00Z", "sender": "orders@example.test", "subject": "Amazon order"},
-            "facts": {"merchant": "Amazon", "amount_minor": 12345, "currency": "AED", "transaction_date": "2026-08-20"},
-            "confidence": 0.77, "allowed_fields": ["vendor", "category"],
+            "transaction_id": "actual:1",
+            "replay_key": "GENERIC_EMAIL:actual:1:message-1",
+            "identity": {
+                "source_message_id": "message-1",
+                "internet_message_id": None,
+                "received_at": "2026-08-20T09:00:00Z",
+                "sender": "orders@example.test",
+                "subject": "Amazon order",
+            },
+            "facts": {
+                "merchant": "Amazon",
+                "amount_minor": 12345,
+                "currency": "AED",
+                "transaction_date": "2026-08-20",
+            },
+            "confidence": 0.77,
+            "allowed_fields": ["vendor", "category"],
         }
         handoff = {
-            "schema_version": 1, "operation_code": "EMAIL_ENRICHMENT_EVIDENCE", "run_id": "email:1", "source_code": "GENERIC_EMAIL",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z", "matched": [matched], "unresolved": [],
-            "replay_keys": [matched["replay_key"]], "idempotency_key": "a" * 64, "replay_protected": True, "archive_readback_verified": True,
+            "schema_version": 1,
+            "operation_code": "EMAIL_ENRICHMENT_EVIDENCE",
+            "run_id": "email:1",
+            "source_code": "GENERIC_EMAIL",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "matched": [matched],
+            "unresolved": [],
+            "replay_keys": [matched["replay_key"]],
+            "idempotency_key": "a" * 64,
+            "replay_protected": True,
+            "archive_readback_verified": True,
             "archive_sha256": "b" * 64,
             "archive_identity_keys": ["message-1:INLINE_BODY"],
             "archive_item_ids": ["drive-item-1"],
             "archive_proof": {
                 "identity_keys": ["message-1:INLINE_BODY"],
                 "item_ids": ["drive-item-1"],
-                "messages": [{
-                    "source_message_id": "message-1",
-                    "email_evidence_sha256": "b" * 64,
-                    "onedrive_item_id": "drive-item-1",
-                    "email_evidence_identity": "message-1:INLINE_BODY",
-                }],
+                "messages": [
+                    {
+                        "source_message_id": "message-1",
+                        "email_evidence_sha256": "b" * 64,
+                        "onedrive_item_id": "drive-item-1",
+                        "email_evidence_identity": "message-1:INLINE_BODY",
+                    }
+                ],
             },
-            "archive_receipt": {"status": "ARCHIVED", "source_message_id": "message-1", "archive_ready": True, "email_evidence_receipts_verified": 1, "identity_keys": ["message-1:INLINE_BODY"], "item_ids": ["drive-item-1"]},
+            "archive_receipt": {
+                "status": "ARCHIVED",
+                "source_message_id": "message-1",
+                "archive_ready": True,
+                "email_evidence_receipts_verified": 1,
+                "identity_keys": ["message-1:INLINE_BODY"],
+                "item_ids": ["drive-item-1"],
+            },
         }
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(handoff)), [])
         tampered = dict(handoff)
-        tampered["matched"] = [{**matched, "identity": {**matched["identity"], "source_message_id": "other"}}]
+        tampered["matched"] = [
+            {
+                **matched,
+                "identity": {**matched["identity"], "source_message_id": "other"},
+            }
+        ]
         # The structural schema permits the identity fields, but replay keys are
         # content-addressed by the source message identity in the W12 matcher.
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(tampered)), [])
-        self.assertNotEqual(tampered["matched"][0]["identity"]["source_message_id"], matched["identity"]["source_message_id"])
+        self.assertNotEqual(
+            tampered["matched"][0]["identity"]["source_message_id"],
+            matched["identity"]["source_message_id"],
+        )
         workflow = self.workflow("21-subscription-agent-adapter.json")
         invocation = {
             "job_id": "finance-ai:" + "a" * 64,
@@ -3186,7 +4507,8 @@ try {
         for auth_error in ("authentication token revoked", "codex login required"):
             with self.subTest(auth_error=auth_error):
                 invalid = self.execute_code_node(
-                    workflow, "Validate ProDex Proposal Schema and Normalize Provider Output",
+                    workflow,
+                    "Validate ProDex Proposal Schema and Normalize Provider Output",
                     json_value={"errorMessage": auth_error},
                     refs={"Validate and Build Fixed Provider Invocation": invocation},
                 )
@@ -3205,9 +4527,18 @@ try {
             "subscription auth state from protected state"
         )
         forbidden_directives = (
-            "api key", "api-key", "custom mcp", "custom-mcp",
-            "separate runner", "separate-runner", "codex login",
-            "re-enable", "per-run", "per run", "device auth", "device-auth",
+            "api key",
+            "api-key",
+            "custom mcp",
+            "custom-mcp",
+            "separate runner",
+            "separate-runner",
+            "codex login",
+            "re-enable",
+            "per-run",
+            "per run",
+            "device auth",
+            "device-auth",
         )
         terminals = (
             (
@@ -3218,9 +4549,11 @@ try {
             (
                 "21-subscription-agent-adapter.json",
                 "Validate ProDex Proposal Schema and Normalize Provider Output",
-                {"Validate and Build Fixed Provider Invocation": {
-                    "agent_provider": "CODEX_SUBSCRIPTION",
-                }},
+                {
+                    "Validate and Build Fixed Provider Invocation": {
+                        "agent_provider": "CODEX_SUBSCRIPTION",
+                    }
+                },
             ),
         )
         for workflow_name, node_name, refs in terminals:
@@ -3245,155 +4578,323 @@ try {
     def test_generic_evidence_binds_currency_direction_kind_and_message_reuse(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         base = {
-            "operation": "EVIDENCE", "run_id": "email:binding", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"],
+            "operation": "EVIDENCE",
+            "run_id": "email:binding",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
         }
+
         def match(transaction, messages):
-            validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value={
-                **base, "transactions": [transaction]
-            })
+            validated = self.execute_code_node(
+                workflow,
+                "Validate Evidence Request",
+                json_value={**base, "transactions": [transaction]},
+            )
             return self.execute_code_node(
-                workflow, "Match Outlook Evidence to Transactions", input_items=messages,
+                workflow,
+                "Match Outlook Evidence to Transactions",
+                input_items=messages,
                 refs={"Validate Evidence Request": validated["output"][0]["json"]},
             )["output"][0]["json"]
 
         transaction = {
-            "transaction_id": "actual:binding", "transaction_date": "2026-08-20",
-            "amount_minor": 12345, "currency": "AED", "merchant": "Amazon", "kind": "ORDER",
+            "transaction_id": "actual:binding",
+            "transaction_date": "2026-08-20",
+            "amount_minor": 12345,
+            "currency": "AED",
+            "merchant": "Amazon",
+            "kind": "ORDER",
         }
-        usd = {"id": "usd", "receivedDateTime": "2026-08-20T09:00:00Z",
-               "from": {"emailAddress": {"address": "orders@example.test"}},
-               "subject": "Amazon order", "body": "Order total USD 123.45"}
-        self.assertEqual(match(transaction, [usd])["unresolved"][0]["status"], "NO_MATCH")
+        usd = {
+            "id": "usd",
+            "receivedDateTime": "2026-08-20T09:00:00Z",
+            "from": {"emailAddress": {"address": "orders@example.test"}},
+            "subject": "Amazon order",
+            "body": "Order total USD 123.45",
+        }
+        self.assertEqual(
+            match(transaction, [usd])["unresolved"][0]["status"], "NO_MATCH"
+        )
         refund = {**usd, "id": "refund", "body": "Refund issued AED 123.45"}
         refund_result = match({**transaction, "kind": "REFUND"}, [refund])
         self.assertEqual(refund_result["matched"][0]["facts"]["direction"], "CREDIT")
-        self.assertEqual(match(transaction, [refund])["unresolved"][0]["status"], "NO_MATCH")
+        self.assertEqual(
+            match(transaction, [refund])["unresolved"][0]["status"], "NO_MATCH"
+        )
 
-        message = {"id": "same", "receivedDateTime": "2026-08-20T09:00:00Z",
-                   "from": {"emailAddress": {"address": "orders@example.test"}},
-                   "subject": "Amazon order", "body": "Order total AED 123.45"}
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value={
-            **base, "transactions": [transaction, {**transaction, "transaction_id": "actual:binding-2"}]
-        })
+        message = {
+            "id": "same",
+            "receivedDateTime": "2026-08-20T09:00:00Z",
+            "from": {"emailAddress": {"address": "orders@example.test"}},
+            "subject": "Amazon order",
+            "body": "Order total AED 123.45",
+        }
+        validated = self.execute_code_node(
+            workflow,
+            "Validate Evidence Request",
+            json_value={
+                **base,
+                "transactions": [
+                    transaction,
+                    {**transaction, "transaction_id": "actual:binding-2"},
+                ],
+            },
+        )
         reused = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[message],
             refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )["output"][0]["json"]
         self.assertEqual(reused["matched"][0]["identity"]["source_message_id"], "same")
-        self.assertEqual(reused["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP")
+        self.assertEqual(
+            reused["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP"
+        )
 
     def test_generic_evidence_allows_only_explicit_split_group_reuse(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         request = {
-            "operation": "EVIDENCE", "run_id": "email:split", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"], "transactions": [
-                {"transaction_id": "split:1", "transaction_date": "2026-08-20", "amount_minor": 6000,
-                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "order-1"},
-                {"transaction_id": "split:2", "transaction_date": "2026-08-20", "amount_minor": 4000,
-                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "order-1"},
+            "operation": "EVIDENCE",
+            "run_id": "email:split",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
+            "transactions": [
+                {
+                    "transaction_id": "split:1",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 6000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "order-1",
+                },
+                {
+                    "transaction_id": "split:2",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 4000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "order-1",
+                },
             ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=request)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=request
+        )
         result = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[{
-                "id": "split-message", "receivedDateTime": "2026-08-20T09:00:00Z",
-                "from": {"emailAddress": {"address": "orders@example.test"}},
-                "subject": "Amazon order", "body": "Line AED 60.00; line AED 40.00; total AED 100.00",
-            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[
+                {
+                    "id": "split-message",
+                    "receivedDateTime": "2026-08-20T09:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Line AED 60.00; line AED 40.00; total AED 100.00",
+                }
+            ],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(result["ok"], result)
-        self.assertEqual([row["transaction_id"] for row in result["output"][0]["json"]["matched"]], ["split:1", "split:2"])
+        self.assertEqual(
+            [row["transaction_id"] for row in result["output"][0]["json"]["matched"]],
+            ["split:1", "split:2"],
+        )
 
     def test_generic_evidence_reserves_split_message_globally(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         base = {
-            "operation": "EVIDENCE", "run_id": "email:split-ownership", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"],
+            "operation": "EVIDENCE",
+            "run_id": "email:split-ownership",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
         }
         message = {
-            "id": "owned-message", "receivedDateTime": "2026-08-20T09:00:00Z",
+            "id": "owned-message",
+            "receivedDateTime": "2026-08-20T09:00:00Z",
             "from": {"emailAddress": {"address": "orders@example.test"}},
-            "subject": "Amazon order", "body": "Order total AED 100.00",
+            "subject": "Amazon order",
+            "body": "Order total AED 100.00",
         }
         cross_group = {
             **base,
             "transactions": [
-                {"transaction_id": "split:g1", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
-                {"transaction_id": "split:g2", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g2"},
+                {
+                    "transaction_id": "split:g1",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "g1",
+                },
+                {
+                    "transaction_id": "split:g2",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "g2",
+                },
             ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=cross_group)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=cross_group
+        )
         result = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[message],
             refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(result["ok"], result)
         evidence = result["output"][0]["json"]
-        self.assertEqual([row["transaction_id"] for row in evidence["matched"]], ["split:g1"])
-        self.assertEqual(evidence["unresolved"][0]["status"], "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT")
+        self.assertEqual(
+            [row["transaction_id"] for row in evidence["matched"]], ["split:g1"]
+        )
+        self.assertEqual(
+            evidence["unresolved"][0]["status"],
+            "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT",
+        )
 
         split_then_normal = {
             **base,
             "transactions": [
-                {"transaction_id": "split:only", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
-                {"transaction_id": "normal:reuse", "transaction_date": "2026-08-20", "amount_minor": 10000, "currency": "AED", "merchant": "Amazon", "kind": "ORDER"},
+                {
+                    "transaction_id": "split:only",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "g1",
+                },
+                {
+                    "transaction_id": "normal:reuse",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                },
             ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=split_then_normal)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=split_then_normal
+        )
         result = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[message],
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[message],
             refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(result["ok"], result)
         evidence = result["output"][0]["json"]
-        self.assertEqual([row["transaction_id"] for row in evidence["matched"]], ["split:only"])
-        self.assertEqual(evidence["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP")
+        self.assertEqual(
+            [row["transaction_id"] for row in evidence["matched"]], ["split:only"]
+        )
+        self.assertEqual(
+            evidence["unresolved"][0]["status"], "MESSAGE_REUSE_REQUIRES_SPLIT_GROUP"
+        )
 
     def test_generic_split_conflict_handoff_executes_and_validates_against_schema(self):
         workflow = self.workflow("12-outlook-message-sweep.json")
         request = {
-            "operation": "EVIDENCE", "run_id": "email:split-handoff", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"], "transactions": [
-                {"transaction_id": "split:g1", "transaction_date": "2026-08-20", "amount_minor": 10000,
-                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g1"},
-                {"transaction_id": "split:g2", "transaction_date": "2026-08-20", "amount_minor": 10000,
-                 "currency": "AED", "merchant": "Amazon", "kind": "ORDER", "split_group": "g2"},
+            "operation": "EVIDENCE",
+            "run_id": "email:split-handoff",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
+            "transactions": [
+                {
+                    "transaction_id": "split:g1",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "g1",
+                },
+                {
+                    "transaction_id": "split:g2",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 10000,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                    "split_group": "g2",
+                },
             ],
         }
-        validated = self.execute_code_node(workflow, "Validate Evidence Request", json_value=request)
+        validated = self.execute_code_node(
+            workflow, "Validate Evidence Request", json_value=request
+        )
         matched = self.execute_code_node(
-            workflow, "Match Outlook Evidence to Transactions", input_items=[{
-                "id": "split-handoff-message", "receivedDateTime": "2026-08-20T09:00:00Z",
-                "from": {"emailAddress": {"address": "orders@example.test"}},
-                "subject": "Amazon order", "body": "Order total AED 100.00",
-            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+            workflow,
+            "Match Outlook Evidence to Transactions",
+            input_items=[
+                {
+                    "id": "split-handoff-message",
+                    "receivedDateTime": "2026-08-20T09:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Order total AED 100.00",
+                }
+            ],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         self.assertTrue(matched["ok"], matched)
         evidence = matched["output"][0]["json"]
-        self.assertEqual(evidence["unresolved"][0]["status"], "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT")
+        self.assertEqual(
+            evidence["unresolved"][0]["status"],
+            "SPLIT_GROUP_MESSAGE_OWNERSHIP_CONFLICT",
+        )
         archive = {
-            "status": "ARCHIVED", "attachment_verification_barrier": "VERIFIED",
-            "email_evidence_receipt_barrier": "VERIFIED", "archive_ready": True,
+            "status": "ARCHIVED",
+            "attachment_verification_barrier": "VERIFIED",
+            "email_evidence_receipt_barrier": "VERIFIED",
+            "archive_ready": True,
             "email_evidence_receipts_verified": 1,
-            "archive_identity_keys": ["split-handoff-message:INLINE_BODY"], "archive_item_ids": ["drive-split-handoff"],
-            "email_evidence_archive_proof": [{
-                "source_message_id": "split-handoff-message", "email_evidence_sha256": "a" * 64,
-                "onedrive_item_id": "drive-split-handoff", "email_evidence_identity": "split-handoff-message:INLINE_BODY",
-            }],
+            "archive_identity_keys": ["split-handoff-message:INLINE_BODY"],
+            "archive_item_ids": ["drive-split-handoff"],
+            "email_evidence_archive_proof": [
+                {
+                    "source_message_id": "split-handoff-message",
+                    "email_evidence_sha256": "a" * 64,
+                    "onedrive_item_id": "drive-split-handoff",
+                    "email_evidence_identity": "split-handoff-message:INLINE_BODY",
+                }
+            ],
         }
-        handoff = self.execute_code_node(workflow, "Build Evidence Handoff", refs={
-            "Match Outlook Evidence to Transactions": evidence,
-            "Archive Matched Email Evidence in W01": archive,
-        })
+        handoff = self.execute_code_node(
+            workflow,
+            "Build Evidence Handoff",
+            refs={
+                "Match Outlook Evidence to Transactions": evidence,
+                "Archive Matched Email Evidence in W01": archive,
+            },
+        )
         self.assertTrue(handoff["ok"], handoff)
         built = handoff["output"][0]["json"]
         built["archive_sha256"] = hashlib.sha256(
@@ -3402,44 +4903,83 @@ try {
         built["idempotency_key"] = hashlib.sha256(
             json.dumps(built, separators=(",", ":")).encode()
         ).hexdigest()
-        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
+        schema = json.loads(
+            (
+                self.ROOT
+                / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
         self.assertEqual(list(Draft202012Validator(schema).iter_errors(built)), [])
 
-    def test_generic_evidence_dispatches_finance_ai_job_through_existing_w21_contract(self):
+    def test_generic_evidence_dispatches_finance_ai_job_through_existing_w21_contract(
+        self,
+    ):
         w12 = self.workflow("12-outlook-message-sweep.json")
         w21 = self.workflow("21-subscription-agent-adapter.json")
         request = {
-            "operation": "EVIDENCE", "run_id": "email:dispatch", "source_code": "GENERIC_EMAIL",
-            "folder_id": "inbox", "onedrive_parent_id": "finance-evidence",
-            "window_start": "2026-08-19T00:00:00Z", "run_upper_bound": "2026-08-21T00:00:00Z",
-            "senders": ["orders@example.test"], "subjects": ["order"], "transactions": [{
-                "transaction_id": "actual:dispatch", "transaction_date": "2026-08-20", "amount_minor": 12345,
-                "currency": "AED", "merchant": "Amazon", "kind": "ORDER",
-            }],
+            "operation": "EVIDENCE",
+            "run_id": "email:dispatch",
+            "source_code": "GENERIC_EMAIL",
+            "folder_id": "inbox",
+            "onedrive_parent_id": "finance-evidence",
+            "window_start": "2026-08-19T00:00:00Z",
+            "run_upper_bound": "2026-08-21T00:00:00Z",
+            "senders": ["orders@example.test"],
+            "subjects": ["order"],
+            "transactions": [
+                {
+                    "transaction_id": "actual:dispatch",
+                    "transaction_date": "2026-08-20",
+                    "amount_minor": 12345,
+                    "currency": "AED",
+                    "merchant": "Amazon",
+                    "kind": "ORDER",
+                }
+            ],
         }
-        validated = self.execute_code_node(w12, "Validate Evidence Request", json_value=request)
+        validated = self.execute_code_node(
+            w12, "Validate Evidence Request", json_value=request
+        )
         matched = self.execute_code_node(
-            w12, "Match Outlook Evidence to Transactions", input_items=[{
-                "id": "dispatch-message", "receivedDateTime": "2026-08-20T09:00:00Z",
-                "from": {"emailAddress": {"address": "orders@example.test"}},
-                "subject": "Amazon order", "body": "Order total AED 123.45",
-            }], refs={"Validate Evidence Request": validated["output"][0]["json"]},
+            w12,
+            "Match Outlook Evidence to Transactions",
+            input_items=[
+                {
+                    "id": "dispatch-message",
+                    "receivedDateTime": "2026-08-20T09:00:00Z",
+                    "from": {"emailAddress": {"address": "orders@example.test"}},
+                    "subject": "Amazon order",
+                    "body": "Order total AED 123.45",
+                }
+            ],
+            refs={"Validate Evidence Request": validated["output"][0]["json"]},
         )
         evidence = matched["output"][0]["json"]
         archive = {
-            "status": "ARCHIVED", "attachment_verification_barrier": "VERIFIED",
-            "email_evidence_receipt_barrier": "VERIFIED", "archive_ready": True,
+            "status": "ARCHIVED",
+            "attachment_verification_barrier": "VERIFIED",
+            "email_evidence_receipt_barrier": "VERIFIED",
+            "archive_ready": True,
             "email_evidence_receipts_verified": 1,
-            "archive_identity_keys": ["dispatch-message:INLINE_BODY"], "archive_item_ids": ["drive-dispatch"],
-            "email_evidence_archive_proof": [{
-                "source_message_id": "dispatch-message", "email_evidence_sha256": "a" * 64,
-                "onedrive_item_id": "drive-dispatch", "email_evidence_identity": "dispatch-message:INLINE_BODY",
-            }],
+            "archive_identity_keys": ["dispatch-message:INLINE_BODY"],
+            "archive_item_ids": ["drive-dispatch"],
+            "email_evidence_archive_proof": [
+                {
+                    "source_message_id": "dispatch-message",
+                    "email_evidence_sha256": "a" * 64,
+                    "onedrive_item_id": "drive-dispatch",
+                    "email_evidence_identity": "dispatch-message:INLINE_BODY",
+                }
+            ],
         }
-        handoff = self.execute_code_node(w12, "Build Evidence Handoff", refs={
-            "Match Outlook Evidence to Transactions": evidence,
-            "Archive Matched Email Evidence in W01": archive,
-        })
+        handoff = self.execute_code_node(
+            w12,
+            "Build Evidence Handoff",
+            refs={
+                "Match Outlook Evidence to Transactions": evidence,
+                "Archive Matched Email Evidence in W01": archive,
+            },
+        )
         self.assertTrue(handoff["ok"], handoff)
         built_handoff = handoff["output"][0]["json"]
         archive_sha = hashlib.sha256(
@@ -3449,22 +4989,38 @@ try {
         hashed_handoff["idempotency_key"] = hashlib.sha256(
             json.dumps(hashed_handoff, separators=(",", ":")).encode()
         ).hexdigest()
-        schema = json.loads((self.ROOT / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json").read_text(encoding="utf-8"))
-        self.assertEqual(list(Draft202012Validator(schema).iter_errors(hashed_handoff)), [])
-        replay_handoff = self.execute_code_node(w12, "Build Evidence Handoff", refs={
-            "Match Outlook Evidence to Transactions": evidence,
-            "Archive Matched Email Evidence in W01": archive,
-        })
+        schema = json.loads(
+            (
+                self.ROOT
+                / "integrations/n8n/contracts/email-enrichment-handoff-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            list(Draft202012Validator(schema).iter_errors(hashed_handoff)), []
+        )
+        replay_handoff = self.execute_code_node(
+            w12,
+            "Build Evidence Handoff",
+            refs={
+                "Match Outlook Evidence to Transactions": evidence,
+                "Archive Matched Email Evidence in W01": archive,
+            },
+        )
         self.assertEqual(replay_handoff, handoff)
         missing_proof = {**archive, "archive_item_ids": []}
-        rejected = self.execute_code_node(w12, "Build Evidence Handoff", refs={
-            "Match Outlook Evidence to Transactions": evidence,
-            "Archive Matched Email Evidence in W01": missing_proof,
-        })
+        rejected = self.execute_code_node(
+            w12,
+            "Build Evidence Handoff",
+            refs={
+                "Match Outlook Evidence to Transactions": evidence,
+                "Archive Matched Email Evidence in W01": missing_proof,
+            },
+        )
         self.assertFalse(rejected["ok"])
         self.assertIn("ARCHIVE_MESSAGE_PROOF", rejected["error"])
         request_to_w21 = self.execute_code_node(
-            w12, "Prepare W21 Email Request",
+            w12,
+            "Prepare W21 Email Request",
             json_value=hashed_handoff,
             refs={"Match Outlook Evidence to Transactions": evidence},
         )
@@ -3472,15 +5028,27 @@ try {
         authoritative = self.execute_code_node(
             w12,
             "Build Authoritative W09 Email Job",
-            input_items=[{
-                "policy_id": "classify-unresolved", "state": "ACTIVE", "agent_profile": "LUNA_MAX",
-                "agent_provider": "CODEX_SUBSCRIPTION", "policy_sha256": "d" * 64,
-                "config_sha256": "e" * 64, "output_schema_sha256": "f" * 64,
-                "allowed_fields_json": json.dumps(["vendor", "category", "subcategory", "tags"]),
-                "allowed_values_json": json.dumps({
-                    "category": ["Groceries"], "subcategory": ["Produce"], "tags": ["grocery"],
-                }),
-            }],
+            input_items=[
+                {
+                    "policy_id": "classify-unresolved",
+                    "state": "ACTIVE",
+                    "agent_profile": "LUNA_MAX",
+                    "agent_provider": "CODEX_SUBSCRIPTION",
+                    "policy_sha256": "d" * 64,
+                    "config_sha256": "e" * 64,
+                    "output_schema_sha256": "f" * 64,
+                    "allowed_fields_json": json.dumps(
+                        ["vendor", "category", "subcategory", "tags"]
+                    ),
+                    "allowed_values_json": json.dumps(
+                        {
+                            "category": ["Groceries"],
+                            "subcategory": ["Produce"],
+                            "tags": ["grocery"],
+                        }
+                    ),
+                }
+            ],
             refs={"Prepare W21 Email Request": request_to_w21["output"][0]["json"]},
         )
         self.assertTrue(authoritative["ok"], authoritative)
@@ -3496,50 +5064,92 @@ try {
         self.assertTrue(authoritative_handoff["ok"], authoritative_handoff)
         job = {
             **authoritative_handoff["output"][0]["json"],
-            "codex_normal_model": "gpt-5.6-luna", "codex_normal_reasoning_effort": "max",
-            "codex_exception_model": "gpt-5.6-sol", "codex_exception_reasoning_effort": "medium",
+            "codex_normal_model": "gpt-5.6-luna",
+            "codex_normal_reasoning_effort": "max",
+            "codex_exception_model": "gpt-5.6-sol",
+            "codex_exception_reasoning_effort": "medium",
             "codex_auth_mode": "CHATGPT_SUBSCRIPTION",
             "proposal_output_schema": "{}",
         }
-        invocation = self.execute_code_node(w21, "Validate and Build Fixed Provider Invocation", json_value=job)
+        invocation = self.execute_code_node(
+            w21, "Validate and Build Fixed Provider Invocation", json_value=job
+        )
         self.assertTrue(invocation["ok"], invocation)
         proposal = {
-            "schema_version": 1, "job_id": job["job_id"], "idempotency_key": job["idempotency_key"],
-            "agent_provider": "CODEX_SUBSCRIPTION", "policy_id": job["policy_id"], "policy_class": job["policy_class"],
-            "policy_sha256": job["policy_sha256"], "config_sha256": job["config_sha256"],
+            "schema_version": 1,
+            "job_id": job["job_id"],
+            "idempotency_key": job["idempotency_key"],
+            "agent_provider": "CODEX_SUBSCRIPTION",
+            "policy_id": job["policy_id"],
+            "policy_class": job["policy_class"],
+            "policy_sha256": job["policy_sha256"],
+            "config_sha256": job["config_sha256"],
             "output_schema_sha256": job["output_schema_sha256"],
-            "runner_receipt_id": "receipt", "runner_model": "gpt-5.6-luna", "runner_reasoning_effort": "max",
-            "auth_mode": "CHATGPT_SUBSCRIPTION", "proposals": [],
+            "runner_receipt_id": "receipt",
+            "runner_model": "gpt-5.6-luna",
+            "runner_reasoning_effort": "max",
+            "auth_mode": "CHATGPT_SUBSCRIPTION",
+            "proposals": [],
         }
         normalized = self.execute_code_node(
-            w21, "Validate ProDex Proposal Schema and Normalize Provider Output",
+            w21,
+            "Validate ProDex Proposal Schema and Normalize Provider Output",
             json_value={"output": json.dumps(proposal)},
-            refs={"Validate and Build Fixed Provider Invocation": invocation["output"][0]["json"]},
+            refs={
+                "Validate and Build Fixed Provider Invocation": invocation["output"][0][
+                    "json"
+                ]
+            },
         )
         self.assertTrue(normalized["ok"], normalized)
         self.assertEqual(normalized["output"][0]["json"]["job_id"], job["job_id"])
         forged_policy = {**proposal, "policy_id": "attacker-policy"}
         forged = self.execute_code_node(
-            w21, "Validate ProDex Proposal Schema and Normalize Provider Output",
+            w21,
+            "Validate ProDex Proposal Schema and Normalize Provider Output",
             json_value={"output": json.dumps(forged_policy)},
-            refs={"Validate and Build Fixed Provider Invocation": invocation["output"][0]["json"]},
+            refs={
+                "Validate and Build Fixed Provider Invocation": invocation["output"][0][
+                    "json"
+                ]
+            },
         )
         self.assertFalse(forged["ok"])
         self.assertIn("POLICY_ENVELOPE_MISMATCH", forged["error"])
 
         w12_terminal = self.workflow("12-outlook-message-sweep.json")
         valid_terminal = self.execute_code_node(
-            w12_terminal, "Validate Email Proposal Result", json_value=proposal,
-            refs={"Build Idempotent W09 Email Handoff": authoritative_handoff["output"][0]["json"]},
+            w12_terminal,
+            "Validate Email Proposal Result",
+            json_value=proposal,
+            refs={
+                "Build Idempotent W09 Email Handoff": authoritative_handoff["output"][
+                    0
+                ]["json"]
+            },
         )
         self.assertTrue(valid_terminal["ok"], valid_terminal)
-        protected = {**proposal, "proposals": [{
-            "transaction_id": "actual:dispatch", "field": "amount", "value": 2,
-            "confidence": 2, "reason_code": "ATTACK",
-        }]}
+        protected = {
+            **proposal,
+            "proposals": [
+                {
+                    "transaction_id": "actual:dispatch",
+                    "field": "amount",
+                    "value": 2,
+                    "confidence": 2,
+                    "reason_code": "ATTACK",
+                }
+            ],
+        }
         rejected = self.execute_code_node(
-            w12_terminal, "Validate Email Proposal Result", json_value=protected,
-            refs={"Build Idempotent W09 Email Handoff": authoritative_handoff["output"][0]["json"]},
+            w12_terminal,
+            "Validate Email Proposal Result",
+            json_value=protected,
+            refs={
+                "Build Idempotent W09 Email Handoff": authoritative_handoff["output"][
+                    0
+                ]["json"]
+            },
         )
         self.assertFalse(rejected["ok"])
         self.assertIn("Agent proposed forbidden field", rejected["error"])

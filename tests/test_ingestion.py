@@ -33,10 +33,16 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
         self.assertTrue(batch.balance_tied)
         self.assertFalse(batch.ledger_reconciled)
         self.assertEqual(batch.review_count, 0)
-        self.assertTrue(all(not row.metadata["ledger_reconciled"] for row in batch.transactions))
-        self.assertTrue(all(row.institution == "Emirates Islamic" for row in batch.transactions))
+        self.assertTrue(
+            all(not row.metadata["ledger_reconciled"] for row in batch.transactions)
+        )
+        self.assertTrue(
+            all(row.institution == "Emirates Islamic" for row in batch.transactions)
+        )
         self.assertTrue(all(row.account_last4 == "0082" for row in batch.transactions))
-        self.assertEqual(total_spend(batch.transactions, "EI_AMAZON"), Decimal("25.00"))
+        # Staged rows are intentionally unresolved until classification; they
+        # must not enter spend aggregates before that review boundary.
+        self.assertEqual(total_spend(batch.transactions, "EI_AMAZON"), Decimal("0.00"))
 
     def test_unknown_card_requires_review(self) -> None:
         batch = stage_statement(self.statement, {})

@@ -207,7 +207,7 @@ class RuleSeedTests(TestCase):
 
         self.assertEqual(transaction.reward_bucket, "SC_WALLET")
 
-    def test_rak_wallet_purchase_retains_enhanced_merchant_category_bucket(self) -> None:
+    def test_rak_wallet_purchase_retains_category_bucket(self) -> None:
         transaction = self.transaction("CARREFOUR MIRDIF", card="RAK_WORLD")
         transaction.channel = "APPLE_PAY_POS"
 

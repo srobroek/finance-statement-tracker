@@ -133,14 +133,62 @@
     {
       "id": "16009",
       "name": "Read Provider Circuit after Failure",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         -1120,
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Read Provider Circuit after Failure. Keep this deterministic and fail closed.\nconst failure = $('Redact and Classify Failure').first().json;\nreturn [{ json: { provider_code: failure.provider_code, state: 'CLOSED', transient_failure_count: 0, last_error_class: '', opened_at: null, retry_after: null, readback_verified: false } }];\n"
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "16009-provider-code",
+              "name": "provider_code",
+              "type": "string",
+              "value": "={{ $('Redact and Classify Failure').first().json.provider_code }}"
+            },
+            {
+              "id": "16009-state",
+              "name": "state",
+              "type": "string",
+              "value": "CLOSED"
+            },
+            {
+              "id": "16009-transient-failure-count",
+              "name": "transient_failure_count",
+              "type": "number",
+              "value": 0
+            },
+            {
+              "id": "16009-last-error-class",
+              "name": "last_error_class",
+              "type": "string",
+              "value": ""
+            },
+            {
+              "id": "16009-opened-at",
+              "name": "opened_at",
+              "type": "string",
+              "value": "={{ null }}"
+            },
+            {
+              "id": "16009-retry-after",
+              "name": "retry_after",
+              "type": "string",
+              "value": "={{ null }}"
+            },
+            {
+              "id": "16009-readback-verified",
+              "name": "readback_verified",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {
@@ -159,14 +207,26 @@
     {
       "id": "16011",
       "name": "Upsert OPEN Provider Circuit",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         -520,
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Upsert OPEN Provider Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
+        "mode": "manual",
+        "includeOtherFields": true,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "16011-readback-verified",
+              "name": "readback_verified",
+              "type": "boolean",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {

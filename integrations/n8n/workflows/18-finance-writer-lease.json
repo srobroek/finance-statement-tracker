@@ -26,7 +26,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.\nconst r = $json, op = String(r.operation || '');\nif (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))\n    throw new Error('INVALID_LEASE_OPERATION');\nif (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))\n    throw new Error('INVALID_LEASE_RESOURCE');\nif (op === 'ACQUIRE') {\n    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))\n        throw new Error('INVALID_LEASE_OWNER');\n    const ttl = Number(r.ttl_seconds || 120);\n    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)\n        throw new Error('INVALID_LEASE_TTL');\n    return [{ json: { ...r, ttl_seconds: ttl } }];\n}\nif (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isInteger(Number(r.fencing_token)) || Number(r.fencing_token) <= 0)\n    throw new Error('INVALID_LEASE_TOKEN');\nreturn [{ json: { ...r, fencing_token: Number(r.fencing_token) } }];\n"
+        "jsCode": "// Purpose: Validate Fixed Lease Operation. Keep this deterministic and fail closed.\nconst r = $json, op = String(r.operation || '');\nif (!['ACQUIRE', 'ASSERT', 'RELEASE'].includes(op))\n    throw new Error('INVALID_LEASE_OPERATION');\nif (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(String(r.resource_key || '')))\n    throw new Error('INVALID_LEASE_RESOURCE');\nif (op === 'ACQUIRE') {\n    if (!/^n8n:[A-Za-z0-9:_-]{1,160}$/.test(String(r.lease_owner || '')))\n        throw new Error('INVALID_LEASE_OWNER');\n    const ttl = Number(r.ttl_seconds || 120);\n    if (!Number.isInteger(ttl) || ttl < 30 || ttl > 600)\n        throw new Error('INVALID_LEASE_TTL');\n    if (!/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.outbox_id || '')))\n        throw new Error('INVALID_WRITER_OUTBOX_ID');\n    if (!['PREPARED', 'VERIFIED', 'RECONCILED', 'COMMITTED'].includes(String(r.outbox_state || '')))\n        throw new Error('WRITER_STATE_NOT_ADMISSIBLE');\n    if (!Number.isSafeInteger(r.attempt_count) || Number(r.attempt_count) < 0)\n        throw new Error('INVALID_WRITER_ATTEMPT_COUNT');\n    if (!['INITIAL', 'SUCCESSOR'].includes(String(r.admission || '')))\n        throw new Error('INVALID_WRITER_ADMISSION');\n    if (!/^[a-f0-9]{64}$/i.test(String(r.payload_sha256 || '')))\n        throw new Error('INVALID_WRITER_PAYLOAD_DIGEST');\n    return [{ json: { ...r, ttl_seconds: ttl, attempt_count: Number(r.attempt_count), payload_sha256: String(r.payload_sha256).toLowerCase() } }];\n}\nif (!/^[0-9a-f-]{36}$/i.test(String(r.lease_id || '')) || !Number.isSafeInteger(r.fencing_token) || Number(r.fencing_token) <= 0)\n    throw new Error('INVALID_LEASE_TOKEN');\nif (op === 'RELEASE') {\n    if (!/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.outbox_id || '')) || !/^[A-Za-z0-9:_-]{1,160}$/.test(String(r.account_id || '')) || !/^[a-f0-9]{64}$/i.test(String(r.payload_sha256 || '')))\n        throw new Error('INVALID_RELEASE_CORRELATION');\n}\nreturn [{ json: { ...r, fencing_token: Number(r.fencing_token), payload_sha256: r.payload_sha256 ? String(r.payload_sha256).toLowerCase() : r.payload_sha256 } }];\n"
       }
     },
     {
@@ -117,9 +117,9 @@
       "alwaysOutputData": true,
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer);",
+        "query": "WITH blockers AS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND budget_id = $8::text AND state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') AND NOT (state = 'PREPARED' AND outbox_id = $4::text AND attempt_count = 0 AND $5::text = 'INITIAL')), acquired AS (SELECT lease.*, $4::text AS outbox_id FROM finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer) AS lease WHERE NOT EXISTS (SELECT 1 FROM blockers)), marked AS (INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, issued_at, updated_at) SELECT $1::text, $4::text, $6::text, $8::text, $7::text, $9::date, $10::date, 'ISSUED', 1, lease_id, lease_owner, fencing_token, clock_timestamp(), clock_timestamp() FROM acquired ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = 'ISSUED', account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, payload_sha256 = EXCLUDED.payload_sha256, period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, attempt_count = actual_writer_effects.attempt_count + 1, issued_at = clock_timestamp(), updated_at = clock_timestamp() WHERE actual_writer_effects.state = 'PREPARED' AND actual_writer_effects.attempt_count = 0 RETURNING resource_key, outbox_id), issued AS (SELECT resource_key, outbox_id FROM marked UNION ALL SELECT resource_key, outbox_id FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $6::text AND budget_id = $8::text AND payload_sha256 = $7::text AND period_start = $9::date AND period_end = $10::date AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) SELECT acquired.* FROM acquired JOIN issued USING (resource_key, outbox_id);",
         "options": {
-          "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds] }}"
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds, $json.outbox_id, $json.admission, $json.account_id, $json.payload_sha256, $json.budget_id, $json.period_start, $json.period_end] }}"
         }
       },
       "credentials": {
@@ -163,9 +163,9 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released;",
+        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $5::text AND payload_sha256 = $6::text AND verified_payload_sha256 = $7::text AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) AS allowed) SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released FROM terminal WHERE allowed;",
         "options": {
-          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token] }}"
+          "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token, $json.outbox_id, $json.account_id, $json.payload_sha256, $json.verified_payload_sha256] }}"
         }
       },
       "credentials": {
@@ -281,6 +281,9 @@
   "pinData": {},
   "meta": {
     "financeWorkflowCode": "FINANCE_WRITER_LEASE",
+    "durableStateTable": "finance_ops.actual_writer_effects",
+    "admissionPolicy": "PREPARED attempt zero only; ISSUED/OUTCOME_UNKNOWN never reclaimed; terminal VERIFIED/RECONCILED/COMMITTED required for successors",
+    "fenceReleasePolicy": "W20 terminal verified readback only",
     "migrationStatus": "SPEC_ONLY",
     "fixedSqlOnly": true,
     "callerSqlForbidden": true,

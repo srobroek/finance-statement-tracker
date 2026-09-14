@@ -231,7 +231,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Close Outlook Circuit. Keep this deterministic and fail closed.\nreturn [{ json: { ...$json, readback_verified: false } }];\n"
+        "jsCode": "// Purpose: Close Outlook Circuit. Keep this deterministic and fail closed.\nconst input = $json;\nconst messages = Array.isArray(input.messages) ? input.messages : [];\nconst attachmentIdentityKeys = Array.isArray(input.attachment_identity_keys) ? input.attachment_identity_keys : [];\nconst messageIds = messages.map(row => String(row?.message_id || row?.message?.id || row?.id || '').trim());\nconst emailEvidenceIdentityKeys = messageIds.map(id => id + ':INLINE_BODY');\nif (messageIds.some(id => !id) || new Set(messageIds).size !== messageIds.length || messages.length !== Number(input.matched_count))\n    throw new Error('ENUMERATED_INVENTORY_WRITE_INVALID');\nconst payload = {\n    schema_version: 1,\n    run_id: input.run_id,\n    source_code: input.source_code,\n    window_start: input.window_start,\n    run_upper_bound: input.run_upper_bound,\n    pages_fetched: input.pages_fetched,\n    pagination_exhausted: input.pagination_exhausted,\n    scanned_count: input.scanned_count,\n    matched_count: input.matched_count,\n    heartbeat: input.heartbeat,\n    messages,\n    attachment_identity_keys: attachmentIdentityKeys,\n    email_evidence_identity_keys: emailEvidenceIdentityKeys,\n};\nconst recordPayloadJson = JSON.stringify(payload);\nconst inventorySha256 = require('crypto').createHash('sha256').update(recordPayloadJson, 'utf8').digest('hex');\nreturn [{ json: {\n            ...input,\n            record_payload_json: recordPayloadJson,\n            inventory_run_id: input.run_id,\n            inventory_fence: 0,\n            inventory_sha256: inventorySha256,\n            inventory_schema_version: 'inventory-v1',\n            inventory_length_bytes: Buffer.byteLength(recordPayloadJson, 'utf8'),\n            immutable_inventory: true,\n            email_evidence_identity_keys: emailEvidenceIdentityKeys,\n            email_evidence_receipts_verified: emailEvidenceIdentityKeys.length,\n        } }];\n"
       }
     },
     {
@@ -255,6 +255,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Aggregate Exact Window Heartbeat').item.json.run_id), String($('Aggregate Exact Window Heartbeat').item.json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}"
@@ -264,6 +274,9 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
+            "record_type": "ACQUISITION_RECEIPT",
+            "record_key": "={{ JSON.stringify([String($('Aggregate Exact Window Heartbeat').item.json.run_id), String($('Aggregate Exact Window Heartbeat').item.json.source_code)]) }}",
+            "record_payload_json": "={{ $('Close Outlook Circuit').item.json.record_payload_json }}",
             "source_code": "={{ $('Aggregate Exact Window Heartbeat').item.json.source_code }}",
             "receipt_run_id": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_id }}",
             "receipt_run_upper_bound": "={{ $('Aggregate Exact Window Heartbeat').item.json.run_upper_bound }}",
@@ -282,7 +295,14 @@
             "attachment_identity_keys_json": "={{ JSON.stringify($('Aggregate Immutable Archive Inventory').item.json.attachment_identity_keys || []) }}",
             "attachments_verified": "={{ ($('Aggregate Immutable Archive Inventory').item.json.attachment_identity_keys || []).length }}",
             "archive_receipt_sha256": "",
-            "archive_readback_verified": false
+            "archive_readback_verified": false,
+            "inventory_run_id": "={{ $('Close Outlook Circuit').item.json.inventory_run_id }}",
+            "inventory_fence": "={{ $('Close Outlook Circuit').item.json.inventory_fence }}",
+            "inventory_sha256": "={{ $('Close Outlook Circuit').item.json.inventory_sha256 }}",
+            "inventory_schema_version": "={{ $('Close Outlook Circuit').item.json.inventory_schema_version }}",
+            "inventory_length_bytes": "={{ $('Close Outlook Circuit').item.json.inventory_length_bytes }}",
+            "email_evidence_identity_keys_json": "={{ JSON.stringify($('Close Outlook Circuit').item.json.email_evidence_identity_keys || []) }}",
+            "email_evidence_receipts_verified": "={{ $('Close Outlook Circuit').item.json.email_evidence_receipts_verified }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -316,6 +336,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Aggregate Exact Window Heartbeat').item.json.run_id), String($('Aggregate Exact Window Heartbeat').item.json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -367,7 +397,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Sweep. Keep this deterministic and fail closed.\nconst receipt = $json, trusted = $('Freeze Trusted Cursor Window').first().json;\nconst runId = String(receipt.receipt_run_id || receipt.run_id || '');\nconst sourceCode = String(receipt.source_code || '');\nconst windowStart = String(receipt.last_window_start || receipt.window_start || '');\nconst runUpperBound = String(receipt.receipt_run_upper_bound || receipt.run_upper_bound || '');\nif (receipt.record_type !== 'ACQUISITION_RECEIPT' || receipt.record_key !== JSON.stringify([runId, sourceCode]))\n    throw new Error('ENUMERATED_INVENTORY_RECORD_KEY_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', runId, trusted.run_id],\n    ['source_code', sourceCode, trusted.source_code],\n    ['window_start', windowStart, trusted.window_start],\n    ['run_upper_bound', runUpperBound, trusted.run_upper_bound],\n]) {\n    if (observed !== String(expected ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\n}\nconst payloadText = String(receipt.record_payload_json || '');\nif (!payloadText)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_MISSING');\nlet inventory;\ntry {\n    inventory = JSON.parse(payloadText);\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\n}\nif (!inventory || typeof inventory !== 'object' || Array.isArray(inventory) || inventory.schema_version !== 1)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', inventory.run_id, runId],\n    ['source_code', inventory.source_code, sourceCode],\n    ['window_start', inventory.window_start, windowStart],\n    ['run_upper_bound', inventory.run_upper_bound, runUpperBound],\n    ['scanned_count', inventory.scanned_count, receipt.scanned_count],\n    ['matched_count', inventory.matched_count, receipt.matched_count],\n    ['heartbeat', inventory.heartbeat, receipt.last_heartbeat],\n    ['pagination_exhausted', inventory.pagination_exhausted, receipt.last_pagination_exhausted],\n]) {\n    if (JSON.stringify(observed) !== JSON.stringify(expected))\n        throw new Error('ENUMERATED_INVENTORY_BINDING_MISMATCH:' + field);\n}\nif (!Array.isArray(inventory.messages) || inventory.messages.length !== Number(receipt.matched_count))\n    throw new Error('ENUMERATED_INVENTORY_COUNT_MISMATCH');\nconst messageIds = inventory.messages.map(row => String(row?.message_id || row?.message?.id || row?.id || '').trim());\nif (messageIds.some(id => !id) || new Set(messageIds).size !== messageIds.length)\n    throw new Error('ENUMERATED_INVENTORY_MESSAGE_ID_INVALID');\nconst attachmentKeys = inventory.messages.flatMap(row => {\n    const messageId = String(row?.message_id || row?.message?.id || row?.id || '').trim();\n    return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n        .map(attachment => messageId + ':' + String(attachment?.id || '').trim());\n});\nif (attachmentKeys.some(key => key.endsWith(':')) || new Set(attachmentKeys).size !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_ID_INVALID');\nif (!Array.isArray(inventory.attachment_identity_keys) || JSON.stringify(inventory.attachment_identity_keys) !== JSON.stringify(attachmentKeys))\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nconst emailKeys = messageIds.map(id => id + ':INLINE_BODY');\nif (!Array.isArray(inventory.email_evidence_identity_keys) || JSON.stringify(inventory.email_evidence_identity_keys) !== JSON.stringify(emailKeys))\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nlet storedAttachmentKeys, storedEmailKeys;\ntry {\n    storedAttachmentKeys = JSON.parse(String(receipt.attachment_identity_keys_json || ''));\n    storedEmailKeys = JSON.parse(String(receipt.email_evidence_identity_keys_json || ''));\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_IDENTITY_KEYS_INVALID');\n}\nif (JSON.stringify(storedAttachmentKeys) !== JSON.stringify(attachmentKeys) || Number(receipt.attachments_verified) !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nif (JSON.stringify(storedEmailKeys) !== JSON.stringify(emailKeys) || Number(receipt.email_evidence_receipts_verified) !== emailKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nconst actualHash = require('crypto').createHash('sha256').update(payloadText, 'utf8').digest('hex');\nif (!/^[a-f0-9]{64}$/.test(String(receipt.inventory_sha256 || '')) || String(receipt.inventory_sha256).toLowerCase() !== actualHash)\n    throw new Error('ENUMERATED_INVENTORY_HASH_MISMATCH');\nif (String(receipt.inventory_run_id || '') !== runId || receipt.inventory_schema_version !== 'inventory-v1' || Number(receipt.inventory_length_bytes) !== Buffer.byteLength(payloadText, 'utf8'))\n    throw new Error('ENUMERATED_INVENTORY_METADATA_MISMATCH');\nreturn [{ json: {\n            ...receipt,\n            messages: inventory.messages,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: attachmentKeys,\n            email_evidence_identity_keys: emailKeys,\n            empty_inventory: inventory.messages.length === 0,\n            inventory_replay_verified: true,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id || receipt.run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound || receipt.run_upper_bound,\n            window_start: receipt.last_window_start || receipt.window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n            receipt_readback_verified: true,\n            cursor_commit_eligible: false,\n        } }];\n"
       }
     },
     {
@@ -406,7 +436,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json;\nfor (const field of ['receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'last_pagination_exhausted', 'last_heartbeat', 'last_terminal_state']) {\n    if (receipt[field] === undefined || receipt[field] === null || receipt[field] === '') {\n        throw new Error(`ENUMERATION_RECEIPT_FIELD_MISSING:${field}`);\n    }\n}\nreturn [{ json: {\n            ...receipt,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound,\n            window_start: receipt.last_window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n        } }];\n"
+        "jsCode": "// Purpose: Project Enumeration Receipt Fields for Existing Gate. Keep this deterministic and fail closed.\nconst receipt = $json, trusted = $('Freeze Trusted Cursor Window').first().json;\nif (!receipt || typeof receipt !== 'object' || Object.keys(receipt).length === 0)\n    return [{ json: { ...trusted, receipt_absent: true, terminal_state: null } }];\nconst runId = String(receipt.receipt_run_id || receipt.run_id || '');\nconst sourceCode = String(receipt.source_code || '');\nconst windowStart = String(receipt.last_window_start || receipt.window_start || '');\nconst runUpperBound = String(receipt.receipt_run_upper_bound || receipt.run_upper_bound || '');\nif (receipt.record_type !== 'ACQUISITION_RECEIPT' || receipt.record_key !== JSON.stringify([runId, sourceCode]))\n    throw new Error('ENUMERATED_INVENTORY_RECORD_KEY_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', runId, trusted.run_id],\n    ['source_code', sourceCode, trusted.source_code],\n    ['window_start', windowStart, trusted.window_start],\n    ['run_upper_bound', runUpperBound, trusted.run_upper_bound],\n]) {\n    if (observed !== String(expected ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\n}\nconst payloadText = String(receipt.record_payload_json || '');\nif (!payloadText)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_MISSING');\nlet inventory;\ntry {\n    inventory = JSON.parse(payloadText);\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\n}\nif (!inventory || typeof inventory !== 'object' || Array.isArray(inventory) || inventory.schema_version !== 1)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', inventory.run_id, runId],\n    ['source_code', inventory.source_code, sourceCode],\n    ['window_start', inventory.window_start, windowStart],\n    ['run_upper_bound', inventory.run_upper_bound, runUpperBound],\n    ['scanned_count', inventory.scanned_count, receipt.scanned_count],\n    ['matched_count', inventory.matched_count, receipt.matched_count],\n    ['heartbeat', inventory.heartbeat, receipt.last_heartbeat],\n    ['pagination_exhausted', inventory.pagination_exhausted, receipt.last_pagination_exhausted],\n]) {\n    if (JSON.stringify(observed) !== JSON.stringify(expected))\n        throw new Error('ENUMERATED_INVENTORY_BINDING_MISMATCH:' + field);\n}\nif (!Array.isArray(inventory.messages) || inventory.messages.length !== Number(receipt.matched_count))\n    throw new Error('ENUMERATED_INVENTORY_COUNT_MISMATCH');\nconst messageIds = inventory.messages.map(row => String(row?.message_id || row?.message?.id || row?.id || '').trim());\nif (messageIds.some(id => !id) || new Set(messageIds).size !== messageIds.length)\n    throw new Error('ENUMERATED_INVENTORY_MESSAGE_ID_INVALID');\nconst attachmentKeys = inventory.messages.flatMap(row => {\n    const messageId = String(row?.message_id || row?.message?.id || row?.id || '').trim();\n    return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n        .map(attachment => messageId + ':' + String(attachment?.id || '').trim());\n});\nif (attachmentKeys.some(key => key.endsWith(':')) || new Set(attachmentKeys).size !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_ID_INVALID');\nif (!Array.isArray(inventory.attachment_identity_keys) || JSON.stringify(inventory.attachment_identity_keys) !== JSON.stringify(attachmentKeys))\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nconst emailKeys = messageIds.map(id => id + ':INLINE_BODY');\nif (!Array.isArray(inventory.email_evidence_identity_keys) || JSON.stringify(inventory.email_evidence_identity_keys) !== JSON.stringify(emailKeys))\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nlet storedAttachmentKeys, storedEmailKeys;\ntry {\n    storedAttachmentKeys = JSON.parse(String(receipt.attachment_identity_keys_json || ''));\n    storedEmailKeys = JSON.parse(String(receipt.email_evidence_identity_keys_json || ''));\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_IDENTITY_KEYS_INVALID');\n}\nif (JSON.stringify(storedAttachmentKeys) !== JSON.stringify(attachmentKeys) || Number(receipt.attachments_verified) !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nif (JSON.stringify(storedEmailKeys) !== JSON.stringify(emailKeys) || Number(receipt.email_evidence_receipts_verified) !== emailKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nconst actualHash = require('crypto').createHash('sha256').update(payloadText, 'utf8').digest('hex');\nif (!/^[a-f0-9]{64}$/.test(String(receipt.inventory_sha256 || '')) || String(receipt.inventory_sha256).toLowerCase() !== actualHash)\n    throw new Error('ENUMERATED_INVENTORY_HASH_MISMATCH');\nif (String(receipt.inventory_run_id || '') !== runId || receipt.inventory_schema_version !== 'inventory-v1' || Number(receipt.inventory_length_bytes) !== Buffer.byteLength(payloadText, 'utf8'))\n    throw new Error('ENUMERATED_INVENTORY_METADATA_MISMATCH');\nreturn [{ json: {\n            ...receipt,\n            messages: inventory.messages,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: attachmentKeys,\n            email_evidence_identity_keys: emailKeys,\n            empty_inventory: inventory.messages.length === 0,\n            inventory_replay_verified: true,\n            cursor_run_upper_bound: receipt.run_upper_bound,\n            run_id: receipt.receipt_run_id || receipt.run_id,\n            run_upper_bound: receipt.receipt_run_upper_bound || receipt.run_upper_bound,\n            window_start: receipt.last_window_start || receipt.window_start,\n            pages_fetched: receipt.last_pages_fetched,\n            pagination_exhausted: receipt.last_pagination_exhausted,\n            heartbeat: receipt.last_heartbeat,\n            terminal_state: receipt.last_terminal_state,\n            created_at: receipt.last_receipt_created_at,\n            receipt_readback_verified: true,\n            cursor_commit_eligible: false,\n        } }];\n"
       }
     },
     {
@@ -458,6 +488,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Validate Sweep or Commit').first().json.run_id), String($('Validate Sweep or Commit').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
@@ -492,7 +532,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Commit Resume State. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'archive_receipt_sha256']) {\n    if (String(receipt[field] ?? '') !== String(request[field] ?? ''))\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:' + field);\n}\nif (!/^[a-f0-9]{64}$/.test(String(receipt.archive_receipt_sha256 || '')))\n    throw new Error('ACQUISITION_RESUME_HASH_INVALID');\nif (receipt.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nconst sameRun = receipt.committed_run_id === request.run_id;\nconst committed = sameRun\n    && receipt.cursor_value === request.run_upper_bound\n    && receipt.cursor_run_upper_bound === request.run_upper_bound\n    && Number(receipt.cursor_version) === Number(request.expected_cursor_version) + 1;\nif (sameRun && !committed)\n    throw new Error('SOURCE_CURSOR_RECOVERY_TUPLE_MISMATCH');\nif (![false, true].includes(receipt.readback_verified))\n    throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\nif (committed) {\n    if (receipt.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:downstream_receipt_sha256');\n}\nelse if (receipt.downstream_receipt_sha256) {\n    throw new Error('DOWNSTREAM_RECEIPT_WITHOUT_CURSOR_COMMIT');\n}\nif (receipt.terminal_state === 'ARCHIVED') {\n    return [{ json: { ...receipt, resume_terminal_state: 'ARCHIVED', resume_readback_verified: receipt.readback_verified } }];\n}\nif (receipt.terminal_state === 'DOWNSTREAM_VERIFIED' && committed) {\n    return [{ json: { ...receipt, resume_terminal_state: 'DOWNSTREAM_VERIFIED', resume_readback_verified: receipt.readback_verified } }];\n}\nthrow new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n"
+        "jsCode": "// Purpose: Validate Commit Resume State. Keep this deterministic and fail closed.\nconst request = $('Validate Sweep or Commit').first().json, receipt = $json;\nconst receiptHash = String(receipt.archive_receipt_sha256 || '');\nif (!/^[a-f0-9]{64}$/.test(receiptHash))\n    throw new Error('ACQUISITION_RESUME_HASH_INVALID');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound']) {\n    if (String(receipt[field] ?? '') !== String(request[field] ?? ''))\n        throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:' + field);\n}\nif (receiptHash !== String(request.archive_receipt_sha256 || ''))\n    throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:archive_receipt_sha256');\nif (receipt.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nif (!['ARCHIVED', 'DOWNSTREAM_VERIFIED'].includes(receipt.terminal_state))\n    throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\nif (![false, true].includes(receipt.readback_verified))\n    throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\nif (receipt.terminal_state === 'DOWNSTREAM_VERIFIED' && receipt.downstream_receipt_sha256 !== request.downstream_receipt_sha256)\n    throw new Error('ACQUISITION_RESUME_CONTEXT_MISMATCH:downstream_receipt_sha256');\nif (receipt.terminal_state === 'ARCHIVED' && receipt.downstream_receipt_sha256)\n    throw new Error('DOWNSTREAM_RECEIPT_WITHOUT_TERMINAL_RECEIPT');\nreturn [{ json: { ...receipt, resume_terminal_state: receipt.terminal_state, resume_readback_verified: receipt.readback_verified } }];\n"
       }
     },
     {
@@ -505,7 +545,7 @@
         2660
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_id !== r.run_id || o.source_code !== r.source_code || o.window_start !== r.window_start || o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nif (o.terminal_state === 'ARCHIVED') {\n    if (o.archive_readback_verified !== true)\n        throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\n}\nelse if (o.terminal_state === 'DOWNSTREAM_VERIFIED') {\n    if (![false, true].includes(o.readback_verified))\n        throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\n}\nelse {\n    throw new Error('DOWNSTREAM_RECEIPT_STATE_UNSUPPORTED');\n}\nif (o.archive_ready !== true || o.attachment_verification_barrier !== 'VERIFIED' || o.attachment_ids_verified !== true || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nif (o.archive_receipt_sha256 !== r.archive_receipt_sha256 || o.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nif (o.downstream_terminal_readback_verified !== true || o.verified_downstream_receipt_sha256 !== r.downstream_receipt_sha256)\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\nlet attachmentKeys, emailKeys;\ntry {\n    attachmentKeys = JSON.parse(o.attachment_identity_keys_json);\n    emailKeys = JSON.parse(o.email_evidence_identity_keys_json);\n}\ncatch {\n    throw new Error('DOWNSTREAM_RECEIPT_KEYS_INVALID');\n}\nif (!Array.isArray(attachmentKeys) || !Array.isArray(emailKeys) || attachmentKeys.length !== Number(o.attachments_verified) || emailKeys.length !== Number(o.email_evidence_receipts_verified))\n    throw new Error('DOWNSTREAM_RECEIPT_COUNTS_MISMATCH');\nconst output = {\n    ...r,\n    window_start: o.window_start,\n    scanned_count: Number(o.scanned_count),\n    matched_count: Number(o.matched_count),\n    heartbeat: Boolean(o.heartbeat),\n    attachment_identity_keys: attachmentKeys,\n    attachments_verified: Number(o.attachments_verified),\n    email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified),\n    email_evidence_identity_keys: emailKeys,\n    email_evidence_receipt_barrier: o.email_evidence_receipt_barrier,\n    attachment_verification_barrier: o.attachment_verification_barrier,\n    attachment_ids_verified: o.attachment_ids_verified,\n    archive_ready: o.archive_ready,\n    archive_receipt_sha256: o.archive_receipt_sha256,\n    archive_readback_verified: true,\n    downstream_receipt_sha256: o.verified_downstream_receipt_sha256,\n    terminal_state: o.terminal_state,\n    readback_verified: o.readback_verified,\n};\nreturn [{ json: output }];\n"
+        "jsCode": "// Purpose: Verify Downstream Persistence Proof. Keep this deterministic and fail closed.\nconst r = $('Validate Sweep or Commit').first().json, o = $json;\nif (o.run_id !== r.run_id || o.source_code !== r.source_code || o.window_start !== r.window_start || o.run_upper_bound !== r.run_upper_bound || o.pagination_exhausted !== true)\n    throw new Error('ACQUISITION_NOT_COMMIT_ELIGIBLE');\nlet downstreamReceiptHash = String(r.downstream_receipt_sha256 || '');\nif (o.terminal_state === 'ARCHIVED') {\n    if (o.archive_readback_verified !== true)\n        throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\n}\nelse if (o.terminal_state === 'DOWNSTREAM_VERIFIED') {\n    downstreamReceiptHash = String(o.verified_downstream_receipt_sha256 || o.downstream_receipt_sha256 || '');\n}\nelse {\n    throw new Error('DOWNSTREAM_RECEIPT_STATE_UNSUPPORTED');\n}\nif (!/^[a-f0-9]{64}$/.test(downstreamReceiptHash))\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\nif (o.archive_ready !== true || o.attachment_verification_barrier !== 'VERIFIED' || o.attachment_ids_verified !== true || o.email_evidence_receipt_barrier !== 'VERIFIED' || Number(o.email_evidence_receipts_verified) !== Number(o.matched_count))\n    throw new Error('DOWNSTREAM_ARCHIVE_AND_EMAIL_BARRIER_MISSING');\nif (o.archive_receipt_sha256 !== r.archive_receipt_sha256 || o.archive_readback_verified !== true)\n    throw new Error('DOWNSTREAM_ARCHIVE_RECEIPT_NOT_DURABLE');\nif (o.terminal_state === 'DOWNSTREAM_VERIFIED' && downstreamReceiptHash !== r.downstream_receipt_sha256)\n    throw new Error('DOWNSTREAM_TERMINAL_RECEIPT_NOT_DURABLE');\nlet attachmentKeys, emailKeys;\ntry {\n    attachmentKeys = JSON.parse(o.attachment_identity_keys_json);\n    emailKeys = JSON.parse(o.email_evidence_identity_keys_json);\n}\ncatch {\n    throw new Error('DOWNSTREAM_RECEIPT_KEYS_INVALID');\n}\nif (!Array.isArray(attachmentKeys) || !Array.isArray(emailKeys) || attachmentKeys.length !== Number(o.attachments_verified) || emailKeys.length !== Number(o.email_evidence_receipts_verified))\n    throw new Error('DOWNSTREAM_RECEIPT_COUNTS_MISMATCH');\nconst output = {\n    ...r,\n    window_start: o.window_start,\n    scanned_count: Number(o.scanned_count),\n    matched_count: Number(o.matched_count),\n    heartbeat: Boolean(o.heartbeat),\n    attachment_identity_keys: attachmentKeys,\n    attachments_verified: Number(o.attachments_verified),\n    email_evidence_receipts_verified: Number(o.email_evidence_receipts_verified),\n    email_evidence_identity_keys: emailKeys,\n    email_evidence_receipt_barrier: o.email_evidence_receipt_barrier,\n    attachment_verification_barrier: o.attachment_verification_barrier,\n    attachment_ids_verified: o.attachment_ids_verified,\n    archive_ready: o.archive_ready,\n    archive_receipt_sha256: o.archive_receipt_sha256,\n    archive_readback_verified: true,\n    downstream_receipt_sha256: downstreamReceiptHash,\n    terminal_state: o.terminal_state,\n    readback_verified: o.readback_verified,\n};\nreturn [{ json: output }];\n"
       }
     },
     {
@@ -531,6 +571,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
@@ -550,7 +600,7 @@
         3040
       ],
       "parameters": {
-        "jsCode": "// Purpose: Determine Existing Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $json;\nif (cursor.source_code !== proof.source_code)\n    throw new Error('SOURCE_CURSOR_SOURCE_MISMATCH');\nif (cursor.receipt_run_id !== proof.run_id || cursor.receipt_run_upper_bound !== proof.run_upper_bound\n    || cursor.last_window_start !== proof.window_start\n    || cursor.archive_receipt_sha256 !== proof.archive_receipt_sha256\n    || cursor.archive_readback_verified !== true)\n    throw new Error('ACQUISITION_CURSOR_PROOF_MISMATCH');\nconst sameRun = cursor.committed_run_id === proof.run_id;\nconst sameWindow = cursor.cursor_value === proof.run_upper_bound && cursor.run_upper_bound === proof.run_upper_bound;\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun && sameWindow) {\n    if (Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n        throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_MISMATCH');\n    if (cursor.downstream_receipt_sha256 !== proof.downstream_receipt_sha256)\n        throw new Error('SOURCE_CURSOR_RECOVERY_RECEIPT_MISMATCH');\n    if (!['ARCHIVED', 'DOWNSTREAM_VERIFIED'].includes(cursor.last_terminal_state)\n        || ![false, true].includes(cursor.readback_verified))\n        throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n    const resumePath = cursor.last_terminal_state === 'ARCHIVED' ? 'ARCHIVED_RECOVERY'\n        : cursor.readback_verified === true ? 'DOWNSTREAM_VERIFIED_REPLAY' : 'DOWNSTREAM_UNVERIFIED';\n    return [{ json: { ...proof, ...cursor, downstream_receipt_sha256: proof.downstream_receipt_sha256, terminal_state: cursor.last_terminal_state,\n                cursor_recovery: true, cursor_readback_verified: true, resume_path: resumePath } }];\n}\nif (cursor.last_terminal_state !== 'ARCHIVED' || cursor.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_TERMINAL_COMMIT_MISSING');\nreturn [{ json: { ...proof, ...cursor, downstream_receipt_sha256: proof.downstream_receipt_sha256, cursor_recovery: false,\n            cursor_readback_verified: false, resume_path: 'CAS' } }];\n"
+        "jsCode": "// Purpose: Determine Existing Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $json;\nif (cursor.source_code !== proof.source_code)\n    throw new Error('SOURCE_CURSOR_SOURCE_MISMATCH');\nconst version = Number(cursor.cursor_version);\nif (!Number.isInteger(version) || version < 0)\n    throw new Error('SOURCE_CURSOR_VERSION_INVALID');\nconst committedRunId = String(cursor.committed_run_id || '');\nconst sameRun = committedRunId === proof.run_id;\nconst sameWindow = cursor.cursor_value === proof.run_upper_bound && cursor.run_upper_bound === proof.run_upper_bound;\nif (sameRun && !sameWindow)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nif (sameRun) {\n    if (version !== Number(proof.expected_cursor_version) + 1)\n        throw new Error('SOURCE_CURSOR_RECOVERY_VERSION_MISMATCH');\n    if (!['ARCHIVED', 'DOWNSTREAM_VERIFIED'].includes(proof.terminal_state))\n        throw new Error('ACQUISITION_RESUME_STATE_UNSUPPORTED');\n    if (cursor.readback_verified !== true) {\n        if (proof.terminal_state !== 'ARCHIVED')\n            throw new Error('SOURCE_CURSOR_RECOVERY_READBACK_MISMATCH');\n        return [{ json: { ...proof, ...cursor, cursor_recovery: true, cursor_readback_verified: false,\n                    resume_path: 'CURSOR_READBACK_PENDING' } }];\n    }\n    const resumePath = proof.terminal_state === 'ARCHIVED' ? 'ARCHIVED_RECOVERY'\n        : proof.readback_verified === true ? 'DOWNSTREAM_VERIFIED_REPLAY' : 'DOWNSTREAM_UNVERIFIED';\n    return [{ json: { ...proof, ...cursor, cursor_recovery: true, cursor_readback_verified: true, resume_path: resumePath } }];\n}\nif (!sameRun && (cursor.cursor_value === proof.run_upper_bound || cursor.run_upper_bound === proof.run_upper_bound))\n    throw new Error('SOURCE_CURSOR_TERMINAL_COMMIT_MISSING');\nconst cursorReadbackVerified = cursor.readback_verified === undefined || cursor.readback_verified === true;\nif (!cursorReadbackVerified)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (cursor.cursor_value === proof.run_upper_bound || cursor.run_upper_bound === proof.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_RECOVERY_WINDOW_MISMATCH');\nreturn [{ json: { ...proof, ...cursor, cursor_recovery: false, cursor_readback_verified: false, resume_path: 'CAS' } }];\n"
       }
     },
     {
@@ -723,6 +773,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Determine Existing Cursor Commit').item.json.source_code }}"
@@ -748,6 +808,11 @@
               "keyValue": true
             },
             {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
               "keyName": "receipt_run_id",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
@@ -756,23 +821,13 @@
               "keyName": "receipt_run_upper_bound",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "downstream_receipt_sha256": "={{ $('Determine Existing Cursor Commit').item.json.downstream_receipt_sha256 }}",
+            "downstream_receipt_sha256": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}",
             "readback_verified": false,
             "updated_at": "={{ $now.toISO() }}",
             "last_terminal_state": "DOWNSTREAM_VERIFIED"
@@ -808,6 +863,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $json.source_code }}"
@@ -831,31 +896,6 @@
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": false
-            },
-            {
-              "keyName": "archive_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
-            },
-            {
-              "keyName": "archive_readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            },
-            {
-              "keyName": "receipt_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
-            },
-            {
-              "keyName": "receipt_run_upper_bound",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
             },
             {
               "keyName": "committed_run_id",
@@ -903,6 +943,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.source_code }}"
@@ -928,31 +978,6 @@
               "keyValue": true
             },
             {
-              "keyName": "archive_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
-            },
-            {
-              "keyName": "archive_readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            },
-            {
-              "keyName": "receipt_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
-            },
-            {
-              "keyName": "receipt_run_upper_bound",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
               "keyName": "committed_run_id",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
@@ -972,7 +997,7 @@
         3420
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Source Cursor Readback. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, detected = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (observed.source_code !== proof.source_code || observed.committed_run_id !== proof.run_id || observed.cursor_value !== proof.run_upper_bound || observed.run_upper_bound !== proof.run_upper_bound || Number(observed.cursor_version) !== Number(proof.expected_cursor_version) + 1 || observed.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_READBACK_MISMATCH');\nreturn [{ json: { ...proof, ...detected, ...observed, cursor_readback_stage: true, cursor_readback_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify Source Cursor Readback. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, detected = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (observed.source_code !== proof.source_code || observed.committed_run_id !== proof.run_id || observed.cursor_value !== proof.run_upper_bound || observed.run_upper_bound !== proof.run_upper_bound || Number(observed.cursor_version) !== Number(proof.expected_cursor_version) + 1 || observed.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_READBACK_MISMATCH');\nreturn [{ json: { ...proof, ...detected, ...observed, cursor_recovery: false, cursor_readback_stage: true, cursor_readback_verified: true, resume_path: 'CURSOR_READBACK_COMPLETE' } }];\n"
       }
     },
     {
@@ -985,7 +1010,7 @@
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json, o = $('Read Authoritative Source Cursor').first().json, expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nif (o.receipt_run_id !== r.run_id || o.receipt_run_upper_bound !== r.run_upper_bound\n    || o.last_window_start !== r.window_start || o.last_terminal_state !== 'ARCHIVED'\n    || o.archive_receipt_sha256 !== r.archive_receipt_sha256 || o.archive_readback_verified !== true\n    || o.downstream_receipt_sha256)\n    throw new Error('SOURCE_CURSOR_ARCHIVE_PROOF_CHANGED');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nif (o.committed_run_id === r.run_id && o.cursor_value === r.run_upper_bound)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nreturn [{ json: { ...r, prior_cursor_version: expected, prior_cursor_value: o.cursor_value, next_cursor_version: expected + 1 } }];\n"
+        "jsCode": "// Purpose: Build Cursor CAS Update. Keep this deterministic and fail closed.\nconst r = $('Verify Downstream Persistence Proof').first().json;\nconst o = $json;\nconst expected = Number(r.expected_cursor_version);\nif (o.source_code !== r.source_code || !Number.isInteger(expected) || expected < 0 || Number(o.cursor_version) !== expected)\n    throw new Error('SOURCE_CURSOR_VERSION_CONFLICT');\nif (o.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_READBACK_REQUIRED');\nif (o.committed_run_id === r.run_id)\n    throw new Error('SOURCE_CURSOR_ALREADY_COMMITTED');\nconst next = new Date(r.run_upper_bound), prior = new Date(o.cursor_value);\nif (!Number.isFinite(next.valueOf()) || !Number.isFinite(prior.valueOf()) || next <= prior)\n    throw new Error('SOURCE_CURSOR_NON_MONOTONIC');\nreturn [{ json: { ...r, prior_cursor_version: expected, prior_cursor_value: o.cursor_value, prior_cursor_run_upper_bound: o.run_upper_bound, prior_committed_run_id: o.committed_run_id || '', next_cursor_version: expected + 1 } }];\n"
       }
     },
     {
@@ -1009,6 +1034,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $json.source_code }}"
@@ -1017,41 +1052,6 @@
               "keyName": "cursor_version",
               "condition": "eq",
               "keyValue": "={{ $json.prior_cursor_version }}"
-            },
-            {
-              "keyName": "archive_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
-            },
-            {
-              "keyName": "archive_readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            },
-            {
-              "keyName": "receipt_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
-            },
-            {
-              "keyName": "receipt_run_upper_bound",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "last_terminal_state",
-              "condition": "eq",
-              "keyValue": "ARCHIVED"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": ""
-            },
-            {
-              "keyName": "cursor_value",
-              "condition": "eq",
-              "keyValue": "={{ $json.prior_cursor_value }}"
             }
           ]
         },
@@ -1065,8 +1065,7 @@
             "matched_count": "={{ $json.matched_count }}",
             "cursor_version": "={{ $json.next_cursor_version }}",
             "readback_verified": false,
-            "updated_at": "={{ $now.toISO() }}",
-            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}"
+            "updated_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -1102,6 +1101,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Cursor CAS Update').item.json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Build Cursor CAS Update').item.json.source_code }}"
@@ -1112,34 +1121,24 @@
               "keyValue": "={{ $('Build Cursor CAS Update').item.json.next_cursor_version }}"
             },
             {
-              "keyName": "archive_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.archive_receipt_sha256 }}"
-            },
-            {
-              "keyName": "archive_readback_verified",
-              "condition": "eq",
-              "keyValue": true
-            },
-            {
-              "keyName": "receipt_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
-            },
-            {
-              "keyName": "receipt_run_upper_bound",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
               "keyName": "committed_run_id",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "cursor_value",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.run_upper_bound }}"
+            },
+            {
+              "keyName": "run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Build Cursor CAS Update').item.json.run_upper_bound }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": false
             }
           ]
         },
@@ -1156,7 +1155,7 @@
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor CAS Update').first().json, observed = $json;\nif (observed.source_code !== expected.source_code\n    || observed.receipt_run_id !== expected.run_id\n    || observed.receipt_run_upper_bound !== expected.run_upper_bound\n    || observed.cursor_value !== expected.run_upper_bound\n    || observed.run_upper_bound !== expected.run_upper_bound\n    || Number(observed.cursor_version) !== expected.next_cursor_version\n    || observed.committed_run_id !== expected.run_id\n    || observed.archive_receipt_sha256 !== expected.archive_receipt_sha256\n    || observed.archive_readback_verified !== true\n    || observed.downstream_receipt_sha256 !== expected.downstream_receipt_sha256\n    || observed.last_terminal_state !== 'ARCHIVED')\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: expected }];\n"
+        "jsCode": "// Purpose: Compare CAS Cursor Readback. Keep this deterministic and fail closed.\nconst expected = $('Build Cursor CAS Update').first().json, observed = $json;\nif (observed.source_code !== expected.source_code || observed.cursor_value !== expected.run_upper_bound || observed.run_upper_bound !== expected.run_upper_bound || Number(observed.cursor_version) !== expected.next_cursor_version || observed.committed_run_id !== expected.run_id || (observed.readback_verified !== undefined && observed.readback_verified !== false))\n    throw new Error('SOURCE_CURSOR_CAS_READBACK_MISMATCH');\nreturn [{ json: { ...expected, cursor_readback_stage: true, cursor_readback_verified: false } }];\n"
       }
     },
     {
@@ -1179,6 +1178,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1205,6 +1214,11 @@
               "keyValue": true
             },
             {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            },
+            {
               "keyName": "receipt_run_id",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
@@ -1213,23 +1227,13 @@
               "keyName": "receipt_run_upper_bound",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
-            },
-            {
-              "keyName": "downstream_receipt_sha256",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "downstream_receipt_sha256": "={{ $json.downstream_receipt_sha256 }}",
+            "downstream_receipt_sha256": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}",
             "readback_verified": false,
             "updated_at": "={{ $now.toISO() }}",
             "last_terminal_state": "DOWNSTREAM_VERIFIED"
@@ -1267,6 +1271,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
@@ -1310,11 +1324,6 @@
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1331,7 +1340,7 @@
         3800
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json;\nconst cursor = $('Determine Existing Cursor Commit').first().json;\nconst receipt = $json;\nif (receipt.source_code !== proof.source_code || receipt.receipt_run_id !== proof.run_id\n    || receipt.receipt_run_upper_bound !== proof.run_upper_bound\n    || receipt.last_window_start !== proof.window_start\n    || receipt.committed_run_id !== proof.run_id\n    || receipt.cursor_value !== proof.run_upper_bound || receipt.run_upper_bound !== proof.run_upper_bound\n    || Number(receipt.cursor_version) !== Number(proof.expected_cursor_version) + 1\n    || receipt.last_terminal_state !== 'DOWNSTREAM_VERIFIED' || receipt.readback_verified !== true\n    || receipt.archive_readback_verified !== true\n    || receipt.archive_receipt_sha256 !== proof.archive_receipt_sha256\n    || receipt.downstream_receipt_sha256 !== proof.downstream_receipt_sha256)\n    throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code,\n            cursor: receipt.cursor_value, cursor_version: Number(receipt.cursor_version),\n            archive_receipt_sha256: receipt.archive_receipt_sha256,\n            downstream_receipt_sha256: receipt.downstream_receipt_sha256,\n            recovered_after_cas: cursor.cursor_recovery === true } }];\n"
+        "jsCode": "// Purpose: Return Verified Cursor Commit. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json;\nconst receipt = $('Read Back Verified Terminal Acquisition Receipt').first().json;\nconst cursor = $json;\nfor (const field of ['source_code', 'receipt_run_id', 'receipt_run_upper_bound', 'last_window_start', 'archive_receipt_sha256', 'downstream_receipt_sha256']) {\n    const expected = field === 'source_code' ? proof.source_code : field === 'receipt_run_id' ? proof.run_id : field === 'receipt_run_upper_bound' ? proof.run_upper_bound : field === 'last_window_start' ? proof.window_start : proof[field];\n    if (String(receipt[field] ?? '') !== String(expected ?? ''))\n        throw new Error('ACQUISITION_TERMINAL_READBACK_MISMATCH:' + field);\n}\nif (receipt.last_terminal_state !== 'DOWNSTREAM_VERIFIED' || receipt.readback_verified !== true || receipt.archive_readback_verified !== true)\n    throw new Error('ACQUISITION_TERMINAL_STATE_MISMATCH');\nif (cursor.source_code !== proof.source_code || cursor.committed_run_id !== proof.run_id || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1 || cursor.readback_verified !== true)\n    throw new Error('SOURCE_CURSOR_TERMINAL_JOIN_MISMATCH');\nreturn [{ json: { status: 'CURSOR_COMMITTED', run_id: proof.run_id, source_code: proof.source_code, cursor: cursor.cursor_value, cursor_version: Number(cursor.cursor_version), archive_receipt_sha256: receipt.archive_receipt_sha256, downstream_receipt_sha256: receipt.downstream_receipt_sha256, recovered_after_cas: $('Determine Existing Cursor Commit').first().json.cursor_recovery === true } }];\n"
       }
     },
     {
@@ -1368,6 +1377,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
@@ -1411,11 +1430,6 @@
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1458,12 +1472,22 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
             },
             {
-              "keyName": "run_upper_bound",
+              "keyName": "receipt_run_upper_bound",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.run_upper_bound }}"
             },
@@ -1506,11 +1530,6 @@
               "keyName": "downstream_receipt_sha256",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
-            },
-            {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
             }
           ]
         },
@@ -1527,7 +1546,7 @@
         4180
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'archive_receipt_sha256', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.archive_readback_verified !== true || observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
+        "jsCode": "// Purpose: Verify Replayed Terminal Acquisition Receipt. Keep this deterministic and fail closed.\nconst proof = $('Verify Downstream Persistence Proof').first().json, cursor = $('Determine Existing Cursor Commit').first().json, observed = $json;\nif (cursor.cursor_recovery !== true || cursor.cursor_readback_verified !== true || cursor.committed_run_id !== proof.run_id || cursor.cursor_value !== proof.run_upper_bound || cursor.run_upper_bound !== proof.run_upper_bound || Number(cursor.cursor_version) !== Number(proof.expected_cursor_version) + 1)\n    throw new Error('SOURCE_CURSOR_REPLAY_MISMATCH');\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound', 'archive_receipt_sha256', 'downstream_receipt_sha256'])\n    if (String(observed[field] ?? '') !== String(proof[field] ?? ''))\n        throw new Error('DOWNSTREAM_REPLAY_READBACK_MISMATCH:' + field);\nif (observed.archive_readback_verified !== true || observed.terminal_state !== 'DOWNSTREAM_VERIFIED' || observed.readback_verified !== true)\n    throw new Error('DOWNSTREAM_REPLAY_STATE_MISMATCH');\nreturn [{ json: { ...observed, replay_verified: true } }];\n"
       }
     },
     {
@@ -1732,6 +1751,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Freeze Trusted Cursor Window').first().json.run_id), String($('Freeze Trusted Cursor Window').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Freeze Trusted Cursor Window').first().json.source_code }}"
@@ -1786,7 +1815,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Existing ENUMERATED Receipt. Keep this deterministic and fail closed.\nconst trusted = $('Freeze Trusted Cursor Window').first().json, receipt = $json;\nfor (const field of ['run_id', 'source_code', 'window_start', 'run_upper_bound'])\n    if (String(receipt[field] ?? '') !== String(trusted[field] ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\nif (receipt.terminal_state !== 'ENUMERATED' || receipt.pagination_exhausted !== true || receipt.attachment_ids_verified !== true)\n    throw new Error('ENUMERATED_RECEIPT_REPLAY_NOT_SAFE');\nlet attachmentIdentityKeys;\ntry {\n    attachmentIdentityKeys = JSON.parse(String(receipt.attachment_identity_keys_json || '[]'));\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_INVALID');\n}\nif (!Array.isArray(attachmentIdentityKeys) || Number(receipt.attachments_verified) !== attachmentIdentityKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_REPLAY_NOT_SAFE');\nreturn [{ json: { ...trusted, ...receipt, messages: [], immutable_inventory: true, attachment_ids_verified: true, attachment_identity_keys: attachmentIdentityKeys, empty_inventory: Number(receipt.matched_count || 0) === 0, replay_noop: true, receipt_readback_verified: true, cursor_commit_eligible: false } }];\n"
+        "jsCode": "// Purpose: Return Existing ENUMERATED Receipt. Keep this deterministic and fail closed.\nconst receipt = $json, trusted = $('Freeze Trusted Cursor Window').first().json;\nconst runId = String(receipt.receipt_run_id || receipt.run_id || '');\nconst sourceCode = String(receipt.source_code || '');\nconst windowStart = String(receipt.last_window_start || receipt.window_start || '');\nconst runUpperBound = String(receipt.receipt_run_upper_bound || receipt.run_upper_bound || '');\nif (receipt.record_type !== 'ACQUISITION_RECEIPT' || receipt.record_key !== JSON.stringify([runId, sourceCode]))\n    throw new Error('ENUMERATED_INVENTORY_RECORD_KEY_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', runId, trusted.run_id],\n    ['source_code', sourceCode, trusted.source_code],\n    ['window_start', windowStart, trusted.window_start],\n    ['run_upper_bound', runUpperBound, trusted.run_upper_bound],\n]) {\n    if (observed !== String(expected ?? ''))\n        throw new Error('ENUMERATED_RECEIPT_READBACK_MISMATCH:' + field);\n}\nconst payloadText = String(receipt.record_payload_json || '');\nif (!payloadText)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_MISSING');\nlet inventory;\ntry {\n    inventory = JSON.parse(payloadText);\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\n}\nif (!inventory || typeof inventory !== 'object' || Array.isArray(inventory) || inventory.schema_version !== 1)\n    throw new Error('ENUMERATED_INVENTORY_PAYLOAD_INVALID');\nfor (const [field, observed, expected] of [\n    ['run_id', inventory.run_id, runId],\n    ['source_code', inventory.source_code, sourceCode],\n    ['window_start', inventory.window_start, windowStart],\n    ['run_upper_bound', inventory.run_upper_bound, runUpperBound],\n    ['scanned_count', inventory.scanned_count, receipt.scanned_count],\n    ['matched_count', inventory.matched_count, receipt.matched_count],\n    ['heartbeat', inventory.heartbeat, receipt.last_heartbeat],\n    ['pagination_exhausted', inventory.pagination_exhausted, receipt.last_pagination_exhausted],\n]) {\n    if (JSON.stringify(observed) !== JSON.stringify(expected))\n        throw new Error('ENUMERATED_INVENTORY_BINDING_MISMATCH:' + field);\n}\nif (!Array.isArray(inventory.messages) || inventory.messages.length !== Number(receipt.matched_count))\n    throw new Error('ENUMERATED_INVENTORY_COUNT_MISMATCH');\nconst messageIds = inventory.messages.map(row => String(row?.message_id || row?.message?.id || row?.id || '').trim());\nif (messageIds.some(id => !id) || new Set(messageIds).size !== messageIds.length)\n    throw new Error('ENUMERATED_INVENTORY_MESSAGE_ID_INVALID');\nconst attachmentKeys = inventory.messages.flatMap(row => {\n    const messageId = String(row?.message_id || row?.message?.id || row?.id || '').trim();\n    return (Array.isArray(row?.attachment_inventory) ? row.attachment_inventory : [])\n        .map(attachment => messageId + ':' + String(attachment?.id || '').trim());\n});\nif (attachmentKeys.some(key => key.endsWith(':')) || new Set(attachmentKeys).size !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_ID_INVALID');\nif (!Array.isArray(inventory.attachment_identity_keys) || JSON.stringify(inventory.attachment_identity_keys) !== JSON.stringify(attachmentKeys))\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nconst emailKeys = messageIds.map(id => id + ':INLINE_BODY');\nif (!Array.isArray(inventory.email_evidence_identity_keys) || JSON.stringify(inventory.email_evidence_identity_keys) !== JSON.stringify(emailKeys))\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nlet storedAttachmentKeys, storedEmailKeys;\ntry {\n    storedAttachmentKeys = JSON.parse(String(receipt.attachment_identity_keys_json || ''));\n    storedEmailKeys = JSON.parse(String(receipt.email_evidence_identity_keys_json || ''));\n}\ncatch {\n    throw new Error('ENUMERATED_INVENTORY_IDENTITY_KEYS_INVALID');\n}\nif (JSON.stringify(storedAttachmentKeys) !== JSON.stringify(attachmentKeys) || Number(receipt.attachments_verified) !== attachmentKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_ATTACHMENT_KEYS_MISMATCH');\nif (JSON.stringify(storedEmailKeys) !== JSON.stringify(emailKeys) || Number(receipt.email_evidence_receipts_verified) !== emailKeys.length)\n    throw new Error('ENUMERATED_INVENTORY_EMAIL_KEYS_MISMATCH');\nconst actualHash = require('crypto').createHash('sha256').update(payloadText, 'utf8').digest('hex');\nif (!/^[a-f0-9]{64}$/.test(String(receipt.inventory_sha256 || '')) || String(receipt.inventory_sha256).toLowerCase() !== actualHash)\n    throw new Error('ENUMERATED_INVENTORY_HASH_MISMATCH');\nif (String(receipt.inventory_run_id || '') !== runId || receipt.inventory_schema_version !== 'inventory-v1' || Number(receipt.inventory_length_bytes) !== Buffer.byteLength(payloadText, 'utf8'))\n    throw new Error('ENUMERATED_INVENTORY_METADATA_MISMATCH');\nreturn [{ json: {\n            ...trusted,\n            ...receipt,\n            messages: inventory.messages,\n            immutable_inventory: true,\n            attachment_ids_verified: true,\n            attachment_identity_keys: attachmentKeys,\n            email_evidence_identity_keys: emailKeys,\n            empty_inventory: inventory.messages.length === 0,\n            inventory_replay_verified: true,\n            replay_noop: true,\n            receipt_readback_verified: true,\n            cursor_commit_eligible: false,\n        } }];\n"
       }
     },
     {
@@ -1838,6 +1867,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Durable Archive Barrier Receipt').first().json.run_id), String($('Build Durable Archive Barrier Receipt').first().json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -1915,6 +1954,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Durable Archive Barrier Receipt').first().json.run_id), String($('Build Durable Archive Barrier Receipt').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
@@ -1982,6 +2031,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Durable Archive Barrier Receipt').first().json.run_id), String($('Build Durable Archive Barrier Receipt').first().json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -2059,6 +2118,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Durable Archive Barrier Receipt').first().json.run_id), String($('Build Durable Archive Barrier Receipt').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Build Durable Archive Barrier Receipt').item.json.source_code }}"
@@ -2134,6 +2203,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Validate Sweep or Commit').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Validate Sweep or Commit').item.json.source_code }}"
@@ -2206,6 +2285,9 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
+            "record_type": "SOURCE_CURSOR",
+            "record_key": "={{ JSON.stringify([String($json.source_code)]) }}",
+            "record_payload_json": "={{ JSON.stringify($json) }}",
             "source_code": "={{ $json.source_code }}",
             "cursor_value": "={{ $json.cursor_value }}",
             "committed_run_id": "={{ $json.committed_run_id }}",
@@ -2249,6 +2331,16 @@
         "matchType": "allConditions",
         "filters": {
           "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Build Cursor v0 Initialization').item.json.source_code)]) }}"
+            },
             {
               "keyName": "source_code",
               "condition": "eq",
@@ -2593,6 +2685,16 @@
         "filters": {
           "conditions": [
             {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "ACQUISITION_RECEIPT"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.run_id), String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
               "keyName": "source_code",
               "condition": "eq",
               "keyValue": "={{ $('Verify Downstream Persistence Proof').item.json.source_code }}"
@@ -2633,11 +2735,6 @@
               "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.downstream_receipt_sha256 }}"
             },
             {
-              "keyName": "committed_run_id",
-              "condition": "eq",
-              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
-            },
-            {
               "keyName": "readback_verified",
               "condition": "eq",
               "keyValue": true
@@ -2659,6 +2756,73 @@
       ],
       "parameters": {
         "jsCode": "// Purpose: Decode Read Verified Downstream Terminal Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"PIPELINE_RUN\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+      }
+    },
+    {
+      "id": "12096",
+      "name": "Read Back Verified Cursor for Terminal Join",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        380,
+        4180
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_ingestion_state",
+          "mode": "name"
+        },
+        "returnAll": false,
+        "limit": 1,
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "record_type",
+              "condition": "eq",
+              "keyValue": "SOURCE_CURSOR"
+            },
+            {
+              "keyName": "record_key",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify([String($('Verify Downstream Persistence Proof').first().json.source_code)]) }}"
+            },
+            {
+              "keyName": "source_code",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.source_code }}"
+            },
+            {
+              "keyName": "cursor_version",
+              "condition": "eq",
+              "keyValue": "={{ Number($('Verify Downstream Persistence Proof').first().json.expected_cursor_version) + 1 }}"
+            },
+            {
+              "keyName": "cursor_value",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "run_upper_bound",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_upper_bound }}"
+            },
+            {
+              "keyName": "committed_run_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Verify Downstream Persistence Proof').first().json.run_id }}"
+            },
+            {
+              "keyName": "readback_verified",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {
@@ -3734,7 +3898,7 @@
       "main": [
         [
           {
-            "node": "Return Verified Cursor Commit",
+            "node": "Read Back Verified Cursor for Terminal Join",
             "type": "main",
             "index": 0
           }
@@ -3746,6 +3910,17 @@
         [
           {
             "node": "Verify Downstream Terminal Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Verified Cursor for Terminal Join": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Cursor Commit",
             "type": "main",
             "index": 0
           }
@@ -3989,12 +4164,13 @@
       "description": "Finance stage 11. Input starts at Mark Acquisition DOWNSTREAM_VERIFIED; verified output leaves through Read Back Terminal Acquisition Receipt."
     },
     {
-      "name": "Stage 12: Mark DOWNSTREAM_VERIFIED Receipt Readback Verified to Read Back Verified Terminal Acquisition Receipt",
+      "name": "Stage 12: Mark DOWNSTREAM_VERIFIED Receipt Readback Verified to Read Back Verified Cursor for Terminal Join",
       "nodeIds": [
         "12049",
-        "12095"
+        "12095",
+        "12096"
       ],
-      "description": "Finance stage 12. Input starts at Mark DOWNSTREAM_VERIFIED Receipt Readback Verified; verified output leaves through Read Back Verified Terminal Acquisition Receipt."
+      "description": "Finance stage 12. Input starts at Mark DOWNSTREAM_VERIFIED Receipt Readback Verified; verified output leaves through Read Back Verified Cursor for Terminal Join."
     },
     {
       "name": "Stage 12: Verify Replayed Terminal Acquisition Receipt to Return Replayed Cursor Commit",

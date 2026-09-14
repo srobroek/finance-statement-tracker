@@ -453,7 +453,7 @@ Closing balance (Total to pay) -25.00
             for candidate in grocery["ranked_cards"]
             if (candidate["card"], candidate["bucket"]) == ("RAK_WORLD", "RAK_EWALLET")
         )
-        self.assertEqual((rak_unlock["tier_before"], rak_unlock["tier_after"]), ("BASE", "ENHANCED"))
+        self.assertEqual((rak_unlock["tier_before"], rak_unlock["tier_after"]), ("BASE", "QUALIFYING"))
         self.assertEqual(rak_unlock["pace_status"], "OVER")
         self.assertGreater(
             Decimal(rak_unlock["estimated_net_value_aed"]),

@@ -114,30 +114,34 @@
         "operation": "upsert",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
+              "keyValue": "={{ $json.request_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "record_type": "MCP_REQUEST",
-            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
-            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"request_id\": $json.request_id, \"request_sha256\": $json.request_sha256, \"operation_code\": $json.operation_code, \"caller_subject_hash\": \"73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275\", \"target_workflow_code\": $json.target_workflow_code, \"state\": \"ACCEPTED\", \"result_sha256\": \"\", \"error_class\": \"\", \"error_message_redacted\": \"\", \"readback_verified\": false, \"created_at\": $now.toISO()}) }}"
+            "request_id": "={{ $json.request_id }}",
+            "request_sha256": "={{ $json.request_sha256 }}",
+            "operation_code": "={{ $json.operation_code }}",
+            "caller_subject_hash": "73fc8166af135ca56586663a8aae716f3d2c11298e429b387f31610e2b20c275",
+            "target_workflow_code": "={{ $json.target_workflow_code }}",
+            "state": "ACCEPTED",
+            "result_sha256": "",
+            "error_class": "",
+            "error_message_redacted": "",
+            "readback_verified": false,
+            "created_at": "={{ $now.toISO() }}",
+            "completed_at": "={{ null }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -163,7 +167,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "returnAll": false,
@@ -172,14 +176,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Request').item.json.request_id)]) }}"
+              "keyValue": "={{ $('SHA-256 MCP Request').item.json.request_id }}"
             }
           ]
         },
@@ -419,30 +418,28 @@
         "operation": "update",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
+              "keyValue": "={{ $json.request_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "record_type": "MCP_REQUEST",
-            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
-            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"state\": $json.state, \"result_sha256\": $json.result_sha256, \"error_class\": $json.error_class, \"error_message_redacted\": $json.error_message_redacted, \"readback_verified\": false, \"completed_at\": $now.toISO()}) }}"
+            "state": "={{ $json.state }}",
+            "result_sha256": "={{ $json.result_sha256 }}",
+            "error_class": "={{ $json.error_class }}",
+            "error_message_redacted": "={{ $json.error_message_redacted }}",
+            "readback_verified": false,
+            "completed_at": "={{ $now.toISO() }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -468,7 +465,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "returnAll": false,
@@ -477,14 +474,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Result').item.json.request_id)]) }}"
+              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
             }
           ]
         },
@@ -518,30 +510,23 @@
         "operation": "update",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "matchType": "allConditions",
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($json.request_id)]) }}"
+              "keyValue": "={{ $json.request_id }}"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "record_type": "MCP_REQUEST",
-            "record_key": "={{ JSON.stringify([String($json.request_id)]) }}",
-            "record_payload_json": "={{ JSON.stringify({ ...($json.record_payload_json ? JSON.parse($json.record_payload_json) : {}), \"readback_verified\": true}) }}"
+            "readback_verified": true
           },
           "matchingColumns": [],
           "schema": [],
@@ -567,7 +552,7 @@
         "operation": "get",
         "dataTableId": {
           "__rl": true,
-          "value": "finance_ingestion_state",
+          "value": "finance_mcp_requests",
           "mode": "name"
         },
         "returnAll": false,
@@ -576,14 +561,9 @@
         "filters": {
           "conditions": [
             {
-              "keyName": "record_type",
+              "keyName": "request_id",
               "condition": "eq",
-              "keyValue": "MCP_REQUEST"
-            },
-            {
-              "keyName": "record_key",
-              "condition": "eq",
-              "keyValue": "={{ JSON.stringify([String($('SHA-256 MCP Result').item.json.request_id)]) }}"
+              "keyValue": "={{ $('SHA-256 MCP Result').item.json.request_id }}"
             }
           ]
         },
@@ -613,7 +593,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Decode Read Back ACCEPTED MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+        "jsCode": "// Purpose: Decode Read Back ACCEPTED MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (!row || typeof row.request_id !== 'string')\n    throw new Error('MCP_AUDIT_ROW_INVALID');\nreturn [{ json: row }];\n"
       }
     },
     {
@@ -626,7 +606,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Decode Read Back Terminal MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+        "jsCode": "// Purpose: Decode Read Back Terminal MCP Request Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (!row || typeof row.request_id !== 'string')\n    throw new Error('MCP_AUDIT_ROW_INVALID');\nreturn [{ json: row }];\n"
       }
     },
     {
@@ -639,7 +619,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Decode Read Verified MCP Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (row.record_type !== \"MCP_REQUEST\" || typeof row.record_payload_json !== 'string')\n    throw new Error('TYPED_OPERATIONAL_RECORD_INVALID');\nlet payload;\ntry {\n    payload = JSON.parse(row.record_payload_json);\n}\ncatch {\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\n}\nif (!payload || typeof payload !== 'object' || Array.isArray(payload))\n    throw new Error('TYPED_OPERATIONAL_PAYLOAD_INVALID');\nreturn [{ json: { ...payload, record_type: row.record_type, record_key: row.record_key, record_payload_json: row.record_payload_json } }];\n"
+        "jsCode": "// Purpose: Decode Read Verified MCP Receipt Typed Record. Keep this deterministic and fail closed.\nconst row = $json;\nif (!row || typeof row.request_id !== 'string')\n    throw new Error('MCP_AUDIT_ROW_INVALID');\nreturn [{ json: row }];\n"
       }
     }
   ],
@@ -924,7 +904,7 @@
     "financeWorkflowCode": "FINANCE_OPERATIONS_STATUS",
     "mcpSafe": false,
     "migrationStatus": "SPEC_ONLY",
-    "mcpAuditTable": "finance_ingestion_state",
+    "mcpAuditTable": "finance_mcp_requests",
     "mcpTerminalReadback": true,
     "importTested": false,
     "fixtureExecuted": false,

@@ -108,6 +108,9 @@ BaseCommand.prototype.init = async function financeDataTableDigest(...args) {
       completed = true;
       return;
     }
+    if (listed.count !== CANONICAL_TABLES.size || listed.data.length !== CANONICAL_TABLES.size) {
+      throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${listed.count}`);
+    }
     if (tables.length !== CANONICAL_TABLES.size) throw new Error(`EXACT_FINANCE_DATA_TABLE_COUNT_REQUIRED:${tables.length}`);
     assertCanonicalTableNames(tables);
     const tableReceipts = [];

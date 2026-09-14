@@ -28,6 +28,23 @@ def _locked(transaction: Transaction, field: str) -> bool:
     return field in set(transaction.metadata.get("locked_fields", []))
 
 
+def locked_ownership_conflict(transaction: Transaction) -> bool:
+    """Return whether locked owner evidence disagrees across fields."""
+
+    locked = set(transaction.metadata.get("locked_fields", []))
+    values: set[str] = set()
+    if "owner" in locked:
+        ownership = _normalise_ownership(transaction.owner)
+        if ownership is not None:
+            values.add(ownership)
+    for field in ("property_ownership", "ownership"):
+        if field in locked:
+            ownership = _normalise_ownership(transaction.metadata.get(field))
+            if ownership is not None:
+                values.add(ownership)
+    return len(values) > 1
+
+
 def _add_review_reason(transaction: Transaction, reason: str) -> None:
     reasons = transaction.metadata.setdefault("property_review_reasons", [])
     if not isinstance(reasons, list):
@@ -35,6 +52,19 @@ def _add_review_reason(transaction: Transaction, reason: str) -> None:
         transaction.metadata["property_review_reasons"] = reasons
     if reason not in reasons:
         reasons.append(reason)
+
+
+def _mark_ownership_conflict(transaction: Transaction) -> None:
+    _add_review_reason(transaction, "LOCKED_OWNERSHIP_CONFLICT")
+    if not _locked(transaction, "tags"):
+        transaction.tags.discard("shared")
+    transaction.review_required = True
+
+
+@dataclass(frozen=True, slots=True)
+class SharedDefaults:
+    categories: frozenset[str] = frozenset()
+    vendors: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,8 +86,14 @@ class PropertyDefinition:
 
 
 class PropertyRegistry:
-    def __init__(self, properties: Iterable[PropertyDefinition]) -> None:
+    def __init__(
+        self,
+        properties: Iterable[PropertyDefinition],
+        *,
+        shared_defaults: SharedDefaults | None = None,
+    ) -> None:
         self.properties = tuple(properties)
+        self.shared_defaults = shared_defaults or SharedDefaults()
         self._by_code: dict[str, PropertyDefinition] = {}
         self._by_unit: dict[str, PropertyDefinition] = {}
         self._by_name: dict[str, PropertyDefinition] = {}
@@ -110,6 +146,34 @@ class PropertyRegistry:
         return self._by_reference.get(
             (_identity_key(provider), _identity_key(reference))
         )
+
+    def is_shared_default(self, transaction: Transaction) -> bool:
+        """Match only normalized facts already produced by classification."""
+
+        return (
+            _identity_key(transaction.category) in self.shared_defaults.categories
+            or _identity_key(transaction.vendor) in self.shared_defaults.vendors
+        )
+
+
+def _shared_defaults(payload: dict[str, Any]) -> SharedDefaults:
+    raw = payload.get("shared_defaults", {})
+    if raw in (None, {}):
+        return SharedDefaults()
+    if not isinstance(raw, dict):
+        raise ValueError("Property config shared_defaults must be an object")
+
+    def values(key: str) -> frozenset[str]:
+        entries = raw.get(key, [])
+        if isinstance(entries, str):
+            entries = [entries]
+        if not isinstance(entries, list):
+            raise ValueError(f"Property config shared_defaults.{key} must be an array")
+        return frozenset(
+            _identity_key(entry) for entry in entries if _identity_key(entry)
+        )
+
+    return SharedDefaults(categories=values("categories"), vendors=values("vendors"))
 
 
 def load_property_registry(path: str | Path) -> PropertyRegistry:
@@ -169,7 +233,7 @@ def load_property_registry(path: str | Path) -> PropertyRegistry:
                 ownership,
             )
         )
-    return PropertyRegistry(properties)
+    return PropertyRegistry(properties, shared_defaults=_shared_defaults(payload))
 
 
 def _evidence_objects(transaction: Transaction) -> tuple[dict[str, Any], ...]:
@@ -298,6 +362,8 @@ def _resolve_explicit_property(
 
 
 def _manual_ownership(transaction: Transaction) -> str | None:
+    if locked_ownership_conflict(transaction):
+        return None
     metadata = transaction.metadata
     for field in ("property_ownership", "ownership"):
         if _locked(transaction, field):
@@ -307,6 +373,17 @@ def _manual_ownership(transaction: Transaction) -> str | None:
     if _locked(transaction, "owner"):
         return _normalise_ownership(transaction.owner)
     return None
+
+
+def _apply_shared_default(transaction: Transaction, registry: PropertyRegistry) -> None:
+    if not registry.is_shared_default(transaction) or _locked(transaction, "tags"):
+        return
+    if locked_ownership_conflict(transaction):
+        _mark_ownership_conflict(transaction)
+        return
+    if _manual_ownership(transaction) == "PERSONAL":
+        return
+    transaction.tags.add("shared")
 
 
 def project_property_tags(
@@ -319,11 +396,16 @@ def project_property_tags(
     while carrying a rental-unit identity. Manual field/tag corrections remain
     authoritative through every projection replay.
     """
+    if locked_ownership_conflict(transaction):
+        _mark_ownership_conflict(transaction)
+        return None
+
     resolved = _resolve_explicit_property(transaction, registry)
     if resolved is None:
-        if (
+        has_explicit_hints = (
             transaction.property_code
             or transaction.rental_unit
+            or bool(_evidence_objects(transaction))
             or any(
                 key in transaction.metadata
                 for key in (
@@ -331,12 +413,23 @@ def project_property_tags(
                     "property_display_name",
                     "property_identity",
                     "property",
+                    "utility_provider",
+                    "utility_account_reference",
+                    "utility_reference",
+                    "premise_reference",
                 )
             )
-        ):
+        )
+        if has_explicit_hints:
             if not transaction.review_required:
                 _add_review_reason(transaction, "UNKNOWN_CONFIGURED_PROPERTY")
                 transaction.review_required = True
+        elif _manual_ownership(transaction) == "PERSONAL" and not _locked(
+            transaction, "tags"
+        ):
+            transaction.tags.discard("shared")
+        else:
+            _apply_shared_default(transaction, registry)
         return None
 
     if not transaction.property_code and not _locked(transaction, "property_code"):

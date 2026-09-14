@@ -6,11 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
-
 from generate_data_table_migration import target_schema_digest
+from generate_data_table_migration_matrix import target_schema_payload
+from jsonschema import Draft202012Validator
 from refactor_workflow_ui import format_code_nodes, layout
-
 
 ROOT = Path(__file__).resolve().parents[2]
 N8N = ROOT / "integrations" / "n8n"
@@ -29,8 +28,14 @@ APPLICATION_CONFIG_PATHS = (
     "config/ai-policies.json",
 )
 SOURCE_CONFIG_SPECS = {
-    "config/statement-sources.json": {"collection": "sources", "identity_key": "card_code"},
-    "config/transaction-email-sources.json": {"collection": "sources", "identity_key": "code"},
+    "config/statement-sources.json": {
+        "collection": "sources",
+        "identity_key": "card_code",
+    },
+    "config/transaction-email-sources.json": {
+        "collection": "sources",
+        "identity_key": "code",
+    },
     "config/ai-policies.json": {"collection": "policies", "identity_key": "policy_id"},
 }
 SOURCE_CONTRACT_PATHS = (
@@ -84,7 +89,9 @@ def canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
-def load_application_configs() -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
+def load_application_configs() -> tuple[
+    dict[str, dict[str, Any]], list[dict[str, str]]
+]:
     """Read each resolver input once and retain its Git-canonical fingerprint."""
     documents: dict[str, dict[str, Any]] = {}
     sources: list[dict[str, str]] = []
@@ -93,7 +100,7 @@ def load_application_configs() -> tuple[dict[str, dict[str, Any]], list[dict[str
         raw = path.read_bytes().replace(b"\r\n", b"\n")
         document = json.loads(raw)
         if not isinstance(document, dict):
-            raise ValueError(f"application config must be an object: {source_path}")
+            raise ValueError(f"application config must be an object: {source_path}")  # noqa: TRY004 -- Invalid decoded configuration content.
         documents[source_path] = document
         sources.append({"path": source_path, "sha256": hashlib.sha256(raw).hexdigest()})
     return documents, sources
@@ -101,12 +108,18 @@ def load_application_configs() -> tuple[dict[str, dict[str, Any]], list[dict[str
 
 def _source_row(document: dict[str, Any], key: str) -> list[dict[str, Any]]:
     rows = document.get("sources") if key == "sources" else document.get(key)
-    if not isinstance(rows, list) or not rows or not all(isinstance(row, dict) for row in rows):
+    if (
+        not isinstance(rows, list)
+        or not rows
+        or not all(isinstance(row, dict) for row in rows)
+    ):
         raise ValueError(f"application config has no valid {key} rows")
     return rows
 
 
-def _config_rows(documents: dict[str, dict[str, Any]], source_path: str) -> list[dict[str, Any]]:
+def _config_rows(
+    documents: dict[str, dict[str, Any]], source_path: str
+) -> list[dict[str, Any]]:
     spec = SOURCE_CONFIG_SPECS[source_path]
     return _source_row(documents[source_path], spec["collection"])
 
@@ -116,25 +129,33 @@ def _identity_key(source_path: str) -> str:
 
 
 def _validate_unique_identities(
-    rows: list[dict[str, Any]], source_path: str,
+    rows: list[dict[str, Any]],
+    source_path: str,
 ) -> None:
     identity_key = _identity_key(source_path)
     identities = [row.get(identity_key) for row in rows]
     if any(not isinstance(identity, str) or not identity for identity in identities):
-        raise ValueError(f"application config has invalid {identity_key} identity: {source_path}")
+        raise ValueError(
+            f"application config has invalid {identity_key} identity: {source_path}"
+        )
     if len(set(identities)) != len(identities):
-        raise ValueError(f"application config has duplicate {identity_key} identities: {source_path}")
+        raise ValueError(
+            f"application config has duplicate {identity_key} identities: {source_path}"
+        )
 
 
 def _config_version(document: dict[str, Any], source_path: str) -> str:
     version = document.get("schema_version")
     if not isinstance(version, (int, str)) or not str(version):
-        raise ValueError(f"application config has no stable schema_version: {source_path}")
+        raise ValueError(
+            f"application config has no stable schema_version: {source_path}"
+        )
     return str(version)
 
 
 def build_config_versions(
-    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+    documents: dict[str, dict[str, Any]],
+    sources: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
     by_path = {source["path"]: source["sha256"] for source in sources}
     return [
@@ -150,7 +171,8 @@ def build_config_versions(
 
 
 def build_source_contracts(
-    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+    documents: dict[str, dict[str, Any]],
+    sources: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
     by_path = {source["path"]: source["sha256"] for source in sources}
     result: list[dict[str, Any]] = []
@@ -159,13 +181,15 @@ def build_source_contracts(
         _validate_unique_identities(rows, path)
         for row in rows:
             source_code = row[_identity_key(path)]
-            result.append({
-                "source_code": source_code,
-                "config_version": _config_version(documents[path], path),
-                "source_path": path,
-                "content_sha256": by_path[path],
-                "contract": row,
-            })
+            result.append(
+                {
+                    "source_code": source_code,
+                    "config_version": _config_version(documents[path], path),
+                    "source_path": path,
+                    "content_sha256": by_path[path],
+                    "contract": row,
+                }
+            )
     ai_path = "config/ai-policies.json"
     proposal_archive = documents[ai_path].get("proposal_archive")
     if not isinstance(proposal_archive, dict):
@@ -183,35 +207,49 @@ def build_source_contracts(
         }
     )
     if len({row["source_code"] for row in result}) != len(result):
-        raise ValueError("application configs have duplicate semantic source_code identities")
+        raise ValueError(
+            "application configs have duplicate semantic source_code identities"
+        )
     return result
 
 
 def build_ai_policy_contracts(
-    document: dict[str, Any], source: dict[str, str],
+    document: dict[str, Any],
+    source: dict[str, str],
 ) -> list[dict[str, Any]]:
     policies = document.get("policies")
-    if not isinstance(policies, list) or not policies or not all(isinstance(row, dict) for row in policies):
+    if (
+        not isinstance(policies, list)
+        or not policies
+        or not all(isinstance(row, dict) for row in policies)
+    ):
         raise ValueError("ai-policies.json has no valid policies")
     _validate_unique_identities(policies, "config/ai-policies.json")
     result = []
     for row in policies:
         policy_id = row.get("policy_id")
         version = row.get("version")
-        if not isinstance(policy_id, str) or not policy_id or not isinstance(version, int):
+        if (
+            not isinstance(policy_id, str)
+            or not policy_id
+            or not isinstance(version, int)
+        ):
             raise ValueError("AI policy is missing its stable identity")
-        result.append({
-            "policy_id": policy_id,
-            "policy_version": version,
-            "source_path": source["path"],
-            "content_sha256": source["sha256"],
-            "contract": row,
-        })
+        result.append(
+            {
+                "policy_id": policy_id,
+                "policy_version": version,
+                "source_path": source["path"],
+                "content_sha256": source["sha256"],
+                "contract": row,
+            }
+        )
     return result
 
 
 def build_resolver_maps(
-    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+    documents: dict[str, dict[str, Any]],
+    sources: list[dict[str, str]],
 ) -> list[dict[str, Any]]:
     source_by_path = {source["path"]: source for source in sources}
     rows_by_path = {
@@ -232,18 +270,21 @@ def build_resolver_maps(
             raise ValueError(f"{resolver['workflow_code']} has an invalid resolver key")
         if len(set(keys)) != len(keys):
             raise ValueError(f"{resolver['workflow_code']} has duplicate resolver keys")
-        result.append({
-            "workflow_code": resolver["workflow_code"],
-            "workflow_path": resolver["workflow_path"],
-            "selection_key": resolver["selection_key"],
-            "sources": [source],
-            "entries": entries,
-        })
+        result.append(
+            {
+                "workflow_code": resolver["workflow_code"],
+                "workflow_path": resolver["workflow_path"],
+                "selection_key": resolver["selection_key"],
+                "sources": [source],
+                "entries": entries,
+            }
+        )
     return result
 
 
 def build_application_contract_schema(
-    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]],
+    documents: dict[str, dict[str, Any]],
+    sources: list[dict[str, str]],
 ) -> dict[str, Any]:
     source_paths = list(APPLICATION_CONFIG_PATHS)
     source_by_path = {source["path"]: source for source in sources}
@@ -271,9 +312,7 @@ def build_application_contract_schema(
             "maxItems": len(rows),
         }
 
-    source_document_schemas = [
-        exact_object_schema(source) for source in sources
-    ]
+    source_document_schemas = [exact_object_schema(source) for source in sources]
     resolver_map_schemas = [exact_object_schema(resolver) for resolver in resolver_maps]
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -281,22 +320,34 @@ def build_application_contract_schema(
         "title": "Finance application contract resolver bundle",
         "type": "object",
         "required": [
-            "schema_version", "contract_status", "schema_path", "schema_sha256",
-            "content_digest", "bundle_content_sha256", "source_documents",
-            "resolver_order", "resolver_maps", "source_contracts",
-            "config_versions", "ai_policy_contracts",
+            "schema_version",
+            "contract_status",
+            "schema_path",
+            "schema_sha256",
+            "content_digest",
+            "bundle_content_sha256",
+            "source_documents",
+            "resolver_order",
+            "resolver_maps",
+            "source_contracts",
+            "config_versions",
+            "ai_policy_contracts",
         ],
         "properties": {
             "schema_version": {"const": 1},
             "contract_status": {"const": "SPEC_ONLY"},
-            "schema_path": {"const": "integrations/n8n/generated/application-contract-bundle.schema.json"},
+            "schema_path": {
+                "const": "integrations/n8n/generated/application-contract-bundle.schema.json"
+            },
             "schema_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
             "content_digest": {
                 "type": "object",
                 "required": ["algorithm", "canonicalization", "excluded_fields"],
                 "properties": {
                     "algorithm": {"const": "SHA-256"},
-                    "canonicalization": {"const": "sorted-object-keys;array-order-preserved;compact-utf8-json"},
+                    "canonicalization": {
+                        "const": "sorted-object-keys;array-order-preserved;compact-utf8-json"
+                    },
                     "excluded_fields": {"const": ["bundle_content_sha256"]},
                 },
                 "additionalProperties": False,
@@ -328,7 +379,9 @@ def build_application_contract_schema(
 
 
 def build_application_contract_bundle(
-    documents: dict[str, dict[str, Any]], sources: list[dict[str, str]], schema: dict[str, Any],
+    documents: dict[str, dict[str, Any]],
+    sources: list[dict[str, str]],
+    schema: dict[str, Any],
 ) -> dict[str, Any]:
     schema_text = json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
     schema_sha256 = hashlib.sha256(schema_text.encode("utf-8")).hexdigest()
@@ -344,13 +397,19 @@ def build_application_contract_bundle(
         },
         "bundle_content_sha256": "",
         "source_documents": sources,
-        "resolver_order": [resolver["workflow_code"] for resolver in RESOLVER_WORKFLOWS],
+        "resolver_order": [
+            resolver["workflow_code"] for resolver in RESOLVER_WORKFLOWS
+        ],
         "resolver_maps": build_resolver_maps(documents, sources),
         "source_contracts": build_source_contracts(documents, sources),
         "config_versions": build_config_versions(documents, sources),
         "ai_policy_contracts": build_ai_policy_contracts(
             documents["config/ai-policies.json"],
-            next(source for source in sources if source["path"] == "config/ai-policies.json"),
+            next(
+                source
+                for source in sources
+                if source["path"] == "config/ai-policies.json"
+            ),
         ),
     }
     digest_payload = dict(bundle)
@@ -363,7 +422,8 @@ def build_application_contract_bundle(
 
 
 def validate_application_contract_bundle(
-    bundle: dict[str, Any], schema: dict[str, Any],
+    bundle: dict[str, Any],
+    schema: dict[str, Any],
 ) -> None:
     Draft202012Validator.check_schema(schema)
     errors = sorted(
@@ -375,11 +435,15 @@ def validate_application_contract_bundle(
             f"{'.'.join(str(part) for part in error.absolute_path) or '<root>'}: {error.message}"
             for error in errors[:3]
         )
-        raise ValueError(f"application contract bundle schema validation failed: {details}")
+        raise ValueError(
+            f"application contract bundle schema validation failed: {details}"
+        )
 
 
 def readable_js_literal(
-    value: object, level: int = 0, split_long_strings: bool = False,
+    value: object,
+    level: int = 0,
+    split_long_strings: bool = False,
 ) -> str:
     """Render generated configuration as reviewable JavaScript data.
 
@@ -393,9 +457,7 @@ def readable_js_literal(
         for key in sorted(value):
             item = value[key]
             if key.endswith("_json") and isinstance(item, str):
-                rendered = (
-                    f"JSON.stringify({readable_js_literal(json.loads(item), level + 1, split_long_strings)})"
-                )
+                rendered = f"JSON.stringify({readable_js_literal(json.loads(item), level + 1, split_long_strings)})"
             else:
                 rendered = readable_js_literal(item, level + 1, split_long_strings)
             lines.append(f"{child_indent}{json.dumps(key)}: {rendered}")
@@ -420,16 +482,6 @@ def readable_js_literal(
     return json.dumps(value, ensure_ascii=False)
 
 
-def ordered_tables(contract: dict) -> list[dict]:
-    tables = contract["tables"]
-    # Provision the error sink first so later bootstrap failures have somewhere
-    # durable to land once workflow 16 has itself been imported and bound.
-    return sorted(
-        tables,
-        key=lambda row: (row["name"] != "finance_execution_failures", row["name"]),
-    )
-
-
 def target_table_rows(matrix: dict) -> list[dict]:
     """Convert the generated migration matrix to native Data Table creates."""
     return [
@@ -437,21 +489,37 @@ def target_table_rows(matrix: dict) -> list[dict]:
             "name": target,
             "columns": {
                 field: definition["type"]
-                for field, definition in matrix["target_schemas"][target]["columns"].items()
+                for field, definition in matrix["target_schemas"][target][
+                    "columns"
+                ].items()
             },
         }
         for target in matrix["targets"]
     ]
 
 
-def target_schema_contract(matrix: dict) -> tuple[list[str], dict[str, dict[str, Any]], str]:
+def target_schema_contract(
+    matrix: dict,
+) -> tuple[list[str], dict[str, dict[str, Any]], str]:
     """Return the ordered target set, canonical n8n column arrays, and digest."""
     targets = list(matrix["targets"])
+    expected = [
+        "finance_ingestion_state",
+        "finance_documents",
+        "finance_actual_batches",
+        "finance_ai_reviews",
+    ]
+    if targets != expected or set(matrix["target_schemas"]) != set(expected):
+        raise ValueError(
+            "platform bootstrap requires exactly the four canonical target schemas"
+        )
     schemas = {
         target: {
             "columns": [
                 {"name": field, "type": definition["type"]}
-                for field, definition in matrix["target_schemas"][target]["columns"].items()
+                for field, definition in matrix["target_schemas"][target][
+                    "columns"
+                ].items()
             ],
             "logical_key": list(matrix["target_schemas"][target]["logical_key"]),
         }
@@ -477,14 +545,12 @@ def create_parameters(table: dict) -> dict:
 
 
 def build_manifest(
-    tables: dict,
-    seed: dict,
-    config_seed: dict,
     bundle: dict,
     bundle_file_sha256: str,
     bundle_schema_sha256: str,
-    matrix: dict | None = None,
+    matrix: dict,
 ) -> dict:
+    targets, _, schema_digest = target_schema_contract(matrix)
     manifest = {
         "schema_version": 1,
         "contract_status": "SPEC_ONLY",
@@ -515,34 +581,8 @@ def build_manifest(
                 "table_name": table["name"],
                 "parameters": create_parameters(table),
             }
-            for table in ordered_tables(tables)
+            for table in target_table_rows(matrix)
         ],
-        "seed": {
-            "table_name": "finance_ai_policy_contracts",
-            "idempotency_key": ["policy_id", "policy_version"],
-            "rows": seed["rows"],
-            "exact_readback_fields": [
-                "policy_id",
-                "policy_version",
-                "agent_profile",
-                "agent_provider",
-                "policy_sha256",
-                "config_sha256",
-                "output_schema_sha256",
-                "allowed_fields_json",
-                "allowed_values_json",
-                "state",
-            ],
-        },
-        "config_seed": {
-            "table_name": "finance_config_versions",
-            "idempotency_key": ["config_name", "version"],
-            "rows": config_seed["rows"],
-            "exact_readback_fields": [
-                "config_name", "version", "source_path", "content_sha256",
-                "git_commit", "state",
-            ],
-        },
         "application_contract": {
             "path": "integrations/n8n/generated/application-contract-bundle.json",
             "schema_path": "integrations/n8n/generated/application-contract-bundle.schema.json",
@@ -554,50 +594,37 @@ def build_manifest(
         "execution_evidence": {
             "exact_image_import_tested": False,
             "disposable_create_reuse_tested": False,
-            "seed_readback_tested": False,
+            "table_list_readback_tested": False,
             "production_validated": False,
         },
         "activation_blockers": [
             "EXACT_IMAGE_IMPORT_REQUIRED",
             "DISPOSABLE_BOOTSTRAP_RUNTIME_PROOF_REQUIRED",
+            "SOURCE_MIGRATION_GATE_REQUIRED",
         ],
         "warning": (
             "Generated provisioning shape only. It is not evidence that the workflow "
             "imports or executes in the pinned n8n image."
         ),
     }
-    if matrix is not None:
-        targets, _, schema_digest = target_schema_contract(matrix)
-        manifest["sources"]["data_table_migration_matrix"] = "integrations/n8n/data-table-migration-matrix.json"
-        manifest["table_create_operations"] = [
-            {
-                "table_name": table["name"],
-                "parameters": create_parameters(table),
-            }
-            for table in target_table_rows(matrix)
-        ]
-        manifest.pop("seed")
-        manifest.pop("config_seed")
-        manifest["target_schema_contract"] = {
-            "path": "integrations/n8n/data-table-migration-matrix.json",
-            "digest": schema_digest,
-            "target_tables": targets,
-            "readback_operation": "list",
-            "readback_required": True,
-            "legacy_table_creation_forbidden": True,
-            "row_seed_writes_forbidden": True,
-        }
-        manifest["activation_blockers"].append("SOURCE_MIGRATION_GATE_REQUIRED")
-        manifest["execution_evidence"] = {
-            "exact_image_import_tested": False,
-            "disposable_create_reuse_tested": False,
-            "table_list_readback_tested": False,
-            "production_validated": False,
-        }
+    manifest["sources"]["data_table_migration_matrix"] = (
+        "integrations/n8n/data-table-migration-matrix.json"
+    )
+    manifest["target_schema_contract"] = {
+        "path": "integrations/n8n/data-table-migration-matrix.json",
+        "digest": schema_digest,
+        "target_tables": targets,
+        "readback_operation": "list",
+        "readback_required": True,
+        "legacy_table_creation_forbidden": True,
+        "row_seed_writes_forbidden": True,
+    }
     return manifest
 
 
-def data_table_node(node_id: str, name: str, position: list[int], parameters: dict) -> dict:
+def data_table_node(
+    node_id: str, name: str, position: list[int], parameters: dict
+) -> dict:
     return {
         "id": node_id,
         "name": name,
@@ -617,23 +644,25 @@ def target_bootstrap_document(
     schema_digest: str,
 ) -> dict:
     """Build the manual-only W19 document after its four-table readback."""
-    nodes.append({
-        "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
-        "name": "Stage 1 · Manual Platform Bootstrap Only to Emit Redacted Bootstrap Receipt",
-        "type": "n8n-nodes-base.stickyNote",
-        "typeVersion": 1,
-        "position": [-1160, -180],
-        "parameters": {
-            "content": (
-                "## Stage 1 · Four-table schema bootstrap\\n"
-                "**Input:** Manual Platform Bootstrap Only  ·  **Output:** canonical native table-list "
-                "readback and redacted receipt\\nPartial, extra, mismatched, or ID-drifting schemas fail closed."
-            ),
-            "height": 110,
-            "width": 2240,
-            "color": 7,
-        },
-    })
+    nodes.append(
+        {
+            "id": "10000000-0000-4000-8000-000000000019-generated-note-1",
+            "name": "Stage 1 · Manual Platform Bootstrap Only to Emit Redacted Bootstrap Receipt",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [-1160, -180],
+            "parameters": {
+                "content": (
+                    "## Stage 1 · Four-table schema bootstrap\\n"
+                    "**Input:** Manual Platform Bootstrap Only  ·  **Output:** canonical native table-list "
+                    "readback and redacted receipt\\nPartial, extra, mismatched, or ID-drifting schemas fail closed."
+                ),
+                "height": 110,
+                "width": 2240,
+                "color": 7,
+            },
+        }
+    )
     return {
         "id": WORKFLOW_ID,
         "name": "Finance · Platform Data Table Bootstrap",
@@ -679,15 +708,11 @@ def target_bootstrap_document(
 
 
 def build_workflow(
-    tables: dict,
-    seed: dict,
-    config_seed: dict,
     manifest: dict,
     bundle: dict,
-    matrix: dict | None = None,
+    matrix: dict,
 ) -> dict:
-    table_rows = target_table_rows(matrix) if matrix is not None else ordered_tables(tables)
-    seed_rows = seed["rows"]
+    table_rows = target_table_rows(matrix)
     nodes: list[dict] = [
         {
             "id": "19001",
@@ -795,10 +820,10 @@ def build_workflow(
     }
     previous = verify_bundle_name
 
-    if matrix is not None:
-        targets, target_schemas, target_schema_digest = target_schema_contract(matrix)
-        target_guard_name = "Verify Four-Table Target Contract"
-        nodes.append({
+    targets, target_schemas, target_schema_digest = target_schema_contract(matrix)
+    target_guard_name = "Verify Four-Table Target Contract"
+    nodes.append(
+        {
             "id": "19000-target-guard",
             "name": target_guard_name,
             "type": "n8n-nodes-base.code",
@@ -819,11 +844,12 @@ def build_workflow(
                     f"return [{{json:{{status:'TARGET_SCHEMA_CONTRACT_VERIFIED',target_tables:expected,target_schemas:contract,target_schema_digest:'{target_schema_digest}',runtime_cutover:false,deletion_authorized:false}}}}];"
                 )
             },
-        })
-        connections[previous] = {
-            "main": [[{"node": target_guard_name, "type": "main", "index": 0}]]
         }
-        previous = target_guard_name
+    )
+    connections[previous] = {
+        "main": [[{"node": target_guard_name, "type": "main", "index": 0}]]
+    }
+    previous = target_guard_name
 
     for index, table in enumerate(table_rows, start=1):
         name = f"Create or Reuse {table['name']}"
@@ -834,26 +860,31 @@ def build_workflow(
             create_parameters(table),
         )
         nodes.append(node)
-        connections[previous] = {
-            "main": [[{"node": name, "type": "main", "index": 0}]]
-        }
+        connections[previous] = {"main": [[{"node": name, "type": "main", "index": 0}]]}
         previous = name
 
-    if matrix is not None:
-        list_name = "List Four Target Tables"
-        nodes.append(data_table_node(
+    list_name = "List Four Target Tables"
+    nodes.append(
+        data_table_node(
             "19006",
             list_name,
             [1380, 0],
-            {"resource": "table", "operation": "list", "returnAll": True, "options": {}},
-        ))
-        connections[previous] = {
-            "main": [[{"node": list_name, "type": "main", "index": 0}]]
-        }
-        previous = list_name
+            {
+                "resource": "table",
+                "operation": "list",
+                "returnAll": True,
+                "options": {},
+            },
+        )
+    )
+    connections[previous] = {
+        "main": [[{"node": list_name, "type": "main", "index": 0}]]
+    }
+    previous = list_name
 
-        readback_name = "Verify Four Target Table Readback"
-        nodes.append({
+    readback_name = "Verify Four Target Table Readback"
+    nodes.append(
+        {
             "id": "19007",
             "name": readback_name,
             "type": "n8n-nodes-base.code",
@@ -913,14 +944,16 @@ return [{ json: {
 } }];
 """.strip(),
             },
-        })
-        connections[previous] = {
-            "main": [[{"node": readback_name, "type": "main", "index": 0}]]
         }
-        previous = readback_name
+    )
+    connections[previous] = {
+        "main": [[{"node": readback_name, "type": "main", "index": 0}]]
+    }
+    previous = readback_name
 
-        receipt_name = "Emit Redacted Bootstrap Receipt"
-        nodes.append({
+    receipt_name = "Emit Redacted Bootstrap Receipt"
+    nodes.append(
+        {
             "id": "19060",
             "name": receipt_name,
             "type": "n8n-nodes-base.code",
@@ -936,292 +969,41 @@ return [{ json: {
                     "redacted:true,mode:'0600'}}];"
                 )
             },
-        })
-        connections[previous] = {
-            "main": [[{"node": receipt_name, "type": "main", "index": 0}]]
-        }
-        return target_bootstrap_document(
-            nodes,
-            connections,
-            bundle,
-            manifest,
-            targets,
-            target_schema_digest,
-        )
-
-    embedded_seed = readable_js_literal(seed_rows)
-    emit_name = "Emit Versioned AI Policy Seed"
-    nodes.append(
-        {
-            "id": "19050",
-            "name": emit_name,
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [1200, 0],
-            "parameters": {
-                "jsCode": (
-                    f"const rows={embedded_seed}; "
-                    "const updated_at=new Date().toISOString(); "
-                    "return rows.map(row=>({json:{...row,updated_at}}));"
-                )
-            },
         }
     )
     connections[previous] = {
-        "main": [[{"node": emit_name, "type": "main", "index": 0}]]
+        "main": [[{"node": receipt_name, "type": "main", "index": 0}]]
     }
-
-    upsert_name = "Upsert AI Policy Contracts"
-    upsert_value = {
-        field: f"={{{{ $json.{field} }}}}"
-        for field in (
-            "policy_id",
-            "policy_version",
-            "agent_profile",
-            "agent_provider",
-            "policy_sha256",
-            "config_sha256",
-            "output_schema_sha256",
-            "allowed_fields_json",
-            "allowed_values_json",
-            "state",
-            "updated_at",
-        )
-    }
-    nodes.append(
-        data_table_node(
-            "19051",
-            upsert_name,
-            [1400, 0],
-            {
-                "resource": "row",
-                "operation": "upsert",
-                "dataTableId": {
-                    "__rl": True,
-                    "value": "finance_ai_policy_contracts",
-                    "mode": "name",
-                },
-                "matchType": "allConditions",
-                "filters": {
-                    "conditions": [
-                        {
-                            "keyName": "policy_id",
-                            "condition": "eq",
-                            "keyValue": "={{ $json.policy_id }}",
-                        },
-                        {
-                            "keyName": "policy_version",
-                            "condition": "eq",
-                            "keyValue": "={{ $json.policy_version }}",
-                        },
-                    ]
-                },
-                "columns": {
-                    "mappingMode": "defineBelow",
-                    "value": upsert_value,
-                    "matchingColumns": [],
-                    "schema": [],
-                    "attemptToConvertTypes": False,
-                    "convertFieldsToString": False,
-                },
-                "options": {"dryRun": False},
-            },
-        )
+    return target_bootstrap_document(
+        nodes,
+        connections,
+        bundle,
+        manifest,
+        targets,
+        target_schema_digest,
     )
-    connections[emit_name] = {
-        "main": [[{"node": upsert_name, "type": "main", "index": 0}]]
-    }
-
-    collapse_name = "Collapse Seed Writes to One Readback"
-    nodes.append(
-        {
-            "id": "19052",
-            "name": collapse_name,
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [1600, 0],
-            "parameters": {
-                "jsCode": (
-                    "const rows=$input.all(); "
-                    "if(rows.length!=="
-                    + str(len(seed_rows))
-                    + ") throw new Error('AI_POLICY_SEED_UPSERT_COUNT_MISMATCH'); "
-                    "return [{json:{seed_write_count:rows.length}}];"
-                )
-            },
-        }
-    )
-    connections[upsert_name] = {
-        "main": [[{"node": collapse_name, "type": "main", "index": 0}]]
-    }
-
-    read_name = "Read Back All ACTIVE AI Policy Contracts"
-    read_node = data_table_node(
-        "19053",
-        read_name,
-        [1800, 0],
-        {
-            "resource": "row",
-            "operation": "get",
-            "dataTableId": {
-                "__rl": True,
-                "value": "finance_ai_policy_contracts",
-                "mode": "name",
-            },
-            "returnAll": True,
-            "matchType": "allConditions",
-            "filters": {
-                "conditions": [
-                    {"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}
-                ]
-            },
-            "options": {},
-        },
-    )
-    read_node["alwaysOutputData"] = True
-    nodes.append(read_node)
-    connections[collapse_name] = {
-        "main": [[{"node": read_name, "type": "main", "index": 0}]]
-    }
-
-    compare_name = "Exact Compare AI Policy Seed Readback"
-    fields = manifest["seed"]["exact_readback_fields"]
-    nodes.append(
-        {
-            "id": "19054",
-            "name": compare_name,
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [2000, 0],
-            "parameters": {
-                "jsCode": (
-                    f"const expected={embedded_seed}; const fields={readable_js_literal(fields)}; "
-                    "const observed=$input.all().map(item=>item.json).filter(row=>row&&row.state==='ACTIVE'); "
-                    "if(observed.length!==expected.length) throw new Error('AI_POLICY_ACTIVE_COUNT_MISMATCH'); "
-                    "const key=row=>JSON.stringify([row.policy_id,Number(row.policy_version)]); "
-                    "const byKey=new Map(); for(const row of observed){const k=key(row); "
-                    "if(byKey.has(k)) throw new Error('AI_POLICY_DUPLICATE_ACTIVE_VERSION'); byKey.set(k,row);} "
-                    "for(const row of expected){const actual=byKey.get(key(row)); "
-                    "if(!actual) throw new Error(`AI_POLICY_READBACK_MISSING:${row.policy_id}`); "
-                    "for(const field of fields) if(String(actual[field])!==String(row[field])) "
-                    "throw new Error(`AI_POLICY_READBACK_MISMATCH:${row.policy_id}:${field}`); "
-                    "if(!actual.updated_at||Number.isNaN(Date.parse(actual.updated_at))) "
-                    "throw new Error(`AI_POLICY_UPDATED_AT_INVALID:${row.policy_id}`);} "
-                    f"return [{{json:{{status:'VERIFIED',tables_created_or_reused:{len(table_rows)},"
-                    f"ai_policy_rows_verified:{len(seed_rows)},finance_ledger_writes:false,"
-                    "actual_writes:false,contract_status:'SPEC_ONLY'}}];"
-                )
-            },
-        }
-    )
-    connections[read_name] = {
-        "main": [[{"node": compare_name, "type": "main", "index": 0}]]
-    }
-
-    embedded_config_seed = readable_js_literal(config_seed["rows"])
-    emit_config_name = "Emit Versioned Config Fingerprints"
-    nodes.append({
-        "id": "19055", "name": emit_config_name, "type": "n8n-nodes-base.code",
-        "typeVersion": 2, "position": [2200, 0],
-        "parameters": {"jsCode": (
-            f"const rows={embedded_config_seed}; const activated_at=new Date().toISOString(); "
-            "return rows.map(row=>({json:{...row,activated_at}}));"
-        )},
-    })
-    connections[compare_name] = {"main": [[{"node": emit_config_name, "type": "main", "index": 0}]]}
-
-    config_upsert_name = "Upsert Config Version Fingerprints"
-    config_fields = ("config_name", "version", "source_path", "content_sha256", "git_commit", "state", "readback_verified", "activated_at")
-    nodes.append(data_table_node("19056", config_upsert_name, [2400, 0], {
-        "resource": "row", "operation": "upsert",
-        "dataTableId": {"__rl": True, "value": "finance_config_versions", "mode": "name"},
-        "matchType": "allConditions",
-        "filters": {"conditions": [
-            {"keyName": "config_name", "condition": "eq", "keyValue": "={{ $json.config_name }}"},
-            {"keyName": "version", "condition": "eq", "keyValue": "={{ $json.version }}"},
-        ]},
-        "columns": {"mappingMode": "defineBelow", "value": {field: f"={{{{ $json.{field} }}}}" for field in config_fields}, "matchingColumns": [], "schema": [], "attemptToConvertTypes": False, "convertFieldsToString": False},
-        "options": {"dryRun": False},
-    }))
-    connections[emit_config_name] = {"main": [[{"node": config_upsert_name, "type": "main", "index": 0}]]}
-
-    collapse_config_name = "Collapse Config Writes to One Readback"
-    nodes.append({"id": "19057", "name": collapse_config_name, "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [2600, 0], "parameters": {"jsCode": f"const rows=$input.all(); if(rows.length!=={len(config_seed['rows'])}) throw new Error('CONFIG_VERSION_UPSERT_COUNT_MISMATCH'); return [{{json:{{config_write_count:rows.length}}}}];"}})
-    connections[config_upsert_name] = {"main": [[{"node": collapse_config_name, "type": "main", "index": 0}]]}
-
-    config_read_name = "Read Back ACTIVE Config Fingerprints"
-    config_read = data_table_node("19058", config_read_name, [2800, 0], {"resource": "row", "operation": "get", "dataTableId": {"__rl": True, "value": "finance_config_versions", "mode": "name"}, "returnAll": True, "matchType": "allConditions", "filters": {"conditions": [{"keyName": "state", "condition": "eq", "keyValue": "ACTIVE"}]}, "options": {}})
-    config_read["alwaysOutputData"] = True
-    nodes.append(config_read)
-    connections[collapse_config_name] = {"main": [[{"node": config_read_name, "type": "main", "index": 0}]]}
-
-    compare_config_name = "Exact Compare Config Fingerprint Readback"
-    config_compare_fields = manifest["config_seed"]["exact_readback_fields"]
-    nodes.append({"id": "19059", "name": compare_config_name, "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [3000, 0], "parameters": {"jsCode": (
-        f"const expected={embedded_config_seed},fields={readable_js_literal(config_compare_fields)}; "
-        "const rows=$input.all().map(i=>i.json).filter(r=>r&&r.state==='ACTIVE'),byKey=new Map(rows.map(r=>[JSON.stringify([r.config_name,String(r.version)]),r])); "
-        "for(const row of expected){const actual=byKey.get(JSON.stringify([row.config_name,String(row.version)])); if(!actual) throw new Error(`CONFIG_VERSION_READBACK_MISSING:${row.config_name}`); for(const field of fields){const value=field==='git_commit'&&row[field]==='RUNTIME_BIND_GIT_COMMIT'?actual[field]:row[field]; if(String(actual[field])!==String(value)) throw new Error(`CONFIG_VERSION_READBACK_MISMATCH:${row.config_name}:${field}`);}} "
-        f"return [{{json:{{status:'VERIFIED',tables_created_or_reused:{len(table_rows)},ai_policy_rows_verified:{len(seed_rows)},config_rows_verified:{len(config_seed['rows'])},finance_ledger_writes:false,actual_writes:false,contract_status:'SPEC_ONLY'}}}}];"
-    )}})
-    connections[config_read_name] = {"main": [[{"node": compare_config_name, "type": "main", "index": 0}]]}
-
-    return {
-        "id": WORKFLOW_ID,
-        "name": "Finance · Platform Data Table Bootstrap",
-        "active": False,
-        "nodes": nodes,
-        "connections": connections,
-        "settings": {
-            "executionOrder": "v1",
-            "timezone": "Asia/Dubai",
-            "saveDataErrorExecution": "none",
-            "saveDataSuccessExecution": "none",
-            "errorWorkflow": ERROR_WORKFLOW_ID,
-        },
-        "pinData": {},
-        "meta": {
-            "financeWorkflowCode": "PLATFORM_DATA_TABLE_BOOTSTRAP",
-            "migrationStatus": "SPEC_ONLY",
-            "manualOnly": True,
-            "platformBootstrapOnly": True,
-            "financeLedgerMutationForbidden": True,
-            "actualMutationForbidden": True,
-            "sourceContract": "integrations/n8n/data-tables.json",
-            "seedContract": "integrations/n8n/generated/ai-policy-contracts.seed.json",
-            "configSeedContract": "integrations/n8n/generated/config-versions.seed.json",
-            "applicationContractBundle": "integrations/n8n/generated/application-contract-bundle.json",
-            "applicationContractBundleSchema": "integrations/n8n/generated/application-contract-bundle.schema.json",
-            "applicationContractBundleContentSha256": bundle["bundle_content_sha256"],
-            "provisioningManifest": "integrations/n8n/generated/platform-bootstrap-manifest.json",
-            "activationBlockers": manifest["activation_blockers"],
-            "importTested": False,
-            "fixtureExecuted": False,
-            "credentialBindings": [],
-            "setupRequired": True,
-        },
-    }
 
 
-def render() -> tuple[str, str, str, str]:
-    tables = load_json(TABLES_PATH)
+def render(*, require_current_schema: bool = False) -> tuple[str, str, str, str]:
     matrix = load_json(MATRIX_PATH)
-    seed = load_json(SEED_PATH)
-    config_seed = load_json(CONFIG_SEED_PATH)
+    schemas = target_schema_payload()
+    if require_current_schema and matrix["target_schemas"] != schemas:
+        raise ValueError(
+            "platform bootstrap matrix target schemas are stale; regenerate the migration matrix"
+        )
+    matrix = {**matrix, "target_schemas": schemas}
     documents, sources = load_application_configs()
     bundle_schema = build_application_contract_schema(documents, sources)
     bundle = build_application_contract_bundle(documents, sources, bundle_schema)
     bundle_text = json.dumps(bundle, indent=2, ensure_ascii=False) + "\n"
     bundle_schema_text = json.dumps(bundle_schema, indent=2, ensure_ascii=False) + "\n"
     manifest = build_manifest(
-        tables,
-        seed,
-        config_seed,
         bundle,
         hashlib.sha256(bundle_text.encode("utf-8")).hexdigest(),
         hashlib.sha256(bundle_schema_text.encode("utf-8")).hexdigest(),
         matrix,
     )
-    workflow = build_workflow(tables, seed, config_seed, manifest, bundle, matrix)
+    workflow = build_workflow(manifest, bundle, matrix)
     format_code_nodes([workflow])
     layout(workflow)
     return (
@@ -1233,7 +1015,8 @@ def render() -> tuple[str, str, str, str]:
 
 
 def generated_artifact_drift(
-    expected: tuple[tuple[Path, str], ...], root: Path = ROOT,
+    expected: tuple[tuple[Path, str], ...],
+    root: Path = ROOT,
 ) -> list[str]:
     return [
         path.relative_to(root).as_posix() if path.is_relative_to(root) else str(path)
@@ -1254,20 +1037,26 @@ def main(argv: list[str] | None = None) -> int:
         help="check generated artifacts and exit non-zero when stale",
     )
     args = parser.parse_args(argv)
-    bundle_text, bundle_schema_text, manifest_text, workflow_text = render()
+    bundle_text, bundle_schema_text, manifest_text, workflow_text = render(
+        require_current_schema=not args.write,
+    )
     if args.write:
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
         BUNDLE_PATH.write_text(bundle_text, encoding="utf-8", newline="\n")
-        BUNDLE_SCHEMA_PATH.write_text(bundle_schema_text, encoding="utf-8", newline="\n")
+        BUNDLE_SCHEMA_PATH.write_text(
+            bundle_schema_text, encoding="utf-8", newline="\n"
+        )
         MANIFEST_PATH.write_text(manifest_text, encoding="utf-8")
         WORKFLOW_PATH.write_text(workflow_text, encoding="utf-8")
         return 0
-    drift = generated_artifact_drift((
-        (BUNDLE_PATH, bundle_text),
-        (BUNDLE_SCHEMA_PATH, bundle_schema_text),
-        (MANIFEST_PATH, manifest_text),
-        (WORKFLOW_PATH, workflow_text),
-    ))
+    drift = generated_artifact_drift(
+        (
+            (BUNDLE_PATH, bundle_text),
+            (BUNDLE_SCHEMA_PATH, bundle_schema_text),
+            (MANIFEST_PATH, manifest_text),
+            (WORKFLOW_PATH, workflow_text),
+        )
+    )
     if drift:
         print("platform bootstrap artifacts are stale: " + ", ".join(drift))
         print("run: python integrations/n8n/generate_platform_bootstrap.py --write")

@@ -107,6 +107,8 @@ def verified_manifest(document: dict, status: str) -> dict:
         reference="ghcr.io/srobroek/finance-n8n@sha256:" + "b" * 64,
         digest="sha256:" + "b" * 64,
     )
+    if status == "PRODUCTION_VERIFIED":
+        verified["blockers"] = []
     return verified
 
 
@@ -193,6 +195,22 @@ class N8nApplicationManifestTests(unittest.TestCase):
         source_mismatch = deepcopy(locked)
         source_mismatch["support_images"]["cashback"]["attestation"]["source_commit"] = "0" * 40
         self.assertIn("attestation source mismatch", " ".join(lock_cross_field_errors(source_mismatch)))
+
+    def test_manifest_blocker_cardinality_follows_contract_status(self) -> None:
+        spec_only = deepcopy(self.manifest)
+        self.assertEqual(schema_errors(spec_only, self.manifest_schema), [])
+        spec_only["blockers"] = []
+        self.assertTrue(schema_errors(spec_only, self.manifest_schema))
+
+        disposable = verified_manifest(self.manifest, "DISPOSABLE_VERIFIED")
+        self.assertEqual(schema_errors(disposable, self.manifest_schema), [])
+        disposable["blockers"] = []
+        self.assertTrue(schema_errors(disposable, self.manifest_schema))
+
+        production = verified_manifest(self.manifest, "PRODUCTION_VERIFIED")
+        self.assertEqual(schema_errors(production, self.manifest_schema), [])
+        production["blockers"] = ["STALE_BLOCKER"]
+        self.assertTrue(schema_errors(production, self.manifest_schema))
 
     def test_verified_disposable_and_production_fixtures_match_both_schemas(self) -> None:
         for status in ("LOCKED_DISPOSABLE", "LOCKED_PRODUCTION"):

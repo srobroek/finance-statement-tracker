@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Iterable
 
 from .models import Transaction
+from .transaction_semantics import is_finalized_for_consumption
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,16 +50,18 @@ def _label(value: str) -> str:
     return value.replace('"', "'").replace("\n", " ").strip()
 
 
-def month_category_totals(transactions: Iterable[Transaction], month: str) -> dict[str, Decimal]:
+def month_category_totals(
+    transactions: Iterable[Transaction], month: str
+) -> dict[str, Decimal]:
     year, month_number = (int(part) for part in month.split("-", 1))
     totals: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
     for transaction in transactions:
         when = transaction.transaction_at
         if (
-            when.year != year
+            not is_finalized_for_consumption(transaction)
+            or when.year != year
             or when.month != month_number
             or transaction.spend_aed <= 0
-            or transaction.review_required
         ):
             continue
         category = transaction.category or "Uncategorised"
@@ -69,11 +72,17 @@ def month_category_totals(transactions: Iterable[Transaction], month: str) -> di
 def month_close_markdown(transactions: Iterable[Transaction], month: str) -> str:
     totals = month_category_totals(transactions, month)
     generated = date.today().isoformat()
-    pie_lines = [f'    "{_label(category)}" : {amount.quantize(Decimal("0.01"))}' for category, amount in totals.items()]
+    pie_lines = [
+        f'    "{_label(category)}" : {amount.quantize(Decimal("0.01"))}'
+        for category, amount in totals.items()
+    ]
     if not pie_lines:
         pie_lines = ['    "No spend" : 1']
     table_lines = ["| Category | Spend (AED) |", "|---|---:|"]
-    table_lines.extend(f"| {category} | {amount.quantize(Decimal('0.01'))} |" for category, amount in totals.items())
+    table_lines.extend(
+        f"| {category} | {amount.quantize(Decimal('0.01'))} |"
+        for category, amount in totals.items()
+    )
     return "\n".join(
         [
             f"# Month close: {month}",
@@ -82,7 +91,7 @@ def month_close_markdown(transactions: Iterable[Transaction], month: str) -> str
             "",
             "```mermaid",
             "pie showData",
-            f'    title Spending by category — {month}',
+            f"    title Spending by category — {month}",
             *pie_lines,
             "```",
             "",

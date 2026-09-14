@@ -13,7 +13,10 @@ from finance_tracker.classification_audit import (
 from finance_tracker.models import Transaction
 from finance_tracker.platforms import ActualBudgetAdapter
 from finance_tracker.rules import RuleAction, RuleCondition, RuleEngine, StaticRule
-from finance_tracker.transaction_semantics import finalize_transaction_topic
+from finance_tracker.transaction_semantics import (
+    finalize_transaction_topic,
+    is_finalized_for_consumption,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +50,41 @@ class TransactionTopicTests(TestCase):
         self.assertTrue(transaction.is_refund)
         self.assertIn("refund", transaction.tags)
         self.assertIn("transaction_type", transaction.metadata["locked_fields"])
+
+    def test_matched_reimbursement_requires_link_and_round_trips_as_credit(
+        self,
+    ) -> None:
+        transaction = self.transaction(
+            "UTILITY PROVIDER",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.metadata["original_transaction_id"] = "purchase-1"
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REIMBURSEMENT")
+        self.assertTrue(transaction.is_refund)
+        self.assertEqual(transaction.spend_aed, Decimal("-3.55"))
+        self.assertIn("reimbursement", transaction.tags)
+        self.assertNotIn("refund", transaction.tags)
+
+    def test_reimbursement_hint_without_link_stays_refund(self) -> None:
+        transaction = self.transaction("UTILITY PROVIDER", direction="CREDIT")
+        transaction.tags.update({"refund", "reimbursement"})
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REFUND")
+        self.assertNotIn("reimbursement", transaction.tags)
+
+    def test_consumption_predicate_rejects_unknown_payee_and_pending_category(
+        self,
+    ) -> None:
+        transaction = self.transaction("SHOP", direction="DEBIT")
+        transaction.category = "GENERAL"
+        transaction.vendor = "Unknown"
+        self.assertFalse(is_finalized_for_consumption(transaction))
 
     def test_explicit_reward_credit_is_not_downgraded_to_refund(self) -> None:
         transaction = self.transaction(

@@ -4,19 +4,46 @@ import unittest
 from datetime import date
 from decimal import Decimal
 
-from finance_tracker.planning import SchedulePolicy, recommend_category_budgets, recommend_schedules
+from finance_tracker.planning import (
+    SchedulePolicy,
+    recommend_category_budgets,
+    recommend_schedules,
+)
 
 
 class PlanningTests(unittest.TestCase):
-    def test_budget_recommendations_ignore_current_month_transfers_and_reviews(self) -> None:
+    def test_budget_recommendations_ignore_current_month_transfers_and_reviews(
+        self,
+    ) -> None:
         rows = []
-        for month, amount in (("2026-01", -10000), ("2026-02", -12000), ("2026-03", -11000)):
-            rows.append({"date": f"{month}-05", "amount": amount, "category_name": "Groceries"})
+        for month, amount in (
+            ("2026-01", -10000),
+            ("2026-02", -12000),
+            ("2026-03", -11000),
+        ):
+            rows.append(
+                {"date": f"{month}-05", "amount": amount, "category_name": "Groceries"}
+            )
         rows.extend(
             [
                 {"date": "2026-04-05", "amount": -999999, "category_name": "Groceries"},
-                {"date": "2026-03-05", "amount": -500000, "category_name": "Card Payments"},
-                {"date": "2026-03-06", "amount": -500000, "category_name": "Needs Review"},
+                {
+                    "date": "2026-03-05",
+                    "amount": -500000,
+                    "category_name": "Card Payments",
+                },
+                {
+                    "date": "2026-03-06",
+                    "amount": -500000,
+                    "category_name": "Needs Review",
+                },
+                {
+                    "date": "2026-03-07",
+                    "amount": -500000,
+                    "category_name": "Groceries",
+                    "payee_name": "Shop",
+                    "notes": "#needs-review",
+                },
             ]
         )
 

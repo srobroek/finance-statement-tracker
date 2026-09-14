@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 import re
 from typing import Any, Iterable
-
 from .actual_notes import validate_actual_notes
+from .classification_audit import build_actual_snapshot_classification_report
 
 
 _SPACE = re.compile(r"[^a-z0-9]+")
@@ -82,7 +82,9 @@ def _resolve_catalogue_path(root: Path, relative_path: object) -> Path | None:
     return path
 
 
-def _evidence_index(root: Path, catalogue_path: Path) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
+def _evidence_index(
+    root: Path, catalogue_path: Path
+) -> tuple[dict[str, list[dict[str, Any]]], list[dict[str, Any]]]:
     payload = _read_json(catalogue_path)
     if not isinstance(payload, list):
         raise ValueError("Evidence catalogue must be a JSON array")
@@ -134,7 +136,9 @@ def _manifest_artifact_audit(
         "expected_sha256": expected_hash or None,
         "artifact": _relative(existing[0], root) if existing else None,
         "exists": bool(existing),
-        "hash_matches": bool(existing and expected_hash and actual_hash == expected_hash),
+        "hash_matches": bool(
+            existing and expected_hash and actual_hash == expected_hash
+        ),
         "actual_sha256": actual_hash,
     }
 
@@ -152,16 +156,23 @@ def _load_expected(
         if not source_id:
             raise ValueError("Every manifest source requires an id")
         allowed_accounts = set(str(value) for value in source.get("accounts") or [])
-        prefixes = tuple(str(value) for value in source.get("imported_id_prefixes") or [])
+        prefixes = tuple(
+            str(value) for value in source.get("imported_id_prefixes") or []
+        )
         for path in _manifest_paths(root, source):
             manifest = _read_json(path)
             if not isinstance(manifest, dict):
-                raise ValueError(f"Ingestion manifest must be an object: {_relative(path, root)}")
+                raise ValueError(
+                    f"Ingestion manifest must be an object: {_relative(path, root)}"
+                )
             envelopes = manifest.get("envelopes") or []
             statement = manifest.get("statement") or {}
             count = sum(len(envelope.get("records") or []) for envelope in envelopes)
             errors: list[str] = []
-            if source.get("require_balance_tied") and statement.get("balance_tied") is not True:
+            if (
+                source.get("require_balance_tied")
+                and statement.get("balance_tied") is not True
+            ):
                 errors.append("STATEMENT_NOT_BALANCE_TIED")
             stated_count = statement.get("transaction_count")
             if stated_count is not None and int(stated_count) != count:
@@ -178,23 +189,36 @@ def _load_expected(
                         errors.append("MISSING_IMPORTED_ID")
                     elif prefixes and not imported_id.startswith(prefixes):
                         errors.append(f"UNEXPECTED_IMPORTED_ID:{imported_id}")
-                    records.append(ExpectedRecord(source_id, _relative(path, root), account, dict(record)))
-            manifests.append({
-                "source_id": source_id,
-                "path": _relative(path, root),
-                "record_count": count,
-                "balance_tied": statement.get("balance_tied"),
-                "errors": sorted(set(errors)),
-            })
-            artifacts.append(_manifest_artifact_audit(root, manifest, path, evidence_by_hash))
+                    records.append(
+                        ExpectedRecord(
+                            source_id, _relative(path, root), account, dict(record)
+                        )
+                    )
+            manifests.append(
+                {
+                    "source_id": source_id,
+                    "path": _relative(path, root),
+                    "record_count": count,
+                    "balance_tied": statement.get("balance_tied"),
+                    "errors": sorted(set(errors)),
+                }
+            )
+            artifacts.append(
+                _manifest_artifact_audit(root, manifest, path, evidence_by_hash)
+            )
     return records, manifests, artifacts
 
 
-def _statement_evidence_audit(root: Path, rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+def _statement_evidence_audit(
+    root: Path, rows: Iterable[dict[str, Any]]
+) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     seen_hashes: set[str] = set()
     for row in rows:
-        if row.get("entity_type") != "CARD_PERIOD" or row.get("document_type") != "statement":
+        if (
+            row.get("entity_type") != "CARD_PERIOD"
+            or row.get("document_type") != "statement"
+        ):
             continue
         expected_hash = str(row.get("sha256") or "").casefold()
         if not expected_hash or expected_hash in seen_hashes:
@@ -203,20 +227,26 @@ def _statement_evidence_audit(root: Path, rows: Iterable[dict[str, Any]]) -> lis
         path = _resolve_catalogue_path(root, row.get("relative_path"))
         exists = bool(path and path.is_file())
         actual_hash = _sha256(path) if exists and path is not None else None
-        result.append({
-            "bank": row.get("bank"),
-            "card_code": row.get("card_code"),
-            "statement_date": row.get("statement_date"),
-            "path": str(row.get("relative_path") or ""),
-            "exists": exists,
-            "expected_sha256": expected_hash,
-            "actual_sha256": actual_hash,
-            "hash_matches": actual_hash == expected_hash,
-        })
-    return sorted(result, key=lambda row: (str(row["statement_date"]), str(row["bank"])))
+        result.append(
+            {
+                "bank": row.get("bank"),
+                "card_code": row.get("card_code"),
+                "statement_date": row.get("statement_date"),
+                "path": str(row.get("relative_path") or ""),
+                "exists": exists,
+                "expected_sha256": expected_hash,
+                "actual_sha256": actual_hash,
+                "hash_matches": actual_hash == expected_hash,
+            }
+        )
+    return sorted(
+        result, key=lambda row: (str(row["statement_date"]), str(row["bank"]))
+    )
 
 
-def _actual_rows(snapshot: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:
+def _actual_rows(
+    snapshot: dict[str, Any], config: dict[str, Any]
+) -> list[dict[str, Any]]:
     scope = config.get("snapshot_scope") or {}
     accounts = set(str(value) for value in scope.get("accounts") or [])
     prefixes = tuple(str(value) for value in scope.get("imported_id_prefixes") or [])
@@ -236,7 +266,9 @@ def _actual_rows(snapshot: dict[str, Any], config: dict[str, Any]) -> list[dict[
     return result
 
 
-def _untracked_actual_rows(snapshot: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:
+def _untracked_actual_rows(
+    snapshot: dict[str, Any], config: dict[str, Any]
+) -> list[dict[str, Any]]:
     """Return scoped rows that cannot be traced to an import or native transfer."""
     scope = config.get("snapshot_scope") or {}
     accounts = set(str(value) for value in scope.get("accounts") or [])
@@ -246,7 +278,11 @@ def _untracked_actual_rows(snapshot: dict[str, Any], config: dict[str, Any]) -> 
             continue
         if accounts and str(raw.get("account_name") or "") not in accounts:
             continue
-        if raw.get("imported_id") or raw.get("starting_balance_flag") or raw.get("transfer_id"):
+        if (
+            raw.get("imported_id")
+            or raw.get("starting_balance_flag")
+            or raw.get("transfer_id")
+        ):
             continue
         result.append(dict(raw))
     return result
@@ -276,17 +312,19 @@ def _suppressed_statement_duplicates(
         imported_id = str(item.record.get("imported_id") or "")
         if not imported_id.startswith("statement:"):
             continue
-        key = _economic_key(item.record)
-        matches = browser_by_key.get(key) or []
-        if incoming_counts[key] == 1 and len(matches) == 1:
-            ids.add(imported_id)
-            suppressed.append({
+        matches = browser_by_key.get(_economic_key(item.record), [])
+        if len(matches) != 1:
+            continue
+        ids.add(imported_id)
+        suppressed.append(
+            {
                 "imported_id": imported_id,
                 "matched_existing_id": matches[0].get("imported_id"),
                 "date": item.record.get("date"),
                 "amount": item.record.get("amount"),
                 "imported_payee": item.record.get("imported_payee"),
-            })
+            }
+        )
     return suppressed, ids
 
 
@@ -313,6 +351,7 @@ def validate_full_ingestion(
     evidence_by_hash, evidence_rows = _evidence_index(root, catalogue_path)
     expected, manifests, artifacts = _load_expected(root, config, evidence_by_hash)
     actual = _actual_rows(snapshot, config)
+    classification_report = build_actual_snapshot_classification_report(actual)
     untracked_actual = _untracked_actual_rows(snapshot, config)
     sample_limit = int(config.get("sample_limit") or 25)
 
@@ -341,10 +380,7 @@ def validate_full_ingestion(
     suppressed, suppressed_ids = _suppressed_statement_duplicates(
         missing_rows, expected, actual_by_id
     )
-    suppression_targets = {
-        str(row["matched_existing_id"])
-        for row in suppressed
-    }
+    suppression_targets = {str(row["matched_existing_id"]) for row in suppressed}
     missing = [
         str(item.record["imported_id"])
         for item in missing_rows
@@ -368,26 +404,35 @@ def validate_full_ingestion(
             desired = _expected_field(expected_item, field)
             observed = _actual_field(actual_row, field)
             if desired != observed:
-                mismatches.append({
-                    "imported_id": imported_id,
-                    "field": field,
-                    "expected": desired,
-                    "actual": observed,
-                })
+                mismatches.append(
+                    {
+                        "imported_id": imported_id,
+                        "field": field,
+                        "expected": desired,
+                        "actual": observed,
+                    }
+                )
 
     note_violations: list[dict[str, str]] = []
     for row in actual:
         try:
             validate_actual_notes(str(row.get("notes") or ""))
         except ValueError as error:
-            note_violations.append({
-                "imported_id": str(row.get("imported_id") or ""),
-                "error": str(error),
-            })
+            note_violations.append(
+                {
+                    "imported_id": str(row.get("imported_id") or ""),
+                    "error": str(error),
+                }
+            )
 
     evidence_audit = _statement_evidence_audit(root, evidence_rows)
     account_rows: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"source_records": 0, "actual_records": 0, "source_amount": 0, "actual_amount": 0}
+        lambda: {
+            "source_records": 0,
+            "actual_records": 0,
+            "source_amount": 0,
+            "actual_amount": 0,
+        }
     )
     for item in expected:
         row = account_rows[item.account]
@@ -405,24 +450,37 @@ def validate_full_ingestion(
         if row["errors"]
     ]
     artifact_failures = [
-        row for row in artifacts
+        row
+        for row in artifacts
         if row["expected_sha256"] and (not row["exists"] or not row["hash_matches"])
     ]
     statement_evidence_failures = [
         row for row in evidence_audit if not row["exists"] or not row["hash_matches"]
     ]
-    status = "PASS" if not any((
-        duplicate_expected,
-        duplicate_actual,
-        missing,
-        unexpected,
-        mismatches,
-        note_violations,
-        untracked_actual,
-        manifest_errors,
-        artifact_failures,
-        statement_evidence_failures,
-    )) else "FAIL"
+    classification_exceptions = classification_report.get("exceptions") or []
+    classification_unaccounted = (
+        classification_report.get("unaccounted_transaction_ids") or []
+    )
+    status = (
+        "PASS"
+        if not any(
+            (
+                duplicate_expected,
+                duplicate_actual,
+                missing,
+                unexpected,
+                mismatches,
+                note_violations,
+                untracked_actual,
+                manifest_errors,
+                artifact_failures,
+                statement_evidence_failures,
+                classification_exceptions,
+                classification_unaccounted,
+            )
+        )
+        else "FAIL"
+    )
     return {
         "schema_version": "full-ingestion-audit-v1",
         "status": status,
@@ -440,6 +498,8 @@ def validate_full_ingestion(
             "untracked_actual_rows": len(untracked_actual),
             "statement_evidence": len(evidence_audit),
             "statement_evidence_failures": len(statement_evidence_failures),
+            "classification_exceptions": len(classification_exceptions),
+            "classification_unaccounted": len(classification_unaccounted),
         },
         "accounts": dict(sorted(account_rows.items())),
         "suppressed_cross_source_duplicates": suppressed,
@@ -462,6 +522,7 @@ def validate_full_ingestion(
         "manifest_errors": manifest_errors,
         "artifact_failures": artifact_failures[:sample_limit],
         "statement_evidence_failures": statement_evidence_failures[:sample_limit],
+        "classification_report": classification_report,
         "manifests": manifests,
     }
 

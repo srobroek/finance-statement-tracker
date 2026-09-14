@@ -18,17 +18,21 @@ class StatementSourceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.sources = load_statement_sources(Path("config/statement-sources.json"))
 
-    def test_registry_covers_implemented_adapters_and_preserves_placeholders(self) -> None:
+    def test_registry_covers_implemented_adapters_and_preserves_placeholders(
+        self,
+    ) -> None:
         validate_statement_adapter_coverage(
             self.sources,
             DEFAULT_STATEMENT_ADAPTERS.codes,
         )
-        placeholders = {source.card_code for source in self.sources if not source.adapter_active}
-        self.assertEqual(placeholders, {"RAK_WORLD", "SC_PLATINUM_X"})
+        placeholders = {
+            source.card_code for source in self.sources if not source.adapter_active
+        }
+        self.assertEqual(placeholders, {"SC_PLATINUM_X"})
 
     def test_placeholder_card_cannot_be_ingested(self) -> None:
         with self.assertRaisesRegex(ValueError, "placeholder"):
-            require_active_statement_adapter(self.sources, "RAK_WORLD", None)
+            require_active_statement_adapter(self.sources, "SC_PLATINUM_X", None)
 
     def test_active_card_resolves_only_its_registered_adapter(self) -> None:
         self.assertEqual(

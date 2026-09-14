@@ -81,17 +81,24 @@ function isoWord(day: string, month: string, year: string | number): string {
   return date.toISOString().slice(0, 10);
 }
 
+function statementTimestamp(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return Number.NaN;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return Number.NaN;
+  return timestamp;
+}
+
 function resolveStatementDate(day: string, month: string, periodStart: string | null, periodEnd: string | null): string {
   if (!periodStart || !periodEnd) throw new Error(`Cannot resolve ${day} ${month} without authoritative statement bounds`);
-  const start = Date.parse(`${periodStart}T00:00:00Z`);
-  const end = Date.parse(`${periodEnd}T00:00:00Z`);
+  const start = statementTimestamp(periodStart);
+  const end = statementTimestamp(periodEnd);
   if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) throw new Error('Invalid authoritative statement bounds');
   const candidates: string[] = [];
   for (let year = Number(periodStart.slice(0, 4)); year <= Number(periodEnd.slice(0, 4)); year += 1) {
     try {
       const value = isoWord(day, month, year);
-      const timestamp = Date.parse(`${value}T00:00:00Z`);
-      if (timestamp >= start && timestamp <= end) candidates.push(value);
+      const timestamp = statementTimestamp(value);
+      if (Number.isFinite(timestamp) && timestamp >= start && timestamp <= end) candidates.push(value);
     } catch {
       // Invalid calendar dates are not candidates.
     }

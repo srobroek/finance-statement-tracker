@@ -264,7 +264,7 @@
     },
     "blockers": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "uniqueItems": true,
       "items": {
         "type": "string"
@@ -291,6 +291,9 @@
                 "type": "null"
               }
             }
+          },
+          "blockers": {
+            "minItems": 1
           }
         }
       },
@@ -301,6 +304,38 @@
           },
           "extension_image": {
             "$ref": "#/$defs/verifiedExtensionImage"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contract_status": {
+            "const": "DISPOSABLE_VERIFIED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "blockers": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "contract_status": {
+            "const": "PRODUCTION_VERIFIED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "blockers": {
+            "maxItems": 0
           }
         }
       }

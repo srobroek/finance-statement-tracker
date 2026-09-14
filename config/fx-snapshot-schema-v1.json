@@ -22,6 +22,12 @@
     "precision": {"type": "integer", "minimum": 0, "maximum": 12},
     "max_age_seconds": {"type": "integer", "minimum": 1},
     "source_identity": {"type": "string", "minLength": 1},
-    "uncertainty": {"enum": ["KNOWN", "ESTIMATE", "UNKNOWN"]}
+    "uncertainty": {"enum": ["KNOWN", "ESTIMATE", "UNKNOWN"]},
+    "original_amount": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$"},
+    "original_currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+    "published_at": {"type": "string", "format": "date-time"},
+    "retrieved_at": {"type": "string", "format": "date-time"},
+    "units": {"type": "string", "minLength": 1},
+    "sell_basis": {"const": "DISPLAYED_SELL"}
   }
 }

@@ -86,6 +86,37 @@ class N8nMailE2EContractTests(unittest.TestCase):
                 self.assertEqual(receipt["replay"]["actual_new_writes"], 0)
                 self.assertEqual(receipt["replay"]["cursor_new_writes"], 0)
 
+    def test_same_content_attachments_keep_source_identity_and_replay_is_idempotent(self) -> None:
+        shared_content = base64.b64encode(b"%PDF-shared-content%").decode()
+        first = _attachment("attachment-a")
+        first["content_base64"] = shared_content
+        second = _attachment("attachment-b")
+        second["content_base64"] = shared_content
+        receipt = run_synthetic_e2e(
+            source_code="EI_AMAZON",
+            messages=[
+                _message(
+                    "message-a",
+                    received="2026-08-21T00:01:00+00:00",
+                    attachments=[first],
+                ),
+                _message(
+                    "message-b",
+                    received="2026-08-21T00:02:00+00:00",
+                    attachments=[second],
+                ),
+            ],
+        )
+        rows = receipt["archive"]["attachment_rows"]
+        self.assertEqual(receipt["archive"]["attachment_writes"], 2)
+        self.assertEqual(
+            {row["identity_key"] for row in rows},
+            {"message-a:attachment-a", "message-b:attachment-b"},
+        )
+        self.assertEqual({row["source_sha256"] for row in rows}, {rows[0]["source_sha256"]})
+        self.assertTrue(receipt["replay"]["idempotent"])
+        self.assertEqual(receipt["replay"]["attachment_new_writes"], 0)
+
     def test_zero_one_and_101_message_fixtures_have_exact_enumeration_counts(self) -> None:
         for source_code, count in (("EI_AMAZON", 0), ("EI_AMAZON", 1), ("WIO_CREDIT", 101)):
             with self.subTest(source_code=source_code, count=count):

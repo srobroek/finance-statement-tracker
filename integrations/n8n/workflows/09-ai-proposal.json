@@ -556,14 +556,44 @@
     {
       "id": "9014",
       "name": "Return Proposal Only",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
         -520,
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Proposal Only. Keep this deterministic and fail closed.\nconst p = $('Validate Proposal Schema and Policy Boundary').first().json;\nreturn [{ json: { policy_id: p.policy_id, job_id: p.job_id, idempotency_key: p.idempotency_key, proposals: p.proposals } }];\n"
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9014-proposal-policy-id",
+              "name": "policy_id",
+              "type": "string",
+              "value": "={{ $('Validate Proposal Schema and Policy Boundary').first().json.policy_id }}"
+            },
+            {
+              "id": "9014-proposal-job-id",
+              "name": "job_id",
+              "type": "string",
+              "value": "={{ $('Validate Proposal Schema and Policy Boundary').first().json.job_id }}"
+            },
+            {
+              "id": "9014-proposal-idempotency-key",
+              "name": "idempotency_key",
+              "type": "string",
+              "value": "={{ $('Validate Proposal Schema and Policy Boundary').first().json.idempotency_key }}"
+            },
+            {
+              "id": "9014-proposal-proposals",
+              "name": "proposals",
+              "type": "array",
+              "value": "={{ $('Validate Proposal Schema and Policy Boundary').first().json.proposals }}"
+            }
+          ]
+        },
+        "options": {}
       }
     },
     {

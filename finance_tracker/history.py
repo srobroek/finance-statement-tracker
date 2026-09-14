@@ -8,6 +8,7 @@ from typing import Iterable
 from pathlib import Path
 
 from .models import Transaction
+from .properties import locked_ownership_conflict
 
 
 _NOISE = re.compile(r"\b(?:AED|UAE|DUBAI|ABU DHABI|POS|ONLINE|PURCHASE)\b|\d+")
@@ -76,12 +77,26 @@ def build_history_index(
     return decisions
 
 
+def _mark_ownership_conflict(transaction: Transaction) -> None:
+    reasons = transaction.metadata.setdefault("property_review_reasons", [])
+    if not isinstance(reasons, list):
+        reasons = list(reasons) if isinstance(reasons, (tuple, set)) else [str(reasons)]
+        transaction.metadata["property_review_reasons"] = reasons
+    if "LOCKED_OWNERSHIP_CONFLICT" not in reasons:
+        reasons.append("LOCKED_OWNERSHIP_CONFLICT")
+    if "tags" not in set(transaction.metadata.get("locked_fields", [])):
+        transaction.tags.discard("shared")
+    transaction.review_required = True
+
+
 def _history_tag_lock_reason(transaction: Transaction, tag: object) -> str | None:
     metadata = transaction.metadata
     locked = set(metadata.get("locked_fields", []))
     if "tags" in locked:
         return "tags"
     normalized = str(tag).strip().casefold()
+    if normalized == "shared" and locked_ownership_conflict(transaction):
+        return "ownership_conflict"
     if (
         normalized in {"subscription", "recurring"}
         and "is_subscription" in locked
@@ -113,6 +128,8 @@ def apply_history_match(
     transaction: Transaction,
     history: dict[str, HistoryDecision],
 ) -> HistoryTrace | None:
+    if locked_ownership_conflict(transaction):
+        _mark_ownership_conflict(transaction)
     fingerprint = merchant_fingerprint(transaction.merchant_raw)
     decision = history.get(fingerprint)
     if decision is None:

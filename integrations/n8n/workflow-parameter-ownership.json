@@ -202,7 +202,9 @@
         "PDF Extraction Parameters": {
           "caller_fields": {
             "document_id": "string",
-            "source_sha256": "string"
+            "source_sha256": "string",
+            "source_code": "string",
+            "card_code": "string"
           },
           "fields": {
             "document_profile": {

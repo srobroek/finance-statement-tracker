@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-import re
 import calendar
+import re
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any
 
+from .actual_pipeline import account_maps, account_owner_map
 from .cashback import (
     PaymentIntent,
+    _refund_cashback_deduction,
     bucket_spend,
     channel_from_config,
     configured_reward_bucket,
@@ -21,9 +24,102 @@ from .cashback import (
     reward_total,
     total_spend,
 )
-from .models import Transaction
-from .actual_pipeline import account_maps, account_owner_map
-from .transaction_semantics import REFUND_TOPICS, TOPIC_BY_TAG
+from .models import CardMembership, Transaction
+from .transaction_semantics import (
+    PENDING_CATEGORY_VALUES,
+    REFUND_TOPICS,
+    TOPIC_BY_TAG,
+    UNKNOWN_PAYEE_VALUES,
+)
+
+
+MEMBERSHIP_REQUIRED_CARDS = frozenset({"SC_PLATINUM_X"})
+
+
+def _membership_records(
+    memberships: Iterable[object] | Mapping[str, object] | None,
+) -> tuple[Mapping[str, object], ...]:
+    if memberships is None:
+        return ()
+    if isinstance(memberships, Mapping):
+        if "card_code" in memberships:
+            raw_records: Iterable[object] = (memberships,)
+        else:
+            raw_records = tuple(
+                (
+                    {**value, "card_code": value.get("card_code") or card}
+                    if isinstance(value, Mapping)
+                    else {"card_code": card, "status": value}
+                )
+                for card, value in memberships.items()
+            )
+    else:
+        raw_records = memberships
+    records: list[Mapping[str, object]] = []
+    for record in raw_records:
+        if isinstance(record, CardMembership):
+            records.append(record.to_dict())
+        elif isinstance(record, Mapping):
+            records.append(record)
+        else:
+            raise ValueError("Cashback memberships must be objects")
+    return tuple(records)
+
+
+def _membership_is_held(record: Mapping[str, object]) -> bool:
+    coverage = str(record.get("coverage") or "").strip().upper()
+    if "sc_held" in record:
+        return coverage == "HELD" and record.get("sc_held") is True
+    if coverage:
+        return coverage == "HELD"
+    status = (
+        str(
+            record.get("status")
+            or record.get("membership_status")
+            or record.get("lifecycle_status")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
+    if status in {"HELD", "ACTIVE"}:
+        return True
+    return record.get("active") is True
+
+
+def eligible_card_codes(
+    programs: Iterable[Any],
+    memberships: Iterable[object] | Mapping[str, object] | None = None,
+) -> frozenset[str]:
+    """Return cards allowed to participate in live cashback projections.
+
+    Statement-only programmes remain available to the evidence store, but
+    never become live spend. Cards whose membership is unknown are also
+    unavailable; a held/active claim must be explicit.
+    """
+    held_cards: set[str] = set()
+    membership_states: dict[str, bool] = {}
+    for record in _membership_records(memberships):
+        card = str(record.get("card_code") or "").strip().upper()
+        if not card:
+            raise ValueError("Cashback memberships require card_code")
+        held = _membership_is_held(record)
+        previous = membership_states.get(card)
+        if previous is not None and previous != held:
+            raise ValueError(f"Conflicting membership state for {card}")
+        membership_states[card] = held
+        if held:
+            held_cards.add(card)
+
+    eligible: set[str] = set()
+    for program in programs:
+        card = str(program.card).strip().upper()
+        if program.tracking_mode == "STATEMENT_ONLY":
+            continue
+        if card in MEMBERSHIP_REQUIRED_CARDS and card not in held_cards:
+            continue
+        eligible.add(card)
+    return frozenset(eligible)
 
 
 _TAG = re.compile(r"(?:^|\s)#([A-Za-z0-9_:-]+)")
@@ -39,15 +135,20 @@ def _tags(notes: str) -> set[str]:
 
 def _canonical_topic(tags: set[str]) -> str | None:
     topics = {
-        TOPIC_BY_TAG[tag.casefold()]
-        for tag in tags
-        if tag.casefold() in TOPIC_BY_TAG
+        TOPIC_BY_TAG[tag.casefold()] for tag in tags if tag.casefold() in TOPIC_BY_TAG
     }
-    # Older rows used #refund for reversals; prefer the durable canonical tag.
+    # A legacy/refund hint may coexist with reimbursement. Without durable
+    # linkage it is still an ordinary refund; canonical reimbursements emit
+    # only #reimbursement and therefore round-trip unambiguously.
+    if "REFUND" in topics and "REIMBURSEMENT" in topics:
+        topics.discard("REIMBURSEMENT")
     if "REVERSAL" in topics:
         topics.discard("REFUND")
+        topics.discard("REIMBURSEMENT")
     if len(topics) > 1:
-        raise ValueError("Conflicting canonical Actual topic tags: " + ", ".join(sorted(topics)))
+        raise ValueError(
+            "Conflicting canonical Actual topic tags: " + ", ".join(sorted(topics))
+        )
     return next(iter(topics), None)
 
 
@@ -72,11 +173,13 @@ def _reward_bucket(
     currency: str,
     tags: set[str],
 ) -> str | None:
-    tagged_buckets = sorted({
-        tag[9:].replace("-", "_").upper()
-        for tag in tags
-        if tag.casefold().startswith("cashback-")
-    })
+    tagged_buckets = sorted(
+        {
+            tag[9:].replace("-", "_").upper()
+            for tag in tags
+            if tag.casefold().startswith("cashback-")
+        }
+    )
     if len(tagged_buckets) > 1:
         raise ValueError(
             "Conflicting cashback bucket tags: " + ", ".join(tagged_buckets)
@@ -92,7 +195,9 @@ def transactions_from_actual_snapshot(
     cashback_config: dict[str, Any] | None = None,
 ) -> list[Transaction]:
     cashback_source = cashback_config or load_program_configuration()
-    base_currency = str(cashback_source.get("currency") or config.get("currency") or "XXX").upper()
+    base_currency = str(
+        cashback_source.get("currency") or config.get("currency") or "XXX"
+    ).upper()
     programs = programs_from_config(cashback_source)
     retired_config = config.get("retired_accounts", [])
     if not isinstance(retired_config, list) or any(
@@ -140,13 +245,15 @@ def transactions_from_actual_snapshot(
         for alias in account.get("aliases", []):
             bind_account_identifier(str(alias), card)
 
-    unknown_accounts = sorted({
-        str(row["account_name"])
-        for row in snapshot.get("transactions", [])
-        if str(row["account_name"]).casefold() not in card_by_account
-        and str(row["account_name"]).casefold() not in retired_accounts
-        and str(row["account_name"]).casefold() not in disabled_accounts
-    })
+    unknown_accounts = sorted(
+        {
+            str(row["account_name"])
+            for row in snapshot.get("transactions", [])
+            if str(row["account_name"]).casefold() not in card_by_account
+            and str(row["account_name"]).casefold() not in retired_accounts
+            and str(row["account_name"]).casefold() not in disabled_accounts
+        }
+    )
     if unknown_accounts:
         raise ValueError(
             "Unknown active Actual snapshot accounts: " + ", ".join(unknown_accounts)
@@ -162,17 +269,16 @@ def transactions_from_actual_snapshot(
         notes = str(row.get("notes") or "")
         tags = _tags(notes)
         merchant = str(row.get("imported_payee") or row.get("payee_name") or "Unknown")
+        payee = str(row.get("payee_name") or row.get("imported_payee") or "").strip()
+        unresolved_payee = payee.casefold() in UNKNOWN_PAYEE_VALUES
         currency_match = _CURRENCY.search(notes)
         currency = currency_match.group(1).upper() if currency_match else base_currency
         native_category = str(row.get("category_name") or "").strip() or None
         category = purchase_type_from_config(cashback_source, native_category, merchant)
-        unresolved_category = native_category is None or native_category.casefold() in {
-            "holding",
-            "needs review",
-            "uncategorized",
-            "uncategorised",
-            "unmapped",
-        }
+        unresolved_category = (
+            native_category is None
+            or native_category.casefold() in PENDING_CATEGORY_VALUES
+        )
         channel = channel_from_config(cashback_source, tags, merchant, card)
         amount_minor = int(row["amount"])
         canonical_topic = _canonical_topic(tags)
@@ -180,23 +286,33 @@ def transactions_from_actual_snapshot(
         card_payment = row.get("category_name") == "Card Payments" or any(
             tag.casefold() == "card-payment" for tag in tags
         )
-        income_category = row.get("category_name") in {"Cashback & Rewards", "Other Income"}
+        income_category = row.get("category_name") in {
+            "Cashback & Rewards",
+            "Other Income",
+        }
         transaction_type = (
             canonical_topic
             if canonical_topic is not None
-            else "TRANSFER" if transfer or card_payment else
-            "REWARD_CREDIT" if amount_minor > 0 and income_category else
-            "REVERSAL" if amount_minor > 0 and "reversal" in {tag.casefold() for tag in tags} else
-            "REFUND" if amount_minor > 0 else
-            "PURCHASE"
+            else "TRANSFER"
+            if transfer or card_payment
+            else "REWARD_CREDIT"
+            if amount_minor > 0 and income_category
+            else "REVERSAL"
+            if amount_minor > 0 and "reversal" in {tag.casefold() for tag in tags}
+            else "REFUND"
+            if amount_minor > 0
+            else "PURCHASE"
         )
         result.append(
             Transaction(
                 transaction_id=str(row.get("imported_id") or f"actual:{row['id']}"),
-                transaction_at=datetime.combine(date.fromisoformat(str(row["date"])), time.min),
+                transaction_at=datetime.combine(
+                    date.fromisoformat(str(row["date"])), time.min
+                ),
                 card=card,
                 merchant_raw=merchant,
                 account=account_name,
+                owner=owner_by_card.get(card),
                 category=category,
                 subcategory=native_category,
                 vendor=row.get("payee_name"),
@@ -206,18 +322,29 @@ def transactions_from_actual_snapshot(
                 channel=channel,
                 source_type="actual_snapshot",
                 transaction_type=transaction_type,
-                reward_bucket=_reward_bucket(programs, card, category, channel, currency, tags),
+                reward_bucket=_reward_bucket(
+                    programs, card, category, channel, currency, tags
+                ),
                 tags={
                     tag
                     for tag in tags
-                    if not tag.casefold().startswith(("channel-", "cashback-", "owner-"))
+                    if not tag.casefold().startswith(
+                        ("channel-", "cashback-", "owner-")
+                    )
                 },
-                review_required=unresolved_category or bool({"review", "needs-review"} & tags),
+                review_required=unresolved_category
+                or unresolved_payee
+                or bool({"review", "needs-review"} & {tag.casefold() for tag in tags}),
                 is_refund=transaction_type in REFUND_TOPICS,
                 metadata={
                     "actual_id": row["id"],
                     "actual_category_name": native_category,
-                    "category_resolution": "UNRESOLVED" if unresolved_category else "RESOLVED",
+                    "category_resolution": "UNRESOLVED"
+                    if unresolved_category
+                    else "RESOLVED",
+                    "payee_resolution": "UNRESOLVED"
+                    if unresolved_payee
+                    else "RESOLVED",
                     "cleared": bool(row.get("cleared")),
                     "reconciled": bool(row.get("reconciled")),
                 },
@@ -239,34 +366,48 @@ def _bucket_state(
         spend_cap = bucket.spend_cap_aed
         if spend_cap is None:
             cashback_cap = target_tier.cashback_cap(bucket.code, bucket.cap_aed)
-            spend_cap = None if cashback_cap is None or rate <= 0 else cashback_cap / rate
-        bucket_ratio = None if spend_cap in (None, Decimal("0")) else bucket_actual / spend_cap
+            spend_cap = (
+                None if cashback_cap is None or rate <= 0 else cashback_cap / rate
+            )
+        bucket_ratio = (
+            None if spend_cap in (None, Decimal("0")) else bucket_actual / spend_cap
+        )
         bucket_status = (
-            "FULL" if bucket_ratio is not None and bucket_ratio >= 1
-            else "NEAR_FULL" if (
+            "FULL"
+            if bucket_ratio is not None and bucket_ratio >= 1
+            else "NEAR_FULL"
+            if (
                 bucket_ratio is not None
                 and bucket_ratio >= program.alert_policy.bucket_near_full_ratio
             )
             else "OPEN"
         )
-        bucket_rows.append({
-            "code": bucket.code,
-            "spend_aed": _plain(bucket_actual),
-            "spend_cap_aed": None if spend_cap is None else _plain(spend_cap),
-            "headroom_aed": None if spend_cap is None else _plain(max(spend_cap - bucket_actual, Decimal("0"))),
-            "status": bucket_status,
-        })
+        bucket_rows.append(
+            {
+                "code": bucket.code,
+                "spend_aed": _plain(bucket_actual),
+                "spend_cap_aed": None if spend_cap is None else _plain(spend_cap),
+                "headroom_aed": None
+                if spend_cap is None
+                else _plain(max(spend_cap - bucket_actual, Decimal("0"))),
+                "status": bucket_status,
+            }
+        )
         if bucket_status in {"FULL", "NEAR_FULL"}:
-            alerts.append({
-                "key": f"bucket:{program.card}:{bucket.code}:{bucket_status.lower()}",
-                "severity": "warning" if bucket_status == "NEAR_FULL" else "critical",
-                "title": f"{program.name} {bucket.code.replace('_', ' ').title()} is {bucket_status.replace('_', ' ').lower()}",
-                "detail": (
-                    "Route new eligible spend to the next recommended card."
-                    if bucket_status == "FULL"
-                    else "Headroom is below 10%; check routing before the next large payment."
-                ),
-            })
+            alerts.append(
+                {
+                    "key": f"bucket:{program.card}:{bucket.code}:{bucket_status.lower()}",
+                    "severity": "warning"
+                    if bucket_status == "NEAR_FULL"
+                    else "critical",
+                    "title": f"{program.name} {bucket.code.replace('_', ' ').title()} is {bucket_status.replace('_', ' ').lower()}",
+                    "detail": (
+                        "Route new eligible spend to the next recommended card."
+                        if bucket_status == "FULL"
+                        else "Headroom is below 10%; check routing before the next large payment."
+                    ),
+                }
+            )
     return bucket_rows, alerts
 
 
@@ -316,8 +457,10 @@ def _pace_state(
     )
     pace = {
         key: (
-            _plain(value) if isinstance(value, Decimal)
-            else value.isoformat() if isinstance(value, date)
+            _plain(value)
+            if isinstance(value, Decimal)
+            else value.isoformat()
+            if isinstance(value, date)
             else value
         )
         for key, value in pace.items()
@@ -339,33 +482,37 @@ def _pace_state(
         routing_mode = "CURRENT_TIER"
         routing_program = replace(program, safety_target=None)
     if elapsed_days >= risk_after_days and spend < program.safety_target:
-        alerts.append({
-            "key": f"minimum:{program.card}:{period_start}:{period_end}",
-            "severity": "warning",
-            "title": f"{program.name} minimum is at risk",
-            "detail": (
-                f"{base_currency} {_plain(program.safety_target - spend)} remains after week "
-                f"{program.alert_policy.minimum_risk_after_week} of the cycle."
-            ),
-        })
+        alerts.append(
+            {
+                "key": f"minimum:{program.card}:{period_start}:{period_end}",
+                "severity": "warning",
+                "title": f"{program.name} minimum is at risk",
+                "detail": (
+                    f"{base_currency} {_plain(program.safety_target - spend)} remains after week "
+                    f"{program.alert_policy.minimum_risk_after_week} of the cycle."
+                ),
+            }
+        )
     days_remaining = (period_end - as_of).days
     if (
         0 <= days_remaining <= program.alert_policy.close_warning_days
         and spend < program.safety_target
     ):
-        alerts.append({
-            "key": f"close:{program.card}:{period_start}:{period_end}",
-            "severity": (
-                "critical"
-                if days_remaining <= program.alert_policy.close_critical_days
-                else "warning"
-            ),
-            "title": f"{program.name} target is not secured",
-            "detail": (
-                f"{base_currency} {_plain(program.safety_target - spend)} remains with "
-                f"{days_remaining} day{'s' if days_remaining != 1 else ''} until cycle close."
-            ),
-        })
+        alerts.append(
+            {
+                "key": f"close:{program.card}:{period_start}:{period_end}",
+                "severity": (
+                    "critical"
+                    if days_remaining <= program.alert_policy.close_critical_days
+                    else "warning"
+                ),
+                "title": f"{program.name} target is not secured",
+                "detail": (
+                    f"{base_currency} {_plain(program.safety_target - spend)} remains with "
+                    f"{days_remaining} day{'s' if days_remaining != 1 else ''} until cycle close."
+                ),
+            }
+        )
     return pace, routing_mode, routing_program, alerts
 
 
@@ -385,13 +532,13 @@ def _build_card_state(
             row
             for row in rows
             if row.card == program.card
-            and (
-                period is None
-                or period[0] <= row.transaction_at.date() <= period[1]
-            )
+            and (period is None or period[0] <= row.transaction_at.date() <= period[1])
         ]
         spend = total_spend(card_transactions, program.card)
         buckets = bucket_spend(card_transactions, program.card)
+        refund_deduction = _refund_cashback_deduction(
+            program, card_transactions, spend, buckets
+        )
         target_tier = program.target_tier(program.safety_target or spend, buckets)
         bucket_rows, bucket_alerts = _bucket_state(program, buckets, target_tier)
         alerts.extend(bucket_alerts)
@@ -405,53 +552,77 @@ def _build_card_state(
         )
         routing_programs.append(routing_program)
         alerts.extend(pace_alerts)
-        program_rows.append({
-            "card": program.card,
-            "name": program.name,
-            "short_name": program.short_name or program.name,
-            "tracking_mode": program.tracking_mode,
-            "position_mode": program.position_mode,
-            "position_headline": program.position_headline,
-            "position_detail": program.position_detail,
-            "programme_version": program.programme_version,
-            "effective_start": None if program.effective_start is None else program.effective_start.isoformat(),
-            "effective_end": None if program.effective_end is None else program.effective_end.isoformat(),
-            "statement_close_day": program.statement_close_day,
-            "reward_cycle_basis": program.reward_cycle_basis,
-            "payment_due_forecast_days": program.payment_due_forecast_days,
-            "period_start": None if period is None else period[0].isoformat(),
-            "period_end": None if period is None else period[1].isoformat(),
-            "total_spend_aed": _plain(spend),
-            "safety_target_aed": None if program.safety_target is None else _plain(program.safety_target),
-            "tier": program.tier_for(spend, buckets).code,
-            "expected_cashback_aed": _plain(reward_total(program, spend, buckets)),
-            "tiers": [
-                {
-                    "code": tier.code,
-                    "minimum_spend_aed": _plain(tier.minimum_spend),
-                    "met": tier.qualifies(spend, buckets),
-                    "remaining_aed": _plain(max(tier.minimum_spend - spend, Decimal("0"))),
-                    "requirements": [
-                        {
-                            "metric": requirement.metric,
-                            "operator": requirement.operator,
-                            "value": _plain(requirement.value),
-                            "bucket": requirement.bucket,
-                            "met": requirement.met(spend, buckets),
-                        }
-                        for requirement in tier.requirements
-                    ],
-                }
-                for tier in program.tiers
-            ],
-            "routing_mode": routing_mode,
-            "pace": pace,
-            "transaction_count": len(card_transactions),
-            "refund_effect_aed": _plain(
-                sum((-row.spend_aed for row in card_transactions if row.spend_aed < 0), Decimal("0"))
-            ),
-            "buckets": bucket_rows,
-        })
+        program_rows.append(
+            {
+                "card": program.card,
+                "name": program.name,
+                "short_name": program.short_name or program.name,
+                "tracking_mode": program.tracking_mode,
+                "position_mode": program.position_mode,
+                "position_headline": program.position_headline,
+                "position_detail": program.position_detail,
+                "programme_version": program.programme_version,
+                "effective_start": None
+                if program.effective_start is None
+                else program.effective_start.isoformat(),
+                "effective_end": None
+                if program.effective_end is None
+                else program.effective_end.isoformat(),
+                "statement_close_day": program.statement_close_day,
+                "reward_cycle_basis": program.reward_cycle_basis,
+                "payment_due_forecast_days": program.payment_due_forecast_days,
+                "period_start": None if period is None else period[0].isoformat(),
+                "period_end": None if period is None else period[1].isoformat(),
+                "total_spend_aed": _plain(spend),
+                "safety_target_aed": None
+                if program.safety_target is None
+                else _plain(program.safety_target),
+                "tier": program.tier_for(spend, buckets).code,
+                "expected_cashback_aed": _plain(
+                    reward_total(
+                        program,
+                        spend,
+                        buckets,
+                        refund_deductions=refund_deduction,
+                    )
+                ),
+                "tiers": [
+                    {
+                        "code": tier.code,
+                        "minimum_spend_aed": _plain(tier.minimum_spend),
+                        "met": tier.qualifies(spend, buckets),
+                        "remaining_aed": _plain(
+                            max(tier.minimum_spend - spend, Decimal("0"))
+                        ),
+                        "requirements": [
+                            {
+                                "metric": requirement.metric,
+                                "operator": requirement.operator,
+                                "value": _plain(requirement.value),
+                                "bucket": requirement.bucket,
+                                "met": requirement.met(spend, buckets),
+                            }
+                            for requirement in tier.requirements
+                        ],
+                    }
+                    for tier in program.tiers
+                ],
+                "routing_mode": routing_mode,
+                "pace": pace,
+                "transaction_count": len(card_transactions),
+                "refund_effect_aed": _plain(
+                    sum(
+                        (
+                            -row.spend_aed
+                            for row in card_transactions
+                            if row.spend_aed < 0
+                        ),
+                        Decimal("0"),
+                    )
+                ),
+                "buckets": bucket_rows,
+            }
+        )
     return program_rows, routing_programs, alerts
 
 
@@ -470,57 +641,67 @@ def _build_recommendations(
         item = recommend(routing_programs, rows, intent)
         ranked_cards = []
         for index, candidate in enumerate(item.ranked):
-            ranked_cards.append({
-                "order": index + 1,
-                "status": (
-                    "PREFERRED" if index == 0
-                    else "AVOID" if candidate.net_value_aed <= 0
-                    else "NEXT"
-                ),
-                "card": candidate.card,
-                "bucket": candidate.bucket,
-                "tier_before": candidate.tier_before,
-                "tier_after": candidate.tier_after,
-                "target_tier": candidate.target_tier,
-                "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
-                "estimated_net_value_aed": _plain(candidate.net_value_aed),
+            ranked_cards.append(
+                {
+                    "order": index + 1,
+                    "status": (
+                        "PREFERRED"
+                        if index == 0
+                        else "AVOID"
+                        if candidate.net_value_aed <= 0
+                        else "NEXT"
+                    ),
+                    "card": candidate.card,
+                    "bucket": candidate.bucket,
+                    "tier_before": candidate.tier_before,
+                    "tier_after": candidate.tier_after,
+                    "target_tier": candidate.target_tier,
+                    "target_rate_percent": _plain(
+                        candidate.target_rate * Decimal("100")
+                    ),
+                    "estimated_net_value_aed": _plain(candidate.net_value_aed),
+                    "estimated_net_return_percent": _plain(
+                        candidate.net_value_aed / intent.amount_aed * Decimal("100")
+                        if intent.amount_aed
+                        else Decimal("0")
+                    ),
+                    "card_spend_aed": _plain(candidate.card_spend_before_aed),
+                    "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
+                    "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
+                    "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
+                    "bucket_cap_aed": (
+                        None
+                        if candidate.bucket_spend_cap_aed is None
+                        else _plain(candidate.bucket_spend_cap_aed)
+                    ),
+                    "bucket_remaining_aed": (
+                        None
+                        if candidate.bucket_remaining_aed is None
+                        else _plain(candidate.bucket_remaining_aed)
+                    ),
+                }
+            )
+        recommendations.append(
+            {
+                "purchase_type": intent.category,
+                "channel": intent.channel,
+                "currency": intent.currency,
+                "use_card": item.primary_card,
+                "avoid_cards": list(item.avoid_cards),
+                "guidance": item.guidance,
+                "reason": item.reason,
+                "decision_amount_aed": _plain(intent.amount_aed),
+                "estimated_net_value_aed": _plain(item.net_value_aed),
                 "estimated_net_return_percent": _plain(
-                    candidate.net_value_aed / intent.amount_aed * Decimal("100")
+                    item.net_value_aed / intent.amount_aed * Decimal("100")
                     if intent.amount_aed
                     else Decimal("0")
                 ),
-                "card_spend_aed": _plain(candidate.card_spend_before_aed),
-                "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
-                "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
-                "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
-                "bucket_cap_aed": (
-                    None if candidate.bucket_spend_cap_aed is None
-                    else _plain(candidate.bucket_spend_cap_aed)
-                ),
-                "bucket_remaining_aed": (
-                    None if candidate.bucket_remaining_aed is None
-                    else _plain(candidate.bucket_remaining_aed)
-                ),
-            })
-        recommendations.append({
-            "purchase_type": intent.category,
-            "channel": intent.channel,
-            "currency": intent.currency,
-            "use_card": item.primary_card,
-            "avoid_cards": list(item.avoid_cards),
-            "guidance": item.guidance,
-            "reason": item.reason,
-            "decision_amount_aed": _plain(intent.amount_aed),
-            "estimated_net_value_aed": _plain(item.net_value_aed),
-            "estimated_net_return_percent": _plain(
-                item.net_value_aed / intent.amount_aed * Decimal("100")
-                if intent.amount_aed
-                else Decimal("0")
-            ),
-            "conditional": intent.conditional,
-            "active": not intent.conditional or threshold_actionable,
-            "ranked_cards": ranked_cards,
-        })
+                "conditional": intent.conditional,
+                "active": not intent.conditional or threshold_actionable,
+                "ranked_cards": ranked_cards,
+            }
+        )
     return recommendations
 
 
@@ -537,12 +718,17 @@ def _build_routing_graphs(
     routing_graphs = []
     for profile in routing_profiles or ():
         amount = Decimal(
-            str(profile.get("decision_amount", profile.get("decision_amount_aed")) or "100")
+            str(
+                profile.get("decision_amount", profile.get("decision_amount_aed"))
+                or "100"
+            )
         )
         category = str(profile["category"])
         currency = str(profile.get("currency") or "AED")
         routes = profile.get("routes") or []
-        if not isinstance(routes, list) or any(not isinstance(route, dict) for route in routes):
+        if not isinstance(routes, list) or any(
+            not isinstance(route, dict) for route in routes
+        ):
             raise ValueError("Routing profile routes must be a list of objects")
         route_candidates: dict[tuple[str, str, str], dict[str, object]] = {}
         for route in routes:
@@ -568,20 +754,35 @@ def _build_routing_graphs(
             when = policy.get("when") or {}
             ranking = policy.get("ranking") or {}
             reasons = policy.get("reasons") or {}
-            if not isinstance(when, dict) or not isinstance(ranking, dict) or not isinstance(reasons, dict):
-                raise ValueError(f"Routing policy {policy_code} must define object policies")
-            bucket_open = candidate.bucket_remaining_aed is None or candidate.bucket_remaining_aed > 0
+            if (
+                not isinstance(when, dict)
+                or not isinstance(ranking, dict)
+                or not isinstance(reasons, dict)
+            ):
+                raise ValueError(
+                    f"Routing policy {policy_code} must define object policies"
+                )
+            bucket_open = (
+                candidate.bucket_remaining_aed is None
+                or candidate.bucket_remaining_aed > 0
+            )
             bucket_fits_purchase = (
                 candidate.bucket_remaining_aed is None
                 or candidate.bucket_remaining_aed >= amount
             )
             target_remaining = (
-                None if program.safety_target is None
-                else max(program.safety_target - candidate.card_spend_before_aed, Decimal("0"))
+                None
+                if program.safety_target is None
+                else max(
+                    program.safety_target - candidate.card_spend_before_aed,
+                    Decimal("0"),
+                )
             )
             card_state = routing_state_by_card.get(card) or {}
             pace = card_state.get("pace") or {}
-            pace_status_value = str(pace.get("routing_status") or pace.get("status") or "OPEN")
+            pace_status_value = str(
+                pace.get("routing_status") or pace.get("status") or "OPEN"
+            )
             checks = {
                 "bucket_open": bucket_open,
                 "bucket_fits_purchase": bucket_fits_purchase,
@@ -596,18 +797,31 @@ def _build_routing_graphs(
                     f"Routing policy {policy_code} uses unknown checks: "
                     + ", ".join(sorted(unknown_checks))
                 )
-            active = all(not required or checks[name] for name, required in when.items() if name in checks)
+            active = all(
+                not required or checks[name]
+                for name, required in when.items()
+                if name in checks
+            )
             pace_in = {str(value).upper() for value in when.get("pace_in", [])}
             pace_not_in = {str(value).upper() for value in when.get("pace_not_in", [])}
             active = active and (not pace_in or pace_status_value in pace_in)
             active = active and pace_status_value not in pace_not_in
-            condition = str(reasons.get(pace_status_value) or reasons.get("*") or route.get("reason") or policy_code.replace("_", " ").title())
+            condition = str(
+                reasons.get(pace_status_value)
+                or reasons.get("*")
+                or route.get("reason")
+                or policy_code.replace("_", " ").title()
+            )
             if not active:
                 continue
             groups_by_pace = ranking.get("groups_by_pace") or {"*": 100}
             if not isinstance(groups_by_pace, dict):
-                raise ValueError(f"Routing policy {policy_code} groups_by_pace must be an object")
-            strategy_rank_value = groups_by_pace.get(pace_status_value, groups_by_pace.get("*", 100))
+                raise ValueError(
+                    f"Routing policy {policy_code} groups_by_pace must be an object"
+                )
+            strategy_rank_value = groups_by_pace.get(
+                pace_status_value, groups_by_pace.get("*", 100)
+            )
             strategy_rank = _routing_int(
                 strategy_rank_value,
                 f"Routing policy {policy_code} strategy rank must be an integer",
@@ -635,26 +849,45 @@ def _build_routing_graphs(
                 "target_rate_percent": _plain(candidate.target_rate * Decimal("100")),
                 "estimated_net_value_aed": _plain(candidate.net_value_aed),
                 "estimated_net_return_percent": _plain(
-                    candidate.net_value_aed / amount * Decimal("100") if amount else Decimal("0")
+                    candidate.net_value_aed / amount * Decimal("100")
+                    if amount
+                    else Decimal("0")
                 ),
                 "card_spend_aed": _plain(candidate.card_spend_before_aed),
-                "card_target_aed": None if program.safety_target is None else _plain(program.safety_target),
-                "card_target_remaining_aed": None if target_remaining is None else _plain(target_remaining),
+                "card_target_aed": None
+                if program.safety_target is None
+                else _plain(program.safety_target),
+                "card_target_remaining_aed": None
+                if target_remaining is None
+                else _plain(target_remaining),
                 "tier_threshold_aed": _plain(candidate.tier_threshold_aed),
                 "tier_remaining_aed": _plain(candidate.tier_remaining_aed),
                 "bucket_spend_aed": _plain(candidate.bucket_spend_before_aed),
-                "bucket_cap_aed": None if candidate.bucket_spend_cap_aed is None else _plain(candidate.bucket_spend_cap_aed),
-                "bucket_remaining_aed": None if candidate.bucket_remaining_aed is None else _plain(candidate.bucket_remaining_aed),
+                "bucket_cap_aed": None
+                if candidate.bucket_spend_cap_aed is None
+                else _plain(candidate.bucket_spend_cap_aed),
+                "bucket_remaining_aed": None
+                if candidate.bucket_remaining_aed is None
+                else _plain(candidate.bucket_remaining_aed),
             }
             identity = (card, candidate.bucket, channel)
             existing = route_candidates.get(identity)
-            if existing is None or int(row["policy_priority"]) < _routing_int(existing["policy_priority"], "Routing policy route priority must be an integer"):
+            if existing is None or int(row["policy_priority"]) < _routing_int(
+                existing["policy_priority"],
+                "Routing policy route priority must be an integer",
+            ):
                 route_candidates[identity] = row
         ranked_routes = sorted(
             route_candidates.values(),
             key=lambda candidate: (
-                _routing_int(candidate["strategy_rank"], "Routing policy strategy rank must be an integer"),
-                _routing_int(candidate["policy_priority"], "Routing policy route priority must be an integer"),
+                _routing_int(
+                    candidate["strategy_rank"],
+                    "Routing policy strategy rank must be an integer",
+                ),
+                _routing_int(
+                    candidate["policy_priority"],
+                    "Routing policy route priority must be an integer",
+                ),
                 -Decimal(str(candidate["estimated_net_value_aed"])),
                 str(candidate["card"]),
             ),
@@ -662,24 +895,36 @@ def _build_routing_graphs(
         for index, candidate in enumerate(ranked_routes):
             candidate["order"] = index + 1
             candidate["status"] = "PREFERRED" if index == 0 else "NEXT"
-        routing_graphs.append({
-            "code": str(profile.get("code") or category),
-            "label": str(profile.get("label") or category.replace("_", " ").title()),
-            "purchase_type": category,
-            "currency": currency,
-            "conditional": bool(profile.get("conditional")),
-            "active": bool(ranked_routes),
-            "methods": list(dict.fromkeys(str(candidate["payment_channel"]) for candidate in ranked_routes)),
-            "use_card": None if not ranked_routes else ranked_routes[0]["card"],
-            "avoid_cards": list(dict.fromkeys(
-                str(candidate["card"])
-                for candidate in ranked_routes[1:]
-                if candidate["card"] != ranked_routes[0]["card"]
-            )),
-            "estimated_net_return_percent": None if not ranked_routes else ranked_routes[0]["estimated_net_return_percent"],
-            "reason": None if not ranked_routes else ranked_routes[0]["condition"],
-            "ranked_cards": ranked_routes,
-        })
+        routing_graphs.append(
+            {
+                "code": str(profile.get("code") or category),
+                "label": str(
+                    profile.get("label") or category.replace("_", " ").title()
+                ),
+                "purchase_type": category,
+                "currency": currency,
+                "conditional": bool(profile.get("conditional")),
+                "active": bool(ranked_routes),
+                "methods": list(
+                    dict.fromkeys(
+                        str(candidate["payment_channel"]) for candidate in ranked_routes
+                    )
+                ),
+                "use_card": None if not ranked_routes else ranked_routes[0]["card"],
+                "avoid_cards": list(
+                    dict.fromkeys(
+                        str(candidate["card"])
+                        for candidate in ranked_routes[1:]
+                        if candidate["card"] != ranked_routes[0]["card"]
+                    )
+                ),
+                "estimated_net_return_percent": None
+                if not ranked_routes
+                else ranked_routes[0]["estimated_net_return_percent"],
+                "reason": None if not ranked_routes else ranked_routes[0]["condition"],
+                "ranked_cards": ranked_routes,
+            }
+        )
     return routing_graphs
 
 
@@ -692,20 +937,44 @@ def cashback_dashboard(
     routing_profiles: Iterable[dict[str, object]] | None = None,
     route_policies: dict[str, dict[str, object]] | None = None,
     base_currency: str = "AED",
+    memberships: Iterable[object] | Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    rows = list(transactions)
+    selected_programs = tuple(programs)
+    eligible_cards = (
+        frozenset(program.card.upper() for program in selected_programs)
+        if memberships is None
+        else eligible_card_codes(selected_programs, memberships)
+    )
+    selected_programs = tuple(
+        program
+        for program in selected_programs
+        if program.card.upper() in eligible_cards
+    )
+    rows = [
+        row for row in transactions if str(row.card).strip().upper() in eligible_cards
+    ]
+    dashboard_rows = rows
+    if periods_by_card:
+        dashboard_rows = [
+            row
+            for row in rows
+            if (
+                (period := periods_by_card.get(row.card)) is None
+                or period[0] <= row.transaction_at.date() <= period[1]
+            )
+        ]
     program_rows, routing_programs, alerts = _build_card_state(
-        programs,
-        rows,
+        selected_programs,
+        dashboard_rows,
         as_of,
         periods_by_card,
         base_currency,
     )
-    recommendations = _build_recommendations(routing_programs, rows, intents)
+    recommendations = _build_recommendations(routing_programs, dashboard_rows, intents)
     routing_graphs = _build_routing_graphs(
         routing_programs,
         program_rows,
-        rows,
+        dashboard_rows,
         routing_profiles,
         route_policies,
     )

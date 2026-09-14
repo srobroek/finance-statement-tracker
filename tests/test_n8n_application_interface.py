@@ -84,6 +84,7 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                     "workflows",
                     "folders",
                     "bootstrap",
+                    "contracts",
                     "fixtures",
                     "credentials",
                     "route",
@@ -104,6 +105,25 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
             self.assertEqual(
                 {row["name"] for row in manifest["bootstrap"]["tables"]},
                 TARGET_TABLE_NAMES,
+            )
+            self.assertEqual(
+                manifest["contracts"],
+                {
+                    "application_bundle": {
+                        "path": "contracts/application-contract-bundle.json",
+                        "sha256": sha256(N8N / "generated/application-contract-bundle.json"),
+                    },
+                    "application_schema": {
+                        "path": "contracts/application-contract-bundle.schema.json",
+                        "sha256": sha256(N8N / "generated/application-contract-bundle.schema.json"),
+                    },
+                    "source_bindings": {
+                        "path": "contracts/source-contract-bindings.json",
+                        "sha256": sha256(N8N / "source-contract-bindings.json"),
+                    },
+                    "contract_status": "SPEC_ONLY",
+                    "source_contract_status": "READY",
+                },
             )
             self.assertEqual(manifest["fixtures"], {"directory": "fixtures", "manifest": "fixtures/fixture-manifest.json"})
             self.assertEqual(
@@ -142,6 +162,9 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 Path(manifest["bootstrap"]["directory"]) / manifest["bootstrap"]["sql"],
                 Path(manifest["fixtures"]["manifest"]),
                 Path(manifest["credentials"]["binding_contract"]["path"]),
+                Path(manifest["contracts"]["application_bundle"]["path"]),
+                Path(manifest["contracts"]["application_schema"]["path"]),
+                Path(manifest["contracts"]["source_bindings"]["path"]),
             ]
             for relative in relative_files:
                 resolved = (root / relative).resolve()
@@ -167,6 +190,13 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 (first_root / "credential-bindings.json").read_bytes(),
                 (N8N / "credential-bindings.json").read_bytes(),
             )
+            for key, source in (
+                ("application_bundle", N8N / "generated/application-contract-bundle.json"),
+                ("application_schema", N8N / "generated/application-contract-bundle.schema.json"),
+                ("source_bindings", N8N / "source-contract-bindings.json"),
+            ):
+                staged = first_root / first_manifest["contracts"][key]["path"]
+                self.assertEqual(staged.read_bytes(), source.read_bytes())
             first_files = sorted(path.relative_to(first_root) for path in first_root.rglob("*") if path.is_file())
             second_files = sorted(path.relative_to(second_root) for path in second_root.rglob("*") if path.is_file())
             self.assertEqual(first_files, second_files)
@@ -175,6 +205,34 @@ class N8nApplicationInterfaceTests(unittest.TestCase):
                 [path.read_bytes() for path in sorted((second_root / "workflows").glob("*.json"))],
             )
             self.assertEqual(first_manifest, second_manifest)
+
+    def test_adapter_rejects_active_workflow_contract(self) -> None:
+        original_load = self.adapter._load
+
+        def load(path: Path) -> dict:
+            value = original_load(path)
+            if path.name == "01-outlook-finance-acquisition.json":
+                value = deepcopy(value)
+                value["active"] = True
+            return value
+
+        with tempfile.TemporaryDirectory() as temporary, patch.object(
+            self.adapter, "_load", side_effect=load
+        ):
+            with self.assertRaisesRegex(ValueError, "must remain inactive"):
+                self.adapter.stage_application(ROOT, Path(temporary) / "application", "a" * 40)
+
+    def test_adapter_rejects_stale_source_contract_binding(self) -> None:
+        original_sha256 = self.adapter._sha256
+
+        def stale_bundle(path: Path) -> str:
+            if path.name == "application-contract-bundle.json":
+                return "0" * 64
+            return original_sha256(path)
+
+        with patch.object(self.adapter, "_sha256", side_effect=stale_bundle):
+            with self.assertRaisesRegex(ValueError, "source contract binding is stale"):
+                self.adapter._contract_manifest(N8N)
 
     def test_adapter_rejects_stale_credential_contract_declaration(self) -> None:
         original_sha256 = self.adapter._sha256
