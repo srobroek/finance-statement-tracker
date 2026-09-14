@@ -56,7 +56,6 @@ def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
     locked = set(transaction.metadata.get("locked_fields", []))
     queue_locked = bool(
         {
-            "tags",
             "review_required",
             "classification_review_reasons",
             "category_resolution",
@@ -99,7 +98,8 @@ def enforce_transaction_invariants(transaction: Transaction) -> tuple[str, ...]:
     if not queue_locked:
         if reasons:
             transaction.review_required = True
-            transaction.tags.add("needs-review")
+            if "tags" not in locked:
+                transaction.tags.add("needs-review")
         else:
             transaction.review_required = False
             transaction.tags.discard("needs-review")
