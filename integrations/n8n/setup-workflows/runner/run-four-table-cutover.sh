@@ -187,8 +187,9 @@ validate_inputs() {
     --lock-receipt "$lock_receipt" \
     --operation-kind "${3^^}" >/dev/null
 }
-
 recover_runtime_receipt() {
+  local recovery_input="$1"
+  shift
   local -a recovery_env=("$@")
   recovery_env+=(
     -e "FINANCE_FOUR_TABLE_RECOVER_JOURNAL=1"
@@ -196,7 +197,7 @@ recover_runtime_receipt() {
   )
   local recovery_status
   if docker exec -i "${recovery_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
-    <"$canonical_source" >"$recovery_stdout" 2>"$recovery_stderr"; then
+    <"$recovery_input" >"$recovery_stdout" 2>"$recovery_stderr"; then
     recovery_status=0
   else
     recovery_status=$?
@@ -277,14 +278,13 @@ run_runtime() {
     runtime_env+=(-e "FINANCE_FOUR_TABLE_FORWARD_RECEIPT_B64=$(base64 -w0 -- "$forward_runtime_receipt")")
   fi
 
-  local runtime_status
   if docker exec -i "${runtime_env[@]}" "$FINANCE_N8N_CONTAINER" node -e "$(<"$runtime_script")" \
     <"$runtime_input" >"$runtime_stdout" 2>"$runtime_stderr"; then
     runtime_status=0
   else
     runtime_status=$?
     chmod 0600 "$runtime_stdout" "$runtime_stderr"
-    if ! recover_runtime_receipt "${runtime_env[@]}"; then
+    if ! recover_runtime_receipt "$runtime_input" "${runtime_env[@]}"; then
       echo "Unable to recover the committed ${operation} runtime journal" >&2
       return "$runtime_status"
     fi

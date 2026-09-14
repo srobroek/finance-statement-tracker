@@ -751,6 +751,14 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
         self.assertNotIn("FINANCE_FOUR_TABLE_CREDENTIAL_BINDINGS:-", source)
         self.assertIn('--canonical-source-input "$canonical_source"', source)
         self.assertIn("FINANCE_FOUR_TABLE_CANONICAL_SOURCE_FILE_SHA256", source)
+        self.assertIn('recover_runtime_receipt "$runtime_input"', source)
+        recovery = source[
+            source.index("recover_runtime_receipt() {") : source.index(
+                "\n\nrun_runtime()"
+            )
+        ]
+        self.assertIn('<"$recovery_input"', recovery)
+        self.assertNotIn('<"$canonical_source"', recovery)
 
     def test_digest_adapter_composes_phase_contract_with_closed_table_set(self) -> None:
         source = DIGEST_ADAPTER.read_text(encoding="utf-8")
