@@ -5,7 +5,12 @@ from pathlib import Path
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
-from finance_tracker.properties import load_property_registry, project_property_tags
+from finance_tracker.properties import (
+    PropertyDefinition,
+    PropertyRegistry,
+    load_property_registry,
+    project_property_tags,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -17,7 +22,9 @@ class PropertyRegistryTests(TestCase):
 
     @staticmethod
     def transaction() -> Transaction:
-        return Transaction("property-1", datetime(2026, 8, 18), "ADCB", "EMPOWER", "100")
+        return Transaction(
+            "property-1", datetime(2026, 8, 18), "ADCB", "EMPOWER", "100"
+        )
 
     def test_utility_references_map_to_evidenced_properties(self) -> None:
         self.assertEqual(
@@ -62,5 +69,99 @@ class PropertyRegistryTests(TestCase):
         self.assertTrue(transaction.review_required)
         self.assertIn(
             "PROPERTY_CODE_RENTAL_UNIT_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_conflicting_property_evidence_preserves_locked_review_flag(self) -> None:
+        transaction = self.transaction()
+        transaction.property_code = "LT713"
+        transaction.rental_unit = "Indigo1414"
+        transaction.metadata["locked_fields"] = ["review_required"]
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+
+        self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "PROPERTY_IDENTITY_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_unknown_property_preserves_locked_review_flag(self) -> None:
+        transaction = self.transaction()
+        transaction.property_code = "NOT_CONFIGURED"
+        transaction.metadata["locked_fields"] = ["review_required"]
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+
+        self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "UNKNOWN_CONFIGURED_PROPERTY",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_resolved_ownership_mismatch_preserves_locked_review_flag(self) -> None:
+        registry = PropertyRegistry(
+            (
+                PropertyDefinition(
+                    property_code="JOINT_HOME",
+                    display_name="Joint Home",
+                    occupancy="OWNER_OCCUPIED",
+                    rental_unit=None,
+                    tags=("home",),
+                    utility_accounts=(),
+                    ownership="JOINT",
+                ),
+            )
+        )
+        transaction = self.transaction()
+        transaction.property_code = "JOINT_HOME"
+        transaction.metadata.update(
+            {
+                "property_ownership": "LEGACY_VALUE",
+                "locked_fields": ["property_ownership", "review_required"],
+            }
+        )
+
+        self.assertIsNotNone(project_property_tags(transaction, registry))
+
+        self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_ownership_conflict_preserves_locked_review_flag(self) -> None:
+        transaction = self.transaction()
+        transaction.owner = "Personal"
+        transaction.metadata.update(
+            {
+                "property_ownership": "JOINT",
+                "locked_fields": ["owner", "property_ownership", "review_required"],
+            }
+        )
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+
+        self.assertFalse(transaction.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            transaction.metadata["property_review_reasons"],
+        )
+
+    def test_ownership_conflict_queues_review_when_unlocked(self) -> None:
+        transaction = self.transaction()
+        transaction.owner = "Personal"
+        transaction.metadata.update(
+            {
+                "property_ownership": "JOINT",
+                "locked_fields": ["owner", "property_ownership"],
+            }
+        )
+
+        self.assertIsNone(project_property_tags(transaction, self.registry))
+
+        self.assertTrue(transaction.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
             transaction.metadata["property_review_reasons"],
         )

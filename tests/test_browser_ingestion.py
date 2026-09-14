@@ -475,7 +475,14 @@ class BrowserIngestionTests(TestCase):
             load_compiled_rules(ROOT / "config" / "static-rules.seed.json"),
         )
 
-        self.assertEqual(run.review_count, 2)
+        self.assertEqual(
+            [row["review_required"] for row in run.transactions],
+            [False, False, False, True, True, True],
+        )
+        self.assertIn(
+            "UNMATCHED_REIMBURSEMENT",
+            run.transactions[3]["metadata"]["classification_review_reasons"],
+        )
         self.assertEqual(
             [row["transaction_type"] for row in run.transactions],
             ["TRANSFER", "REWARD_CREDIT", "INCOME", "REFUND", "INCOME", "REFUND"],

@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Iterable, Literal
 
 from .models import Transaction
+from .transaction_semantics import is_finalized_for_consumption
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +59,9 @@ class Breakdown:
     unique_vendors: int
 
 
-Dimension = Literal["category", "subcategory", "vendor", "owner", "account", "transaction_type"]
+Dimension = Literal[
+    "category", "subcategory", "vendor", "owner", "account", "transaction_type"
+]
 
 
 def breakdown(
@@ -69,7 +72,9 @@ def breakdown(
 ) -> list[Breakdown]:
     rows: dict[str, list[Transaction]] = defaultdict(list)
     for transaction in transactions:
-        if not report_filter.matches(transaction):
+        if not is_finalized_for_consumption(transaction) or not report_filter.matches(
+            transaction
+        ):
             continue
         if dimension == "account":
             key = transaction.account or transaction.card
@@ -79,8 +84,13 @@ def breakdown(
 
     result = []
     for key, grouped in rows.items():
-        net = sum((transaction.spend_aed for transaction in grouped), start=Decimal("0"))
-        spend = sum((max(Decimal("0"), transaction.spend_aed) for transaction in grouped), start=Decimal("0"))
+        net = sum(
+            (transaction.spend_aed for transaction in grouped), start=Decimal("0")
+        )
+        spend = sum(
+            (max(Decimal("0"), transaction.spend_aed) for transaction in grouped),
+            start=Decimal("0"),
+        )
         vendors = {transaction.vendor for transaction in grouped if transaction.vendor}
         result.append(Breakdown(key, net, spend, len(grouped), len(vendors)))
     return sorted(result, key=lambda item: (-item.spend_aed, item.key.casefold()))

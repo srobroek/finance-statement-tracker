@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "authoring_source": "config/static-rules.seed.json",
-  "authoring_source_sha256": "0b03f0a1846cb51273fd114f165607bfe56de59e0967431c550b3728d75bdd4c",
+  "authoring_source_sha256": "8b8960e2d46b361910013b25f6adf32e412657664ba976b02742d0b2526ea87b",
   "capability_version": "actual-rule-capability-v1",
   "ownership": [
     {
@@ -937,6 +937,13 @@
       "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
+      "rule_id": "vendor-careem",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
       "rule_id": "vendor-carrefour",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -949,6 +956,13 @@
       "execution_owner": "N8N_ONLY",
       "actual_representable": false,
       "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-cars-taxi",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
       "rule_id": "vendor-cloudflare",
@@ -972,6 +986,20 @@
       "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
+      "rule_id": "vendor-deliveroo",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-deliveroo",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
       "rule_id": "vendor-dewa",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -980,6 +1008,13 @@
     },
     {
       "rule_id": "vendor-dhl",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-dubai-taxi",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
       "actual_representable": false,
@@ -1007,6 +1042,13 @@
       "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
+      "rule_id": "vendor-etisalat",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
       "rule_id": "vendor-fab-services",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -1022,20 +1064,6 @@
     },
     {
       "rule_id": "vendor-farzana",
-      "rule_set": "LIVE_CASHBACK",
-      "execution_owner": "N8N_ONLY",
-      "actual_representable": false,
-      "reason": "NON_LEDGER_SCOPE"
-    },
-    {
-      "rule_id": "vendor-food-delivery",
-      "rule_set": "FULL_LEDGER",
-      "execution_owner": "N8N_ONLY",
-      "actual_representable": false,
-      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
-    },
-    {
-      "rule_id": "vendor-food-delivery",
       "rule_set": "LIVE_CASHBACK",
       "execution_owner": "N8N_ONLY",
       "actual_representable": false,
@@ -1175,13 +1203,6 @@
       "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
-      "rule_id": "vendor-mobile",
-      "rule_set": "FULL_LEDGER",
-      "execution_owner": "N8N_ONLY",
-      "actual_representable": false,
-      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
-    },
-    {
       "rule_id": "vendor-move-shoot-move",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -1190,6 +1211,13 @@
     },
     {
       "rule_id": "vendor-naqel",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-national-taxi",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
       "actual_representable": false,
@@ -1218,13 +1246,6 @@
     },
     {
       "rule_id": "vendor-real-debrid",
-      "rule_set": "FULL_LEDGER",
-      "execution_owner": "N8N_ONLY",
-      "actual_representable": false,
-      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
-    },
-    {
-      "rule_id": "vendor-ride-hailing",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
       "actual_representable": false,
@@ -1287,6 +1308,48 @@
       "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
     },
     {
+      "rule_id": "vendor-taksi-yonetim",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-talabat",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-talabat",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
+      "rule_id": "vendor-uber",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-uber-eats",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
+      "rule_id": "vendor-uber-eats",
+      "rule_set": "LIVE_CASHBACK",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "NON_LEDGER_SCOPE"
+    },
+    {
       "rule_id": "vendor-unrwa",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -1315,6 +1378,13 @@
       "reason": "NON_LEDGER_SCOPE"
     },
     {
+      "rule_id": "vendor-virgin-mobile",
+      "rule_set": "FULL_LEDGER",
+      "execution_owner": "N8N_ONLY",
+      "actual_representable": false,
+      "reason": "STAGE_NOT_PROVEN_EQUIVALENT"
+    },
+    {
       "rule_id": "vendor-waitrose",
       "rule_set": "FULL_LEDGER",
       "execution_owner": "N8N_ONLY",
@@ -1332,6 +1402,6 @@
   "overlap": [],
   "unowned": [],
   "actual_rule_count": 7,
-  "n8n_rule_count": 182,
+  "n8n_rule_count": 192,
   "warning": "Generated ownership is not evidence that Actual rules were imported or parity-tested."
 }

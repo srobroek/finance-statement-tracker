@@ -48,6 +48,43 @@ class TransactionTopicTests(TestCase):
         self.assertIn("refund", transaction.tags)
         self.assertIn("transaction_type", transaction.metadata["locked_fields"])
 
+    def test_unmatched_reimbursement_hint_remains_explicit_and_queued(self) -> None:
+        transaction = self.transaction(
+            "INWARD IPP PAYMENT--UTILITY BILL PAYMENTS",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.tags.update({"refund", "reimbursement"})
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REFUND")
+        self.assertEqual(
+            transaction.metadata["reimbursement_match_status"], "UNMATCHED"
+        )
+        self.assertTrue(transaction.review_required)
+        self.assertIn("reimbursement", transaction.tags)
+        self.assertIn("needs-review", transaction.tags)
+
+    def test_matched_reimbursement_preserves_locked_tags(self) -> None:
+        transaction = self.transaction(
+            "MATCHED MERCHANT CREDIT",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.tags = {"manual", "refund"}
+        transaction.metadata.update(
+            {
+                "original_transaction_id": "purchase-1",
+                "locked_fields": ["tags"],
+            }
+        )
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REIMBURSEMENT")
+        self.assertEqual(transaction.tags, {"manual", "refund"})
+
     def test_explicit_reward_credit_is_not_downgraded_to_refund(self) -> None:
         transaction = self.transaction(
             "MONTHLY CASHBACK REWARD CREDIT",

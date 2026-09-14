@@ -287,6 +287,21 @@
       "worker": true
     },
     {
+      "name": "Deliveroo",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Talabat",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Uber Eats",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
       "name": "Franklin Chiropractic",
       "bootstrap": true,
       "worker": true
@@ -313,6 +328,36 @@
     },
     {
       "name": "Ride Hailing",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Careem",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Uber",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Dubai Taxi",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "National Taxi",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Cars Taxi",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Taksi Yonetim",
       "bootstrap": true,
       "worker": true
     },
@@ -363,6 +408,11 @@
     },
     {
       "name": "Mobile Provider",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Etisalat",
       "bootstrap": true,
       "worker": true
     },
@@ -428,6 +478,11 @@
     },
     {
       "name": "Urban Foods",
+      "bootstrap": true,
+      "worker": true
+    },
+    {
+      "name": "Virgin Mobile",
       "bootstrap": true,
       "worker": true
     },
