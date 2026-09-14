@@ -328,6 +328,15 @@
       "name": "Food Delivery"
     },
     {
+      "name": "Deliveroo"
+    },
+    {
+      "name": "Talabat"
+    },
+    {
+      "name": "Uber Eats"
+    },
+    {
       "name": "Franklin Chiropractic"
     },
     {
@@ -344,6 +353,24 @@
     },
     {
       "name": "Ride Hailing"
+    },
+    {
+      "name": "Careem"
+    },
+    {
+      "name": "Uber"
+    },
+    {
+      "name": "Dubai Taxi"
+    },
+    {
+      "name": "National Taxi"
+    },
+    {
+      "name": "Cars Taxi"
+    },
+    {
+      "name": "Taksi Yonetim"
     },
     {
       "name": "Airline"
@@ -374,6 +401,9 @@
     },
     {
       "name": "Mobile Provider"
+    },
+    {
+      "name": "Etisalat"
     },
     {
       "name": "Move Shoot Move"
