@@ -314,6 +314,23 @@ class RuleAnalysisWorkbenchTests(unittest.TestCase):
         self.assertIsNotNone(unique.relation)
         self.assertFalse(unique.review_only)
 
+        with self.assertRaises(UnknownReasonCode):
+            EvaluationResult(
+                query=unique.query,
+                outcome=unique.outcome,
+                relation=unique.relation,
+                reason_codes=("NOT_A_REGISTERED_REASON",),
+                review_only=False,
+            )
+        with self.assertRaisesRegex(ValueError, "do not match the query trace"):
+            EvaluationResult(
+                query=unique.query,
+                outcome="MISSING",
+                relation=None,
+                reason_codes=unique.reason_codes,
+                review_only=True,
+            )
+
         missing = workbench.evaluate(source, (source,))
         self.assertEqual(missing.outcome, "MISSING")
         self.assertIsNone(missing.relation)

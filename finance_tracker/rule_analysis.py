@@ -128,10 +128,10 @@ def _agent_targets(candidate: CandidateEnvelope) -> None:
 
 
 def _is_review_only(outcome: str, reason_codes: tuple[str, ...]) -> bool:
-    return outcome in _REVIEW_ONLY_OUTCOMES or any(
-        reason_definition(reason_code).outcome == "review_only"
-        for reason_code in reason_codes
+    reason_outcomes = tuple(
+        reason_definition(reason_code).outcome for reason_code in reason_codes
     )
+    return outcome in _REVIEW_ONLY_OUTCOMES or "review_only" in reason_outcomes
 
 
 def _artifact_pair(
@@ -198,7 +198,21 @@ class EvaluationResult:
     evaluation_hash: str = field(init=False)
 
     def __post_init__(self) -> None:
-        if self.review_only != _is_review_only(self.outcome, self.reason_codes):
+        expected_review_only = _is_review_only(self.outcome, self.reason_codes)
+        if len(self.query.match.traces) != 1:
+            raise ValueError("evaluation query must contain exactly one trace")
+        trace = self.query.match.traces[0]
+        if (
+            self.outcome,
+            self.relation,
+            self.reason_codes,
+        ) != (
+            trace.outcome,
+            trace.selected_edge,
+            trace.reason_codes,
+        ):
+            raise ValueError("evaluation facts do not match the query trace")
+        if self.review_only != expected_review_only:
             raise ValueError(
                 "evaluation review_only state does not match its reason outcomes"
             )
