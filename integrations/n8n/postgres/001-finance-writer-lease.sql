@@ -150,7 +150,7 @@ BEGIN
          WHERE resource_key = p_resource_key
            AND lease_id = p_lease_id
            AND fencing_token = p_fencing_token
-           AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')
+           AND state = 'COMMITTED'
            AND verified_payload_sha256 IS NOT NULL
     ) THEN
         RETURN false;
@@ -184,7 +184,7 @@ BEGIN
          WHERE resource_key = p_resource_key
            AND lease_id = p_lease_id
            AND fencing_token = p_fencing_token
-           AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')
+           AND state = 'COMMITTED'
            AND verified_payload_sha256 IS NOT NULL
         ON CONFLICT (resource_key, outbox_id, fencing_token) DO NOTHING;
     END IF;

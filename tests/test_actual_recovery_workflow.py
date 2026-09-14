@@ -58,6 +58,7 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             for condition in read["parameters"]["filters"]["conditions"]
         }
         self.assertEqual(states, {"PREPARED", "ACTUAL_OBSERVED", "VERIFIED"})
+        self.assertEqual(read["typeVersion"], 1.1)
         self.assertEqual(
             next_node(document, "Every 10 Minutes"), "Read Nonterminal Actual Outbox"
         )
@@ -101,7 +102,21 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         self.assertIn("$5::text = 'SUCCESSOR'", acquire_sql)
         self.assertIn("$11::text = 'PREPARED'", acquire_sql)
         self.assertIn("$12::integer = 0", acquire_sql)
-        self.assertIn("state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')", release_sql)
+        self.assertIn("payload_sha256 = $7::text", acquire_sql)
+        self.assertIn("verified_payload_sha256 IS NOT NULL", acquire_sql)
+        self.assertNotIn("verified_payload_sha256 = $7::text", acquire_sql)
+        self.assertIn(
+            "state = CASE WHEN actual_writer_effects.state = 'PREPARED' "
+            "THEN 'ISSUED' ELSE actual_writer_effects.state END",
+            acquire_sql,
+        )
+        for assignment in (
+            "lease_id = EXCLUDED.lease_id",
+            "lease_owner = EXCLUDED.lease_owner",
+            "fencing_token = EXCLUDED.fencing_token",
+        ):
+            self.assertIn(assignment, acquire_sql)
+        self.assertIn("state = 'COMMITTED'", release_sql)
         self.assertIn("finance_ops.acquire_writer_lease", acquire_sql)
         self.assertIn("finance_ops.release_writer_lease", release_sql)
         self.assertIn(
@@ -150,7 +165,7 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
             next_node(document, "Validate Fixed Lease Operation"), "Lease Operation"
         )
         self.assertEqual(
-            metadata["fenceReleasePolicy"], "W20 terminal verified readback only"
+            metadata["fenceReleasePolicy"], "W20 durable COMMITTED readback only"
         )
 
     def test_actual_observed_recovery_request_is_terminal_backed(self) -> None:
@@ -219,12 +234,25 @@ class ActualRecoveryWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             next_node(document, "Assert Recovery Fence Before Commit"),
+            "Upsert COMMITTED Recovery",
+        )
+        self.assertEqual(
+            next_node(document, "Read Back COMMITTED Recovery"),
             "Build Recovery Fence Release",
         )
         self.assertEqual(
             next_node(document, "Release Recovery Writer Fence"),
             "Read Back Released Recovery Writer Fence",
         )
+        self.assertEqual(
+            next_node(document, "Read Back Released Recovery Writer Fence"),
+            "Return Verified Commit Receipt",
+        )
+        release_code = actual_nodes["Build Recovery Fence Release"]["parameters"][
+            "jsCode"
+        ]
+        self.assertIn("Validate Stored Verification Receipt for Commit", release_code)
+        self.assertNotIn("Compare Exact Actual Verification Receipt", release_code)
         replay_code = actual_nodes["Return Verified Commit Receipt Replay"][
             "parameters"
         ]["jsCode"]

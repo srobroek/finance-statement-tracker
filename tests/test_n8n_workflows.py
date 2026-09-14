@@ -1280,6 +1280,10 @@ try {{
             "Assert Recovery Fence Before Commit",
         ):
             self.assertIn(name, writer)
+        recovery_read = self.nodes("17-actual-outbox-recovery.json")[
+            "Read Nonterminal Actual Outbox"
+        ]
+        self.assertEqual(recovery_read["typeVersion"], 1.1)
         code = self.nodes("20-actual-outbox-apply.json")["Verify Recovery Contract"][
             "parameters"
         ]["jsCode"]
@@ -1369,13 +1373,19 @@ try {{
             self.workflow("20-actual-outbox-apply.json")["connections"][
                 "Assert Recovery Fence Before Commit"
             ]["main"][0][0]["node"],
+            "Upsert COMMITTED Recovery",
+        )
+        self.assertEqual(
+            self.workflow("20-actual-outbox-apply.json")["connections"][
+                "Read Back COMMITTED Recovery"
+            ]["main"][0][0]["node"],
             "Build Recovery Fence Release",
         )
         self.assertEqual(
             self.workflow("20-actual-outbox-apply.json")["connections"][
                 "Read Back Released Recovery Writer Fence"
             ]["main"][0][0]["node"],
-            "Upsert COMMITTED Recovery",
+            "Return Verified Commit Receipt",
         )
         observed_values = writer_nodes["Upsert ACTUAL OBSERVED Recovery"]["parameters"][
             "columns"
@@ -2029,11 +2039,41 @@ try {{
         self.assertIn(
             "NOT EXISTS (SELECT 1 FROM blockers)", acquire["parameters"]["query"]
         )
+        acquire_query = acquire["parameters"]["query"]
+        self.assertIn("payload_sha256 = $7::text", acquire_query)
+        self.assertIn("verified_payload_sha256 IS NOT NULL", acquire_query)
+        self.assertNotIn("verified_payload_sha256 = $7::text", acquire_query)
+        self.assertIn(
+            "state = CASE WHEN actual_writer_effects.state = 'PREPARED' "
+            "THEN 'ISSUED' ELSE actual_writer_effects.state END",
+            acquire_query,
+        )
+        for assignment in (
+            "lease_id = EXCLUDED.lease_id",
+            "lease_owner = EXCLUDED.lease_owner",
+            "fencing_token = EXCLUDED.fencing_token",
+        ):
+            self.assertIn(assignment, acquire_query)
+        self.assertIn(
+            "$5::text = 'SUCCESSOR' AND actual_writer_effects.state IN "
+            "('VERIFIED', 'RECONCILED', 'COMMITTED')",
+            acquire_query,
+        )
         self.assertNotIn(
             "$json.lease_id", acquire["parameters"]["options"]["queryReplacement"]
         )
         self.assertNotIn("={{", queries)
         self.assertTrue(all("$1" in node["parameters"]["query"] for node in postgres))
+        release = next(
+            node
+            for node in postgres
+            if "release_writer_lease" in node["parameters"]["query"]
+        )
+        self.assertIn("state = 'COMMITTED'", release["parameters"]["query"])
+        self.assertNotIn(
+            "state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')",
+            release["parameters"]["query"],
+        )
         migration = (N8N / "postgres" / "001-finance-writer-lease.sql").read_text(
             encoding="utf-8"
         )
@@ -2073,6 +2113,7 @@ try {{
         self.assertIn("IF changed = 1 OR EXISTS", release_body)
         self.assertIn("INSERT INTO finance_ops.actual_writer_releases", release_body)
         self.assertIn("AND released_at IS NOT NULL", release_body)
+        self.assertEqual(release_body.count("AND state = 'COMMITTED'"), 2)
 
     def test_error_workflow_persists_only_redacted_receipts_with_real_readback(
         self,
@@ -3102,6 +3143,61 @@ try {{ console.log(JSON.stringify(execute())); }} catch (error) {{ console.error
             self.assertEqual(
                 hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"]
             )
+
+    def test_successor_recovery_fixtures_seed_exact_terminal_writer_evidence(
+        self,
+    ) -> None:
+        generated = N8N / "disposable" / "generated"
+        for filename, state, artifact_digest, economic_digest in (
+            ("104-recover-actual-observed.json", "ACTUAL_OBSERVED", "b" * 64, "d" * 64),
+            ("105-recover-verified.json", "VERIFIED", "c" * 64, "e" * 64),
+        ):
+            with self.subTest(filename=filename):
+                workflow = load_json(generated / filename)
+                nodes = {node["name"]: node for node in workflow["nodes"]}
+                terminal_name = f"Seed {state} Terminal Writer Evidence"
+                terminal = nodes[terminal_name]
+                self.assertEqual(terminal["type"], "n8n-nodes-base.postgres")
+                self.assertEqual(terminal["typeVersion"], 2.6)
+                query = terminal["parameters"]["query"]
+                replacements = terminal["parameters"]["options"]["queryReplacement"]
+                self.assertIn("finance_ops.actual_writer_effects", query)
+                self.assertIn("verified_payload_sha256", query)
+                self.assertIn("'VERIFIED'", query)
+                self.assertIn(artifact_digest, replacements)
+                self.assertIn(economic_digest, replacements)
+                self.assertNotEqual(artifact_digest, economic_digest)
+                self.assertEqual(
+                    workflow["connections"]["Run Disposable Fixture"]["main"][0][0][
+                        "node"
+                    ],
+                    terminal_name,
+                )
+                outbox_name = f"Seed {state} Outbox Crash Boundary"
+                outbox_values = nodes[outbox_name]["parameters"]["columns"]["value"]
+                self.assertEqual(outbox_values["account_id"], "fixture-account")
+                self.assertEqual(outbox_values["card_code"], "FIXTURE_CARD")
+                if state == "VERIFIED":
+                    self.assertEqual(
+                        outbox_values["expected_payload_sha256"], economic_digest
+                    )
+                    self.assertEqual(
+                        outbox_values["observed_payload_sha256"], economic_digest
+                    )
+                    self.assertTrue(outbox_values["invariants_passed"])
+                self.assertEqual(
+                    workflow["connections"][terminal_name]["main"][0][0]["node"],
+                    outbox_name,
+                )
+                self.assertEqual(
+                    workflow["connections"][outbox_name]["main"][0][0]["node"],
+                    "Run Derived Recovery Core",
+                )
+
+        prepared = load_json(generated / "103-recover-prepared.json")
+        self.assertFalse(
+            any(node["type"] == "n8n-nodes-base.postgres" for node in prepared["nodes"])
+        )
 
     def test_disposable_execute_workflows_are_recursively_inline_and_allowlisted(
         self,

@@ -682,7 +682,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json, r = $('Verify Recovery Contract').first().json, receipt = $('Compare Exact Actual Verification Receipt').first().json;\nif (!receipt || receipt.invariants_passed !== true || receipt.expected_payload_sha256 !== receipt.observed_payload_sha256 || !/^[a-f0-9]{64}$/i.test(String(receipt.expected_payload_sha256)) || receipt.account_id !== r.manifest.account_id || !r.payload_sha256)\n    throw new Error('ACTUAL_RELEASE_REQUIRES_EXACT_VERIFIED_READBACK');\nreturn [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, lease_owner: l.lease_owner, fencing_token: l.fencing_token, outbox_id: String(r.outbox_row.outbox_id || r.outbox_row.batch_id), account_id: r.manifest.account_id, payload_sha256: r.payload_sha256, verified_payload_sha256: receipt.expected_payload_sha256 } }];\n"
+        "jsCode": "// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json, r = $('Verify Recovery Contract').first().json, receipt = $('Validate Stored Verification Receipt for Commit').first().json;\nif (!receipt || receipt.invariants_passed !== true || receipt.expected_payload_sha256 !== receipt.observed_payload_sha256 || !/^[a-f0-9]{64}$/i.test(String(receipt.expected_payload_sha256)) || receipt.account_id !== r.manifest.account_id || !r.payload_sha256)\n    throw new Error('ACTUAL_RELEASE_REQUIRES_EXACT_VERIFIED_READBACK');\nreturn [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, lease_owner: l.lease_owner, fencing_token: l.fencing_token, outbox_id: String(r.outbox_row.outbox_id || r.outbox_row.batch_id), account_id: r.manifest.account_id, payload_sha256: r.payload_sha256, verified_payload_sha256: receipt.expected_payload_sha256 } }];\n"
       }
     },
     {
@@ -1566,7 +1566,7 @@
       "main": [
         [
           {
-            "node": "Return Verified Commit Receipt",
+            "node": "Build Recovery Fence Release",
             "type": "main",
             "index": 0
           }
@@ -1610,7 +1610,7 @@
       "main": [
         [
           {
-            "node": "Upsert COMMITTED Recovery",
+            "node": "Return Verified Commit Receipt",
             "type": "main",
             "index": 0
           }
@@ -1742,7 +1742,7 @@
       "main": [
         [
           {
-            "node": "Build Recovery Fence Release",
+            "node": "Upsert COMMITTED Recovery",
             "type": "main",
             "index": 0
           }

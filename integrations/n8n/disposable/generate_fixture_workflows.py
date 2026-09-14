@@ -430,7 +430,7 @@ def build_recovery_core() -> dict:
         ),
         "Extract Recovered Delta JSON": (
             "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
+            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',card_code:'FIXTURE_CARD',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
         ),
         "Recovery Actual Preflight": (
             "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
@@ -461,6 +461,8 @@ def outbox_upsert_node(state: str) -> dict:
         "run_id": f"fixture-recovery-{suffix}",
         "idempotency_key": f"fixture:recovery:{suffix}",
         "actual_file_id": "fixture_actual",
+        "account_id": "fixture-account",
+        "card_code": "FIXTURE_CARD",
         "delta_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
         "delta_artifact_item_id": f"fixture-artifact-{suffix}",
         "delta_artifact_etag": "fixture-etag",
@@ -471,6 +473,22 @@ def outbox_upsert_node(state: str) -> dict:
         "attempt_count": 0,
         "updated_at": "={{ $now.toISO() }}",
     }
+    if state == "VERIFIED":
+        value.update({
+            "verification_version": 1,
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": "e" * 64,
+            "observed_payload_sha256": "e" * 64,
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": -100,
+            "observed_amount_sum_minor": -100,
+            "expected_account_balance": -100,
+            "observed_account_balance": -100,
+            "invariants_passed": True,
+            "verified_at": "={{ $now.toISO() }}",
+        })
     return {
         "id": f"seed-{suffix}",
         "name": f"Seed {state} Outbox Crash Boundary",
@@ -498,19 +516,68 @@ def outbox_upsert_node(state: str) -> dict:
     }
 
 
+def terminal_effect_upsert_node(state: str) -> dict:
+    suffix = state.lower().replace("_", "-")
+    payload_sha256 = ("b" if state == "ACTUAL_OBSERVED" else "c") * 64
+    verified_payload_sha256 = ("d" if state == "ACTUAL_OBSERVED" else "e") * 64
+    return {
+        "id": f"seed-{suffix}-terminal-effect",
+        "name": f"Seed {state} Terminal Writer Evidence",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [-300, 0],
+        "parameters": {
+            "operation": "executeQuery",
+            "query": (
+                "INSERT INTO finance_ops.actual_writer_effects "
+                "(resource_key, outbox_id, account_id, budget_id, payload_sha256, "
+                "verified_payload_sha256, period_start, period_end, state, attempt_count, "
+                "lease_id, lease_owner, fencing_token, updated_at) "
+                "VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, "
+                "$7::date, $8::date, 'VERIFIED', 1, $9::uuid, $10::text, 1, clock_timestamp()) "
+                "ON CONFLICT (resource_key, outbox_id) DO UPDATE SET "
+                "account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, "
+                "payload_sha256 = EXCLUDED.payload_sha256, "
+                "verified_payload_sha256 = EXCLUDED.verified_payload_sha256, "
+                "period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, "
+                "state = 'VERIFIED', attempt_count = 1, lease_id = EXCLUDED.lease_id, "
+                "lease_owner = EXCLUDED.lease_owner, fencing_token = 1, "
+                "updated_at = clock_timestamp() "
+                "RETURNING resource_key, outbox_id, payload_sha256, verified_payload_sha256, state;"
+            ),
+            "options": {"queryReplacement": "={{ ["
+                + f"'actual:fixture_actual', 'fixture-recovery-{suffix}', "
+                + f"'fixture-account', 'fixture_actual', '{payload_sha256}', "
+                + f"'{verified_payload_sha256}', '2026-08-01', '2026-08-31', "
+                + f"'00000000-0000-4000-8000-0000000000{19 if state == 'ACTUAL_OBSERVED' else 20}', "
+                + f"'n8n:fixture:predecessor:{suffix}'"
+                + "] }}"},
+        },
+        "credentials": {"postgres": {"id": "BIND_FINANCE_OPS_DB", "name": "Finance Operations Postgres"}},
+    }
+
+
 def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
     trigger = manual_node()
     seed = outbox_upsert_node(state)
     call = execute_node("run-recovery", "Run Derived Recovery Core", RECOVERY_FIXTURE_ID, [100, 0])
+    nodes = [trigger]
+    connections = {}
+    previous = trigger
+    if state in {"ACTUAL_OBSERVED", "VERIFIED"}:
+        terminal_seed = terminal_effect_upsert_node(state)
+        nodes.append(terminal_seed)
+        connections[previous["name"]] = {"main": [[{"node": terminal_seed["name"], "type": "main", "index": 0}]]}
+        previous = terminal_seed
+    nodes.extend((seed, call))
+    connections[previous["name"]] = {"main": [[{"node": seed["name"], "type": "main", "index": 0}]]}
+    connections[seed["name"]] = {"main": [[{"node": call["name"], "type": "main", "index": 0}]]}
     return {
         "id": workflow_id,
         "name": f"DISPOSABLE ONLY · Recover from {state}",
         "active": False,
-        "nodes": [trigger, seed, call],
-        "connections": {
-            trigger["name"]: {"main": [[{"node": seed["name"], "type": "main", "index": 0}]]},
-            seed["name"]: {"main": [[{"node": call["name"], "type": "main", "index": 0}]]},
-        },
+        "nodes": nodes,
+        "connections": connections,
         "settings": fixture_settings(),
         "pinData": {},
         "meta": {"disposableOnly": True, "productionImportForbidden": True},

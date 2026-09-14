@@ -4261,10 +4261,9 @@ return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_i
         ],
     }
 
-    # The lease table keeps only the current row per Actual file, so an old
-    # released lease cannot serve as durable COMMITTED replay evidence after a
-    # later acquire. Release and read it back before the final COMMITTED write;
-    # the durable state transition then proves the release ordering.
+    # Durable COMMITTED replay uses immutable historical release evidence
+    # because the lease table keeps only the current row per Actual file.
+    # Successor execution persists and reads COMMITTED before it releases.
     obsolete_replay_release = {
         "Read Committed Writer Fence Replay",
         "Build Committed Replay Fence Release",
@@ -4290,14 +4289,14 @@ return [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_i
         ],
     }
     existing["connections"]["Assert Recovery Fence Before Commit"] = {
+        "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
+    }
+    existing["connections"]["Read Back COMMITTED Recovery"] = {
         "main": [
             [{"node": "Build Recovery Fence Release", "type": "main", "index": 0}]
         ],
     }
     existing["connections"]["Read Back Released Recovery Writer Fence"] = {
-        "main": [[{"node": "Upsert COMMITTED Recovery", "type": "main", "index": 0}]],
-    }
-    existing["connections"]["Read Back COMMITTED Recovery"] = {
         "main": [
             [{"node": "Return Verified Commit Receipt", "type": "main", "index": 0}]
         ],
@@ -4872,6 +4871,7 @@ def ensure_durable_actual_writer(workflows: list[dict]) -> None:
 
     read = node_by_name(recovery, "Read Nonterminal Actual Outbox")
     read["alwaysOutputData"] = True
+    read["typeVersion"] = 1.1
     recovery_by_name = {node["name"]: node for node in recovery["nodes"]}
     if "Has Nonterminal Actual Outbox Rows" not in recovery_by_name:
         recovery["nodes"].extend(
@@ -4968,14 +4968,14 @@ return [{ json: { ...r, fencing_token: Number(r.fencing_token), payload_sha256: 
     lease_nodes = {node["name"]: node for node in lease["nodes"]}
     lease_nodes["Atomic Acquire Writer Lease"]["parameters"] = {
         "operation": "executeQuery",
-        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $6::text AND budget_id = $8::text AND payload_sha256 = $7::text AND period_start = $9::date AND period_end = $10::date AND verified_payload_sha256 = $7::text AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) AS present), blockers AS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND budget_id = $8::text AND state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') AND NOT (state = 'PREPARED' AND outbox_id = $4::text AND attempt_count = 0 AND $5::text = 'INITIAL')), acquired AS (SELECT lease.*, $4::text AS outbox_id FROM terminal CROSS JOIN LATERAL finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer) AS lease WHERE NOT EXISTS (SELECT 1 FROM blockers) AND (($5::text = 'INITIAL' AND $11::text = 'PREPARED' AND $12::integer = 0) OR ($5::text = 'SUCCESSOR' AND terminal.present))), marked AS (INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, issued_at, updated_at) SELECT $1::text, $4::text, $6::text, $8::text, $7::text, $9::date, $10::date, 'ISSUED', 1, lease_id, lease_owner, fencing_token, clock_timestamp(), clock_timestamp() FROM acquired ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = 'ISSUED', account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, payload_sha256 = EXCLUDED.payload_sha256, period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, attempt_count = actual_writer_effects.attempt_count + 1, issued_at = clock_timestamp(), updated_at = clock_timestamp() WHERE actual_writer_effects.state = 'PREPARED' AND actual_writer_effects.attempt_count = 0 RETURNING resource_key, outbox_id), issued AS (SELECT resource_key, outbox_id FROM marked UNION ALL SELECT resource_key, outbox_id FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $6::text AND budget_id = $8::text AND payload_sha256 = $7::text AND period_start = $9::date AND period_end = $10::date AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED') AND verified_payload_sha256 = $7::text) SELECT acquired.* FROM acquired JOIN issued USING (resource_key, outbox_id);",
+        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $6::text AND budget_id = $8::text AND payload_sha256 = $7::text AND period_start = $9::date AND period_end = $10::date AND verified_payload_sha256 IS NOT NULL AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) AS present), blockers AS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND budget_id = $8::text AND state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') AND NOT (state = 'PREPARED' AND outbox_id = $4::text AND attempt_count = 0 AND $5::text = 'INITIAL')), acquired AS (SELECT lease.*, $4::text AS outbox_id FROM terminal CROSS JOIN LATERAL finance_ops.acquire_writer_lease($1::text, $2::text, $3::integer) AS lease WHERE NOT EXISTS (SELECT 1 FROM blockers) AND (($5::text = 'INITIAL' AND $11::text = 'PREPARED' AND $12::integer = 0) OR ($5::text = 'SUCCESSOR' AND terminal.present))), marked AS (INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, issued_at, updated_at) SELECT $1::text, $4::text, $6::text, $8::text, $7::text, $9::date, $10::date, 'ISSUED', 1, lease_id, lease_owner, fencing_token, clock_timestamp(), clock_timestamp() FROM acquired ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = CASE WHEN actual_writer_effects.state = 'PREPARED' THEN 'ISSUED' ELSE actual_writer_effects.state END, account_id = EXCLUDED.account_id, budget_id = EXCLUDED.budget_id, payload_sha256 = EXCLUDED.payload_sha256, period_start = EXCLUDED.period_start, period_end = EXCLUDED.period_end, lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, attempt_count = actual_writer_effects.attempt_count + 1, issued_at = clock_timestamp(), updated_at = clock_timestamp() WHERE ($5::text = 'INITIAL' AND actual_writer_effects.state = 'PREPARED' AND actual_writer_effects.attempt_count = 0) OR ($5::text = 'SUCCESSOR' AND actual_writer_effects.state IN ('VERIFIED', 'RECONCILED', 'COMMITTED') AND actual_writer_effects.verified_payload_sha256 IS NOT NULL AND actual_writer_effects.resource_key = $1::text AND actual_writer_effects.outbox_id = $4::text AND actual_writer_effects.account_id = $6::text AND actual_writer_effects.budget_id = $8::text AND actual_writer_effects.payload_sha256 = $7::text AND actual_writer_effects.period_start = $9::date AND actual_writer_effects.period_end = $10::date) RETURNING resource_key, outbox_id) SELECT acquired.* FROM acquired JOIN marked USING (resource_key, outbox_id);",
         "options": {
             "queryReplacement": "={{ [$json.resource_key, $json.lease_owner, $json.ttl_seconds, $json.outbox_id, $json.admission, $json.account_id, $json.payload_sha256, $json.budget_id, $json.period_start, $json.period_end, $json.outbox_state, $json.attempt_count] }}"
         },
     }
     lease_nodes["Release Exact Writer Fence"]["parameters"] = {
         "operation": "executeQuery",
-        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $5::text AND payload_sha256 = $6::text AND verified_payload_sha256 = $7::text AND state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')) AS allowed) SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released FROM terminal WHERE allowed;",
+        "query": "WITH terminal AS (SELECT EXISTS (SELECT 1 FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $4::text AND account_id = $5::text AND payload_sha256 = $6::text AND verified_payload_sha256 = $7::text AND state = 'COMMITTED') AS allowed) SELECT finance_ops.release_writer_lease($1::text, $2::uuid, $3::bigint) AS released FROM terminal WHERE allowed;",
         "options": {
             "queryReplacement": "={{ [$json.resource_key, $json.lease_id, $json.fencing_token, $json.outbox_id, $json.account_id, $json.payload_sha256, $json.verified_payload_sha256] }}"
         },
@@ -4985,6 +4985,7 @@ return [{ json: { ...r, fencing_token: Number(r.fencing_token), payload_sha256: 
             "durableStateTable": "finance_ops.actual_writer_effects",
             "releaseEvidenceTable": "finance_ops.actual_writer_releases",
             "admissionPolicy": "PREPARED attempt zero only; ISSUED/OUTCOME_UNKNOWN never reclaimed; terminal VERIFIED/RECONCILED/COMMITTED required for successors",
+            "fenceReleasePolicy": "W20 durable COMMITTED readback only",
         }
     )
 
@@ -5066,7 +5067,7 @@ return [{
 """.strip()
     writer_by_name["Build Recovery Fence Release"]["parameters"]["jsCode"] = r"""
 // Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.
-const l = $('Acquire Recovery Writer Fence').first().json, r = $('Verify Recovery Contract').first().json, receipt = $('Compare Exact Actual Verification Receipt').first().json;
+const l = $('Acquire Recovery Writer Fence').first().json, r = $('Verify Recovery Contract').first().json, receipt = $('Validate Stored Verification Receipt for Commit').first().json;
 if (!receipt || receipt.invariants_passed !== true || receipt.expected_payload_sha256 !== receipt.observed_payload_sha256 || !/^[a-f0-9]{64}$/i.test(String(receipt.expected_payload_sha256)) || receipt.account_id !== r.manifest.account_id || !r.payload_sha256)
     throw new Error('ACTUAL_RELEASE_REQUIRES_EXACT_VERIFIED_READBACK');
 return [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, lease_owner: l.lease_owner, fencing_token: l.fencing_token, outbox_id: String(r.outbox_row.outbox_id || r.outbox_row.batch_id), account_id: r.manifest.account_id, payload_sha256: r.payload_sha256, verified_payload_sha256: receipt.expected_payload_sha256 } }];
