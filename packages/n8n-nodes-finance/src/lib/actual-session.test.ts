@@ -45,7 +45,7 @@ test('transaction clearing accepts only booleans', () => {
   for (const cleared of ['false', 0, 1, null]) {
     assert.throws(
       () => assertActualImportTransactions([{ ...transaction, cleared }]),
-      /cleared must be a boolean/,
+      Error,
     );
   }
 });

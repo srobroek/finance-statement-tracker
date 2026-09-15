@@ -114,7 +114,10 @@ export class ActualSession {
         await this.api.init({ dataDir: directory, serverURL: credential.serverUrl, password: credential.password, verbose: false });
         initialized = true;
         await this.api.downloadBudget(credential.syncId, credential.encryptionPassword ? { password: credential.encryptionPassword } : undefined);
-        return await operation(this.api, credential);
+        await this.api.sync();
+        const result = await operation(this.api, credential);
+        await this.api.sync();
+        return result;
       } finally {
         try {
           if (initialized) await this.api.shutdown();
