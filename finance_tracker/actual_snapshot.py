@@ -5,7 +5,7 @@ import calendar
 from dataclasses import asdict, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .cashback import (
     PaymentIntent,
@@ -34,6 +34,36 @@ _CURRENCY = re.compile(
 
 def _tags(notes: str) -> set[str]:
     return {match.group(1) for match in _TAG.finditer(notes or "")}
+
+
+def eligible_card_codes(programs: Iterable[Any], memberships: Iterable[object] | Mapping[str, object] | None = None) -> frozenset[str]:
+    """Return cards allowed in live projections; held membership is explicit."""
+    held: set[str] = set()
+    if memberships is not None:
+        records = (memberships,) if isinstance(memberships, Mapping) and "card_code" in memberships else memberships.items() if isinstance(memberships, Mapping) else memberships
+        for record in records:
+            if isinstance(memberships, Mapping) and "card_code" not in memberships:
+                card, value = record
+                record = {"card_code": card, "status": value} if not isinstance(value, Mapping) else {**value, "card_code": value.get("card_code") or card}
+            if not isinstance(record, Mapping):
+                raise ValueError("Cashback memberships must be objects")
+            card = str(record.get("card_code") or "").strip().upper()
+            if not card:
+                raise ValueError("Cashback memberships require card_code")
+            coverage = str(record.get("coverage") or "").strip().upper()
+            status = str(record.get("status") or record.get("membership_status") or record.get("lifecycle_status") or "").strip().upper()
+            held_now = (coverage == "HELD") if coverage else status in {"HELD", "ACTIVE"} or record.get("active") is True
+            if held_now:
+                held.add(card)
+    eligible = set()
+    for program in programs:
+        card = str(program.card).strip().upper()
+        if program.tracking_mode == "STATEMENT_ONLY":
+            continue
+        if card == "SC_PLATINUM_X" and card not in held:
+            continue
+        eligible.add(card)
+    return frozenset(eligible)
 
 
 def _plain(value: Decimal) -> str:

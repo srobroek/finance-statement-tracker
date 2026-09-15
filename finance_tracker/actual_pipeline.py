@@ -19,7 +19,7 @@ from .platforms import ActualBudgetAdapter
 from .properties import PropertyRegistry, load_property_registry, project_property_tags
 from .rules import RuleAction, RuleCondition, RuleEngine, StaticRule
 from .statements import NormalizedStatement, parse_statement_pdf
-from .transaction_semantics import finalize_transaction_topic
+from .transaction_semantics import CASHBACK_TOPICS, finalize_transaction_topic
 from .classification_audit import enforce_transaction_invariants
 
 
@@ -129,6 +129,52 @@ def load_compiled_rules(path: str | Path | None) -> list[StaticRule]:
     return rules
 
 
+def _apply_credit_category_fallback(transaction: Any) -> None:
+    """Keep unresolved positive credits visible without overriding locks."""
+
+    direction = (
+        str(
+            transaction.source_direction
+            or transaction.metadata.get("source_direction")
+            or transaction.metadata.get("statement_direction")
+            or ""
+        )
+        .strip()
+        .upper()
+    )
+    if direction != "CREDIT":
+        return
+
+    topic = str(transaction.transaction_type or "").strip().upper()
+    locked = set(transaction.metadata.get("locked_fields", []))
+    category_missing = not str(transaction.category or "").strip()
+    category_writable = "category" not in locked
+    has_reimbursement_hint = "reimbursement" in {
+        str(tag).strip().casefold() for tag in transaction.tags
+    }
+
+    if topic == "REIMBURSEMENT":
+        if category_missing and category_writable:
+            transaction.category = _REIMBURSEMENT_CATEGORY
+        return
+    if topic not in {"REFUND", "REVERSAL"}:
+        return
+    if has_reimbursement_hint:
+        if category_missing and category_writable:
+            transaction.category = _REIMBURSEMENT_CATEGORY
+        transaction.review_required = True
+        transaction.tags.add("needs-review")
+        transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
+        return
+    if not category_missing or not category_writable:
+        return
+    if transaction.metadata.get("transaction_topic_reason") != "CREDIT_DEFAULT_REFUND":
+        return
+    transaction.category = _UNIDENTIFIED_CREDIT_CATEGORY
+    transaction.review_required = True
+    transaction.tags.add("needs-review")
+    transaction.metadata["category_resolution"] = "UNRESOLVED"
+
 def build_actual_statement_run(
     statement: NormalizedStatement,
     config: dict[str, Any],
@@ -182,6 +228,7 @@ def build_actual_statement_run(
             ai_traces.extend(ai_engine.enrich(transaction, ai_resolver))
         if property_registry:
             project_property_tags(transaction, property_registry)
+        _apply_credit_category_fallback(transaction)
         enforce_transaction_invariants(transaction)
 
     envelopes = ActualBudgetAdapter().serialize_import(staged.transactions)
@@ -208,7 +255,7 @@ def build_actual_statement_run(
         if transaction.card not in supported_cashback_cards:
             continue
         transaction_type = transaction.transaction_type.upper()
-        if transaction_type not in {"PURCHASE", "REFUND", "REVERSAL"}:
+        if transaction_type not in CASHBACK_TOPICS:
             continue
         purchase_type = str(
             transaction.metadata.get("purchase_type")

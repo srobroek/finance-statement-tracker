@@ -3,12 +3,13 @@ from __future__ import annotations
 import calendar
 import json
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
 
 from .models import Transaction, money
+from .transaction_semantics import CASHBACK_TOPICS, is_finalized_for_consumption
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,35 +235,86 @@ class PaceStatus:
     weekly_target_aed: Decimal
 
 
-def _period_transactions(transactions: Iterable[Transaction], card: str) -> list[Transaction]:
+def _period_transactions(
+    transactions: Iterable[Transaction], card: str
+) -> list[Transaction]:
     return [transaction for transaction in transactions if transaction.card == card]
 
 
+def _as_of_date(value: date | datetime | None) -> date:
+    """Resolve one explicit UTC boundary date for provenance validation.
+
+    Callers that evaluate a historical or boundary fixture can inject ``as_of``
+    directly.  The default is deliberately UTC rather than the host's local
+    timezone, so a Dubai process and a UTC process validate the same interval.
+    """
+    if value is None:
+        return datetime.now(UTC).date()
+    if isinstance(value, datetime):
+        normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return normalized.astimezone(UTC).date()
+    if isinstance(value, date):
+        return value
+    raise TypeError("as_of must be a date, datetime, or None")
+
+def _transaction_type(transaction: Transaction) -> str:
+    return str(transaction.transaction_type or "PURCHASE").strip().upper()
+
+def _is_refund(transaction: Transaction) -> bool:
+    return transaction.is_refund or _transaction_type(transaction) in {
+        "REFUND",
+        "REIMBURSEMENT",
+        "REVERSAL",
+    }
+
+def _is_purchase(transaction: Transaction) -> bool:
+    return not _is_refund(transaction) and _transaction_type(transaction) == "PURCHASE"
+
 def total_spend(transactions: Iterable[Transaction], card: str) -> Decimal:
+    """Return qualifying purchase spend, excluding refund deductions."""
     return sum(
         (
-            transaction.spend_aed
+            transaction.amount_aed
             for transaction in transactions
-            if transaction.card == card and transaction.transaction_type in {"PURCHASE", "REFUND"}
+            if transaction.card == card
+            and is_finalized_for_consumption(transaction)
+            and _is_purchase(transaction)
+            and _transaction_type(transaction) in CASHBACK_TOPICS
         ),
         Decimal("0"),
     )
 
 
 def bucket_spend(transactions: Iterable[Transaction], card: str) -> dict[str, Decimal]:
+    """Return purchase spend used for reward rates and caps.
+
+    Refunds are intentionally excluded. They reduce earned cashback only; they
+    do not restore qualifying spend or bucket cap headroom.
+    """
     result: dict[str, Decimal] = {}
     for transaction in transactions:
         if (
             transaction.card != card
-            or transaction.transaction_type not in {"PURCHASE", "REFUND"}
+            or not is_finalized_for_consumption(transaction)
+            or not _is_purchase(transaction)
+            or _transaction_type(transaction) not in CASHBACK_TOPICS
             or not transaction.reward_bucket
         ):
             continue
-        result[transaction.reward_bucket] = result.get(transaction.reward_bucket, Decimal("0")) + transaction.spend_aed
+        result[transaction.reward_bucket] = (
+            result.get(transaction.reward_bucket, Decimal("0")) + transaction.amount_aed
+        )
     return result
 
 
-def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decimal]) -> Decimal:
+def reward_total(
+    program: CardProgram,
+    total: Decimal,
+    buckets: dict[str, Decimal],
+    *,
+    refund_deductions: Decimal = Decimal("0"),
+) -> Decimal:
+    """Calculate capped cashback after an optional current-period deduction."""
     tier = program.tier_for(total, buckets)
     bucket_defs = {bucket.code: bucket for bucket in program.buckets}
     reward = Decimal("0")
@@ -272,10 +324,13 @@ def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decima
         fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
         cap = tier.cashback_cap(code, fallback_cap)
         reward += min(earned, cap) if cap is not None else earned
+    reward = max(reward - max(refund_deductions, Decimal("0")), Decimal("0"))
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
     if program.rounding_behavior != "NONE":
-        raise ValueError(f"Unsupported reward rounding behavior: {program.rounding_behavior}")
+        raise ValueError(
+            f"Unsupported reward rounding behavior: {program.rounding_behavior}"
+        )
     return reward
 
 
@@ -297,17 +352,36 @@ def evaluate_card(
     ]
     if not eligible:
         return None
-    before_reward = reward_total(program, current_total, current_buckets)
+    refund_deduction = _refund_cashback_deduction(
+        program, existing, current_total, current_buckets
+    )
+    before_reward = reward_total(
+        program,
+        current_total,
+        current_buckets,
+        refund_deductions=refund_deduction,
+    )
     best: CardValue | None = None
     for bucket in eligible:
         after_buckets = dict(current_buckets)
-        after_buckets[bucket.code] = after_buckets.get(bucket.code, Decimal("0")) + money(intent.amount_aed)
+        after_buckets[bucket.code] = after_buckets.get(
+            bucket.code, Decimal("0")
+        ) + money(intent.amount_aed)
         after_total = current_total + money(intent.amount_aed)
-        after_reward = reward_total(program, after_total, after_buckets)
-        target_total = program.safety_target if program.safety_target is not None else after_total
+        after_reward = reward_total(
+            program,
+            after_total,
+            after_buckets,
+            refund_deductions=refund_deduction,
+        )
+        target_total = (
+            program.safety_target if program.safety_target is not None else after_total
+        )
         target_tier = program.target_tier(target_total, after_buckets)
         target_rate = target_tier.rates.get(bucket.code, Decimal("0"))
-        current_bucket_spend = max(current_buckets.get(bucket.code, Decimal("0")), Decimal("0"))
+        current_bucket_spend = max(
+            current_buckets.get(bucket.code, Decimal("0")), Decimal("0")
+        )
         spend_capacity = None
         if bucket.spend_cap_aed is not None:
             spend_capacity = bucket.spend_cap_aed
@@ -356,7 +430,9 @@ def evaluate_card(
             target_rate=target_rate,
             card_spend_before_aed=current_total,
             tier_threshold_aed=target_tier.minimum_spend,
-            tier_remaining_aed=max(target_tier.minimum_spend - current_total, Decimal("0")),
+            tier_remaining_aed=max(
+                target_tier.minimum_spend - current_total, Decimal("0")
+            ),
             bucket_spend_before_aed=current_bucket_spend,
             bucket_spend_cap_aed=spend_capacity,
             bucket_remaining_aed=bucket_remaining,
