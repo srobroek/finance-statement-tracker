@@ -12,8 +12,60 @@ CREATE TABLE IF NOT EXISTS finance_ops.writer_leases (
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
 
+CREATE TABLE IF NOT EXISTS finance_ops.actual_writer_effects (
+    resource_key text NOT NULL,
+    outbox_id text NOT NULL,
+    account_id text NOT NULL,
+    budget_id text NOT NULL,
+    payload_sha256 text NOT NULL CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+    verified_payload_sha256 text CHECK (verified_payload_sha256 IS NULL OR verified_payload_sha256 ~ '^[0-9a-f]{64}$'),
+    period_start date NOT NULL,
+    period_end date NOT NULL CHECK (period_start <= period_end),
+    state text NOT NULL CHECK (state IN ('PREPARED', 'ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN', 'VERIFIED', 'RECONCILED', 'COMMITTED')),
+    attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    lease_id uuid,
+    lease_owner text,
+    fencing_token bigint CHECK (fencing_token IS NULL OR fencing_token > 0),
+    issued_at timestamptz,
+    last_error_class text,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CHECK ((lease_id IS NULL AND lease_owner IS NULL AND fencing_token IS NULL) OR (lease_id IS NOT NULL AND lease_owner IS NOT NULL AND fencing_token IS NOT NULL)),
+    CHECK (state NOT IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') OR (lease_id IS NOT NULL AND lease_owner IS NOT NULL AND fencing_token IS NOT NULL)),
+    CHECK (state NOT IN ('VERIFIED', 'RECONCILED', 'COMMITTED') OR verified_payload_sha256 IS NOT NULL),
+    PRIMARY KEY (resource_key, outbox_id)
+);
+
+CREATE INDEX IF NOT EXISTS actual_writer_effects_admission_idx
+    ON finance_ops.actual_writer_effects (resource_key, state, updated_at);
+
+CREATE TABLE IF NOT EXISTS finance_ops.actual_writer_releases (
+    resource_key text NOT NULL,
+    outbox_id text NOT NULL,
+    account_id text NOT NULL,
+    budget_id text NOT NULL,
+    payload_sha256 text NOT NULL CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+    verified_payload_sha256 text NOT NULL CHECK (verified_payload_sha256 ~ '^[0-9a-f]{64}$'),
+    period_start date NOT NULL,
+    period_end date NOT NULL CHECK (period_start <= period_end),
+    state text NOT NULL CHECK (state IN ('VERIFIED', 'RECONCILED', 'COMMITTED')),
+    lease_id uuid NOT NULL,
+    lease_owner text NOT NULL,
+    fencing_token bigint NOT NULL CHECK (fencing_token > 0),
+    released_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (resource_key, outbox_id, fencing_token),
+    UNIQUE (resource_key, lease_id, fencing_token)
+);
+
+CREATE INDEX IF NOT EXISTS actual_writer_releases_lookup_idx
+    ON finance_ops.actual_writer_releases (resource_key, outbox_id, fencing_token);
+
+
+
 REVOKE ALL ON SCHEMA finance_ops FROM PUBLIC;
 REVOKE ALL ON ALL TABLES IN SCHEMA finance_ops FROM PUBLIC;
+GRANT USAGE ON SCHEMA finance_ops TO n8n;
+GRANT SELECT, INSERT, UPDATE ON finance_ops.actual_writer_effects TO n8n;
+GRANT SELECT ON finance_ops.actual_writer_releases TO n8n;
 
 DROP FUNCTION IF EXISTS finance_ops.acquire_writer_lease(text, uuid, text, integer);
 
@@ -61,6 +113,10 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION finance_ops.acquire_writer_lease(text, text, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.acquire_writer_lease(text, text, integer) TO n8n;
+
+
 CREATE OR REPLACE FUNCTION finance_ops.assert_writer_lease(
     p_resource_key text,
     p_lease_id uuid,
@@ -76,12 +132,89 @@ CREATE OR REPLACE FUNCTION finance_ops.assert_writer_lease(
     );
 $$;
 
+REVOKE ALL ON FUNCTION finance_ops.assert_writer_lease(text, uuid, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.assert_writer_lease(text, uuid, bigint) TO n8n;
+
+
 CREATE OR REPLACE FUNCTION finance_ops.release_writer_lease(
     p_resource_key text,
     p_lease_id uuid,
     p_fencing_token bigint
 ) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, finance_ops AS $$
-DECLARE changed integer;
+BEGIN
+    -- Retry immutable release evidence before consulting the mutable current
+    -- lease row. A successor may already have replaced the committed tuple.
+    IF EXISTS (
+        SELECT 1
+          FROM finance_ops.actual_writer_releases
+         WHERE resource_key = p_resource_key
+           AND lease_id = p_lease_id
+           AND fencing_token = p_fencing_token
+    ) THEN
+        RETURN true;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+          FROM finance_ops.actual_writer_effects
+         WHERE resource_key = p_resource_key
+           AND lease_id = p_lease_id
+           AND fencing_token = p_fencing_token
+           AND state = 'COMMITTED'
+           AND verified_payload_sha256 IS NOT NULL
+    ) THEN
+        RETURN false;
+    END IF;
+
+    -- Release only the exact current tuple. If a successor already owns the
+    -- singleton row, its lease remains untouched.
+    UPDATE finance_ops.writer_leases
+       SET released_at = clock_timestamp(), updated_at = clock_timestamp()
+     WHERE resource_key = p_resource_key
+       AND lease_id = p_lease_id
+       AND fencing_token = p_fencing_token
+       AND released_at IS NULL;
+
+    -- The durable COMMITTED effect is sufficient to close the historical
+    -- tuple even after successor overwrite. This insert is immutable and
+    -- retry-safe; it never releases the successor's fencing token.
+    INSERT INTO finance_ops.actual_writer_releases (
+        resource_key, outbox_id, account_id, budget_id, payload_sha256,
+        verified_payload_sha256, period_start, period_end, state,
+        lease_id, lease_owner, fencing_token, released_at
+    )
+    SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256,
+           verified_payload_sha256, period_start, period_end, state,
+           lease_id, lease_owner, fencing_token, clock_timestamp()
+      FROM finance_ops.actual_writer_effects
+     WHERE resource_key = p_resource_key
+       AND lease_id = p_lease_id
+       AND fencing_token = p_fencing_token
+       AND state = 'COMMITTED'
+       AND verified_payload_sha256 IS NOT NULL
+    ON CONFLICT (resource_key, outbox_id, fencing_token) DO NOTHING;
+
+    RETURN EXISTS (
+        SELECT 1
+          FROM finance_ops.actual_writer_releases
+         WHERE resource_key = p_resource_key
+           AND lease_id = p_lease_id
+           AND fencing_token = p_fencing_token
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION finance_ops.release_writer_lease(text, uuid, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.release_writer_lease(text, uuid, bigint) TO n8n;
+
+
+CREATE OR REPLACE FUNCTION finance_ops.release_maintenance_lease(
+    p_resource_key text,
+    p_lease_id uuid,
+    p_fencing_token bigint
+) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, finance_ops AS $$
+DECLARE
+    changed integer;
 BEGIN
     UPDATE finance_ops.writer_leases
        SET released_at = clock_timestamp(), updated_at = clock_timestamp()
@@ -93,11 +226,9 @@ BEGIN
     IF changed = 1 THEN
         RETURN true;
     END IF;
-    -- Release is retry-safe for the exact historical lease. This allows a
-    -- COMMITTED recovery to repair a crash between state persistence and the
-    -- original release readback without releasing a newer fencing token.
     RETURN EXISTS (
-        SELECT 1 FROM finance_ops.writer_leases
+        SELECT 1
+          FROM finance_ops.writer_leases
          WHERE resource_key = p_resource_key
            AND lease_id = p_lease_id
            AND fencing_token = p_fencing_token
@@ -105,5 +236,8 @@ BEGIN
     );
 END;
 $$;
+
+REVOKE ALL ON FUNCTION finance_ops.release_maintenance_lease(text, uuid, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION finance_ops.release_maintenance_lease(text, uuid, bigint) TO n8n;
 
 COMMIT;

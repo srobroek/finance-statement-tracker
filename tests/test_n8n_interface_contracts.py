@@ -75,6 +75,7 @@ EXPECTED_CALL_TARGETS: dict[str, tuple[tuple[str, str], ...]] = {
         ("Release Recovery Writer Fence", "FINANCE_WRITER_LEASE"),
         ("Assert Recovery Fence After Import", "FINANCE_WRITER_LEASE"),
         ("Assert Recovery Fence Before Commit", "FINANCE_WRITER_LEASE"),
+        ("Release COMMITTED Recovery Writer Fence", "FINANCE_WRITER_LEASE"),
     ),
 }
 
@@ -144,8 +145,14 @@ OUTBOX_CONTEXT = (
     "attempt_count",
     "account_id",
 )
-LEASE_ACQUIRE = ("operation", "resource_key", "lease_owner", "ttl_seconds")
-LEASE_ASSERT = ("operation", "resource_key", "lease_id", "fencing_token")
+LEASE_ACQUIRE = (
+    "operation",
+    "lease_class",
+    "resource_key",
+    "lease_owner",
+    "ttl_seconds",
+)
+LEASE_ASSERT = ("operation", "lease_class", "resource_key", "lease_id", "fencing_token")
 SWEEP_CONTEXT = (
     "run_id",
     "source_code",
@@ -324,7 +331,10 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
     ),
     boundary_case(
         "artifact handoff to statement pipeline",
-        ("INTERACTIVE_ARTIFACT_HANDOFF", "Dispatch Browser Capture to Headless Pipeline"),
+        (
+            "INTERACTIVE_ARTIFACT_HANDOFF",
+            "Dispatch Browser Capture to Headless Pipeline",
+        ),
         "SHARED_STATEMENT_PIPELINE",
         (
             "run_id",
@@ -412,6 +422,7 @@ BOUNDARY_FIXTURES: tuple[dict, ...] = (
         "FINANCE_WRITER_LEASE",
         LEASE_ASSERT,
         LEASE_ASSERT,
+        aliases=(("ACTUAL_OUTBOX_APPLY", "Release COMMITTED Recovery Writer Fence"),),
     ),
     boundary_case(
         "cashback sweep",
@@ -670,6 +681,7 @@ class N8nInterfaceContractTests(unittest.TestCase):
         for field in (
             "operation",
             "resource_key",
+            "lease_class",
             "lease_owner",
             "ttl_seconds",
             "lease_id",

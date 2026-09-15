@@ -15,10 +15,17 @@ from pathlib import Path
 
 APPLICATION_ID = "finance-statement-tracker"
 WORKFLOW_COUNT = 19
-FIXTURE_WORKFLOW_COUNT = 19
+FIXTURE_WORKFLOW_COUNT = 20
 MCP_ROUTE = "/mcp/finance-operations-v1"
 BOOTSTRAP_WORKFLOW_ID = "10000000-0000-4000-8000-000000000019"
-CANONICAL_FORBIDDEN_FIELDS = ["id", "value", "token", "secret", "password", "client_secret"]
+CANONICAL_FORBIDDEN_FIELDS = [
+    "id",
+    "value",
+    "token",
+    "secret",
+    "password",
+    "client_secret",
+]
 PLACEHOLDER_FIELDS = {"name", "binding", "type"}
 SOURCE_FILES = {
     "folders": Path("integrations/n8n/workflow-folders.json"),
@@ -48,8 +55,12 @@ def _sha256(path: Path) -> str:
 
 
 def _validate_commit(source_commit: str) -> None:
-    if not isinstance(source_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", source_commit):
-        raise ValueError("application source commit must be a lowercase 40-character SHA")
+    if not isinstance(source_commit, str) or not re.fullmatch(
+        r"[0-9a-f]{40}", source_commit
+    ):
+        raise ValueError(
+            "application source commit must be a lowercase 40-character SHA"
+        )
 
 
 def _target_tables(finance_root: Path) -> list[dict[str, str]]:
@@ -71,7 +82,9 @@ def _target_tables(finance_root: Path) -> list[dict[str, str]]:
         or not isinstance(target_schemas, dict)
         or set(target_schemas) != set(targets)
     ):
-        raise ValueError("finance Data Table migration matrix target contract is invalid")
+        raise ValueError(
+            "finance Data Table migration matrix target contract is invalid"
+        )
 
     tables = matrix.get("tables")
     if not isinstance(tables, list):
@@ -81,7 +94,9 @@ def _target_tables(finance_root: Path) -> list[dict[str, str]]:
             raise TypeError("finance Data Table migration matrix table row is invalid")
         target = table.get("target_table")
         if target is not None and target not in targets:
-            raise ValueError("finance Data Table migration matrix has an unknown target")
+            raise ValueError(
+                "finance Data Table migration matrix has an unknown target"
+            )
 
     return [{"name": name} for name in targets]
 
@@ -94,7 +109,12 @@ def _credential_manifest(finance_root: Path) -> dict[str, object]:
     contract_path = finance_root / "credential-bindings.json"
     if not isinstance(credentials, dict):
         raise ValueError("finance credential manifest is invalid")
-    if set(credentials) != {"placeholders", "binding_contract", "values_included", "forbidden_fields"}:
+    if set(credentials) != {
+        "placeholders",
+        "binding_contract",
+        "values_included",
+        "forbidden_fields",
+    }:
         raise ValueError("finance credential manifest is invalid")
     if credentials.get("forbidden_fields") != CANONICAL_FORBIDDEN_FIELDS:
         raise ValueError("finance credential forbidden fields are invalid")
@@ -117,7 +137,10 @@ def _credential_manifest(finance_root: Path) -> dict[str, object]:
     if len(declared_types) != len(placeholders):
         raise ValueError("finance credential bindings are duplicated")
     binding_contract = credentials.get("binding_contract")
-    if not isinstance(binding_contract, dict) or set(binding_contract) != {"path", "sha256"}:
+    if not isinstance(binding_contract, dict) or set(binding_contract) != {
+        "path",
+        "sha256",
+    }:
         raise ValueError("finance credential binding declaration is invalid")
     if binding_contract["path"] != "integrations/n8n/credential-bindings.json":
         raise ValueError("finance credential binding declaration path changed")
@@ -168,36 +191,55 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
     workflow_root = finance_root / "workflows"
     workflows = sorted(workflow_root.glob("*.json"))
     if len(workflows) != WORKFLOW_COUNT or any(path.is_symlink() for path in workflows):
-        raise ValueError("finance workflow corpus does not match the application contract")
+        raise ValueError(
+            "finance workflow corpus does not match the application contract"
+        )
 
     registry = _load(finance_root / "pipeline-registry.json")
     registry_files = sorted(row["file"] for row in registry["workflows"])
     if registry_files != [path.name for path in workflows]:
         raise ValueError("finance workflow registry does not match the workflow corpus")
     source_tables = _load(finance_root / "data-tables.json").get("tables")
-    source_names = [row.get("name") for row in source_tables or [] if isinstance(row, dict)]
+    source_names = [
+        row.get("name") for row in source_tables or [] if isinstance(row, dict)
+    ]
     if (
         not isinstance(source_tables, list)
         or len(source_names) != len(source_tables)
         or len(set(source_names)) != len(source_names)
     ):
-        raise ValueError("finance Data Table schema does not match the application contract")
+        raise ValueError(
+            "finance Data Table schema does not match the application contract"
+        )
     tables = _target_tables(finance_root)
     fixture_manifest = _load(finance_root / "disposable" / "fixture-manifest.json")
     fixture_workflows = fixture_manifest["workflows"]
     if len(fixture_workflows) != FIXTURE_WORKFLOW_COUNT:
-        raise ValueError("finance fixture workflow corpus does not match the application contract")
+        raise ValueError(
+            "finance fixture workflow corpus does not match the application contract"
+        )
     for fixture in fixture_workflows:
         filename = fixture.get("file")
-        if not isinstance(filename, str) or Path(filename).name != filename or not filename.endswith(".json"):
+        if (
+            not isinstance(filename, str)
+            or Path(filename).name != filename
+            or not filename.endswith(".json")
+        ):
             raise ValueError("finance fixture workflow filename is invalid")
         source = finance_root / "disposable" / "generated" / filename
         _copy_regular(source, destination / "fixtures" / "generated" / filename)
-        if not isinstance(fixture.get("sha256"), str) or _sha256(source) != fixture["sha256"]:
+        if (
+            not isinstance(fixture.get("sha256"), str)
+            or _sha256(source) != fixture["sha256"]
+        ):
             raise ValueError(f"finance fixture workflow hash mismatch: {filename}")
     for filename, expected_hash in fixture_manifest["source_workflow_sha256"].items():
         source = workflow_root / filename
-        if not source.is_file() or source.is_symlink() or _sha256(source) != expected_hash:
+        if (
+            not source.is_file()
+            or source.is_symlink()
+            or _sha256(source) != expected_hash
+        ):
             raise ValueError(f"finance source workflow hash mismatch: {filename}")
 
     credentials = _credential_manifest(finance_root)
@@ -205,14 +247,18 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
     for workflow in workflows:
         _copy_regular(workflow, destination / "workflows" / workflow.name)
     for key, relative_path in SOURCE_FILES.items():
-        _copy_regular(source_root / relative_path, destination / {
-            "folders": "workflow-folders.json",
-            "folder_sql": "workflow-folder-placement.sql",
-            "tables": "bootstrap/data-tables.json",
-            "fixtures": "fixtures/fixture-manifest.json",
-            "onedrive_setup": "fixtures/onedrive-root-setup.json",
-            "credential_bindings": "credential-bindings.json",
-        }[key])
+        _copy_regular(
+            source_root / relative_path,
+            destination
+            / {
+                "folders": "workflow-folders.json",
+                "folder_sql": "workflow-folder-placement.sql",
+                "tables": "bootstrap/data-tables.json",
+                "fixtures": "fixtures/fixture-manifest.json",
+                "onedrive_setup": "fixtures/onedrive-root-setup.json",
+                "credential_bindings": "credential-bindings.json",
+            }[key],
+        )
 
     (destination / "bootstrap" / "seed.sql").write_text(
         "-- Finance Data Tables are created by the supplied bootstrap workflow.\n",
@@ -220,7 +266,9 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
     )
     workflow_19 = _load(workflow_root / "19-platform-data-table-bootstrap.json")
     workflow_15 = _load(workflow_root / "15-finance-mcp-facade.json")
-    trigger = next(node for node in workflow_15["nodes"] if "mcpTrigger" in node["type"])
+    trigger = next(
+        node for node in workflow_15["nodes"] if "mcpTrigger" in node["type"]
+    )
     if trigger["parameters"]["path"] != MCP_ROUTE.removeprefix("/mcp/"):
         raise ValueError("finance MCP route is not the application interface route")
 
@@ -233,14 +281,20 @@ def stage_application(source_root: Path, destination: Path, source_commit: str) 
             "inactive": True,
             "published": False,
         },
-        "folders": {"manifest": "workflow-folders.json", "sql": "workflow-folder-placement.sql"},
+        "folders": {
+            "manifest": "workflow-folders.json",
+            "sql": "workflow-folder-placement.sql",
+        },
         "bootstrap": {
             "directory": "bootstrap",
             "sql": "seed.sql",
             "workflow_id": workflow_19["id"],
             "tables": [{"name": row["name"]} for row in tables],
         },
-        "fixtures": {"directory": "fixtures", "manifest": "fixtures/fixture-manifest.json"},
+        "fixtures": {
+            "directory": "fixtures",
+            "manifest": "fixtures/fixture-manifest.json",
+        },
         "credentials": credentials,
         "route": {
             "path": MCP_ROUTE,

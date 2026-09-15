@@ -27,7 +27,7 @@
       "id": "17002",
       "name": "Read Nonterminal Actual Outbox",
       "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1.1,
+      "alwaysOutputData": true,
       "position": [
         -820,
         0
@@ -58,11 +58,17 @@
               "keyName": "state",
               "condition": "eq",
               "keyValue": "VERIFIED"
+            },
+            {
+              "keyName": "state",
+              "condition": "eq",
+              "keyValue": "COMMITTED"
             }
           ]
         },
         "options": {}
-      }
+      },
+      "typeVersion": 1.1
     },
     {
       "id": "17026",
@@ -70,7 +76,7 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        -520,
+        -220,
         0
       ],
       "parameters": {
@@ -83,6 +89,49 @@
         "options": {
           "waitForSubWorkflow": true
         }
+      }
+    },
+    {
+      "id": "17032",
+      "name": "Has Nonterminal Actual Outbox Rows",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ !!$json.batch_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "17033",
+      "name": "No Nonterminal Actual Outbox Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: No Nonterminal Actual Outbox Rows. Keep this deterministic and fail closed.\nreturn [{ json: { status: 'NOOP', reason: 'NO_NONTERMINAL_ACTUAL_OUTBOX_ROWS' } }];\n"
       }
     }
   ],
@@ -102,7 +151,25 @@
       "main": [
         [
           {
+            "node": "Has Nonterminal Actual Outbox Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Nonterminal Actual Outbox Rows": {
+      "main": [
+        [
+          {
             "node": "Apply Nonterminal Outbox Safely",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Nonterminal Actual Outbox Rows",
             "type": "main",
             "index": 0
           }
@@ -139,16 +206,19 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "releasedStateExcluded": "RELEASED"
   },
   "nodeGroups": [
     {
-      "name": "Stage 1: Read Nonterminal Actual Outbox to Apply Nonterminal Outbox Safely",
+      "name": "Stage 1: Read Nonterminal Actual Outbox to No Nonterminal Actual Outbox Rows",
       "nodeIds": [
         "17002",
-        "17026"
+        "17032",
+        "17026",
+        "17033"
       ],
-      "description": "Finance stage 1. Input starts at Read Nonterminal Actual Outbox; verified output leaves through Apply Nonterminal Outbox Safely."
+      "description": "Finance stage 1. Input starts at Read Nonterminal Actual Outbox; verified output leaves through No Nonterminal Actual Outbox Rows."
     }
   ],
   "tags": [

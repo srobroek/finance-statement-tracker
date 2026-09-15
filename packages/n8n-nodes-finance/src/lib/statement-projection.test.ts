@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import type { IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { FinanceStatement } from '../nodes/FinanceStatement/FinanceStatement.node';
 import { FinanceRules } from '../nodes/FinanceRules/FinanceRules.node';
-import { ActualSession, type ActualApi } from './actual-session';
+import { ActualSession, type ActualApi, type ActualReturnedTransaction } from './actual-session';
 import { projectStatementToActual, type ActualClassificationReadback, type NormalizedStatement } from './statements';
 
 const text = `Statement of Card Account
@@ -40,7 +40,7 @@ test('monthly parser/rules project canonical classification through trusted Actu
     async getCategories(){return [{id:'category-uuid',name:'Online Shopping'}];},
     async getPayees(){return [{id:'payee-uuid',name:'Amazon'}];},
     async getAccountBalance(){return stored.reduce((sum,row)=>sum+Number(row.amount),0);},
-    async getTransactions(){return stored;},
+    async getTransactions(): Promise<ActualReturnedTransaction[]> { return stored as unknown as ActualReturnedTransaction[]; },
     async importTransactions(_account: string,rows: Array<Record<string, unknown>>){
       stored.push(...rows.map((row,index)=>({...row,id:'tx-'+index})));
       return {errors:[],added:stored.map(row=>row.id),updated:[]};
@@ -63,7 +63,7 @@ test('monthly parser/rules project canonical classification through trusted Actu
   assert.equal(manifest.transactions[0].category,'category-uuid');
   assert.throws(()=>build({...projected[0].json,closing_balance_aed:null},()=>({first:()=>({json:sourceContext})})),/CLOSING_BALANCE_REQUIRED/);
   const outbox = {schema_version:1,outbox_id:'fixture',state:'PREPARED',account_id:'account',transactions:rows,
-    execution_context:{trigger:'SCHEDULE',manual:false,mcp:false},writer_lease:{lease_id:'lease',fencing_token:1,expires_at:new Date(Date.now()+60000).toISOString()}};
+    execution_context:{trigger:'SCHEDULE',manual:false,mcp:false},writer_lease:{resource_key:'actual:budget',lease_id:'lease',fencing_token:1,expires_at:new Date(Date.now()+60000).toISOString()}};
   await session.preflight(credentials,outbox);await session.import(credentials,outbox);
   const verification = {account_id:'account',expected_transactions:rows,start_date:'2026-07-01',end_date:'2026-07-31',expected_account_balance:manifest.expected_statement_balance_minor};
   assert.equal((await session.verify(credentials,verification)).status,'VERIFIED');

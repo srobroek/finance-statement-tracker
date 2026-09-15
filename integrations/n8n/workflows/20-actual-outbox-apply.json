@@ -80,7 +80,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nconst text = value => String(value ?? '').trim();\nif (!Number.isSafeInteger(m.expected_statement_balance_minor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nif (h !== o.delta_sha256 || m.schema_version !== o.delta_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{ json: { outbox_row: o, manifest: m, verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
+        "jsCode": "// Purpose: Verify Recovery Contract. Keep this deterministic and fail closed.\nconst o = $('Prepared Outbox Input').first().json, m = $json, h = $('SHA-256 Recovered Delta').item.json.recovered_sha256;\nconst text = value => String(value ?? '').trim();\nif (!Number.isSafeInteger(m.expected_statement_balance_minor))\n    throw new Error('STATEMENT_CLOSING_BALANCE_REQUIRED');\nif (h !== o.delta_sha256 || m.schema_version !== o.delta_schema_version || m.actual_file_id !== o.actual_file_id || m.config_version !== o.config_version || !m.card_code)\n    throw new Error('OUTBOX_RECOVERY_ARTIFACT_MISMATCH');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nif (!Array.isArray(m.transactions) || !m.transactions.length)\n    throw new Error('OUTBOX_RECOVERY_EMPTY');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{ json: { outbox_row: o, manifest: m, payload_sha256: String(h).toLowerCase(), verification: { account_id: m.account_id, card_code: m.card_code, start_date: m.period_start, end_date: m.period_end, expected_transactions: m.transactions, expected_account_balance: m.expected_statement_balance_minor } } }];\n"
       }
     },
     {
@@ -170,6 +170,25 @@
                   }
                 ]
               }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.outbox_row.state }}",
+                    "rightValue": "RELEASED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -188,7 +207,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Recovery Lease Acquire Request. Keep this deterministic and fail closed.\nconst r = $json;\nreturn [{ json: { operation: 'ACQUIRE', resource_key: `actual:${r.outbox_row.actual_file_id}`, lease_owner: `n8n:recovery:${r.outbox_row.batch_id}`, ttl_seconds: 120 } }];\n"
+        "jsCode": "// Purpose: Build Recovery Lease Acquire Request. Keep this deterministic and fail closed.\nconst root = $('Verify Recovery Contract').first().json;\nconst outbox = root.outbox_row;\nconst manifest = root.manifest;\nconst state = String(outbox.state || '').trim().toUpperCase();\nconst attempt = Number(outbox.attempt_count ?? 0);\nif (!['PREPARED', 'ACTUAL_OBSERVED', 'VERIFIED'].includes(state)\n    || !Number.isSafeInteger(attempt) || attempt < 0)\n    throw new Error('WRITER_ADMISSION_INPUT_INVALID');\nconst admission = state === 'PREPARED' && attempt === 0 ? 'INITIAL' : 'SUCCESSOR';\nreturn [{ json: {\n            operation: 'ACQUIRE',\n            lease_class: 'ACTUAL_OUTBOX',\n            resource_key: `actual:${outbox.actual_file_id}`,\n            lease_owner: `n8n:recovery:${outbox.batch_id}`,\n            ttl_seconds: 120,\n            outbox_id: String(outbox.outbox_id || outbox.batch_id),\n            outbox_state: state,\n            attempt_count: attempt,\n            admission,\n            account_id: String(manifest.account_id),\n            payload_sha256: String(root.payload_sha256 || '').toLowerCase(),\n            budget_id: String(outbox.actual_file_id),\n            period_start: manifest.period_start,\n            period_end: manifest.period_end,\n        } }];\n"
       }
     },
     {
@@ -222,7 +241,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.\nconst r = $('Verify Recovery Contract').first().json, l = $json, o = r.outbox_row, m = r.manifest;\nconst text = value => String(value ?? '').trim();\nif (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date())\n    throw new Error('RECOVERY_WRITER_LEASE_INVALID');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nconst outboxId = text(o.outbox_id || o.batch_id);\nif (!outboxId)\n    throw new Error('OUTBOX_RECOVERY_ID_MISSING');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{ json: { original_state: o.state, outbox: { schema_version: 1, outbox_id: outboxId, state: 'PREPARED', account_id: text(m.account_id), card_code: text(m.card_code), ...(historical ? { historical_import: true, historical_source: 'ADCB_CASHBACK', historical_account_id: text(m.historical_account_id) } : {}), execution_context: { trigger: 'RECOVERY', manual: false, mcp: false }, transactions: m.transactions, writer_lease: { lease_id: String(l.lease_id), fencing_token: Number(l.fencing_token), expires_at: String(l.expires_at) } }, verification: r.verification } }];\n"
+        "jsCode": "// Purpose: Build Fenced Recovery Envelope. Keep this deterministic and fail closed.\nconst r = $('Verify Recovery Contract').first().json, l = $json, o = r.outbox_row, m = r.manifest;\nconst text = value => String(value ?? '').trim();\nif (!l.lease_id || Number(l.fencing_token) <= 0 || new Date(l.expires_at) <= new Date() || !l.resource_key)\n    throw new Error('RECOVERY_WRITER_LEASE_INVALID');\nif (text(m.account_id) !== text(o.account_id) || text(m.card_code).toUpperCase() !== text(o.card_code).toUpperCase())\n    throw new Error('OUTBOX_RECOVERY_ACCOUNT_BINDING_MISMATCH');\nconst outboxId = text(o.outbox_id || o.batch_id);\nif (!outboxId)\n    throw new Error('OUTBOX_RECOVERY_ID_MISSING');\nconst historical = m.historical_import === true;\nif (historical && (m.source_code !== 'ADCB_CASHBACK' || m.historical_source !== 'ADCB_CASHBACK' || text(m.historical_account_id) !== text(m.account_id)))\n    throw new Error('OUTBOX_RECOVERY_HISTORICAL_BINDING_MISMATCH');\nreturn [{\n        json: {\n            original_state: o.state,\n            outbox: {\n                schema_version: 1,\n                outbox_id: outboxId,\n                state: 'PREPARED',\n                batch_id: outboxId,\n                actual_file_id: o.actual_file_id,\n                account_id: text(m.account_id),\n                card_code: text(m.card_code),\n                ...(historical ? {\n                    historical_import: true,\n                    historical_source: 'ADCB_CASHBACK',\n                    historical_account_id: text(m.historical_account_id),\n                } : {}),\n                execution_context: { trigger: 'RECOVERY', manual: false, mcp: false },\n                transactions: m.transactions,\n                reimportDeleted: false,\n                writer_lease: {\n                    resource_key: String(l.resource_key),\n                    lease_id: String(l.lease_id),\n                    fencing_token: Number(l.fencing_token),\n                    expires_at: String(l.expires_at),\n                },\n            },\n            verification: r.verification,\n            payload_sha256: r.payload_sha256,\n        },\n    }];\n"
       }
     },
     {
@@ -330,7 +349,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Recovery Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', resource_key: l.resource_key, lease_id: l.lease_id, fencing_token: l.fencing_token } }];\n"
+        "jsCode": "// Purpose: Build Recovery Fence Assert. Keep this deterministic and fail closed.\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', lease_class: 'ACTUAL_OUTBOX', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];\n"
       }
     },
     {
@@ -384,7 +403,8 @@
           "id": "BIND_ACTUAL",
           "name": "Finance Actual"
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "17021",
@@ -681,7 +701,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'RELEASE', resource_key: l.resource_key, lease_id: l.lease_id, lease_owner: l.lease_owner, fencing_token: l.fencing_token } }];\n"
+        "jsCode": "// Purpose: Build Recovery Fence Release. Keep this deterministic and fail closed.\nconst durable = $('Validate Durable COMMITTED Readback').first().json;\nconst root = $('Verify Recovery Contract').first().json;\nconst receipt = $('Validate Stored Verification Receipt for Commit').first().json;\nif (!receipt || receipt.invariants_passed !== true\n    || receipt.expected_payload_sha256 !== receipt.observed_payload_sha256\n    || !/^[a-f0-9]{64}$/i.test(String(receipt.expected_payload_sha256))\n    || receipt.account_id !== root.manifest.account_id\n    || durable.state !== 'COMMITTED')\n    throw new Error('ACTUAL_RELEASE_REQUIRES_EXACT_DURABLE_COMMIT');\nreturn [{ json: {\n            operation: 'RELEASE',\n            lease_class: 'ACTUAL_OUTBOX',\n            resource_key: durable.resource_key,\n            lease_id: durable.lease_id,\n            lease_owner: durable.lease_owner,\n            fencing_token: Number(durable.fencing_token),\n            outbox_id: durable.outbox_id,\n            account_id: durable.account_id,\n            payload_sha256: durable.payload_sha256,\n            verified_payload_sha256: durable.verified_payload_sha256,\n        } }];\n"
       }
     },
     {
@@ -715,7 +735,7 @@
         1140
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst receipt = $('Validate Stored Verification Receipt for Commit').first().json;\nconst release = $('Read Back Released Recovery Writer Fence').first().json;\nconst lease = $('Build Recovery Fence Release').first().json;\nif (!receipt || !receipt.card_code || receipt.invariants_passed !== true || committed.state !== 'COMMITTED')\n    throw new Error('ACTUAL_COMMIT_RECEIPT_NOT_TRUSTED');\nif (String(committed.lease_owner) !== String(lease.lease_owner)\n    || Number(committed.lease_fence) !== Number(lease.fencing_token))\n    throw new Error('ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK');\nif (!release || release.released !== true\n    || String(release.resource_key) !== String(lease.resource_key)\n    || String(release.lease_id) !== String(lease.lease_id)\n    || String(release.lease_owner) !== String(lease.lease_owner)\n    || Number(release.fencing_token) !== Number(lease.fencing_token))\n    throw new Error('ACTUAL_WRITER_LEASE_RELEASE_NOT_READ_BACK');\nreturn [{\n        json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: committed.state,\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: receipt.invariants_passed,\n            verified_at: receipt.verified_at,\n            lease_owner: committed.lease_owner,\n            lease_fence: Number(committed.lease_fence),\n            writer_release_verified: true,\n        },\n    }];\n"
+        "jsCode": "// Purpose: Return Verified Commit Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery').first().json;\nconst durable = $('Validate Durable COMMITTED Readback').first().json;\nconst receipt = $('Validate Stored Verification Receipt for Commit').first().json;\nconst release = $('Read Back Released Recovery Writer Fence').first().json;\nconst lease = $('Build Recovery Fence Release').first().json;\nif (!receipt || !receipt.card_code || receipt.invariants_passed !== true\n    || committed.state !== 'COMMITTED' || durable.state !== 'COMMITTED')\n    throw new Error('ACTUAL_COMMIT_RECEIPT_NOT_TRUSTED');\nif (String(committed.lease_owner) !== String(durable.lease_owner)\n    || Number(committed.lease_fence) !== Number(durable.fencing_token)\n    || String(durable.lease_id) !== String(lease.lease_id))\n    throw new Error('ACTUAL_WRITER_LEASE_CORRELATION_NOT_READ_BACK');\nif (!release || release.released !== true\n    || String(release.resource_key) !== String(lease.resource_key)\n    || String(release.lease_id) !== String(lease.lease_id)\n    || String(release.lease_owner) !== String(lease.lease_owner)\n    || Number(release.fencing_token) !== Number(lease.fencing_token))\n    throw new Error('ACTUAL_WRITER_LEASE_RELEASE_NOT_READ_BACK');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: committed.state,\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: receipt.invariants_passed,\n            verified_at: receipt.verified_at,\n            lease_owner: committed.lease_owner,\n            lease_fence: Number(committed.lease_fence),\n            writer_release_verified: true,\n        } }];\n"
       }
     },
     {
@@ -730,9 +750,9 @@
       "alwaysOutputData": true,
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT resource_key, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.writer_leases WHERE resource_key = $1::text AND lease_id = $2::uuid AND fencing_token = $3::bigint;",
+        "query": "SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.actual_writer_releases WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND payload_sha256 = $4::text AND lease_id = $5::uuid AND fencing_token = $6::bigint;",
         "options": {
-          "queryReplacement": "={{ [$('Build Recovery Fence Release').first().json.resource_key, $('Build Recovery Fence Release').first().json.lease_id, $('Build Recovery Fence Release').first().json.fencing_token] }}"
+          "queryReplacement": "={{ [ $('Build Recovery Fence Release').first().json.resource_key, $('Build Recovery Fence Release').first().json.outbox_id, $('Build Recovery Fence Release').first().json.account_id, $('Build Recovery Fence Release').first().json.payload_sha256, $('Build Recovery Fence Release').first().json.lease_id, $('Build Recovery Fence Release').first().json.fencing_token ] }}"
         }
       },
       "credentials": {
@@ -773,7 +793,7 @@
             {
               "keyName": "state",
               "condition": "eq",
-              "keyValue": "COMMITTED"
+              "keyValue": "={{ $('Verify Recovery Contract').first().json.outbox_row.state }}"
             }
           ]
         },
@@ -828,7 +848,7 @@
         -380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nconst expectedOwner = text(committed.lease_owner);\nconst expectedFence = Number(committed.lease_fence);\nif (receipt.expected_account_balance !== manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (committed.state !== 'COMMITTED' || !receipt || receipt.invariants_passed !== true\n    || !expectedOwner || !Number.isInteger(expectedFence) || expectedFence <= 0)\n    throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');\nif (text(receipt.batch_id) !== text(committed.batch_id)\n    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(manifest.period_start)\n    || text(receipt.period_end) !== text(manifest.period_end)\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.observed_account_balance !== receipt.expected_account_balance\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))\n    throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            lease_owner: expectedOwner,\n            lease_fence: expectedFence,\n            writer_release_verified: true,\n            replay_readback_only: true,\n        } }];\n"
+        "jsCode": "// Purpose: Return Verified Commit Receipt Replay. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst release = $('Read Back Released Recovery Writer Fence Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nconst expectedOwner = text(committed.lease_owner);\nconst expectedFence = Number(committed.lease_fence);\nconst expectedOutbox = text(committed.outbox_id || committed.batch_id);\nconst expectedResource = `actual:${text(manifest.actual_file_id || committed.actual_file_id)}`;\nconst expectedAccount = text(manifest.account_id || committed.account_id);\nconst expectedPayload = text(committed.payload_sha256 || $('Verify Recovery Contract').first().json.payload_sha256).toLowerCase();\nif (receipt.expected_account_balance !== manifest.expected_statement_balance_minor)\n    throw new Error('ACTUAL_STATEMENT_BALANCE_RECEIPT_MISMATCH');\nif (!['COMMITTED', 'RELEASED'].includes(committed.state) || !receipt || receipt.invariants_passed !== true\n    || !release || release.released !== true\n    || text(release.resource_key) !== expectedResource\n    || text(release.outbox_id) !== expectedOutbox\n    || text(release.account_id) !== expectedAccount\n    || text(release.payload_sha256).toLowerCase() !== expectedPayload\n    || text(release.verified_payload_sha256).toLowerCase() !== text(receipt.expected_payload_sha256).toLowerCase()\n    || text(release.lease_owner) !== expectedOwner\n    || Number(release.fencing_token) !== expectedFence\n    || !expectedOwner || !expectedOutbox || !expectedAccount\n    || !/^[a-f0-9]{64}$/i.test(expectedPayload)\n    || !Number.isInteger(expectedFence) || expectedFence <= 0)\n    throw new Error('ACTUAL_COMMITTED_REPLAY_NOT_TRUSTED');\nif (text(receipt.batch_id) !== text(committed.batch_id)\n    || text(receipt.actual_file_id) !== text(manifest.actual_file_id)\n    || text(receipt.account_id).toUpperCase() !== text(manifest.account_id).toUpperCase()\n    || text(receipt.card_code).toUpperCase() !== text(manifest.card_code).toUpperCase()\n    || text(receipt.period_start) !== text(manifest.period_start)\n    || text(receipt.period_end) !== text(manifest.period_end)\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase()\n    || typeof receipt.expected_count !== 'number'\n    || typeof receipt.observed_count !== 'number'\n    || !Number.isSafeInteger(receipt.expected_count) || receipt.expected_count < 0\n    || receipt.expected_count !== receipt.observed_count\n    || typeof receipt.expected_amount_sum_minor !== 'number'\n    || typeof receipt.observed_amount_sum_minor !== 'number'\n    || !Number.isSafeInteger(receipt.expected_amount_sum_minor)\n    || receipt.expected_amount_sum_minor !== receipt.observed_amount_sum_minor\n    || typeof receipt.expected_account_balance !== 'number'\n    || typeof receipt.observed_account_balance !== 'number'\n    || !Number.isSafeInteger(receipt.expected_account_balance)\n    || receipt.observed_account_balance !== receipt.expected_account_balance\n    || !/^[a-f0-9]{64}$/i.test(text(receipt.expected_payload_sha256)))\n    throw new Error('ACTUAL_COMMITTED_REPLAY_RECEIPT_MISMATCH');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            lease_owner: expectedOwner,\n            lease_fence: expectedFence,\n            writer_release_verified: true,\n            replay_readback_only: true,\n        } }];\n"
       }
     },
     {
@@ -1036,7 +1056,7 @@
         380
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Post-Import Fence Assert. Keep this deterministic and fail closed.\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];\n"
+        "jsCode": "// Purpose: Build Post-Import Fence Assert. Keep this deterministic and fail closed.\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', lease_class: 'ACTUAL_OUTBOX', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];\n"
       }
     },
     {
@@ -1134,7 +1154,7 @@
         760
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Pre-Commit Fence Assert. Keep this deterministic and fail closed.\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];\n"
+        "jsCode": "// Purpose: Build Pre-Commit Fence Assert. Keep this deterministic and fail closed.\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nreturn [{ json: { operation: 'ASSERT', lease_class: 'ACTUAL_OUTBOX', resource_key: lease.resource_key, lease_id: lease.lease_id, fencing_token: lease.fencing_token } }];\n"
       }
     },
     {
@@ -1156,6 +1176,355 @@
         "options": {
           "waitForSubWorkflow": true
         }
+      }
+    },
+    {
+      "id": "20015",
+      "name": "Record ISSUED Before Actual Mutation",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        380
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, outbox_id, state, attempt_count, lease_id::text AS lease_id, lease_owner, fencing_token FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $4::text AND payload_sha256 = $5::text AND period_start = $6::date AND period_end = $7::date AND lease_id = $8::uuid AND lease_owner = $9::text AND fencing_token = $10::bigint AND state = 'ISSUED' AND attempt_count = 1;",
+        "options": {
+          "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20016",
+      "name": "Preserve ISSUED Envelope for Actual Mutation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        560
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Preserve ISSUED Envelope for Actual Mutation. Keep this deterministic and fail closed.\nconst issued = $json, envelope = $('Build Fenced Recovery Envelope').first().json;\nif (issued.state !== 'ISSUED' || Number(issued.attempt_count) !== 1)\n    throw new Error('WRITER_ISSUANCE_READBACK_FAILED');\nreturn [{ json: envelope }];\n"
+      }
+    },
+    {
+      "id": "20017",
+      "name": "Persist OUTCOME_UNKNOWN on Apply Error",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        980,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, period_start, period_end, state, lease_id, lease_owner, fencing_token, last_error_class, updated_at) VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::date, $7::date, 'OUTCOME_UNKNOWN', $8::uuid, $9::text, $10::bigint, $11::text, clock_timestamp()) ON CONFLICT (resource_key, outbox_id) DO UPDATE SET state = 'OUTCOME_UNKNOWN', lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, last_error_class = EXCLUDED.last_error_class, updated_at = clock_timestamp() WHERE actual_writer_effects.state IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN') RETURNING resource_key, outbox_id, state;",
+        "options": {
+          "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token, String($json.error?.message || $json.error || 'ACTUAL_APPLY_FAILED').slice(0, 512) ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20018",
+      "name": "Record VERIFIED in Durable Writer State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        560,
+        760
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE finance_ops.actual_writer_effects SET state = 'VERIFIED', verified_payload_sha256 = $5::text, account_id = $3::text, updated_at = clock_timestamp() WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $6::text AND payload_sha256 = $4::text AND period_start = $7::date AND period_end = $8::date AND ((state IN ('ISSUED', 'ACTUAL_OBSERVED', 'OUTCOME_UNKNOWN')) OR (state = 'VERIFIED' AND verified_payload_sha256 = $5::text)) RETURNING resource_key, outbox_id, state, verified_payload_sha256;",
+        "options": {
+          "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Recovery Verify Actual').first().json.actual.expected_sha256, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20020",
+      "name": "Record COMMITTED in Durable Writer State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        980,
+        960
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE finance_ops.actual_writer_effects SET state = 'COMMITTED', updated_at = clock_timestamp() WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $4::text AND payload_sha256 = $5::text AND verified_payload_sha256 = $6::text AND period_start = $7::date AND period_end = $8::date AND lease_id = $9::uuid AND lease_owner = $10::text AND fencing_token = $11::bigint AND state IN ('VERIFIED', 'COMMITTED') RETURNING resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, period_start, period_end, state, lease_id::text AS lease_id, lease_owner, fencing_token;",
+        "options": {
+          "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Validate Stored Verification Receipt for Commit').first().json.expected_payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20021",
+      "name": "Read Back COMMITTED Durable Writer State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        960
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, period_start, period_end, state, lease_id::text AS lease_id, lease_owner, fencing_token FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $4::text AND payload_sha256 = $5::text AND verified_payload_sha256 = $6::text AND period_start = $7::date AND period_end = $8::date AND lease_id = $9::uuid AND lease_owner = $10::text AND fencing_token = $11::bigint AND state = 'COMMITTED';",
+        "options": {
+          "queryReplacement": "={{ [ $('Acquire Recovery Writer Fence').first().json.resource_key, $('Verify Recovery Contract').first().json.outbox_row.batch_id, $('Verify Recovery Contract').first().json.manifest.account_id, $('Verify Recovery Contract').first().json.outbox_row.actual_file_id, $('Verify Recovery Contract').first().json.payload_sha256, $('Validate Stored Verification Receipt for Commit').first().json.expected_payload_sha256, $('Verify Recovery Contract').first().json.manifest.period_start, $('Verify Recovery Contract').first().json.manifest.period_end, $('Acquire Recovery Writer Fence').first().json.lease_id, $('Acquire Recovery Writer Fence').first().json.lease_owner, $('Acquire Recovery Writer Fence').first().json.fencing_token ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20022",
+      "name": "Validate Durable COMMITTED Readback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        960
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Validate Durable COMMITTED Readback. Keep this deterministic and fail closed.\nconst row = $json, root = $('Verify Recovery Contract').first().json;\nconst lease = $('Acquire Recovery Writer Fence').first().json;\nconst receipt = $('Validate Stored Verification Receipt for Commit').first().json;\nconst text = value => String(value ?? '').trim();\nif (row.state !== 'COMMITTED'\n    || text(row.resource_key) !== text(lease.resource_key)\n    || text(row.outbox_id) !== text(root.outbox_row.outbox_id || root.outbox_row.batch_id)\n    || text(row.account_id) !== text(root.manifest.account_id)\n    || text(row.budget_id) !== text(root.outbox_row.actual_file_id)\n    || text(row.payload_sha256).toLowerCase() !== text(root.payload_sha256).toLowerCase()\n    || text(row.verified_payload_sha256).toLowerCase() !== text(receipt.expected_payload_sha256).toLowerCase()\n    || text(row.lease_id) !== text(lease.lease_id)\n    || text(row.lease_owner) !== text(lease.lease_owner)\n    || Number(row.fencing_token) !== Number(lease.fencing_token))\n    throw new Error('ACTUAL_DURABLE_COMMIT_NOT_READ_BACK');\nreturn [{ json: row }];\n"
+      }
+    },
+    {
+      "id": "20019",
+      "name": "Read Back Released Recovery Writer Fence Replay",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1580,
+        -680
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.actual_writer_releases WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND payload_sha256 = $4::text AND fencing_token = $5::bigint;",
+        "options": {
+          "queryReplacement": "={{ [ `actual:${$('Verify Recovery Contract').first().json.manifest.actual_file_id || $('Read Back COMMITTED Recovery Replay').first().json.actual_file_id}`, String($('Read Back COMMITTED Recovery Replay').first().json.outbox_id || $('Read Back COMMITTED Recovery Replay').first().json.batch_id), String($('Verify Recovery Contract').first().json.manifest.account_id || $('Read Back COMMITTED Recovery Replay').first().json.account_id), String($('Read Back COMMITTED Recovery Replay').first().json.payload_sha256 || $('Verify Recovery Contract').first().json.payload_sha256 || ''), $('Read Back COMMITTED Recovery Replay').first().json.lease_fence ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20023",
+      "name": "Historical Recovery Release Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1880,
+        -680
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.released === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "20024",
+      "name": "Read Back COMMITTED Durable Writer State Replay",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2180,
+        -520
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, period_start, period_end, state, lease_id::text AS lease_id, lease_owner, fencing_token FROM finance_ops.actual_writer_effects WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND budget_id = $4::text AND payload_sha256 = $5::text AND verified_payload_sha256 = $6::text AND lease_owner = $7::text AND fencing_token = $8::bigint AND state = 'COMMITTED';",
+        "options": {
+          "queryReplacement": "={{ [ `actual:${$('Verify Recovery Contract').first().json.manifest.actual_file_id || $('Read Back COMMITTED Recovery Replay').first().json.actual_file_id}`, String($('Read Back COMMITTED Recovery Replay').first().json.outbox_id || $('Read Back COMMITTED Recovery Replay').first().json.batch_id), String($('Verify Recovery Contract').first().json.manifest.account_id || $('Read Back COMMITTED Recovery Replay').first().json.account_id), String($('Verify Recovery Contract').first().json.manifest.actual_file_id || $('Read Back COMMITTED Recovery Replay').first().json.actual_file_id), String($('Read Back COMMITTED Recovery Replay').first().json.payload_sha256 || $('Verify Recovery Contract').first().json.payload_sha256 || ''), String($('Read Back Exact Actual Verification Receipt Replay').first().json.expected_payload_sha256 || ''), $('Read Back COMMITTED Recovery Replay').first().json.lease_owner, $('Read Back COMMITTED Recovery Replay').first().json.lease_fence ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20025",
+      "name": "Build COMMITTED Recovery Fence Release",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        -520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Build COMMITTED Recovery Fence Release. Keep this deterministic and fail closed.\nconst effect = $json;\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst manifest = $('Verify Recovery Contract').first().json.manifest;\nconst text = value => String(value ?? '').trim();\nconst outboxId = text(committed.outbox_id || committed.batch_id);\nconst resourceKey = `actual:${text(manifest.actual_file_id || committed.actual_file_id)}`;\nconst accountId = text(manifest.account_id || committed.account_id);\nconst payloadSha256 = text(committed.payload_sha256 || $('Verify Recovery Contract').first().json.payload_sha256).toLowerCase();\nif (effect.state !== 'COMMITTED'\n    || text(effect.resource_key) !== resourceKey\n    || text(effect.outbox_id) !== outboxId\n    || text(effect.account_id) !== accountId\n    || text(effect.budget_id) !== text(manifest.actual_file_id || committed.actual_file_id)\n    || text(effect.payload_sha256).toLowerCase() !== payloadSha256\n    || text(effect.verified_payload_sha256).toLowerCase() !== text(receipt.expected_payload_sha256).toLowerCase()\n    || text(effect.lease_owner) !== text(committed.lease_owner)\n    || Number(effect.fencing_token) !== Number(committed.lease_fence)\n    || !/^[0-9a-f-]{36}$/i.test(text(effect.lease_id))\n    || receipt.invariants_passed !== true\n    || text(receipt.expected_payload_sha256).toLowerCase() !== text(receipt.observed_payload_sha256).toLowerCase())\n    throw new Error('ACTUAL_COMMITTED_UNRELEASED_EFFECT_NOT_TRUSTED');\nreturn [{ json: {\n            operation: 'RELEASE',\n            lease_class: 'ACTUAL_OUTBOX',\n            resource_key: resourceKey,\n            lease_id: text(effect.lease_id),\n            lease_owner: text(effect.lease_owner),\n            fencing_token: Number(effect.fencing_token),\n            outbox_id: outboxId,\n            account_id: accountId,\n            payload_sha256: payloadSha256,\n            verified_payload_sha256: text(effect.verified_payload_sha256).toLowerCase(),\n        } }];\n"
+      }
+    },
+    {
+      "id": "20026",
+      "name": "Release COMMITTED Recovery Writer Fence",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2780,
+        -520
+      ],
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "10000000-0000-4000-8000-000000000018",
+          "mode": "list",
+          "cachedResultName": "Finance · Fenced Actual Writer Lease"
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "20027",
+      "name": "Read Back Recovered COMMITTED Writer Fence",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3080,
+        -520
+      ],
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, lease_id::text AS lease_id, lease_owner, fencing_token, released_at IS NOT NULL AS released FROM finance_ops.actual_writer_releases WHERE resource_key = $1::text AND outbox_id = $2::text AND account_id = $3::text AND payload_sha256 = $4::text AND lease_id = $5::uuid AND fencing_token = $6::bigint;",
+        "options": {
+          "queryReplacement": "={{ [ $('Build COMMITTED Recovery Fence Release').first().json.resource_key, $('Build COMMITTED Recovery Fence Release').first().json.outbox_id, $('Build COMMITTED Recovery Fence Release').first().json.account_id, $('Build COMMITTED Recovery Fence Release').first().json.payload_sha256, $('Build COMMITTED Recovery Fence Release').first().json.lease_id, $('Build COMMITTED Recovery Fence Release').first().json.fencing_token ] }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "BIND_FINANCE_OPS_DB",
+          "name": "Finance Operations Postgres"
+        }
+      }
+    },
+    {
+      "id": "20028",
+      "name": "Return Recovered COMMITTED Release Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        -520
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return Recovered COMMITTED Release Receipt. Keep this deterministic and fail closed.\nconst committed = $('Read Back COMMITTED Recovery Replay').first().json;\nconst receipt = $('Read Back Exact Actual Verification Receipt Replay').first().json;\nconst release = $('Read Back Recovered COMMITTED Writer Fence').first().json;\nconst request = $('Build COMMITTED Recovery Fence Release').first().json;\nconst text = value => String(value ?? '').trim();\nif (!['COMMITTED', 'RELEASED'].includes(committed.state) || receipt.invariants_passed !== true\n    || !release || release.released !== true\n    || text(release.resource_key) !== text(request.resource_key)\n    || text(release.outbox_id) !== text(request.outbox_id)\n    || text(release.account_id) !== text(request.account_id)\n    || text(release.payload_sha256).toLowerCase() !== text(request.payload_sha256).toLowerCase()\n    || text(release.verified_payload_sha256).toLowerCase() !== text(request.verified_payload_sha256).toLowerCase()\n    || text(release.lease_id) !== text(request.lease_id)\n    || text(release.lease_owner) !== text(request.lease_owner)\n    || Number(release.fencing_token) !== Number(request.fencing_token))\n    throw new Error('ACTUAL_COMMITTED_RELEASE_RECOVERY_NOT_READ_BACK');\nreturn [{ json: {\n            batch_id: committed.batch_id,\n            actual_file_id: receipt.actual_file_id,\n            account_id: receipt.account_id,\n            card_code: receipt.card_code,\n            state: 'COMMITTED',\n            verification_version: Number(receipt.verification_version),\n            period_start: receipt.period_start,\n            period_end: receipt.period_end,\n            expected_payload_sha256: receipt.expected_payload_sha256,\n            observed_payload_sha256: receipt.observed_payload_sha256,\n            expected_count: receipt.expected_count,\n            observed_count: receipt.observed_count,\n            expected_amount_sum_minor: receipt.expected_amount_sum_minor,\n            observed_amount_sum_minor: receipt.observed_amount_sum_minor,\n            expected_account_balance: receipt.expected_account_balance,\n            observed_account_balance: receipt.observed_account_balance,\n            invariants_passed: true,\n            verified_at: receipt.verified_at,\n            lease_owner: request.lease_owner,\n            lease_fence: Number(request.fencing_token),\n            writer_release_verified: true,\n            replay_readback_only: false,\n            committed_release_recovered: true,\n        } }];\n"
+      }
+    },
+    {
+      "id": "20029",
+      "name": "Mark Recovery RELEASED",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3680,
+        -200
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "finance_actual_batches",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "batch_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.batch_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "batch_id": "={{ $json.batch_id }}",
+            "state": "RELEASED",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "dryRun": false
+        }
+      }
+    },
+    {
+      "id": "20030",
+      "name": "Return RELEASED Recovery Receipt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3980,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "// Purpose: Return RELEASED Recovery Receipt. Keep this deterministic and fail closed.\nlet receipt = null;\nfor (const name of ['Return Verified Commit Receipt', 'Return Verified Commit Receipt Replay', 'Return Recovered COMMITTED Release Receipt']) {\n    try {\n        const candidate = $(name).first().json;\n        if (candidate && candidate.state === 'COMMITTED' && candidate.writer_release_verified === true) {\n            receipt = candidate;\n            break;\n        }\n    }\n    catch { }\n}\nif (!receipt || $json.state !== 'RELEASED' || String($json.batch_id) !== String(receipt.batch_id))\n    throw new Error('ACTUAL_RELEASED_STATE_NOT_READ_BACK');\nreturn [{ json: { ...receipt, durable_outbox_state: 'RELEASED' } }];\n"
       }
     }
   ],
@@ -1233,6 +1602,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Read Back COMMITTED Recovery Replay",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1251,7 +1627,7 @@
       "main": [
         [
           {
-            "node": "Return Verified Commit Receipt Replay",
+            "node": "Read Back Released Recovery Writer Fence Replay",
             "type": "main",
             "index": 0
           }
@@ -1353,7 +1729,7 @@
       "main": [
         [
           {
-            "node": "Recovery Import PREPARED",
+            "node": "Record ISSUED Before Actual Mutation",
             "type": "main",
             "index": 0
           }
@@ -1365,6 +1741,13 @@
         [
           {
             "node": "Build Post-Import Fence Assert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist OUTCOME_UNKNOWN on Apply Error",
             "type": "main",
             "index": 0
           }
@@ -1452,7 +1835,7 @@
       "main": [
         [
           {
-            "node": "Return Verified Commit Receipt",
+            "node": "Build Recovery Fence Release",
             "type": "main",
             "index": 0
           }
@@ -1496,7 +1879,7 @@
       "main": [
         [
           {
-            "node": "Upsert COMMITTED Recovery",
+            "node": "Return Verified Commit Receipt",
             "type": "main",
             "index": 0
           }
@@ -1529,7 +1912,7 @@
       "main": [
         [
           {
-            "node": "Upsert VERIFIED Recovery",
+            "node": "Record VERIFIED in Durable Writer State",
             "type": "main",
             "index": 0
           }
@@ -1628,7 +2011,190 @@
       "main": [
         [
           {
-            "node": "Build Recovery Fence Release",
+            "node": "Record COMMITTED in Durable Writer State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record ISSUED Before Actual Mutation": {
+      "main": [
+        [
+          {
+            "node": "Preserve ISSUED Envelope for Actual Mutation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preserve ISSUED Envelope for Actual Mutation": {
+      "main": [
+        [
+          {
+            "node": "Recovery Import PREPARED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record VERIFIED in Durable Writer State": {
+      "main": [
+        [
+          {
+            "node": "Upsert VERIFIED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record COMMITTED in Durable Writer State": {
+      "main": [
+        [
+          {
+            "node": "Read Back COMMITTED Durable Writer State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back COMMITTED Durable Writer State": {
+      "main": [
+        [
+          {
+            "node": "Validate Durable COMMITTED Readback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Durable COMMITTED Readback": {
+      "main": [
+        [
+          {
+            "node": "Upsert COMMITTED Recovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Historical Recovery Release Exists": {
+      "main": [
+        [
+          {
+            "node": "Return Verified Commit Receipt Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Back COMMITTED Durable Writer State Replay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back COMMITTED Durable Writer State Replay": {
+      "main": [
+        [
+          {
+            "node": "Build COMMITTED Recovery Fence Release",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build COMMITTED Recovery Fence Release": {
+      "main": [
+        [
+          {
+            "node": "Release COMMITTED Recovery Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release COMMITTED Recovery Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Read Back Recovered COMMITTED Writer Fence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Recovered COMMITTED Writer Fence": {
+      "main": [
+        [
+          {
+            "node": "Return Recovered COMMITTED Release Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Verified Commit Receipt": {
+      "main": [
+        [
+          {
+            "node": "Mark Recovery RELEASED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Verified Commit Receipt Replay": {
+      "main": [
+        [
+          {
+            "node": "Mark Recovery RELEASED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Recovered COMMITTED Release Receipt": {
+      "main": [
+        [
+          {
+            "node": "Mark Recovery RELEASED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Recovery RELEASED": {
+      "main": [
+        [
+          {
+            "node": "Return RELEASED Recovery Receipt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Back Released Recovery Writer Fence Replay": {
+      "main": [
+        [
+          {
+            "node": "Historical Recovery Release Exists",
             "type": "main",
             "index": 0
           }
@@ -1677,7 +2243,14 @@
       "finance",
       "setup-required",
       "inactive"
-    ]
+    ],
+    "durableStateTable": "finance_ops.actual_writer_effects",
+    "releaseEvidenceTable": "finance_ops.actual_writer_releases",
+    "issuanceBoundary": "Record ISSUED Before Actual Mutation",
+    "unknownOutcomeState": "OUTCOME_UNKNOWN",
+    "successorAdmission": "PREPARED attempt zero, exact ACTUAL_OBSERVED over ISSUED, or terminal VERIFIED/RECONCILED/COMMITTED",
+    "releaseBoundary": "After exact receipt and durable COMMITTED readback only",
+    "releasedState": "RELEASED"
   },
   "nodeGroups": [
     {
