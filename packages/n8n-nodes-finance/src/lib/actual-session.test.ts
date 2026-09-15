@@ -46,7 +46,7 @@ const session = (api: ActualApi) => new ActualSession(api, path.join(tmpdir(), '
 test('prepared outbox rejects manual, MCP, duplicate and expired inputs', () => {
   assert.throws(() => preflightOutbox({ ...envelope(), execution_context: { trigger: 'SCHEDULE', manual: true, mcp: false } }), /forbidden/);
   assert.throws(() => preflightOutbox({ ...envelope(), transactions: [...envelope().transactions, ...envelope().transactions] }), /duplicate imported_id/);
-  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }), /expired/);
+  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { resource_key: 'actual:sync', lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }), /expired/);
 });
 
 test('preflight rejects expired or cross-budget writer fences before Actual reads', async () => {

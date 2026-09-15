@@ -41,7 +41,7 @@ export interface PreparedActualOutbox {
     mcp: false;
   };
   writer_lease: {
-    resource_key?: string;
+    resource_key: string;
     lease_id: string;
     fencing_token: number;
     expires_at: string;
@@ -149,8 +149,8 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   }
   assertObject(value.writer_lease, 'outbox.writer_lease');
   const leaseId = requiredString(value.writer_lease.lease_id, 'outbox.writer_lease.lease_id', 128);
-  const resourceKey = value.writer_lease.resource_key === undefined ? undefined : requiredString(value.writer_lease.resource_key, 'outbox.writer_lease.resource_key', 256);
-  if (resourceKey !== undefined && !/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error('writer lease resource key is invalid');
+  const resourceKey = requiredString(value.writer_lease.resource_key, 'outbox.writer_lease.resource_key', 256);
+  if (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error('writer lease resource key is invalid');
   const fencingToken = value.writer_lease.fencing_token;
   const expiresAt = requiredString(value.writer_lease.expires_at, 'outbox.writer_lease.expires_at', 64);
   if (!Number.isSafeInteger(fencingToken) || Number(fencingToken) <= 0) throw new Error('writer lease fencing token must be a positive integer');
@@ -168,7 +168,7 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
     ...(historicalSource === undefined ? {} : { historical_source: historicalSource }),
     ...(historicalAccountId === undefined ? {} : { historical_account_id: historicalAccountId }),
     execution_context: context as PreparedActualOutbox['execution_context'],
-    writer_lease: { ...(resourceKey === undefined ? {} : { resource_key: resourceKey }), lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
+    writer_lease: { resource_key: resourceKey, lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
     transactions,
   };
 }
