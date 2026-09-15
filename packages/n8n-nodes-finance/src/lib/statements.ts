@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ActualImportTransaction } from './contracts';
 
-export const ISSUER_PROFILES = ['adcb_v1', 'emirates_islamic_v1', 'rakbank_v1', 'wio_credit_v1'] as const;
+export const ISSUER_PROFILES = ['adcb_v1', 'emirates_islamic_v1', 'wio_credit_v1'] as const;
 export type IssuerProfile = (typeof ISSUER_PROFILES)[number];
 
 export interface StatementTransaction {
@@ -113,7 +113,7 @@ function transactionType(description: string, direction: 'DEBIT' | 'CREDIT'): St
   if (value.includes('REFUND')) return 'REFUND';
   if ((value.includes('CASHBACK') || value.includes('REWARD CREDIT')) && direction === 'CREDIT') return 'REWARD_CREDIT';
   if (value.includes('FEE') || value.startsWith('VAT ON')) return 'FEE';
-  return direction === 'CREDIT' ? 'CREDIT' : 'PURCHASE';
+  return direction === 'CREDIT' ? 'REFUND' : 'PURCHASE';
 }
 
 function finishTransactions(bankKey: string, drafts: Draft[]): StatementTransaction[] {
@@ -277,137 +277,12 @@ function parseWio(text: string, sourceFile: string): NormalizedStatement {
   });
 }
 
-function parseRakbank(text: string, sourceFile: string): NormalizedStatement {
-  const lines = text.split(/\r?\n/);
-  const tableHeaderIndex = lines.findIndex(line => /^DATE\s+TRANSACTION$/i.test(line.trim()));
-  if (tableHeaderIndex < 0) throw new Error('rakbank_v1 transaction table header was not found');
-
-  const period = /STATEMENT\s+PERIOD\s*:\s*(\d{2}\/\d{2}\/\d{4})\s+TO\s+(\d{2}\/\d{2}\/\d{4})/i.exec(text);
-  if (!period) throw new Error('rakbank_v1 statement period is missing');
-  const periodStart = isoDmy(period[1]);
-  const periodEnd = isoDmy(period[2]);
-  const issued = /DATE\s+ISSUED\s*:\s*(\d{2}\/\d{2}\/\d{4})/i.exec(text);
-  const due = /PAYMENT\s+DUE\s+DATE[^\d]{0,120}(\d{2}\/\d{2}\/\d{4})/i.exec(text);
-  const openingMatch = new RegExp(`PREVIOUS\\s+BALANCE\\s+AED\\s+(${MONEY})`, 'i').exec(text);
-  const closingMatch = new RegExp(`CURRENT\\s+BALANCE\\s+AED\\s+(${MONEY})`, 'i').exec(text);
-  if (!openingMatch || !closingMatch) throw new Error('rakbank_v1 printed balance summary is incomplete');
-
-  const headerText = lines.slice(0, tableHeaderIndex).join('\n');
-  const minimumMatch = new RegExp(`MINIMUM\\s+PAYMENT\\s+DUE[\\s\\S]{0,120}?AED\\s+(${MONEY})`, 'i').exec(headerText);
-  const totalDueMatch = new RegExp(`TOTAL\\s+AMOUNT\\s+DUE[\\s\\S]{0,180}?AED\\s+(${MONEY})`, 'i').exec(headerText);
-
-  const cardLast4s: string[] = [];
-  for (const line of lines) {
-    const cardMatch = /CARD\s+NUMBER\s*:\s*([^:\r\n]+)/i.exec(line);
-    const groups = cardMatch?.[1].match(/\d{4}/g);
-    const last4 = groups?.at(-1);
-    if (last4 && !cardLast4s.includes(last4)) cardLast4s.push(last4);
-  }
-
-  const datePrefix = /^(\d{2}\/\d{2}\/\d{4})\b/;
-  const moneyMatches = (value: string): RegExpMatchArray[] => [...value.matchAll(new RegExp(MONEY, 'g'))];
-  const drafts: Draft[] = [];
-  let index = tableHeaderIndex + 1;
-  while (index < lines.length) {
-    const line = lines[index].trim();
-    if (!line) {
-      index += 1;
-      continue;
-    }
-    const dateMatch = datePrefix.exec(line);
-    if (!dateMatch) {
-      index += 1;
-      continue;
-    }
-    const sourceLine = index + 1;
-    let combined = line;
-    let nextIndex = index + 1;
-    while (moneyMatches(combined).length < 2 && nextIndex < lines.length) {
-      const continuation = lines[nextIndex].trim();
-      if (datePrefix.test(continuation)) break;
-      if (continuation) combined += ` ${continuation}`;
-      nextIndex += 1;
-    }
-    const amounts = moneyMatches(combined);
-    if (amounts.length !== 2) throw new Error(`rakbank_v1 transaction row at line ${sourceLine} could not be parsed`);
-    const firstIndex = amounts[0].index ?? -1;
-    const prefix = combined.slice(dateMatch[0].length, firstIndex).trim();
-    const currencies = [...prefix.matchAll(/\b[A-Za-z]{3}\b/g)];
-    const currencyMatch = currencies.at(-1);
-    if (!currencyMatch || currencyMatch.index === undefined) throw new Error(`rakbank_v1 transaction row at line ${sourceLine} could not be parsed`);
-    const currency = currencyMatch[0].toUpperCase();
-    const description = prefix.slice(0, currencyMatch.index).trim().replace(/[ ,;:]+$/, '');
-    if (!description) throw new Error(`rakbank_v1 transaction row at line ${sourceLine} could not be parsed`);
-    const tail = combined.slice(firstIndex + amounts[0][0].length);
-    const credit = /\bCR\b/i.test(tail);
-    const explicitDebit = new RegExp(`(?:^|\\s)-\\s*${MONEY}(?:\\s+CR)?\\s*$`, 'i').test(tail.trim());
-    if (currency === 'AED' && !credit && !explicitDebit) throw new Error(`rakbank_v1 transaction direction is not explicit at line ${sourceLine}`);
-    const transactionDate = isoDmy(dateMatch[1]);
-    if (transactionDate < periodStart || transactionDate > periodEnd) throw new Error(`rakbank_v1 transaction date is outside statement period at line ${sourceLine}`);
-    drafts.push({
-      transaction_date: transactionDate,
-      post_date: null,
-      card_last4: cardLast4s[0] ?? null,
-      description,
-      amount_aed: moneyValue(amounts[1][0])!,
-      direction: credit ? 'CREDIT' : 'DEBIT',
-      amount_original: currency === 'AED' ? null : moneyValue(amounts[0][0]),
-      currency_original: currency,
-      exchange_rate: null,
-      source_line: sourceLine,
-      review_required: false,
-    });
-    index = nextIndex;
-  }
-  if (drafts.length === 0) throw new Error('rakbank_v1 transaction rows were not parsed');
-
-  const summaryStart = lines.findIndex(line => /PREVIOUS\s+BALANCE/i.test(line));
-  const summaryEnd = lines.findIndex(line => /CURRENT\s+BALANCE/i.test(line));
-  if (summaryStart < 0 || summaryEnd < summaryStart) throw new Error('rakbank_v1 printed balance summary is incomplete');
-  let summaryNet = 0;
-  let summaryComponents = 0;
-  for (const line of lines.slice(summaryStart, summaryEnd + 1)) {
-    const summaryMatch = new RegExp(`AED\\s+(${MONEY})(.*)$`, 'i').exec(line);
-    if (!summaryMatch) continue;
-    if (summaryMatch[2].includes('+')) {
-      summaryNet += cents(summaryMatch[1]);
-      summaryComponents += 1;
-    } else if (summaryMatch[2].includes('-')) {
-      summaryNet -= cents(summaryMatch[1]);
-      summaryComponents += 1;
-    }
-  }
-  if (summaryComponents === 0) throw new Error('rakbank_v1 printed transaction summary is incomplete');
-  const transactions = finishTransactions('RAKBANK', drafts);
-  const rowNet = drafts.reduce((sum, draft) => sum + (draft.direction === 'DEBIT' ? cents(draft.amount_aed) : -cents(draft.amount_aed)), 0);
-  const opening = moneyValue(openingMatch[1])!;
-  const closing = moneyValue(closingMatch[1])!;
-  if (rowNet !== summaryNet) throw new Error('rakbank_v1 transaction rows do not reconcile to printed summary');
-  if (cents(opening) + rowNet !== cents(closing)) throw new Error('rakbank_v1 printed summary does not reconcile to balances');
-  return finishStatement({
-    bank: 'RAKBANK',
-    adapter: 'rakbank_v1',
-    source_file: sourceFile,
-    statement_date: issued ? isoDmy(issued[1]) : null,
-    period_start: periodStart,
-    period_end: periodEnd,
-    payment_due_date: due ? isoDmy(due[1]) : null,
-    opening_balance_aed: opening,
-    closing_balance_aed: closing,
-    minimum_payment_aed: moneyValue(minimumMatch?.[1]),
-    total_payment_due_aed: moneyValue(totalDueMatch?.[1]),
-    card_last4s: cardLast4s,
-    transactions,
-    warnings: [],
-  });
-}
 
 export function parseStatement(text: string, profile: IssuerProfile, sourceFile = ''): NormalizedStatement {
   if (typeof text !== 'string' || text.trim().length < 20 || text.length > 10_000_000) throw new Error('extracted statement text must contain 20..10000000 characters');
   if (!ISSUER_PROFILES.includes(profile)) throw new Error(`Unknown or unverified issuer profile: ${profile}`);
   if (profile === 'adcb_v1') return parseAdcb(text, sourceFile);
   if (profile === 'emirates_islamic_v1') return parseEmiratesIslamic(text, sourceFile);
-  if (profile === 'rakbank_v1') return parseRakbank(text, sourceFile);
   return parseWio(text, sourceFile);
 }
 
@@ -415,7 +290,6 @@ export function detectIssuerProfile(text: string): IssuerProfile {
   const matches: IssuerProfile[] = [];
   if (/PREVIOUS BALANCE OUTSTANDING/i.test(text) && /CARD NO/i.test(text)) matches.push('adcb_v1');
   if (/STATEMENT OF CARD ACCOUNT/i.test(text) && /OPENING BALANCE/i.test(text)) matches.push('emirates_islamic_v1');
-  if (/RAKBANK/i.test(text) && /STATEMENT PERIOD/i.test(text) && /CARD NUMBER/i.test(text) && /CURRENT BALANCE/i.test(text)) matches.push('rakbank_v1');
   if (/CREDIT STATEMENT/i.test(text) && /ACCOUNT NUMBER/i.test(text) && /WIO/i.test(text)) matches.push('wio_credit_v1');
   if (matches.length !== 1) throw new Error(matches.length === 0 ? 'No verified issuer profile recognized this document' : 'Issuer profile detection was ambiguous');
   return matches[0];

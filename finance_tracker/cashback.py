@@ -334,6 +334,63 @@ def reward_total(
     return reward
 
 
+def _refund_cashback_deduction(
+    program: CardProgram,
+    transactions: Iterable[Transaction],
+    total: Decimal,
+    buckets: dict[str, Decimal],
+) -> Decimal:
+    """Return cashback deducted by refunds at their event-time positions."""
+    del total, buckets
+
+    def event_key(transaction: Transaction) -> tuple[datetime, int, str, str]:
+        occurred_at = transaction.transaction_at
+        if occurred_at.tzinfo is None:
+            occurred_at = occurred_at.replace(tzinfo=UTC)
+        else:
+            occurred_at = occurred_at.astimezone(UTC)
+        return (occurred_at, 0 if _is_purchase(transaction) else 1,
+                str(transaction.transaction_id or "").strip(),
+                _transaction_type(transaction))
+
+    bucket_defs = {bucket.code: bucket for bucket in program.buckets}
+    purchase_total = Decimal("0")
+    purchase_buckets: dict[str, Decimal] = {}
+    seen_ids: set[str] = set()
+    deductions: dict[str, Decimal] = {}
+    for transaction in sorted((row for row in transactions if row.card == program.card), key=event_key):
+        if (is_finalized_for_consumption(transaction) and _is_purchase(transaction)
+                and _transaction_type(transaction) in CASHBACK_TOPICS):
+            purchase_total += transaction.amount_aed
+            code = transaction.reward_bucket
+            if code:
+                purchase_buckets[code] = purchase_buckets.get(code, Decimal("0")) + transaction.amount_aed
+            continue
+        if (not is_finalized_for_consumption(transaction) or not _is_refund(transaction)
+                or _transaction_type(transaction) not in CASHBACK_TOPICS):
+            continue
+        transaction_id = str(transaction.transaction_id or "").strip()
+        if transaction_id and transaction_id in seen_ids:
+            continue
+        if transaction_id:
+            seen_ids.add(transaction_id)
+        code = transaction.reward_bucket
+        if not code:
+            continue
+        tier = program.tier_for(purchase_total, purchase_buckets)
+        rate = tier.rates.get(code, Decimal("0"))
+        if rate <= 0:
+            continue
+        earned = max(purchase_buckets.get(code, Decimal("0")), Decimal("0")) * rate
+        fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
+        cap = tier.cashback_cap(code, fallback_cap)
+        earned = min(earned, cap) if cap is not None else earned
+        already_deducted = deductions.get(code, Decimal("0"))
+        remaining = max(earned - already_deducted, Decimal("0"))
+        deductions[code] = already_deducted + min(transaction.amount_aed * rate, remaining)
+    return sum(deductions.values(), Decimal("0"))
+
+
 def evaluate_card(
     program: CardProgram,
     transactions: Iterable[Transaction],

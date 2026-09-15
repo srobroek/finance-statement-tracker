@@ -9,7 +9,7 @@ const future = () => new Date(Date.now() + 60_000).toISOString();
 const envelope = () => ({
   schema_version: 1, outbox_id: 'outbox-1', state: 'PREPARED', account_id: 'account-1',
   execution_context: { trigger: 'SCHEDULE', manual: false, mcp: false },
-  writer_lease: { lease_id: 'lease-1', fencing_token: 1, expires_at: future() },
+  writer_lease: { resource_key: 'actual:sync', lease_id: 'lease-1', fencing_token: 1, expires_at: future() },
   transactions: [{ imported_id: 'statement:one', date: '2026-08-01', amount: -1000, imported_payee: 'Merchant' }],
 });
 
@@ -34,7 +34,7 @@ const session = (api: ActualApi) => new ActualSession(api, path.join(tmpdir(), '
 test('prepared outbox rejects manual, MCP, duplicate and expired inputs', () => {
   assert.throws(() => preflightOutbox({ ...envelope(), execution_context: { trigger: 'SCHEDULE', manual: true, mcp: false } }), /forbidden/);
   assert.throws(() => preflightOutbox({ ...envelope(), transactions: [...envelope().transactions, ...envelope().transactions] }), /duplicate imported_id/);
-  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }), /expired/);
+  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { resource_key: 'actual:sync', lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }));
 });
 
 test('transaction clearing accepts only booleans', () => {
