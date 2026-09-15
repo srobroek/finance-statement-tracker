@@ -1506,6 +1506,13 @@ return [{ json: {
             "position": [350, 0],
             "parameters": {"jsCode": r"""
 const invocation = $('Validate and Build Fixed Provider Invocation').item.json;
+const providerError = String($json?.error?.message || $json?.errorMessage || $json?.message || $json?.json?.error?.message || '');
+if (providerError) {
+    if (/auth|login|token|credential|unauthoriz|forbidden|revok/i.test(providerError)) {
+        throw new Error('PRODEX_AUTH_REQUIRED: restore the existing persistent one-time subscription auth state from protected state');
+    }
+    throw new Error('AGENT_PROVIDER_EXECUTION_FAILED');
+}
 const FINANCE_AI_SCHEMA_V1 = new Set([
   'schema_version', 'job_id', 'idempotency_key', 'agent_provider', 'policy_id',
   'policy_class', 'policy_sha256', 'config_sha256', 'output_schema_sha256',
