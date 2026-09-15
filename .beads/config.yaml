@@ -66,3 +66,4 @@
 # - github.token    → use GITHUB_TOKEN env var instead
 
 sync.remote: "git+https://github.com/srobroek/finance-statement-tracker.git"
+dolt.shared-server: true
