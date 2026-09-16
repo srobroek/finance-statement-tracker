@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import os
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
+
+from jsonschema import Draft202012Validator
 
 from finance_tracker.ai_rules import load_ai_policies
 from finance_tracker.actual_snapshot import cashback_dashboard, transactions_from_actual_snapshot
@@ -15,7 +18,13 @@ from finance_tracker.cashback import (
     programs_from_config,
     validate_program_configuration,
 )
-from finance_tracker.models import Transaction
+from finance_tracker.models import (
+    CashbackPeriod,
+    FxSnapshot,
+    Transaction,
+    period_for_timestamp,
+    validate_cashback_state,
+)
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -42,6 +51,67 @@ def dashboard(
     )
 
 
+def cashback_state() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "receipts": [{
+            "receipt_id": "receipt-1",
+            "source_identity": "mail:message-1",
+            "card_code": "CARD_A",
+            "original_received_at": "2026-09-01T00:00:00Z",
+            "period_id": "period-1",
+        }],
+        "periods": [
+            {
+                "period_id": "period-1",
+                "card_code": "CARD_A",
+                "period_start": "2026-08-01T00:00:00Z",
+                "period_end": "2026-09-01T00:00:00Z",
+                "status": "CLOSED",
+                "closed_by_receipt_id": "receipt-1",
+            },
+            {
+                "period_id": "period-2",
+                "card_code": "CARD_A",
+                "period_start": "2026-09-01T00:00:00Z",
+                "period_end": "2026-10-01T00:00:00Z",
+                "status": "OPEN",
+                "closed_by_receipt_id": None,
+            },
+        ],
+        "memberships": [{"card_code": "CARD_A", "coverage": "UNKNOWN", "sc_held": None}],
+        "accounting": [{
+            "period_id": "period-1",
+            "card_code": "CARD_A",
+            "qualifying_spend": "100",
+            "refund_deductions": "5",
+            "consumed_cap_headroom": "20",
+        }],
+        "category_assessments": [{
+            "transaction_id": "tx-1",
+            "status": "UNRESOLVED",
+            "category": None,
+            "review_required": True,
+            "reason": "missing evidence",
+        }],
+        "fx_snapshots": [{
+            "schema_version": 1,
+            "snapshot_id": "fx-1",
+            "provider": "RAK",
+            "base_currency": "AED",
+            "quote_currency": "USD",
+            "observed_at": "2026-09-01T01:00:00Z",
+            "quote_date": "2026-09-01",
+            "quote_basis": "BASE_PER_QUOTE",
+            "rate": "3.69",
+            "precision": 5,
+            "max_age_seconds": 3600,
+            "source_identity": "rak:2026-09-01",
+            "uncertainty": "ESTIMATE",
+        }],
+    }
+
+
 class PublicCashbackProfileTests(TestCase):
     def test_all_public_example_profiles_validate(self) -> None:
         for path in sorted(PROFILES.glob("*.json")):
@@ -56,6 +126,165 @@ class PublicCashbackProfileTests(TestCase):
         self.assertEqual(routes["GENERAL"]["use_card"], "EVERYDAY_2")
         self.assertEqual(routes["TRAVEL"]["use_card"], "TRAVEL_4")
         self.assertEqual({card["short_name"] for card in result["cards"]}, {"Everyday", "Travel"})
+
+    def test_profile_authoring_rejects_runtime_arrays(self) -> None:
+        for version in (1, 2):
+            schema = json.loads((ROOT / "config" / f"cashback-profile-schema-v{version}.json").read_text())
+            invalid = load_profile("flat-rate-usd.json")
+            invalid["schema_version"] = version
+            invalid["live_ingestion"] = {"receipts": []}
+            self.assertTrue(list(Draft202012Validator(schema).iter_errors(invalid)))
+
+    def test_cashback_state_validates_independent_contracts(self) -> None:
+        validate_cashback_state(cashback_state())
+        periods = (
+            CashbackPeriod("period-1", "CARD_A", datetime(2026, 8, 1, tzinfo=UTC), datetime(2026, 9, 1, tzinfo=UTC)),
+            CashbackPeriod("period-2", "CARD_A", datetime(2026, 9, 1, tzinfo=UTC), datetime(2026, 10, 1, tzinfo=UTC)),
+        )
+        self.assertEqual(period_for_timestamp(periods, datetime(2026, 9, 1, tzinfo=UTC)), periods[1])
+
+    def test_cashback_state_enforces_accounting_and_receipt_identity_uniqueness(self) -> None:
+        duplicate_accounting = deepcopy(cashback_state())
+        duplicate_accounting["accounting"].append(
+            deepcopy(duplicate_accounting["accounting"][0])
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate accounting rows"):
+            validate_cashback_state(duplicate_accounting)
+
+        duplicate_receipt = deepcopy(cashback_state())
+        duplicate_receipt["receipts"].append({
+            "receipt_id": "receipt-2",
+            "source_identity": "mail:message-1",
+            "card_code": "CARD_A",
+            "original_received_at": "2026-09-02T00:00:00Z",
+        })
+        with self.assertRaisesRegex(ValueError, "duplicate statement receipt"):
+            validate_cashback_state(duplicate_receipt)
+
+        other_card = deepcopy(cashback_state())
+        other_card["receipts"].append({
+            "receipt_id": "receipt-2",
+            "source_identity": "mail:message-1",
+            "card_code": "CARD_B",
+            "original_received_at": "2026-09-02T00:00:00Z",
+        })
+        validate_cashback_state(other_card)
+
+
+    def test_cashback_fx_provenance_has_a_separate_schema_boundary(self) -> None:
+        legacy_schema = json.loads(
+            (ROOT / "config" / "fx-snapshot-schema-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        state_schema = json.loads(
+            (ROOT / "config" / "cashback-state-schema-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        provenance = {"quote_date", "quote_basis", "uncertainty"}
+        self.assertTrue(provenance.isdisjoint(legacy_schema["required"]))
+        self.assertTrue(
+            provenance.issubset(state_schema["$defs"]["fxSnapshot"]["required"])
+        )
+
+        for field in sorted(provenance):
+            with self.subTest(missing=field):
+                missing = deepcopy(cashback_state())
+                del missing["fx_snapshots"][0][field]
+                with self.assertRaises(ValueError):
+                    validate_cashback_state(missing)
+
+        invalid_basis = deepcopy(cashback_state())
+        invalid_basis["fx_snapshots"][0]["quote_basis"] = "MID_MARKET"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(invalid_basis)
+
+        zero_rate = deepcopy(cashback_state())
+        zero_rate["fx_snapshots"][0]["rate"] = "0"
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            validate_cashback_state(zero_rate)
+
+    def test_fx_snapshot_rejects_invalid_or_equal_currencies_on_construction(self) -> None:
+        valid = deepcopy(cashback_state()["fx_snapshots"][0])
+        FxSnapshot(**valid)
+
+        for field_name, currency in (
+            ("base_currency", "US1"),
+            ("quote_currency", "€UR"),
+        ):
+            with self.subTest(field=field_name, currency=currency):
+                invalid = {**valid, field_name: currency}
+                with self.assertRaisesRegex(ValueError, "three-letter currency"):
+                    FxSnapshot(**invalid)
+
+        equal = {**valid, "quote_currency": "aed"}
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            FxSnapshot(**equal)
+
+    def test_fx_snapshot_preserves_provenance_and_requires_integer_types(self) -> None:
+        values = deepcopy(cashback_state()["fx_snapshots"][0])
+        values["quote_basis"] = "base_per_quote"
+        values["uncertainty"] = "estimate"
+
+        serialized = FxSnapshot(**values).to_dict()
+        self.assertEqual(serialized["quote_date"], "2026-09-01")
+        self.assertEqual(serialized["quote_basis"], "BASE_PER_QUOTE")
+        self.assertEqual(serialized["uncertainty"], "ESTIMATE")
+
+        for field_name in ("schema_version", "precision", "max_age_seconds"):
+            for invalid in (True, 1.5, "1"):
+                with self.subTest(field=field_name, invalid=invalid):
+                    invalid_values = {**values, field_name: invalid}
+                    with self.assertRaisesRegex(ValueError, "integer"):
+                        FxSnapshot(**invalid_values)
+
+    def test_cashback_state_rejects_closed_period_with_missing_receipt(self) -> None:
+        missing_receipt = deepcopy(cashback_state())
+        missing_receipt["periods"][0]["closed_by_receipt_id"] = "missing-receipt"
+        with self.assertRaisesRegex(ValueError, "unknown receipt"):
+            validate_cashback_state(missing_receipt)
+
+        wrong_period = deepcopy(cashback_state())
+        wrong_period["receipts"][0]["period_id"] = "period-2"
+        with self.assertRaisesRegex(ValueError, "does not reference its period"):
+            validate_cashback_state(wrong_period)
+
+        wrong_timestamp = deepcopy(cashback_state())
+        wrong_timestamp["receipts"][0]["original_received_at"] = (
+            "2026-09-01T00:00:01Z"
+        )
+        with self.assertRaisesRegex(ValueError, "original received timestamp"):
+            validate_cashback_state(wrong_timestamp)
+
+    def test_cashback_state_rejects_open_period_closure_receipt(self) -> None:
+        open_period = deepcopy(cashback_state())
+        open_period["periods"][1]["closed_by_receipt_id"] = "receipt-1"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(open_period)
+        with self.assertRaises(ValueError):
+            CashbackPeriod(
+                "period-2",
+                "CARD_A",
+                datetime(2026, 9, 1, tzinfo=UTC),
+                datetime(2026, 10, 1, tzinfo=UTC),
+                status="OPEN",
+                closed_by_receipt_id="receipt-1",
+            )
+
+    def test_cashback_state_rejects_ambiguous_accounting_and_fx_dates(self) -> None:
+        negative = deepcopy(cashback_state())
+        negative["accounting"][0]["qualifying_spend"] = "-1"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(negative)
+        ambiguous = deepcopy(cashback_state())
+        ambiguous["accounting"][0]["net_spend"] = "95"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(ambiguous)
+        future_quote = deepcopy(cashback_state())
+        future_quote["fx_snapshots"][0]["quote_date"] = "2026-09-02"
+        with self.assertRaises(ValueError):
+            validate_cashback_state(future_quote)
 
     def test_tiered_profile_caps_category_then_routes_to_tier_card(self) -> None:
         source = load_profile("tiered-gbp.json")

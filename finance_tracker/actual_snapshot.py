@@ -18,6 +18,7 @@ from .cashback import (
     programs_from_config,
     purchase_type_from_config,
     recommend,
+    refund_cashback_deduction,
     reward_total,
     total_spend,
 )
@@ -186,6 +187,7 @@ def cashback_dashboard(
         ]
         spend = total_spend(card_transactions, program.card)
         buckets = bucket_spend(card_transactions, program.card)
+        refund_deduction = refund_cashback_deduction(program, card_transactions)
         target_tier = program.target_tier(program.safety_target or spend, buckets)
         bucket_rows = []
         for bucket in program.buckets:
@@ -329,7 +331,14 @@ def cashback_dashboard(
             "total_spend_aed": _plain(spend),
             "safety_target_aed": None if program.safety_target is None else _plain(program.safety_target),
             "tier": program.tier_for(spend, buckets).code,
-            "expected_cashback_aed": _plain(reward_total(program, spend, buckets)),
+            "expected_cashback_aed": _plain(
+                reward_total(
+                    program,
+                    spend,
+                    buckets,
+                    refund_deductions=refund_deduction,
+                )
+            ),
             "tiers": [
                 {
                     "code": tier.code,

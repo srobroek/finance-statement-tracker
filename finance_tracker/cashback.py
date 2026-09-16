@@ -334,14 +334,11 @@ def reward_total(
     return reward
 
 
-def _refund_cashback_deduction(
+def refund_cashback_deduction(
     program: CardProgram,
     transactions: Iterable[Transaction],
-    total: Decimal,
-    buckets: dict[str, Decimal],
 ) -> Decimal:
     """Return cashback deducted by refunds at their event-time positions."""
-    del total, buckets
 
     def event_key(transaction: Transaction) -> tuple[datetime, int, str, str]:
         occurred_at = transaction.transaction_at
@@ -409,9 +406,7 @@ def evaluate_card(
     ]
     if not eligible:
         return None
-    refund_deduction = _refund_cashback_deduction(
-        program, existing, current_total, current_buckets
-    )
+    refund_deduction = refund_cashback_deduction(program, existing)
     before_reward = reward_total(
         program,
         current_total,

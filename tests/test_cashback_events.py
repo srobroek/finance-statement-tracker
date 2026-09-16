@@ -83,7 +83,7 @@ class CashbackEventStoreTests(unittest.TestCase):
             self.assertEqual(result, {"inserted": 0, "updated": 0, "duplicates": 1})
             self.assertEqual(store.stats()["event_count"], 1)
 
-    def test_refund_reduces_live_bucket_and_ignored_event_does_not_count(self) -> None:
+    def test_refund_deducts_cashback_without_reducing_spend_or_cap_headroom(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
             base = {
@@ -94,7 +94,7 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "merchant": "Example",
             }
             store.upsert([
-                {**base, "source_event_id": "purchase", "amount_aed": "100"},
+                {**base, "source_event_id": "purchase", "amount_aed": "4000"},
                 {**base, "source_event_id": "refund", "amount_aed": "25", "event_type": "REFUND"},
                 {**base, "source_event_id": "ignored", "amount_aed": "1000", "status": "IGNORED"},
             ])
@@ -103,10 +103,13 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             sc = next(card for card in dashboard["cards"] if card["card"] == "SC_PLATINUM_X")
             online = next(bucket for bucket in sc["buckets"] if bucket["code"] == "SC_ONLINE")
-            self.assertEqual(sc["total_spend_aed"], "75")
-            self.assertEqual(online["spend_aed"], "75")
+            self.assertEqual(sc["total_spend_aed"], "4000")
+            self.assertEqual(sc["expected_cashback_aed"], "99.25")
+            self.assertEqual(sc["refund_effect_aed"], "25")
+            self.assertEqual(online["spend_aed"], "4000")
+            self.assertEqual(online["headroom_aed"], "0")
 
-    def test_reversal_requires_reference_and_reduces_spend(self) -> None:
+    def test_reversal_requires_reference_and_deducts_cashback_without_reducing_spend(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = CashbackEventStore(Path(temporary) / "events.sqlite3")
             base = {
@@ -116,7 +119,7 @@ class CashbackEventStoreTests(unittest.TestCase):
                 "channel": "PHYSICAL_POS",
                 "merchant": "Example Restaurant",
             }
-            store.upsert([{**base, "source_event_id": "purchase", "amount_aed": "200"}])
+            store.upsert([{**base, "source_event_id": "purchase", "amount_aed": "10000"}])
             with self.assertRaisesRegex(ValueError, "reversal_of"):
                 store.upsert([
                     {
@@ -140,8 +143,11 @@ class CashbackEventStoreTests(unittest.TestCase):
 
             rak = next(card for card in dashboard["cards"] if card["card"] == "RAK_WORLD")
             dining = next(bucket for bucket in rak["buckets"] if bucket["code"] == "RAK_DINING")
-            self.assertEqual(rak["total_spend_aed"], "150")
-            self.assertEqual(dining["spend_aed"], "150")
+            self.assertEqual(rak["total_spend_aed"], "10000")
+            self.assertEqual(rak["expected_cashback_aed"], "295.00")
+            self.assertEqual(rak["refund_effect_aed"], "50")
+            self.assertEqual(dining["spend_aed"], "10000")
+            self.assertEqual(dining["headroom_aed"], "0")
 
     def test_ingest_heartbeat_controls_feed_freshness_even_when_scan_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
