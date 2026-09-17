@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RW-O]
 trace: [orc-n2q.379.42, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J41 -- Run ops/error workflow
+
 ## Goal
 Run the operational error workflow for a failed finance operation and leave a deterministic, observable resolution or escalation.
 
@@ -19,7 +21,8 @@ Run the operational error workflow for a failed finance operation and leave a de
 ## Steps
 ### S1 -- Inspect error {#S1}
 - **Do:** Open the error workflow with the operation reference and inspect state, attempts, fence, and receipts.
-- **Expect:** Error class and current recoverability are explicit; inspection alone causes no mutation.
+- **Expect:** Error class and current recoverability are explicit.
+- **Expect (negative):** Inspection alone causes no mutation.
 
 ### S2 -- Execute permitted branch {#S2}
 - **Do:** Select retry, compensate, or escalate only when its preconditions are met.
@@ -36,5 +39,4 @@ Run the operational error workflow for a failed finance operation and leave a de
 - G1: Product/runtime execution evidence is unavailable; this document is a draft contract, not validation.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed from Beads author scope.
-  Evidence: orc-n2q.379.42; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

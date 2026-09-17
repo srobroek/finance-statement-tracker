@@ -11,26 +11,40 @@ trace: []
 ---
 # J10 -- Import reviewed statements
 
-- **Stable ID:** J10
-- **Profile:** RW-S
-- **Status:** draft / blocked
-- **Owner scope:** `orc-n2q.379.11`
-
 ## Goal
 As an operator, import a reviewed statement into the finance ledger so accepted rows are applied deterministically, with a pre-state, approval, receipt, fresh readback, and reversible rollback boundary.
 
-## Prerequisites and surfaces
-- Reviewed statement fixture and fixed account/period scope are available.
-- Use the statement import surface and ledger readback; do not alter shared journey package files.
-- Capture a pre-state and run in the exclusive write-serial lane.
+## Preconditions
+- P1: Reviewed statement fixture and fixed account/period scope are available.
+- P2: Use the statement import surface and ledger readback; do not alter shared journey package files.
+- P3: Capture a pre-state and run in the exclusive write-serial lane.
 
-## Steps and assertions
-1. **Do:** inspect the fixture, target identity, and pre-state. **Expect:** scope, row count, and hash are recorded; no mutation occurs.
-2. **Do:** preview the reviewed import. **Expect:** only approved rows are proposed and duplicates/out-of-scope rows are rejected.
-3. **Do:** obtain consequential approval, then apply once. **Expect:** a receipt identifies target, input hash, changes, and run identity.
-4. **Do:** perform fresh ledger readback. **Expect:** applied rows and balances match the approved preview.
-5. **Do (negative):** replay the same input or change its identity. **Expect:** replay is rejected or idempotent; no duplicate writes occur.
-6. **Do (negative):** exercise failure/rollback boundary. **Expect:** rollback restores the recorded pre-state and leaves an auditable receipt.
+## Steps
+### S1 -- Inspect fixture, identity, and pre-state {#S1}
+- **Do:** Inspect the fixture, target identity, and pre-state.
+- **Expect:** Scope, row count, and hash are recorded; no mutation occurs.
+### S2 -- Preview reviewed import {#S2}
+- **Do:** Preview the reviewed import.
+- **Expect:** Only approved rows are proposed and duplicates/out-of-scope rows are rejected.
+### S3 -- Approve and apply import {#S3}
+- **Do:** Obtain consequential approval, then apply once.
+- **Expect:** A receipt identifies target, input hash, changes, and run identity.
+### S4 -- Read back ledger {#S4}
+- **Do:** Perform fresh ledger readback.
+- **Expect:** Applied rows and balances match the approved preview.
+### S5 -- Prevent replay mutation {#S5}
+- **Do:** Replay the same input or change its identity.
+- **Expect:** Replay is rejected or idempotent; no duplicate writes occur.
+### S6 -- Exercise rollback boundary {#S6}
+- **Do:** Exercise the failure/rollback boundary.
+- **Expect:** Rollback restores the recorded pre-state and leaves an auditable receipt.
 
-## Evidence and gaps
-Beads author record `orc-n2q.379.11` supplies the stable title/profile and required sections; historical draft evidence is revision `4f115c64351b24554ec9b2ada6b0166786fda727`. The authoritative J01--J51 corpus refs `2cd7612`/`161de41` are unavailable, so exact source commands and final validation receipts remain unresolved. Do not claim pass until independently validated.
+## Success criteria
+- SC1: S1-S6: Approved rows are applied once and fresh readback matches the approved preview.
+- SC2: S1-S6: Replay and rollback preserve ledger integrity and auditable receipts.
+
+## Known gaps
+- G1: Beads author record `orc-n2q.379.11` supplies the stable title/profile and required sections; historical draft evidence is revision `4f115c64351b24554ec9b2ada6b0166786fda727`.
+- G2: The authoritative J01--J51 corpus refs `2cd7612`/`161de41` are unavailable, so exact source commands and final validation receipts remain unresolved. Do not claim pass until independently validated.
+
+## Delta log

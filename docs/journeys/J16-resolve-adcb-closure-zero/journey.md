@@ -11,24 +11,40 @@ trace: []
 ---
 # J16 -- Resolve ADCB closure/zero
 
-- **Stable ID:** J16
-- **Profile:** RW-S
-- **Status:** draft / blocked
-- **Owner scope:** `orc-n2q.379.17`
-
 ## Goal
 Resolve an ADCB closure/zero state while preserving account identity, closure semantics, provenance, and rollback safety.
 
-## Prerequisites and surfaces
-Pin the ADCB account and closure evidence, capture pre-state, and use the exclusive write lane with account and ledger readback.
+## Preconditions
+- P1: Pin the ADCB account and closure evidence.
+- P2: Capture pre-state.
+- P3: Use the exclusive write lane with account and ledger readback.
 
-## Steps and assertions
-1. Inspect account identity, closure evidence, and current zero state; expect deterministic target.
-2. Preview the closure/zero correction; expect only the named ADCB account to change.
-3. Approve and apply once; expect receipt with old/new state and evidence hash.
-4. Fresh readback; expect closed/zero semantics and unchanged unrelated accounts.
-5. Negative: wrong identity, nonzero balance, stale evidence, or replay; expect refusal/idempotency and no mutation.
-6. Restore on failure; expect exact pre-state and linked receipt.
+## Steps
+### S1 -- Inspect ADCB closure state {#S1}
+- **Do:** Inspect account identity, closure evidence, and current zero state.
+- **Expect:** A deterministic target is identified.
+### S2 -- Preview closure correction {#S2}
+- **Do:** Preview the closure/zero correction.
+- **Expect:** Only the named ADCB account is proposed to change.
+### S3 -- Approve and apply correction {#S3}
+- **Do:** Approve and apply once.
+- **Expect:** A receipt contains old/new state and evidence hash.
+### S4 -- Read back account state {#S4}
+- **Do:** Perform fresh readback.
+- **Expect:** Closed/zero semantics are present and unrelated accounts are unchanged.
+### S5 -- Reject unsafe or replayed correction {#S5}
+- **Do:** Submit a wrong identity, nonzero balance, stale evidence, or replay.
+- **Expect:** Refusal or idempotency occurs with no mutation.
+### S6 -- Restore on failure {#S6}
+- **Do:** Restore after failure.
+- **Expect:** Exact pre-state and a linked receipt are present.
 
-## Evidence and gaps
-Beads author `orc-n2q.379.17` establishes the stable title and RW-S profile. A dangling historical draft was reported, but authoritative refs `2cd7612`/`161de41` are unavailable. Exact source semantics and validation receipts remain unresolved.
+## Success criteria
+- SC1: S1-S6: The named ADCB account reaches the supported closed/zero state without changing unrelated accounts.
+- SC2: S1-S6: Unsafe input is refused and failure restore is exact and auditable.
+
+## Known gaps
+- G1: Beads author `orc-n2q.379.17` establishes the stable title and RW-S profile.
+- G2: A dangling historical draft was reported, but authoritative refs `2cd7612`/`161de41` are unavailable. Exact source semantics and validation receipts remain unresolved.
+
+## Delta log

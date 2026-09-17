@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RO]
 trace: [orc-n2q.379.43, orc-n2q.379.199, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J42 -- Inspect n8n workflows/Data Tables
+
 ## Goal
 Inspect the relevant n8n workflows and Data Tables to understand configuration and state without changing them.
 
@@ -19,11 +21,14 @@ Inspect the relevant n8n workflows and Data Tables to understand configuration a
 ## Steps
 ### S1 -- Locate workflow {#S1}
 - **Do:** Search by stable workflow identifier and inspect its status, version, nodes, and connections.
-- **Expect:** The requested workflow is identified unambiguously; no activation or save occurs.
+- **Expect:** The requested workflow is identified unambiguously.
+- **Expect (negative):** No activation or save occurs.
 
 ### S2 -- Inspect Data Tables {#S2}
 - **Do:** Read relevant table schema, row counts, and keyed values needed for diagnosis.
-- **Expect:** Values are attributable to a table/version snapshot; secrets are redacted and data remains unchanged.
+- **Expect:** Values are attributable to a table/version snapshot.
+- **Expect:** Secrets are redacted.
+- **Expect (negative):** Data remains unchanged.
 
 ### S3 -- Compare and report {#S3}
 - **Do:** Compare workflow references with table state and record discrepancies.
@@ -36,5 +41,4 @@ Inspect the relevant n8n workflows and Data Tables to understand configuration a
 - G1: n8n access and current table snapshots are unavailable; runtime inspection is intentionally unclaimed.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed as RO journey from Beads contract.
-  Evidence: orc-n2q.379.43; orc-n2q.379.199; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

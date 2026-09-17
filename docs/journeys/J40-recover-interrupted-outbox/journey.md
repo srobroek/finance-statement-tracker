@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RW-O]
 trace: [orc-n2q.379.41, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J40 -- Recover interrupted outbox
+
 ## Goal
 Safely recover an interrupted Actual outbox operation without duplicating a committed item or losing its audit trail.
 
@@ -19,7 +21,8 @@ Safely recover an interrupted Actual outbox operation without duplicating a comm
 ## Steps
 ### S1 -- Inspect operation state {#S1}
 - **Do:** Read outbox, lease, and audit state for the correlation key.
-- **Expect:** The operation is classified as committed, pending, failed, expired, or unknown; no write occurs.
+- **Expect:** The operation is classified as committed, pending, failed, expired, or unknown.
+- **Expect (negative):** No write occurs.
 
 ### S2 -- Choose safe recovery {#S2}
 - **Do:** For committed state, reconcile; for pending/failed state, retry only with the current fence; for unknown state, stop and escalate.
@@ -36,5 +39,4 @@ Safely recover an interrupted Actual outbox operation without duplicating a comm
 - G1: No runtime recovery/readback receipt is available; unresolved deployment behavior remains draft.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed from Beads author contract.
-  Evidence: orc-n2q.379.41; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

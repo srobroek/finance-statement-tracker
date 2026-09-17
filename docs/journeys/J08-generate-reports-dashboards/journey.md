@@ -9,28 +9,38 @@ surfaces: [finance-core]
 interfaces: [RO]
 trace: []
 ---
+# J08 -- Generate reports/dashboards
+
 ## Goal
 As an operator, generate deterministic finance reports or dashboards from a selected snapshot, with explicit output destination and no source mutation.
 
 ## Preconditions
-- Select source snapshot, account scope, period, report configuration, and output destination.
-- Confirm destination is non-source/non-production and redact sensitive fields.
-
-## Surfaces
-Reporting/dashboard CLI or scripts, `finance_tracker/reports.py`, statement/transaction readers, report templates, and output artifacts.
+- P1: Select source snapshot, account scope, period, report configuration, and output destination.
+- P2: Confirm destination is non-source/non-production and redact sensitive fields.
+- P3: Surfaces include reporting/dashboard CLI or scripts, `finance_tracker/reports.py`, statement/transaction readers, report templates, and output artifacts.
 
 ## Steps
-1. **Do:** Validate source snapshot, schema, and report parameters. **Expect:** Invalid/missing inputs fail before generation.
-2. **Do:** Generate the report/dashboard into the declared destination. **Expect:** Output path, timestamp, source identity, and hash are recorded. **Expect-negative:** Source corpus, ledger, provider, and configuration are not modified.
-3. **Do:** Re-run with identical inputs. **Expect:** Content is deterministic or differences are explained by timestamps/metadata.
-4. **Do:** Inspect output for completeness, redaction, and unsupported assertions. **Expect:** Gaps are labeled; no live-date claim is made from stale data.
+### S1 -- Validate inputs {#S1}
+- **Do:** Validate source snapshot, schema, and report parameters.
+- **Expect:** Invalid/missing inputs fail before generation.
+### S2 -- Generate output {#S2}
+- **Do:** Generate report/dashboard into declared destination.
+- **Expect:** Output path, timestamp, source identity, and hash are recorded.
+- **Expect (negative):** Source corpus, ledger, provider, and configuration are not modified.
+### S3 -- Repeat generation {#S3}
+- **Do:** Re-run with identical inputs.
+- **Expect:** Content is deterministic or differences are explained by timestamps/metadata.
+### S4 -- Inspect report {#S4}
+- **Do:** Inspect output for completeness, redaction, and unsupported assertions.
+- **Expect:** Gaps are labeled; no live-date claim is made from stale data.
 
-## Evidence and trace
-- Beads: `orc-n2q.379.9` (author J08), review `orc-n2q.379.61`, fix `orc-n2q.379.319`.
-- Source trace: `finance_tracker/reports.py`, report/dashboard scripts/templates, and corpus readers.
+## Success criteria
+- SC1: S1 rejects invalid or missing inputs before generation.
+- SC2: S2 emits a traceable output without modifying source or configuration.
+- SC3: S3-S4 establish repeat equivalence or explain metadata-only differences and label gaps.
 
-## Definition-of-ready audit
-- [x] Stable ID/title/profile, input/output contract, deterministic generation, no-mutation checks.
-- [x] Failure, stale-data, redaction, and repeat-equivalence branches.
-- [x] Beads and source traces recorded.
-- [ ] Canonical report route/output contract and authoritative corpus unavailable; status is draft.
+## Known gaps
+- G1: Canonical report route/output contract and authoritative corpus are unavailable; status remains draft. Beads: `orc-n2q.379.9` author J08, review `orc-n2q.379.61`, fix `orc-n2q.379.319`. Source refs: `finance_tracker/reports.py`, report/dashboard scripts/templates, and corpus readers.
+
+## Delta log
+- No behavior delta; structural normalization only.

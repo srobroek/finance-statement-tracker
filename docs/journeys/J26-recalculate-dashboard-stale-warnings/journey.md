@@ -9,28 +9,41 @@ surfaces: [cashback-control]
 interfaces: [RW-O]
 trace: []
 ---
-# Goal
+# J26 -- Recalculate dashboard/stale warnings
+
+## Goal
 As a finance user, recalculate dashboard data and observe honest stale-data warnings without changing source transactions.
 
-## Preconditions and surfaces
-- Dashboard inputs and last-refresh metadata are available.
-- Surfaces: Cashback Control dashboard and `finance_tracker/reports.py` / aggregation code.
-- Recalculation may write derived state only with disposable scope, approval, rollback, and readback.
+## Preconditions
+- P1: Dashboard inputs and last-refresh metadata are available.
+- P2: Surfaces: Cashback Control dashboard and `finance_tracker/reports.py` / aggregation code.
+- P3: Recalculation may write derived state only with disposable scope, approval, rollback, and readback.
 
-## Journey
-1. **Do:** Request dashboard recalculation.
-   **Expect:** Derived totals are recomputed from current accepted records and refresh metadata updates deterministically.
-2. **Do:** Inspect dashboard and freshness indicators.
-   **Expect:** Stale warnings appear when source/refresh evidence is old or incomplete, and clear only when evidence supports freshness.
-3. **Expect-negative:** Missing source, failed calculation, or contradictory refresh metadata.
-   **Expect:** Fail closed or show an explicit stale warning; never present fabricated fresh totals.
-4. **Do:** Re-read and, where applicable, roll back derived state.
-   **Expect:** No source ledger/event mutation and no duplicate derived rows.
+## Steps
+### S1 -- Recalculate dashboard {#S1}
+- **Do:** Request dashboard recalculation.
+- **Expect:** Derived totals are recomputed from current accepted records and refresh metadata updates deterministically.
 
-## Evidence
-- Beads `orc-n2q.379.27`; canonical finding linkage `orc-n2q.379.157`.
-- Beads artifact `local://journeys-J19-J27-beads.json`.
-- `finance_tracker/reports.py` and current cashback aggregation surfaces.
+### S2 -- Inspect freshness {#S2}
+- **Do:** Inspect dashboard and freshness indicators.
+- **Expect:** Stale warnings appear when source/refresh evidence is old or incomplete, and clear only when evidence supports freshness.
+
+### S3 -- Report stale or failed calculation {#S3}
+- **Do:** Missing source, failed calculation, or contradictory refresh metadata.
+- **Expect (negative):** Fail closed or show an explicit stale warning; never present fabricated fresh totals.
+
+### S4 -- Verify source preservation {#S4}
+- **Do:** Re-read and, where applicable, roll back derived state.
+- **Expect (negative):** No source ledger/event mutation and no duplicate derived rows.
+
+## Success criteria
+- SC1: S1: Derived totals are recomputed from current accepted records and refresh metadata updates deterministically.
+- SC2: S2: Stale warnings appear when source/refresh evidence is old or incomplete, and clear only when evidence supports freshness.
+- SC3: S3: Fail closed or show an explicit stale warning; never present fabricated fresh totals.
+- SC4: S4: No source ledger/event mutation and no duplicate derived rows.
 
 ## Known gaps
-- Dashboard runtime and exact stale-warning fixtures are unavailable; this is an evidence-backed draft only.
+- G1: Dashboard runtime and exact stale-warning fixtures are unavailable; this is an evidence-backed draft only. Trace evidence: Beads `orc-n2q.379.27`; canonical finding linkage `orc-n2q.379.157`. Beads artifact `local://journeys-J19-J27-beads.json`. `finance_tracker/reports.py` and current cashback aggregation surfaces.
+
+## Delta log
+- No behavior delta; structural normalization only.

@@ -11,24 +11,39 @@ trace: []
 ---
 # J15 -- Project FAB/Sarwa wealth accounts
 
-- **Stable ID:** J15
-- **Profile:** RW-S
-- **Status:** draft / blocked
-- **Owner scope:** `orc-n2q.379.16`
-
 ## Goal
 Project FAB and Sarwa wealth-account data into the supported finance view without changing source truth or unrelated accounts.
 
-## Prerequisites and surfaces
-Pin account identities, period, source hash, and pre-state; use the exclusive write lane and the wealth projection/readback surfaces.
+## Preconditions
+- P1: Pin account identities, period, source hash, and pre-state.
+- P2: Use the exclusive write lane and wealth projection/readback surfaces.
 
-## Steps and assertions
-1. Inspect source accounts and mapping; expect explicit identity and no ambiguous account.
-2. Preview projection; expect deterministic rows and no mutation.
-3. Approve and apply once; expect receipt with source/config hashes and affected accounts.
-4. Fresh readback; expect projected balances/holdings match the approved preview and source provenance remains intact.
-5. Negative: unknown account, stale source, or replay; expect refusal/idempotency and no duplicates.
-6. Rollback; expect exact pre-state and auditable restore receipt.
+## Steps
+### S1 -- Inspect source accounts and mapping {#S1}
+- **Do:** Inspect source accounts and mapping.
+- **Expect:** Explicit identity is recorded and no account is ambiguous.
+### S2 -- Preview projection {#S2}
+- **Do:** Preview the projection.
+- **Expect:** Deterministic rows are shown and no mutation occurs.
+### S3 -- Approve and apply projection {#S3}
+- **Do:** Approve and apply once.
+- **Expect:** A receipt contains source/config hashes and affected accounts.
+### S4 -- Read back projection {#S4}
+- **Do:** Perform fresh readback.
+- **Expect:** Projected balances/holdings match the approved preview and source provenance remains intact.
+### S5 -- Reject invalid or replayed projection {#S5}
+- **Do:** Submit an unknown account, stale source, or replay.
+- **Expect:** Refusal or idempotency occurs with no duplicates.
+### S6 -- Roll back projection {#S6}
+- **Do:** Roll back the projection.
+- **Expect:** Exact pre-state and an auditable restore receipt are present.
 
-## Evidence and gaps
-Beads author `orc-n2q.379.16` establishes title/profile and RW-S controls. Historical revision `4f115c64351b24554ec9b2ada6b0166786fda727` is draft evidence only. Authoritative refs `2cd7612`/`161de41` are unavailable; validation remains blocked.
+## Success criteria
+- SC1: S1-S6: Approved FAB/Sarwa projection is applied once with source truth and provenance preserved.
+- SC2: S1-S6: Invalid or replayed input cannot create duplicates and rollback is exact.
+
+## Known gaps
+- G1: Beads author `orc-n2q.379.16` establishes title/profile and RW-S controls.
+- G2: Historical revision `4f115c64351b24554ec9b2ada6b0166786fda727` is draft evidence only. Authoritative refs `2cd7612`/`161de41` are unavailable; validation remains blocked.
+
+## Delta log
