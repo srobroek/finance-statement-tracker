@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J15 — Project FAB/Sarwa wealth accounts
+# J15 -- Project FAB/Sarwa wealth accounts
 
 - **Stable ID:** J15
 - **Profile:** RW-S

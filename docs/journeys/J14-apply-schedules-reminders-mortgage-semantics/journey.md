@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J14 — Apply schedules/reminders/mortgage semantics
+# J14 -- Apply schedules/reminders/mortgage semantics
 
 - **Stable ID:** J14
 - **Profile:** RW-S

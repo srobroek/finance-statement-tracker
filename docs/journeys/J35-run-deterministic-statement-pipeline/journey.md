@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J35 — Run deterministic statement pipeline
+# J35 -- Run deterministic statement pipeline
 
 - **Stable ID:** J35
 - **Profile:** RW-O
@@ -35,4 +35,4 @@ As an operator, run statement acquisition, archival, parsing, normalization, rec
 Acceptance requires complete stage receipts, source/archive readback, reconciliation proof, rollback/cleanup proof, and redacted failures. Production execution is not implied by documentation.
 
 ## Known gaps
-No journey-local execution artifact is available; original J01–J51 corpus and shared readiness artifacts are missing, so status is draft.
+No journey-local execution artifact is available; original J01--J51 corpus and shared readiness artifacts are missing, so status is draft.

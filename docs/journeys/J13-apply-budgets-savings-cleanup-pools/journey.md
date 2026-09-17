@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J13 — Apply budgets/savings/cleanup pools
+# J13 -- Apply budgets/savings/cleanup pools
 
 - **Stable ID:** J13
 - **Profile:** RW-S

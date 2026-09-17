@@ -17,15 +17,15 @@ Inspect the relevant n8n workflows and Data Tables to understand configuration a
 - P2: The operator records a before snapshot and uses a read-only session.
 
 ## Steps
-### S1 — Locate workflow {#S1}
+### S1 -- Locate workflow {#S1}
 - **Do:** Search by stable workflow identifier and inspect its status, version, nodes, and connections.
 - **Expect:** The requested workflow is identified unambiguously; no activation or save occurs.
 
-### S2 — Inspect Data Tables {#S2}
+### S2 -- Inspect Data Tables {#S2}
 - **Do:** Read relevant table schema, row counts, and keyed values needed for diagnosis.
 - **Expect:** Values are attributable to a table/version snapshot; secrets are redacted and data remains unchanged.
 
-### S3 — Compare and report {#S3}
+### S3 -- Compare and report {#S3}
 - **Do:** Compare workflow references with table state and record discrepancies.
 - **Expect:** Findings identify exact workflow/table references and preserve a post-snapshot proving no mutation.
 

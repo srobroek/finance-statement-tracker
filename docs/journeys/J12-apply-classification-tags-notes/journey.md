@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J12 — Apply classification/tags/notes
+# J12 -- Apply classification/tags/notes
 
 - **Stable ID:** J12
 - **Profile:** RW-S

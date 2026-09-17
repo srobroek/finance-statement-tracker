@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J36 — Acquire schema-bound AI proposal
+# J36 -- Acquire schema-bound AI proposal
 
 - **Stable ID:** J36
 - **Profile:** RW-O
@@ -28,7 +28,7 @@ As an operator, obtain a constrained AI proposal for unresolved transaction clas
 ## Steps
 1. **Do:** Submit only source facts and unresolved fields to the schema-bound proposal path. **Expect:** A typed proposal references the transaction and allowed evidence sources.
 2. **Do:** Validate schema, confidence, policy, and deterministic identity before review. **Expect:** Invalid or out-of-policy proposals are rejected without mutation.
-3. **Do (negative):** Ask AI to invent amount/date/merchant, alter IDs, or perform a transaction write. **Expect:** Request is refused and source remains unchanged.
+3. **Do (negative):** Ask AI to invent amount/date/merchant, alter IDs, or write a transaction. **Expect:** Request is refused and source remains unchanged.
 4. **Do (negative):** Re-run with identical inputs/configuration. **Expect:** Same proposal identity/output or an explicit deterministic rejection.
 
 ## Evidence and acceptance

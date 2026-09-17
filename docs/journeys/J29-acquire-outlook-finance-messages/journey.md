@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J29 — Acquire Outlook finance messages
+# J29 -- Acquire Outlook finance messages
 
 - **Stable ID:** J29
 - **Profile:** RW-O

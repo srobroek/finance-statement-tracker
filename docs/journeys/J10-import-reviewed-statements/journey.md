@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J10 — Import reviewed statements
+# J10 -- Import reviewed statements
 
 - **Stable ID:** J10
 - **Profile:** RW-S
@@ -33,4 +33,4 @@ As an operator, import a reviewed statement into the finance ledger so accepted 
 6. **Do (negative):** exercise failure/rollback boundary. **Expect:** rollback restores the recorded pre-state and leaves an auditable receipt.
 
 ## Evidence and gaps
-Beads author record `orc-n2q.379.11` supplies the stable title/profile and required sections; historical draft evidence is revision `4f115c64351b24554ec9b2ada6b0166786fda727`. The authoritative J01–J51 corpus refs `2cd7612`/`161de41` are unavailable, so exact source commands and final validation receipts remain unresolved. Do not claim pass until independently validated.
+Beads author record `orc-n2q.379.11` supplies the stable title/profile and required sections; historical draft evidence is revision `4f115c64351b24554ec9b2ada6b0166786fda727`. The authoritative J01--J51 corpus refs `2cd7612`/`161de41` are unavailable, so exact source commands and final validation receipts remain unresolved. Do not claim pass until independently validated.

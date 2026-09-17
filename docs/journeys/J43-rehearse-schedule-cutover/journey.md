@@ -17,15 +17,15 @@ Rehearse a scheduled automation cutover so timing, ownership, rollback, and obse
 - P2: Rehearsal mode and an approval boundary are available; production activation is out of scope.
 
 ## Steps
-### S1 — Capture schedule state {#S1}
+### S1 -- Capture schedule state {#S1}
 - **Do:** Read the current schedule and dependent workflow readiness.
 - **Expect:** A timestamped pre-state identifies the exact schedule and all dependencies.
 
-### S2 — Run rehearsal {#S2}
+### S2 -- Run rehearsal {#S2}
 - **Do:** Execute the cutover rehearsal/dry run with a bounded test window.
 - **Expect:** Planned triggers, handoff, misses, and rollback signals are observable without unintended production writes.
 
-### S3 — Read back and decide {#S3}
+### S3 -- Read back and decide {#S3}
 - **Do:** Inspect rehearsal receipts and compare with the approved plan.
 - **Expect:** Readback supports proceed, remediate, or stop; no production activation occurs without separate approval.
 

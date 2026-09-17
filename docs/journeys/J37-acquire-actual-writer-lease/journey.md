@@ -17,15 +17,15 @@ Acquire an authenticated, fenced writer lease for Actual so one approved writer 
 - P2: A pre-state read and an approval for the consequential write are captured.
 
 ## Steps
-### S1 — Read current lease state {#S1}
+### S1 -- Read current lease state {#S1}
 - **Do:** Inspect the current lease owner, fencing version/token, expiry, and audit state.
 - **Expect:** A fresh, attributable snapshot is returned; a missing or expired lease is distinguishable from an active lease.
 
-### S2 — Request the lease {#S2}
+### S2 -- Request the lease {#S2}
 - **Do:** Authenticated operator requests acquisition with an idempotency key.
 - **Expect:** The service grants one lease with owner identity, monotonically fencing token/version, expiry, and receipt; an active competing lease is rejected without mutation.
 
-### S3 — Renew or release {#S3}
+### S3 -- Renew or release {#S3}
 - **Do:** Before expiry, renew with the same authorized identity, or release the exact lease.
 - **Expect:** Unauthorized, stale-token, and post-expiry requests fail closed; successful renewal/release emits an audit receipt and preserves fencing monotonicity.
 

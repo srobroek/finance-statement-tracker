@@ -17,15 +17,15 @@ Commit the approved Actual outbox item under the writer fence exactly once, then
 - P2: Explicit point-of-risk approval and an exclusive write lane are present.
 
 ## Steps
-### S1 — Recheck pre-state {#S1}
+### S1 -- Recheck pre-state {#S1}
 - **Do:** Read lease, idempotency, and outbox state immediately before commit.
 - **Expect:** State matches the approved candidate; stale, conflicting, or expired state blocks the write.
 
-### S2 — Commit fenced item {#S2}
+### S2 -- Commit fenced item {#S2}
 - **Do:** Submit the candidate with its fencing token and idempotency key.
 - **Expect:** The item is committed once, or a deterministic conflict/replay result is returned; stale writers cannot mutate state.
 
-### S3 — Read back and reconcile {#S3}
+### S3 -- Read back and reconcile {#S3}
 - **Do:** Fetch the authoritative outbox record and compare it with the approved candidate.
 - **Expect:** Correlation, payload, fence, and receipt match; mismatch triggers rollback/compensation rather than silent acceptance.
 

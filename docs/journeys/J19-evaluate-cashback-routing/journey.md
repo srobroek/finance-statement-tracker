@@ -31,4 +31,4 @@ As a finance user, evaluate a cashback candidate and observe the selected routin
 - `finance_tracker/cashback.py` and `finance_tracker/rules.py` are current implementation surfaces.
 
 ## Known gaps
-- Authoritative J01–J51 corpus and FORMAT/INDEX history are unavailable; this is a draft reconstruction. Runtime journey evidence and exact route fixtures remain unverified.
+- Authoritative J01--J51 corpus and FORMAT/INDEX history are unavailable; this is a draft reconstruction. Runtime journey evidence and exact route fixtures remain unverified.

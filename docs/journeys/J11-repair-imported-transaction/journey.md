@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J11 — Repair imported transaction
+# J11 -- Repair imported transaction
 
 - **Stable ID:** J11
 - **Profile:** RW-S

@@ -17,15 +17,15 @@ Activate approved production orchestration exactly once with guarded deployment,
 - P2: Consequential point-of-risk approval and the exclusive write lane are present.
 
 ## Steps
-### S1 — Verify release pre-state {#S1}
+### S1 -- Verify release pre-state {#S1}
 - **Do:** Read deployment, schedule, credential, and orchestration state immediately before activation.
 - **Expect:** State matches the approved release; drift, missing dependencies, or hash mismatch blocks activation.
 
-### S2 — Activate orchestration {#S2}
+### S2 -- Activate orchestration {#S2}
 - **Do:** Submit the approved activation with idempotency key and release receipt.
 - **Expect:** One bounded activation is applied; unauthorized, duplicate, or stale requests fail closed.
 
-### S3 — Verify or roll back {#S3}
+### S3 -- Verify or roll back {#S3}
 - **Do:** Read back health, scheduled ownership, and audit state; invoke approved rollback if criteria fail.
 - **Expect:** Healthy activation or exact rollback is observable with receipt and final state; uncertainty remains blocked, never silently accepted.
 

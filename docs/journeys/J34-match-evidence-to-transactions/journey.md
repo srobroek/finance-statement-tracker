@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J34 — Match evidence to transactions
+# J34 -- Match evidence to transactions
 
 - **Stable ID:** J34
 - **Profile:** RW-O

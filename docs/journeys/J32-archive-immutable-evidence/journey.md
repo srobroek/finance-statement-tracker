@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J32 — Archive immutable evidence
+# J32 -- Archive immutable evidence
 
 - **Stable ID:** J32
 - **Profile:** RW-O
