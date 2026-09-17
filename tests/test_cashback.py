@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from unittest import TestCase
@@ -61,6 +62,25 @@ class CashbackTests(TestCase):
         before = reward_total(program, Decimal("15000"), {"SC_ONLINE": Decimal("4000")})
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
+
+    def test_whole_currency_rounding_floors_reward(self) -> None:
+        program = next(
+            program for program in poc_programs() if program.card == "SC_PLATINUM_X"
+        )
+        whole_unit_program = replace(
+            program,
+            rounding_behavior="WHOLE_CURRENCY_UNIT_FLOOR",
+        )
+
+        self.assertEqual(
+            reward_total(
+                whole_unit_program,
+                Decimal("15000"),
+                {"SC_ONLINE": Decimal("1234.56")},
+            ),
+            Decimal("123"),
+        )
+
 
     def test_rak_cashback_is_zero_below_monthly_minimum(self) -> None:
         program = next(program for program in poc_programs() if program.card == "RAK_WORLD")

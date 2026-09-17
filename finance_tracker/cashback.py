@@ -4,7 +4,7 @@ import calendar
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Iterable
 
@@ -327,6 +327,8 @@ def reward_total(
     reward = max(reward - max(refund_deductions, Decimal("0")), Decimal("0"))
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
+    if program.rounding_behavior == "WHOLE_CURRENCY_UNIT_FLOOR":
+        return reward.quantize(Decimal("1"), rounding=ROUND_FLOOR)
     if program.rounding_behavior != "NONE":
         raise ValueError(
             f"Unsupported reward rounding behavior: {program.rounding_behavior}"
