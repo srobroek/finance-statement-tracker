@@ -1072,7 +1072,7 @@ def payment_intents_from_config(source: dict[str, object]) -> tuple[PaymentInten
 def load_program_configuration(path: Path | None = None) -> dict[str, object]:
     resolved = path or Path(__file__).resolve().parent.parent / "config" / "cashback-programs.json"
     source = json.loads(resolved.read_text(encoding="utf-8"))
-    if int(source.get("schema_version", 0)) != 1:
+    if int(source.get("schema_version", 0)) not in {1, 2}:
         raise ValueError("Unsupported cashback program schema version")
     validate_program_configuration(source)
     return source
