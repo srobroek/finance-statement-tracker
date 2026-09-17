@@ -4,7 +4,7 @@ After=podman-restart.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/stacks/finance-actual-poc/backup.sh
+ExecStart=/opt/stacks/finance-actual/backup.sh
 User=root
 Group=root
 # Do not allow the backup helper or any child process to create readable

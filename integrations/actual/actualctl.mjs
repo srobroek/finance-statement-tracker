@@ -901,8 +901,8 @@ export function validateTransactionDeletionPlan(plan) {
   if (plan?.schema_version !== "actual-transaction-deletion-v1") {
     throw new Error("Unsupported transaction deletion plan schema");
   }
-  if (plan.expected_server_version !== "26.8.1") {
-    throw new Error("Transaction deletion plan must pin Actual server version 26.8.1");
+  if (plan.expected_server_version !== "26.9.0") {
+    throw new Error("Transaction deletion plan must pin Actual server version 26.9.0");
   }
   if (!String(plan.reason ?? "").trim()) {
     throw new Error("Transaction deletion plan requires a reason");
@@ -1111,8 +1111,8 @@ export function validateTransactionEnrichmentPlan(plan) {
   if (plan?.schema_version !== "actual-transaction-enrichment-v1") {
     throw new Error("Unsupported transaction enrichment plan schema");
   }
-  if (plan.expected_server_version !== "26.8.1") {
-    throw new Error("Transaction enrichment plan must pin Actual server version 26.8.1");
+  if (plan.expected_server_version !== "26.9.0") {
+    throw new Error("Transaction enrichment plan must pin Actual server version 26.9.0");
   }
   if (!String(plan.reason ?? "").trim()) {
     throw new Error("Transaction enrichment plan requires a reason");
