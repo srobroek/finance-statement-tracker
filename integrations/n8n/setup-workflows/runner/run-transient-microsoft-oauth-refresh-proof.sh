@@ -158,7 +158,7 @@ data_table_digest() {
 }
 
 execute_probe() {
-  local raw command_status=0 timeout_code terminality_code
+  local raw command_status=0 terminal_failure_code
   execution_terminality_observed=false
   raw="$(timeout --foreground --signal=TERM --kill-after=30s "${execution_timeout_seconds}s" docker exec -i -e FINANCE_MICROSOFT_OAUTH_PROOF_EXECUTION_ACK=EXECUTE_WF23_REDACTED_ONLY -e EXECUTIONS_DATA_SAVE_ON_SUCCESS=none -e EXECUTIONS_DATA_SAVE_ON_ERROR=none -e EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=false "${n8n_container}" node - < "${runner_dir}/n8n-cli-redacted-microsoft-oauth-refresh-proof.cjs" 2>/dev/null | head -c 65537)" || command_status=$?
   if [[ "${command_status}" == "0" ]]; then
@@ -172,18 +172,13 @@ execute_probe() {
     printf '%s' WF23_TIMEOUT_COMMAND_RUN
     return 124
   fi
-  timeout_code="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" timeout)" || {
-    terminality_code="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" terminality)" || return 1
-    execution_terminality_observed=true
-    printf '%s' "${terminality_code}"
-    return 124
-  }
+  terminal_failure_code="$(printf '%s' "${raw}" | python3 "${runner_dir}/parse_wf23_execution_output.py" terminal-failure)" || return 1
   execution_terminality_observed=true
-  printf '%s' "${timeout_code}"
+  printf '%s' "${terminal_failure_code}"
   return 124
 }
 
-retain_execution_timeout_code() {
+retain_execution_failure_code() {
   case "$1" in
     WF23_TIMEOUT_CONFIG_LOAD|WF23_TIMEOUT_MODULE_LOAD|WF23_TIMEOUT_COMMAND_INIT|WF23_TIMEOUT_COMMAND_RUN|WF23_TIMEOUT_RAW_CAPTURE|WF23_TIMEOUT_FINALIZE|OUTLOOK_AUTH_REQUIRED|ONEDRIVE_AUTH_REQUIRED) execution_failure_code="$1" ;;
     *) execution_failure_code="" ;;
@@ -288,7 +283,7 @@ failure_stage="folder_placement"
 
 failure_stage="first_execution"
 execution_first_file="${run_root}/first-execution-output"
-execute_probe >"${execution_first_file}" || { execution_first="$(<"${execution_first_file}")"; retain_execution_timeout_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
+execute_probe >"${execution_first_file}" || { execution_first="$(<"${execution_first_file}")"; retain_execution_failure_code "${execution_first}"; unset execution_first; echo "WF23 first redacted execution failed" >&2; exit 1; }
 execution_first="$(<"${execution_first_file}")"
 [[ "$(wf23_execution_count)" =~ ^[01]$ ]] || { echo "WF23 first execution persistence exceeded one bounded row" >&2; exit 1; }
 metadata_after_first="$(read_metadata)" || { echo "Microsoft OAuth metadata first post-read failed" >&2; exit 1; }
@@ -315,7 +310,7 @@ done
 
 failure_stage="second_execution"
 execution_second_file="${run_root}/second-execution-output"
-execute_probe >"${execution_second_file}" || { execution_second="$(<"${execution_second_file}")"; retain_execution_timeout_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
+execute_probe >"${execution_second_file}" || { execution_second="$(<"${execution_second_file}")"; retain_execution_failure_code "${execution_second}"; unset execution_second; echo "WF23 second redacted execution failed" >&2; exit 1; }
 execution_second="$(<"${execution_second_file}")"
 [[ "$(wf23_execution_count)" =~ ^[01]$ ]] || { echo "WF23 second execution persistence exceeded one bounded row" >&2; exit 1; }
 metadata_after_second="$(read_metadata)" || { echo "Microsoft OAuth metadata second post-read failed" >&2; exit 1; }

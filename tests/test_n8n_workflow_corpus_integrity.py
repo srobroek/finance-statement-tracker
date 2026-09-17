@@ -251,7 +251,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 89, "edges": 94, "sticky": 0, "groups": 15,
         "node_ids_sha256": "4bd78f583a8a7b9d6395be9a098a6f686fe3d0d18befa5b4d3b9a3c23d902170",
         "connections_sha256": "f669daf06dfafd9d68f3ac8ad9dd0b6d7adedce8eb6caa8d4e167323bb4f7afb",
-        "parameters_sha256": "86f2e57c99d7269ab090eec051d2b865209923ae2d701ff27de43634ea092c32",
+        "parameters_sha256": "b956765a6b6c5877422f26e41a48ab8a2c528e09e80de7dd9380ee36188f483f",
         "groups_sha256": "1f0bf9b095e69a55a7231219ea7a810cbb6794f0a9a8ad5160020314ff0e39ad",
     },
     "13-document-extraction-request.json": {
@@ -282,7 +282,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
     "19-platform-data-table-bootstrap.json": {
         "nodes": 12, "sticky": 0,
         "node_ids_sha256": "5be5f493de12fe7d6ad7f44f7bc7c3d13cdc653cabf149df14c128b0b0038a38",
-        "parameters_sha256": "1a46c8e72ae24f0547de7585ecf1b57419ccbd129915e382f39f0a857659004c",
+        "parameters_sha256": "d5cbea48c95b60e3a56db5fd5ccb1087f70a01bcf40256bdf521e25c519eadea",
     },
     "20-actual-outbox-apply.json": {
         "nodes": 35, "sticky": 0,
@@ -293,7 +293,7 @@ VISUAL_CLEANUP_SNAPSHOT = {
         "nodes": 5, "edges": 4, "sticky": 0, "groups": 1,
         "node_ids_sha256": "1a110c098db11f745871eed5f147f8d49fc769fc24942fb3147f80146c34c262",
         "connections_sha256": "2b1b9065d7e4ee46faf6c409e01f0ee1e4156d5b99c93861054c267922f939bd",
-        "parameters_sha256": "944470ecde51761b37289a7c304049775202dc4c72e0ed704e4a5ebdefd418ba",
+        "parameters_sha256": "d7b2345d064c54b18c621fd4009c955aa9b6938812244274783f5df183cd4378",
         "groups_sha256": "d591ac682902484fecae6ac68da4b601d353bc4a7dd9768cc92d7caaa514d814",
     },
     "22-shared-monthly-statement-cycle.json": {
