@@ -1,15 +1,12 @@
 [Unit]
 Description=Cold backup of Actual, Cashback Control, and ingestion data
-After=podman-restart.service
+After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/stacks/finance-actual-poc/backup.sh
+ExecStart=/opt/stacks/finance-actual/backup.sh
 User=root
 Group=root
-# Do not allow the backup helper or any child process to create readable
-# financial artifacts, even if the helper is changed or invoked manually.
-UMask=0077
 # Podman may launch a replacement conmon while unpausing a container. That
 # monitor belongs to the independent application container, not this one-shot.
 KillMode=process
