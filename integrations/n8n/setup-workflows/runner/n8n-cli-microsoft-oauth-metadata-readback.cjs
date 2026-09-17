@@ -24,8 +24,8 @@ const { BaseCommand } = n8nRequire('./dist/commands/base-command.js');
 const { ListWorkflowCommand } = n8nRequire('./dist/commands/list/workflow.js');
 
 const requirements = new Map([
-  ['outlook', 'microsoftOutlookOAuth2Api'],
-  ['onedrive', 'microsoftOneDriveOAuth2Api'],
+  ['outlook', { name: 'Finance Outlook', type: 'microsoftOutlookOAuth2Api' }],
+  ['onedrive', { name: 'Finance OneDrive', type: 'microsoftOneDriveOAuth2Api' }],
 ]);
 
 function parseTokenData(value) {
@@ -60,9 +60,9 @@ BaseCommand.prototype.init = async function microsoftOAuthMetadataReadback(...ar
     const sharedCredentialsRepository = Container.get(SharedCredentialsRepository);
     const cipher = Container.get(Cipher);
     const credentials = {};
-    for (const [label, type] of requirements) {
+    for (const [label, { name, type }] of requirements) {
       stage = `${label}-query`;
-      const rows = await credentialsRepository.find({ select: ['id', 'type', 'data', 'updatedAt'], where: { type } });
+      const rows = await credentialsRepository.find({ select: ['id', 'type', 'data', 'updatedAt'], where: { name, type } });
       const candidates = [];
       for (const row of rows) {
         const shares = await sharedCredentialsRepository.find({ where: { credentialsId: row.id } });
