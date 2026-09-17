@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import Decimal
 from unittest import TestCase
@@ -17,6 +18,30 @@ from finance_tracker.models import Transaction
 
 
 class CashbackTests(TestCase):
+    def test_unknown_category_has_no_cashback_route(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown category"):
+            recommend(
+                poc_programs(),
+                [],
+                PaymentIntent("UNKNOWN", Decimal("100"), "AED", "PHYSICAL_POS"),
+            )
+
+    def test_general_unknown_channel_is_ambiguous(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ambiguous GENERAL/UNKNOWN"):
+            recommend(
+                poc_programs(),
+                [],
+                PaymentIntent("GENERAL", Decimal("100"), "AED", "UNKNOWN"),
+            )
+
+    def test_negative_decision_amount_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "amount must be positive"):
+            recommend(
+                poc_programs(),
+                [],
+                PaymentIntent("GENERAL", Decimal("-1"), "AED", "ONLINE"),
+            )
+
     def test_statement_period_supports_card_specific_close_day(self) -> None:
         self.assertEqual(
             statement_period(date(2026, 8, 16), 15),
@@ -63,6 +88,25 @@ class CashbackTests(TestCase):
         before = reward_total(program, Decimal("15000"), {"SC_ONLINE": Decimal("4000")})
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
+
+    def test_whole_currency_rounding_floors_reward(self) -> None:
+        program = next(
+            program for program in poc_programs() if program.card == "SC_PLATINUM_X"
+        )
+        whole_unit_program = replace(
+            program,
+            rounding_behavior="WHOLE_CURRENCY_UNIT_FLOOR",
+        )
+
+        self.assertEqual(
+            reward_total(
+                whole_unit_program,
+                Decimal("15000"),
+                {"SC_ONLINE": Decimal("1234.56")},
+            ),
+            Decimal("123"),
+        )
+
 
     def test_reversal_reduces_reward_like_a_refund(self) -> None:
         rows = [

@@ -5,7 +5,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
+from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
 from typing import Iterable
 
@@ -185,6 +185,23 @@ class PaymentIntent:
     conditional: bool = False
 
 
+KNOWN_CASHBACK_CATEGORIES = frozenset(
+    {"AMAZON", "GROCERY", "DINING", "TRAVEL", "HOTEL", "AIRLINE", "FUEL", "GENERAL", "FILLER"}
+)
+
+
+def _validate_payment_intent(intent: PaymentIntent) -> None:
+    category = str(intent.category).strip().upper()
+    channel = str(intent.channel).strip().upper()
+    if category not in KNOWN_CASHBACK_CATEGORIES:
+        raise ValueError(f"No cashback route for unknown category {intent.category!r}")
+    if category == "GENERAL" and channel == "UNKNOWN":
+        raise ValueError("No cashback route for ambiguous GENERAL/UNKNOWN intent")
+    if money(intent.amount_aed) <= 0:
+        raise ValueError("Cashback decision amount must be positive")
+
+
+
 @dataclass(frozen=True, slots=True)
 class CardValue:
     card: str
@@ -296,6 +313,8 @@ def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decima
         reward += min(earned, cap) if cap is not None else earned
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
+    if program.rounding_behavior == "WHOLE_CURRENCY_UNIT_FLOOR":
+        return reward.quantize(Decimal("1"), rounding=ROUND_FLOOR)
     if program.rounding_behavior != "NONE":
         raise ValueError(f"Unsupported reward rounding behavior: {program.rounding_behavior}")
     return reward
@@ -308,6 +327,7 @@ def evaluate_card(
     *,
     bucket_code: str | None = None,
 ) -> CardValue | None:
+    _validate_payment_intent(intent)
     existing = list(transactions)
     current_total = total_spend(existing, program.card)
     current_buckets = bucket_spend(existing, program.card)
