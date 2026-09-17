@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RW-O]
 trace: [orc-n2q.379.44, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J43 -- Rehearse schedule cutover
+
 ## Goal
 Rehearse a scheduled automation cutover so timing, ownership, rollback, and observability are proven before production activation.
 
@@ -27,7 +29,8 @@ Rehearse a scheduled automation cutover so timing, ownership, rollback, and obse
 
 ### S3 -- Read back and decide {#S3}
 - **Do:** Inspect rehearsal receipts and compare with the approved plan.
-- **Expect:** Readback supports proceed, remediate, or stop; no production activation occurs without separate approval.
+- **Expect:** Readback supports proceed, remediate, or stop.
+- **Expect (negative):** No production activation occurs without separate approval.
 
 ## Success criteria
 - SC1: S1-S3 produce timing and rollback evidence sufficient for an explicit cutover decision.
@@ -36,5 +39,4 @@ Rehearse a scheduled automation cutover so timing, ownership, rollback, and obse
 - G1: Scheduler runtime and deployment evidence are unavailable; production readiness remains unresolved/draft.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed from Beads author scope.
-  Evidence: orc-n2q.379.44; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

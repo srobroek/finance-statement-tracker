@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RW-O]
 trace: [orc-n2q.379.38, orc-giuj, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J37 -- Acquire Actual writer lease
+
 ## Goal
 Acquire an authenticated, fenced writer lease for Actual so one approved writer can proceed and competing or expired leases fail closed.
 
@@ -23,7 +25,8 @@ Acquire an authenticated, fenced writer lease for Actual so one approved writer 
 
 ### S2 -- Request the lease {#S2}
 - **Do:** Authenticated operator requests acquisition with an idempotency key.
-- **Expect:** The service grants one lease with owner identity, monotonically fencing token/version, expiry, and receipt; an active competing lease is rejected without mutation.
+- **Expect:** The service grants one lease with owner identity, monotonically fencing token/version, expiry, and receipt.
+- **Expect (negative):** An active competing lease is rejected without mutation.
 
 ### S3 -- Renew or release {#S3}
 - **Do:** Before expiry, renew with the same authorized identity, or release the exact lease.
@@ -36,5 +39,4 @@ Acquire an authenticated, fenced writer lease for Actual so one approved writer 
 - G1: Runtime deployment/readback evidence is unavailable; this journey remains draft and is not an execution claim.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed from Beads contract and historical source evidence.
-  Evidence: orc-n2q.379.38; orc-giuj; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

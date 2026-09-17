@@ -9,6 +9,8 @@ surfaces: [n8n-orchestration]
 interfaces: [RW-O]
 trace: [orc-n2q.379.39, 4f115c64351b24554ec9b2ada6b0166786fda727]
 ---
+# J38 -- Prepare Actual outbox item
+
 ## Goal
 Prepare one schema-valid, attributable Actual outbox item without committing it or mutating external state.
 
@@ -23,7 +25,8 @@ Prepare one schema-valid, attributable Actual outbox item without committing it 
 
 ### S2 -- Validate candidate {#S2}
 - **Do:** Validate schema, amounts, dates, account references, and duplicate/idempotency constraints.
-- **Expect:** Valid input is accepted for review; malformed, non-finite, stale-lease, or duplicate input is rejected with no outbox mutation.
+- **Expect:** Valid input is accepted for review.
+- **Expect (negative):** Malformed, non-finite, stale-lease, or duplicate input is rejected with no outbox mutation.
 
 ### S3 -- Review handoff {#S3}
 - **Do:** Present the candidate and pre-state for explicit commit approval.
@@ -36,5 +39,4 @@ Prepare one schema-valid, attributable Actual outbox item without committing it 
 - G1: Canonical J01-J51 corpus and runtime deployment evidence are unavailable; no product execution is claimed.
 
 ## Delta log
-- **Δ1** 2026-09-17 · S1-S3 · reconstructed from assigned Bead contract.
-  Evidence: orc-n2q.379.39; 4f115c64351b24554ec9b2ada6b0166786fda727 · by: journey-scribe
+- No behavior delta; structural normalization only.

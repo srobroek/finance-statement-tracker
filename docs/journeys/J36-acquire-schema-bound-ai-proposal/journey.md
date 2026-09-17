@@ -11,28 +11,38 @@ trace: []
 ---
 # J36 -- Acquire schema-bound AI proposal
 
-- **Stable ID:** J36
-- **Profile:** RW-O
-- **Beads contract:** `orc-n2q.379.37`
-- **Lane:** exclusive-write-serial
-- **Status:** draft (behavioral validation not performed)
-
 ## Goal
 As an operator, obtain a constrained AI proposal for unresolved transaction classification/evidence fields, while preserving source facts and requiring deterministic validation before any application.
 
-## Preconditions and surfaces
-- Source transaction identity, existing categories, configured policy, and allowed value sources are present.
-- AI prompt/runner, proposal schema validator, policy gate, review queue, and Actual write boundary are touched.
-- Evidence: `finance-statement-tracker/docs/ai-enrichment.md`, `finance-statement-tracker/docs/actual-note-contract.md`.
+## Preconditions
+- P1: Source transaction identity, existing categories, configured policy, and allowed value sources are present.
+- P2: AI prompt/runner, proposal schema validator, policy gate, review queue, and Actual write boundary are touched.
+- P3: Evidence: `finance-statement-tracker/docs/ai-enrichment.md`, `finance-statement-tracker/docs/actual-note-contract.md`.
+- P4: The journey uses the exclusive-write-serial lane.
 
 ## Steps
-1. **Do:** Submit only source facts and unresolved fields to the schema-bound proposal path. **Expect:** A typed proposal references the transaction and allowed evidence sources.
-2. **Do:** Validate schema, confidence, policy, and deterministic identity before review. **Expect:** Invalid or out-of-policy proposals are rejected without mutation.
-3. **Do (negative):** Ask AI to invent amount/date/merchant, alter IDs, or write a transaction. **Expect:** Request is refused and source remains unchanged.
-4. **Do (negative):** Re-run with identical inputs/configuration. **Expect:** Same proposal identity/output or an explicit deterministic rejection.
+### S1 -- Request proposal {#S1}
+- **Do:** Submit only source facts and unresolved fields to the schema-bound proposal path.
+- **Expect:** A typed proposal references the transaction and allowed evidence sources.
 
-## Evidence and acceptance
-Capture redacted prompt/proposal digests, validator result, policy decision, reviewer/approval boundary, and proof of zero ledger mutation. Applying a proposal is outside this read-only journey.
+### S2 -- Validate proposal {#S2}
+- **Do:** Validate schema, confidence, policy, and deterministic identity before review.
+- **Expect (negative):** Invalid or out-of-policy proposals are rejected without mutation.
+
+### S3 -- Reject invented facts {#S3}
+- **Do:** Ask AI to invent amount/date/merchant, alter IDs, or write a transaction.
+- **Expect (negative):** Request is refused and source remains unchanged.
+
+### S4 -- Replay proposal {#S4}
+- **Do:** Re-run with identical inputs/configuration.
+- **Expect:** The replay returns the same proposal identity/output or an explicit deterministic rejection.
+
+## Success criteria
+- SC1: S1-S4: Capture redacted prompt/proposal digests, validator result, policy decision, reviewer/approval boundary, and proof of zero ledger mutation.
+- SC2: S1-S4: Applying a proposal is outside this read-only journey.
 
 ## Known gaps
-No AI execution receipt or authoritative prior journey body is available; this remains a draft pending independent readiness review.
+- G1: No AI execution receipt or authoritative prior journey body is available; this remains a draft pending independent readiness review. Trace evidence: Beads contract `orc-n2q.379.37`.
+
+## Delta log
+- No behavior delta; structural normalization only.
