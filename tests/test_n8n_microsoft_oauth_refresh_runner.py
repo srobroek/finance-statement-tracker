@@ -500,6 +500,8 @@ sys.exit(0)
             ))
             self.assertIn('"pg_isready", "-U", "n8n", "-d", "n8n"', calls)
             self.assertIn("current_database()", calls)
+            self.assertIn("c.name='Finance Outlook'", calls)
+            self.assertIn("c.name='Finance OneDrive'", calls)
             self.assertIn("N8N_RUNNERS_MODE !== \\\"external\\\"", calls)
             self.assertIn("N8N_RUNNERS_BROKER_LISTEN_ADDRESS !== \\\"0.0.0.0\\\"", calls)
             self.assertIn("http://127.0.0.1:5679/healthz", calls)
@@ -1342,6 +1344,9 @@ sys.exit(0)
             "CredentialsRepository",
             "SharedCredentialsRepository",
             "credential:owner",
+            "Finance Outlook",
+            "Finance OneDrive",
+            "where: { name, type }",
             "decryptV2",
             "oauthTokenData",
             "n8n_expires_at",
@@ -1592,10 +1597,16 @@ try {{
     def test_runner_enforces_transient_restart_and_restoration_contract(self) -> None:
         runner = (RUNNER / "run-transient-microsoft-oauth-refresh-proof.sh").read_text(encoding="utf-8")
         for marker in (
-            '"19|0|0"',
-            '"20|0|0"',
-            '"$(tag_edge_count)" == "57"',
-            '"$(tag_edge_count)" == "60"',
+            'project_state_before="$(project_state)"',
+            'mapped_count_before="$(mapped_count)"',
+            'tag_edge_count_before="$(tag_edge_count)"',
+            '"$(project_state)" == "${project_state_before}"',
+            '"$(mapped_count)" == "${mapped_count_before}"',
+            '"$(tag_edge_count)" == "${tag_edge_count_before}"',
+            '"$((workflow_count_before + 1))|${active_count_before}|${published_count_before}"',
+            '"$((mapped_count_before + 1))"',
+            '"$((tag_edge_count_before + 3))"',
+            'WF23_BOUNDARY_BEFORE',
             "baseline_digest_before",
             '"$(baseline_digest)" == "${baseline_digest_before}"',
             "data_table_digest_before",
