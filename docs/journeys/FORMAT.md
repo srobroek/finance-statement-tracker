@@ -15,12 +15,12 @@ establish semantic readiness or replace validation against the running product.
   FORMAT.md                     # this spec
   README.md                     # per-project config: reporter, interface
                                 #   profiles, surface map, fix-loop policy
-  journeys.py                   # index/lint/prune helper — travels with the
+  journeys.py                   # index/lint/prune helper -- travels with the
                                 #   repo; installed by journey-init
-  INDEX.md                      # generated routing table — do not hand-edit
+  INDEX.md                      # generated routing table -- do not hand-edit
   TRACKER.md                    # only when reporter is `local`
   J07-<slug>/
-    journey.md                  # THE journey — current expected behavior
+    journey.md                  # THE journey -- current expected behavior
     runs/
       2026-07-14T09-31Z.md      # one file per validation run
 ```
@@ -39,7 +39,7 @@ version: 3                 # bumped on behavior deltas only, never corrections
 status: active             # draft | active | deprecated
 last_reviewed: 2026-07-10  # consolidation checkpoint; delta-log window start
 actors: [primary-user]     # who performs this journey
-surfaces: [checkout, cart] # product surfaces touched — the changed-only key
+surfaces: [checkout, cart] # product surfaces touched -- the changed-only key
 interfaces: [web-ui]       # config.yml interface_profiles able to run this
 trace: []                  # optional links in the repo's own vocabulary:
                            #   spec IDs, FR IDs, PRD sections, tickets
@@ -52,7 +52,7 @@ One paragraph: what the user is trying to accomplish and what "done" means.
 - P1: ... (each precondition gets a stable P-id)
 
 ## Steps
-### S1 — Imperative step title {#S1}
+### S1 -- Imperative step title {#S1}
 - **Do:** what the user does, interface-agnostic.
 - **Expect:** observable outcome(s). Every Expect is an assertion.
 - **Expect (negative):** what must NOT happen, when trust depends on it.
@@ -132,7 +132,7 @@ change was intended.
 
 ```
 - **Δ<version>** <date> · <step ids touched, +new ids> · behavior-change
-  <1–3 lines describing the user-visible change>
+  <1 to 3 lines describing the user-visible change>
   Evidence: <PR / spec / changelog / commit refs> · by: <human name | agent (intent-gated)>
 ```
 
@@ -170,9 +170,9 @@ result: fail              # pass | fail | blocked
 steps: {S1: pass, S2: pass, S3: fail, S3a: skipped}
 findings: [JV-0042]       # reporter-assigned ids
 ---
-## S3 — FAIL
+## S3 -- FAIL
 Expected ... observed ... Evidence: <screenshots, command output, logs>.
-Triage: suspected-regression — no intent evidence in merges since v3.
+Triage: suspected-regression -- no intent evidence in merges since v3.
 → Filed as JV-0042 (github: #712).
 ````
 
@@ -220,7 +220,7 @@ Severity: P1 (journey-blocking) / P2 (step fails, journey completable) /
 P3 (cosmetic or partial expectation miss).
 
 Local reporter (`reporter.kind: local`): findings are appended to
-`TRACKER.md` as `## JV-<seq> — <title>` sections carrying the same block plus
+`TRACKER.md` as `## JV-<seq> -- <title>` sections carrying the same block plus
 a `status: open | fixed | wontfix` line.
 
 ## Consolidation checkpoints

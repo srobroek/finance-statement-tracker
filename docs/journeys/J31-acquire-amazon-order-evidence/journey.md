@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J31 — Acquire Amazon order evidence
+# J31 -- Acquire Amazon order evidence
 
 - **Stable ID:** J31
 - **Profile:** RW-O
@@ -35,4 +35,4 @@ As an operator, acquire Amazon order evidence that can explain a finance transac
 Acceptance requires source hash, capture manifest, archive readback, and proof that no Actual transaction was written. Matching is a later journey and must not be smuggled into acquisition.
 
 ## Known gaps
-No behavioral run receipt is present; authoritative J01–J51 source remains unavailable, so this is an honest draft.
+No behavioral run receipt is present; authoritative J01--J51 source remains unavailable, so this is an honest draft.

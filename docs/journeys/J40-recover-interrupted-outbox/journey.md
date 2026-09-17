@@ -17,15 +17,15 @@ Safely recover an interrupted Actual outbox operation without duplicating a comm
 - P2: Recovery is approved and runs in the exclusive serial lane.
 
 ## Steps
-### S1 — Inspect operation state {#S1}
+### S1 -- Inspect operation state {#S1}
 - **Do:** Read outbox, lease, and audit state for the correlation key.
 - **Expect:** The operation is classified as committed, pending, failed, expired, or unknown; no write occurs.
 
-### S2 — Choose safe recovery {#S2}
+### S2 -- Choose safe recovery {#S2}
 - **Do:** For committed state, reconcile; for pending/failed state, retry only with the current fence; for unknown state, stop and escalate.
 - **Expect:** Recovery refuses duplicate or stale-fence actions and records the chosen branch.
 
-### S3 — Verify outcome {#S3}
+### S3 -- Verify outcome {#S3}
 - **Do:** Freshly read the authoritative record and audit receipt after recovery.
 - **Expect:** Exactly one outcome is attributable to the original key, or an explicit unresolved state remains visible.
 

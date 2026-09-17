@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J30 — Acquire provider browser export
+# J30 -- Acquire provider browser export
 
 - **Stable ID:** J30
 - **Profile:** RW-O

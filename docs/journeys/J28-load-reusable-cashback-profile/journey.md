@@ -9,7 +9,7 @@ surfaces: [cashback-control]
 interfaces: [RW-S]
 trace: []
 ---
-# J28 — Load reusable cashback profile
+# J28 -- Load reusable cashback profile
 
 - **Stable ID:** J28
 - **Profile:** RW-S
@@ -36,4 +36,4 @@ As an operator, load a versioned cashback profile so routing and tier calculatio
 - Acceptance requires deterministic output, no Actual-ledger writes, and a fresh readback proving no duplicate state.
 
 ## Known gaps
-The authoritative J01–J51 corpus and original FORMAT/INDEX are unavailable; this reconstruction follows the live Beads contract and current cashback documentation. Execution evidence is intentionally absent and remains a draft gap.
+The authoritative J01--J51 corpus and original FORMAT/INDEX are unavailable; this reconstruction follows the live Beads contract and current cashback documentation. Execution evidence is intentionally absent and remains a draft gap.

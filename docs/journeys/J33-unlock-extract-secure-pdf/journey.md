@@ -9,7 +9,7 @@ surfaces: [evidence-ingestion]
 interfaces: [RW-O]
 trace: []
 ---
-# J33 — Unlock/extract secure PDF
+# J33 -- Unlock/extract secure PDF
 
 - **Stable ID:** J33
 - **Profile:** RW-O

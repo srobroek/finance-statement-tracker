@@ -17,15 +17,15 @@ Prepare one schema-valid, attributable Actual outbox item without committing it 
 - P2: The operator has captured the input/pre-state and an approval boundary for later commit.
 
 ## Steps
-### S1 — Assemble item {#S1}
+### S1 -- Assemble item {#S1}
 - **Do:** Map the approved transaction intent into the Actual outbox schema, including correlation and idempotency fields.
 - **Expect:** A deterministic candidate item is produced with required fields, provenance, and the lease fencing token.
 
-### S2 — Validate candidate {#S2}
+### S2 -- Validate candidate {#S2}
 - **Do:** Validate schema, amounts, dates, account references, and duplicate/idempotency constraints.
 - **Expect:** Valid input is accepted for review; malformed, non-finite, stale-lease, or duplicate input is rejected with no outbox mutation.
 
-### S3 — Review handoff {#S3}
+### S3 -- Review handoff {#S3}
 - **Do:** Present the candidate and pre-state for explicit commit approval.
 - **Expect:** The item remains uncommitted and a reviewable receipt identifies the candidate and approval requirement.
 

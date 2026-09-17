@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RO]
 trace: []
 ---
-# J18 — Cashback dashboard
+# J18 -- Cashback dashboard
 
 - **Stable ID:** J18
 - **Profile:** RO

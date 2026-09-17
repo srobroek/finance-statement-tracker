@@ -10,27 +10,30 @@ interfaces: [RO]
 trace: []
 ---
 ## Goal
-As an operator, plan deterministic replay and reconciliation of the finance corpus, identifying source identities, ordering, deduplication, and discrepancy handling without changing production data.
+As an operator, plan deterministic replay and reconciliation of the finance corpus without changing production data. Identify source identities, ordering, deduplication, and discrepancy handling.
 
 ## Preconditions
-- Identify the exact corpus snapshot, source hashes, account scope, and time window.
+- Identify the exact corpus snapshot and source hashes.
+- Record the account scope and time window.
 - Work in an isolated/read-only plan; preserve current state and receipts.
 
 ## Surfaces
-Statement/transaction ingestion code under `finance_tracker/`, corpus fixtures, provider exports, provenance/reconciliation artifacts, and ledger/account views.
+- Statement and transaction ingestion code under `finance_tracker/`.
+- Corpus fixtures, provider exports, and provenance or reconciliation artifacts.
+- Ledger and account views.
 
 ## Steps
-1. **Do:** Inventory corpus files, source identities, hashes, and schema versions. **Expect:** Inputs are complete or each gap is explicit.
-2. **Do:** Derive replay ordering, normalization, deduplication, and idempotency rules. **Expect:** Same inputs yield a deterministic plan. **Expect-negative:** No live import or mutation occurs.
-3. **Do:** Compare planned outputs with current ledger/account state. **Expect:** Additions, matches, conflicts, and missing records are separately classified.
-4. **Do:** Define reconciliation approval, rollback, and post-replay readback gates. **Expect:** Writes are outside RO scope and require explicit approval.
+1. **Do:** Inventory corpus files and source identities. Record their hashes and schema versions. **Expect:** Inputs are complete or each gap is explicit.
+2. **Do:** Derive replay ordering and normalization rules. Define deduplication and idempotency. **Expect:** Same inputs yield a deterministic plan. **Expect-negative:** No live import or mutation occurs.
+3. **Do:** Compare planned outputs with current ledger and account state. **Expect:** Classify additions, matches, conflicts, and missing records separately.
+4. **Do:** Define reconciliation approval and rollback gates. Define the post-replay readback gate. **Expect:** Writes are outside RO scope and need explicit approval.
 
 ## Evidence and trace
 - Beads: `orc-n2q.379.6` (author J05); review/fix/revalidation records in supplied packet.
-- Source trace: `finance_tracker/` ingestion, statements, transaction semantics, and provenance artifacts.
+- Source trace: `finance_tracker/` ingestion and statement handling, transaction semantics, and provenance artifacts.
 
 ## Definition-of-ready audit
 - [x] Stable ID/title/profile; deterministic plan and no-write boundary.
-- [x] Corpus, replay, reconciliation, discrepancy, and rollback steps.
+- [x] Corpus and replay steps. Reconciliation, discrepancy, and rollback steps.
 - [x] Beads/source traces and explicit unknown handling.
 - [ ] Authoritative corpus/live replay receipt unavailable; status is draft.

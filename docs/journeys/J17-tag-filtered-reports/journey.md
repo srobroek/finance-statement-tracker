@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RO]
 trace: []
 ---
-# J17 — Tag-filtered reports
+# J17 -- Tag-filtered reports
 
 - **Stable ID:** J17
 - **Profile:** RO

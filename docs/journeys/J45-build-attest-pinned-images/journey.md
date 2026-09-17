@@ -17,15 +17,15 @@ Build release images from reviewed inputs and attest immutable digests so deploy
 - P2: Registry and signing/verifying identities are available; deployment activation is a separate approved step.
 
 ## Steps
-### S1 — Build candidate images {#S1}
+### S1 -- Build candidate images {#S1}
 - **Do:** Run the reproducible build from the pinned source and lock inputs.
 - **Expect:** Images are produced with immutable digests and build provenance; unpinned or dirty inputs fail closed.
 
-### S2 — Attest and verify {#S2}
+### S2 -- Attest and verify {#S2}
 - **Do:** Sign the approved digests and verify signatures/provenance against the release record.
 - **Expect:** Verification succeeds only for exact digests, issuer, and source; mismatches or missing attestations block release.
 
-### S3 — Record handoff {#S3}
+### S3 -- Record handoff {#S3}
 - **Do:** Store the digest/attestation receipt for the deployment handoff.
 - **Expect:** A reviewer can reproduce the mapping from source to image; no deployment mutation occurs in this journey.
 

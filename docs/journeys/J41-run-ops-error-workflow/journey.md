@@ -17,15 +17,15 @@ Run the operational error workflow for a failed finance operation and leave a de
 - P2: Any consequential retry, compensation, or rollback has an approval and exclusive lane.
 
 ## Steps
-### S1 — Inspect error {#S1}
+### S1 -- Inspect error {#S1}
 - **Do:** Open the error workflow with the operation reference and inspect state, attempts, fence, and receipts.
 - **Expect:** Error class and current recoverability are explicit; inspection alone causes no mutation.
 
-### S2 — Execute permitted branch {#S2}
+### S2 -- Execute permitted branch {#S2}
 - **Do:** Select retry, compensate, or escalate only when its preconditions are met.
 - **Expect:** Invalid, stale, or unauthorized branches fail closed; accepted action emits an operation receipt.
 
-### S3 — Confirm closure {#S3}
+### S3 -- Confirm closure {#S3}
 - **Do:** Read back final operation and audit state.
 - **Expect:** Success, compensated, or blocked/escalated status is visible with correlation and no duplicate effect.
 

@@ -1,0 +1,10 @@
+profile = "normal"
+
+# journeys.py generates this routing table from authored journey frontmatter.
+exclude = ["docs/journeys/INDEX.md"]
+
+[[overrides]]
+files = ["docs/journeys/**/*.md"]
+# Journey artifacts must retain their draft status and explicit Known gaps until validation.
+[overrides.rules."docs-discipline.status-language"]
+severity = "suggestion"

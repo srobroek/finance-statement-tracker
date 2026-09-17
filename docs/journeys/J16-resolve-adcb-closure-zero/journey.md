@@ -9,7 +9,7 @@ surfaces: [finance-core]
 interfaces: [RW-S]
 trace: []
 ---
-# J16 — Resolve ADCB closure/zero
+# J16 -- Resolve ADCB closure/zero
 
 - **Stable ID:** J16
 - **Profile:** RW-S
