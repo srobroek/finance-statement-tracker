@@ -25,8 +25,8 @@ SCRIPT = Path(__file__).resolve()
 ROOT = SCRIPT.parents[2]
 VERIFY_SCRIPT = SCRIPT.with_name("verify-backup.py")
 DEFAULT_IMAGE = (
-    "actualbudget/actual-server:26.8.1@sha256:"
-    "6478d9ddfc0924479c09e6699c205e354c6f2216dfe7de3c0fb7b590d6edcdc5"
+    "actualbudget/actual-server:26.9.0@sha256:"
+    "552beab3dec8c93d46b8b9245612d63c3f123b8a45063a474f53e229b17621d3"
 )
 READBACK_SCHEMA = ROOT / "schemas/actual-restore-readback-v1.schema.json"
 READBACK_SCHEMA_VERSION = 1

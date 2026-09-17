@@ -8,16 +8,16 @@ evidence. No second posted-transaction store exists.
 
 | service | responsibility | exposure |
 |---|---|---|
-| `finance-actual-poc` | ledger files and the `Actual` server | private Docker network |
-| `finance-actual-proxy` | shared-array-buffer headers | `127.0.0.1:5006` and tunnel |
-| `finance-cashback-control` | cashback routing and push state | separate stack |
-| `finance-n8n` | schedules and workflow work | `172.20.10.20:5678` and tunnel |
-| `finance-n8n-postgres` | workflow state | private n8n network |
+| `finance-actual-poc` | Actual server and ledger files | private Docker network |
+| `finance-actual-proxy` | SharedArrayBuffer headers | `127.0.0.1:5006` and tunnel |
+| `finance-cashback-control` | live cashback routing and push | separate stack |
+| `finance-n8n` | schedules, ETL, review, and operations | `172.20.10.20:5678` and tunnel |
+| `finance-n8n-postgres` | n8n workflow and operational state | private n8n network |
 
-`n8n` uses a custom node with `@actual-app/api` over
-`finance-actual-poc_default`. `n8n` stores its node cache in the persistent
-volume. Typed finance operations pass through the custom node. It serializes
-ledger writes. It reads each imported ID back. It cannot run arbitrary commands.
+The n8n Actual custom node uses `@actual-app/api` directly over
+`finance-actual-poc_default`. Its local Actual cache is inside the persistent
+n8n volume. The node accepts typed finance operations only, serializes ledger
+writes, verifies imported IDs, and cannot execute arbitrary commands.
 
 ## import gates
 

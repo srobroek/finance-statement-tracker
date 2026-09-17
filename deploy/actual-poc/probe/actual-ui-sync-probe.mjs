@@ -246,7 +246,7 @@ const collectApiProof = async () => {
     const resultDigest = stableDigest(result);
     if (resultDigest !== expectedDigest) throw new Error('Actual API normalized contract differs from expected');
     const proof = {
-      source: '@actual-app/api@26.8.1',
+      source: '@actual-app/api@26.9.0',
       normalized_contract: true,
       account_count: apiAccounts.length,
       representative_transaction_count: apiTransactions.length,

@@ -144,7 +144,7 @@ evidence.
 
 Confirm that current authentication is unusable. Record that failure with the
 shared ingestion `run_id`. Bind the reset receipt to that same `run_id`.
-Do not reset `Actual` by default. Use the supported reset at version `26.8.1`.
+Do not reset `Actual` by default. Use the supported reset at version `26.9.0`.
 
 Keep runtime data under `/opt/stacks/finance-actual-poc/data`. This checkout
 provides no reset command. Keep storage private. Record only redacted receipt

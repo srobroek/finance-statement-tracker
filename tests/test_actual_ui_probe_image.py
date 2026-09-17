@@ -31,10 +31,10 @@ class ActualUiProbeImageTests(unittest.TestCase):
         self.assertIn("better-sqlite3", dockerfile)
         self.assertGreaterEqual(dockerfile.count("await import('playwright')"), 2)
         self.assertGreaterEqual(dockerfile.count("await import('@actual-app/api')"), 2)
-        self.assertEqual(package["dependencies"], {"@actual-app/api": "26.8.1", "playwright": "1.59.1"})
+        self.assertEqual(package["dependencies"], {"@actual-app/api": "26.9.0", "playwright": "1.59.1"})
         root_dependencies = lockfile["packages"][""]["dependencies"]
         self.assertEqual(root_dependencies, package["dependencies"])
-        self.assertEqual(lockfile["packages"]["node_modules/@actual-app/api"]["version"], "26.8.1")
+        self.assertEqual(lockfile["packages"]["node_modules/@actual-app/api"]["version"], "26.9.0")
         self.assertEqual(lockfile["packages"]["node_modules/playwright"]["version"], "1.59.1")
 
     def test_native_preflight_opens_database_and_preserves_missing_binding_regression(self) -> None:

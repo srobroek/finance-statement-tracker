@@ -4,7 +4,7 @@ Deploy `compose.yaml` as the Dockge-compatible stack `finance-actual-poc`.
 Despite the historical stack name, this is the production topology:
 
 <!--slopvac-allow: rule=ste-practices.false-friend-term reason=identifier-fidelity -->
-- `finance-actual`: the digest-pinned Actual 26.8.1 ledger service is private
+- `finance-actual`: the digest-pinned Actual 26.9.0 ledger service is private
   to the Compose network.
 - `finance-actual-proxy`: Nginx serves the browser isolation headers at port
   `5006`. The image uses a digest pin. The process has no root privileges.
