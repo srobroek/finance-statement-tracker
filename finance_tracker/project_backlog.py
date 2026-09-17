@@ -63,7 +63,7 @@ IMPLEMENTATION_LINKS = {
         "N8N-001", "N8N-002", "N8N-003", "N8N-004", "N8N-005", "N8N-006",
         "N8N-007", "N8N-008", "N8N-009", "AUTO-001", "AUTO-002"
     ],
-    "orchestration.codex-agent-handoff": [
+    "orchestration.subscription-agent-handoff": [
         "AGENT-001", "AGENT-002", "AGENT-003", "AGENT-004", "AGENT-005"
     ],
     "ingestion.browser": [
@@ -135,8 +135,7 @@ LATEST_OVERRIDES = {
     },
     "AGENT-005": {
         "contradictions": [
-            "The only pinned community-agent package is n8n-nodes-prodex@0.5.1; "
-            "it remains unapproved for production until disposable proof."
+            "The subscription-agent candidate is pinned to n8n-nodes-prodex@0.5.1; disposable registration, isolation, authentication and structured-output proof remain required."
         ],
         "next_action": (
             "Build the exact pinned image, run registration/security/structured-output fixtures for ProDex 0.5.1, "
@@ -150,7 +149,7 @@ LATEST_OVERRIDES = {
     },
     "AGENT-002": {
         "next_action": (
-            "Prove server-owned normal and exception model routing, including the gated high-reasoning path, in disposable n8n."
+            "Prove server-owned normal and exception model routing, including the gated medium-reasoning exception path, in disposable n8n."
         ),
     },
     "AGENT-004": {
@@ -666,7 +665,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         "",
         "- Manual workflow-layout optimization is removed. Use **Tidy Workflow**; clear code, node names, notes, sections and folders remain required.",
         "- Execute Sub-workflow selectors should use **From list** when the target is available.",
-        "- The community agent package is pinned to `n8n-nodes-prodex@0.5.1`; it is not production-approved until disposable registration, isolation, authentication and structured-output proof passes.",
+        "- The subscription-agent candidate is pinned to `n8n-nodes-prodex@0.5.1`; disposable registration, isolation, authentication and structured-output proof remain required.",
         "- The backlog intentionally has no automatically promoted `VERIFIED` tasks.",
         "",
         "## Ordered executable queue",

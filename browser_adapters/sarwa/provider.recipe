@@ -1,4 +1,5 @@
 1. GOTO url: "https://www.sarwa.co/login"
-2. NOTE Stop and let the user log in and complete any reCAPTCHA or OTP challenge. Never enter or capture credentials. Continue only after the user confirms authentication.
-3. ASSERT condition: "authenticated Sarwa dashboard visible at /dashboard/account/<account-number>"
-4. NOTE Values are reported in USD. Do not record full account numbers in the project capture; retain only a user-approved account label or last four digits.
+2. PAUSE_FOR_USER reason: "AUTHENTICATION_RECAPTCHA_AND_OTP"
+3. NOTE The user completes login, reCAPTCHA, and OTP in the headed window; never type, inspect, copy, log, or store any authentication value.
+4. ASSERT condition: "authenticated Sarwa dashboard visible"
+5. NOTE Capture holdings and account values in USD with an as-of timestamp. Keep only a user-approved account label or last four digits; never record a full account number or session state.

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/actual-account-taxonomy-v1.json",
+  "title": "Canonical Actual account and taxonomy manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scope", "bootstrap_static_sha256", "providers", "accounts", "retired_accounts", "tags", "payees"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scope": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "bootstrap_static_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider_id", "inventory_status", "discovery_required", "blocker", "evidence"],
+        "properties": {
+          "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "inventory_status": {"enum": ["COMPLETE", "INCOMPLETE"]},
+          "discovery_required": {"type": "boolean"},
+          "blocker": {"type": ["string", "null"]},
+          "evidence": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider_id", "account_key", "provider_account_id", "provider_identity_status",
+          "provider_identity_source", "display_name", "actual_account_name",
+          "account_type", "currency", "last4", "owner", "lifecycle_status", "active",
+          "retain_history", "include_in_active_routing", "include_in_actual", "actual_offbudget",
+          "include_in_net_worth", "balance_sign", "balance_evidence_status",
+          "expected_balance_minor", "balance_reconciliation_required", "balance_source",
+          "balance_as_of", "actual"
+        ],
+        "properties": {
+          "provider_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+          "account_key": {"type": "string", "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_account_id": {"type": ["string", "null"], "pattern": "^[a-z0-9-]+(?::[a-z0-9-]+)+$"},
+          "provider_identity_status": {"enum": ["EVIDENCED", "UNAVAILABLE"]},
+          "provider_identity_source": {"type": ["string", "null"], "minLength": 1},
+          "display_name": {"type": "string", "minLength": 1},
+          "actual_account_name": {"type": ["string", "null"]},
+          "account_type": {"enum": ["checking", "savings", "investment", "trade", "credit", "mortgage"]},
+          "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+          "last4": {"type": ["string", "null"], "pattern": "^[0-9]{4}$"},
+          "owner": {"type": ["string", "null"]},
+          "lifecycle_status": {"enum": ["ACTIVE", "CLOSED", "PLANNED"]},
+          "active": {"type": "boolean"},
+          "retain_history": {"type": "boolean"},
+          "include_in_active_routing": {"type": "boolean"},
+          "include_in_actual": {"type": "boolean"},
+          "actual_offbudget": {"type": "boolean"},
+          "include_in_net_worth": {"type": "boolean"},
+          "balance_sign": {"enum": ["ASSET_POSITIVE", "LIABILITY_NEGATIVE"]},
+          "balance_evidence_status": {"enum": ["EVIDENCED", "UNAVAILABLE", "PLANNED"]},
+          "expected_balance_minor": {"type": ["integer", "null"]},
+          "balance_reconciliation_required": {"type": "boolean"},
+          "balance_source": {"type": ["string", "null"]},
+          "balance_as_of": {"type": ["string", "null"]},
+          "actual": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["bootstrap", "name", "type", "offbudget"],
+            "properties": {
+              "bootstrap": {"type": "boolean"},
+              "name": {"type": "string", "minLength": 1},
+              "type": {"type": "string", "minLength": 1},
+              "offbudget": {"type": "boolean"},
+              "enabled": {"type": "boolean"},
+              "aliases": {"type": "array", "items": {"type": "string", "minLength": 1}},
+              "card_code": {"type": "string", "minLength": 1},
+              "card_last4": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]{4}$"}},
+              "loan_code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+              "initial_balance_minor": {"type": "integer"},
+              "activation_note": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "retired_accounts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tag", "description", "bootstrap", "worker"],
+        "properties": {
+          "tag": {"type": "string", "pattern": "^[a-z0-9:-]+$"},
+          "description": {"type": "string"},
+          "bootstrap": {"type": "boolean"},
+          "worker": {"type": "boolean"}
+        }
+      }
+    },
+    "payees": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "bootstrap", "worker"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "bootstrap": {"type": "boolean"},
+          "worker": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

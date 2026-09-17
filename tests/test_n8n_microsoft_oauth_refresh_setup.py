@@ -33,7 +33,12 @@ class MicrosoftOAuthRefreshProofWorkflowTests(unittest.TestCase):
         self.assertTrue(meta["activationForbidden"])
         self.assertTrue(meta["scheduleForbidden"])
         self.assertEqual(meta["providerMutationScope"], "NONE")
-        self.assertEqual(meta["workflowFolder"]["name"], "90 Platform & Admin")
+        self.assertEqual(meta["workflowFolder"], {
+            "id": "f1000000-0000-4000-8000-000000000191",
+            "name": "Shared",
+            "project": "Global",
+            "placement": "EXPLICIT_SETUP_IMPORT_ONLY",
+        })
 
     def test_outlook_read_is_server_filtered_date_bounded_and_limited_to_one(self) -> None:
         node = self.nodes["Read One Bounded Outlook Message"]

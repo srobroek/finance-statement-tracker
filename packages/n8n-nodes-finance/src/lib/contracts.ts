@@ -1,5 +1,5 @@
 export const NODE_PACKAGE = 'n8n-nodes-finance@0.1.0' as const;
-export const PDF_SOCKET_PATH = '/run/finance-pdf/pdf.sock' as const;
+export const PDF_SOCKET_PATH = '/run/platform-pdf/pdf.sock' as const;
 export const ACTUAL_DATA_DIR = '/home/node/.n8n/finance-actual-cache' as const;
 
 export type JsonObject = Record<string, unknown>;
@@ -12,19 +12,10 @@ export interface ActualCredential {
   mutationEnabled?: boolean;
 }
 
-export interface ActualWriterLease {
-  resource_key: string;
-  lease_id: string;
-  fencing_token: number;
-  expires_at: string;
-}
-
-
 export interface PreparedActualOutbox {
   schema_version: 1;
   outbox_id: string;
   state: 'PREPARED';
-  actual_file_id?: string;
   account_id: string;
   execution_context: {
     trigger: 'SCHEDULE' | 'SUBWORKFLOW' | 'RECOVERY';
@@ -32,7 +23,6 @@ export interface PreparedActualOutbox {
     mcp: false;
   };
   writer_lease: {
-    resource_key?: string;
     lease_id: string;
     fencing_token: number;
     expires_at: string;
@@ -60,7 +50,6 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
     ids.add(importedId);
     const amount = row.amount;
     if (!Number.isSafeInteger(amount)) throw new Error(`${label}[${index}].amount must be integer minor units`);
-    if (row.cleared !== undefined && typeof row.cleared !== 'boolean') throw new Error(`${label}[${index}].cleared must be boolean`);
     return {
       imported_id: importedId,
       date: assertIsoDate(row.date, `${label}[${index}].date`),
@@ -68,7 +57,7 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
       imported_payee: requiredString(row.imported_payee, `${label}[${index}].imported_payee`, 512),
       ...(row.notes === undefined ? {} : { notes: requiredString(row.notes, `${label}[${index}].notes`, 4000) }),
       ...(row.category === undefined ? {} : { category: requiredString(row.category, `${label}[${index}].category`, 128) }),
-      ...(row.cleared === undefined ? {} : { cleared: row.cleared }),
+      ...(row.cleared === undefined ? {} : { cleared: Boolean(row.cleared) }),
     };
   });
 }
@@ -86,28 +75,9 @@ export function requiredString(value: unknown, label: string, max = 512): string
   return value;
 }
 
-export function assertActualWriterLease(value: unknown, label = 'writer lease'): ActualWriterLease {
-  assertObject(value, label);
-  const resourceKey = requiredString(value.resource_key, `${label}.resource_key`, 256);
-  if (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error(`${label}.resource_key is invalid`);
-  const leaseId = requiredString(value.lease_id, `${label}.lease_id`, 128);
-  const fencingToken = value.fencing_token;
-  if (!Number.isSafeInteger(fencingToken) || Number(fencingToken) <= 0) throw new Error(`${label}.fencing_token must be a positive integer`);
-  const expiresAt = requiredString(value.expires_at, `${label}.expires_at`, 64);
-  const expiry = Date.parse(expiresAt);
-  if (!Number.isFinite(expiry) || expiry <= Date.now()) throw new Error(`${label}.expires_at is expired or invalid`);
-  return { resource_key: resourceKey, lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt };
-}
-
 export function assertIsoDate(value: unknown, label: string): string {
   const result = requiredString(value, label, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(result)) throw new Error(`${label} must be YYYY-MM-DD`);
-  const [year, month, day] = result.split('-').map(Number);
-  if (month < 1 || month > 12 || day < 1 || day > 31) throw new Error(`${label} must be YYYY-MM-DD`);
-  const date = new Date(0);
-  date.setUTCHours(0, 0, 0, 0);
-  date.setUTCFullYear(year, month - 1, day);
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || Number.isNaN(Date.parse(`${result}T00:00:00Z`))) {
     throw new Error(`${label} must be YYYY-MM-DD`);
   }
   return result;
@@ -123,7 +93,6 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   assertObject(value, 'outbox');
   if (value.schema_version !== 1 || value.state !== 'PREPARED') throw new Error('outbox must be schema v1 in PREPARED state');
   const outboxId = requiredString(value.outbox_id, 'outbox.outbox_id', 128);
-  const actualFileId = value.actual_file_id === undefined ? undefined : requiredString(value.actual_file_id, 'outbox.actual_file_id', 256);
   const accountId = requiredString(value.account_id, 'outbox.account_id', 128);
   assertObject(value.execution_context, 'outbox.execution_context');
   const context = value.execution_context;
@@ -132,8 +101,6 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   }
   assertObject(value.writer_lease, 'outbox.writer_lease');
   const leaseId = requiredString(value.writer_lease.lease_id, 'outbox.writer_lease.lease_id', 128);
-  const resourceKey = value.writer_lease.resource_key === undefined ? undefined : requiredString(value.writer_lease.resource_key, 'outbox.writer_lease.resource_key', 256);
-  if (resourceKey !== undefined && !/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error('writer lease resource key is invalid');
   const fencingToken = value.writer_lease.fencing_token;
   const expiresAt = requiredString(value.writer_lease.expires_at, 'outbox.writer_lease.expires_at', 64);
   if (!Number.isSafeInteger(fencingToken) || Number(fencingToken) <= 0) throw new Error('writer lease fencing token must be a positive integer');
@@ -144,10 +111,9 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
     schema_version: 1,
     outbox_id: outboxId,
     state: 'PREPARED',
-    ...(actualFileId === undefined ? {} : { actual_file_id: actualFileId }),
     account_id: accountId,
     execution_context: context as PreparedActualOutbox['execution_context'],
-    writer_lease: { ...(resourceKey === undefined ? {} : { resource_key: resourceKey }), lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
+    writer_lease: { lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
     transactions,
   };
 }

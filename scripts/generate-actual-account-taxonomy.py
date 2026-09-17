@@ -1,0 +1,331 @@
+"""Generate the Actual account, completeness, and worker taxonomy projections."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import re
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from jsonschema import Draft202012Validator
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CANONICAL = ROOT / "config" / "actual-account-taxonomy.json"
+SCHEMA = ROOT / "config" / "actual-account-taxonomy-schema-v1.json"
+BOOTSTRAP = ROOT / "config" / "actual-bootstrap.json"
+COMPLETENESS = ROOT / "config" / "account-completeness.json"
+WORKER_TAXONOMY = ROOT / "config" / "actual-worker-taxonomy.json"
+STATIC_RULES = ROOT / "config" / "static-rules.seed.json"
+
+
+def _read(path: Path) -> dict[str, Any]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"Expected an object: {path}")
+    return value
+
+
+def _render(value: object) -> str:
+    return json.dumps(value, indent=2, ensure_ascii=False) + "\n"
+
+
+def _runtime_emitted_tags() -> set[str]:
+    """Return tags emitted by deterministic rules and review-only runtime paths."""
+    rules = json.loads(STATIC_RULES.read_text(encoding="utf-8"))
+    emitted: set[str] = set()
+    for rule in rules:
+        for action in rule.get("actions", []):
+            if action.get("action") not in {"add_tag", "add_tags"}:
+                continue
+            values = action.get("value", [])
+            emitted.update(values if isinstance(values, list) else [values])
+    # These are emitted by the AI category-review and platform import paths,
+    # which are runtime producers rather than static rule entries.
+    emitted.update({"category-review", "needs-review"})
+    return {str(tag) for tag in emitted}
+
+
+def _validate_identity_evidence(row: dict[str, Any]) -> None:
+    """Require every evidenced identity to belong to tracked evidence at HEAD."""
+    source = row["provider_identity_source"]
+    if not source:
+        return
+    path = ROOT / source
+    if not path.is_file():
+        raise ValueError(f"Identity evidence is missing: {source}")
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "--", source],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if tracked.returncode != 0:
+        raise ValueError(f"Identity evidence is not tracked at HEAD: {source}")
+    evidence = json.loads(path.read_text(encoding="utf-8"))
+    if row["provider_id"] == "adcb":
+        observed = {evidence.get("provider_account_id")}
+        if row["provider_account_id"] not in observed:
+            raise ValueError(f"ADCB identity is absent from evidence: {row['account_key']}")
+    elif row["provider_id"] == "fab":
+        observed = {
+            account.get("provider_account_id")
+            for account in evidence.get("accounts", [])
+            if isinstance(account, dict)
+        }
+        if row["provider_account_id"] not in observed:
+            raise ValueError(f"FAB identity is absent from evidence: {row['account_key']}")
+    elif row["provider_id"] == "sarwa":
+        accounts = evidence.get("providers", {}).get("sarwa", {}).get("accounts", [])
+        memberships = {
+            (account.get("provider_account_id"), label)
+            for account in accounts
+            if isinstance(account, dict)
+            for label in account.get("capture_labels", [])
+        }
+        if (row["provider_account_id"], row["display_name"]) not in memberships:
+            raise ValueError(f"Sarwa account is absent from evidence: {row['account_key']}")
+    else:
+        raise ValueError(f"No identity evidence validator for provider: {row['provider_id']}")
+
+
+def _validate_manifest(manifest: dict[str, Any]) -> None:
+    errors = sorted(Draft202012Validator(_read(SCHEMA)).iter_errors(manifest), key=str)
+    if errors:
+        raise ValueError("Invalid canonical taxonomy: " + "; ".join(error.message for error in errors[:3]))
+
+    provider_ids = [row["provider_id"] for row in manifest["providers"]]
+    if len(provider_ids) != len(set(provider_ids)):
+        raise ValueError("Canonical taxonomy has duplicate provider inventories")
+    known_providers = set(provider_ids)
+    account_keys = [row["account_key"] for row in manifest["accounts"]]
+    if len(account_keys) != len(set(account_keys)):
+        raise ValueError("Canonical taxonomy has duplicate internal account keys")
+    account_ids = [row["provider_account_id"] for row in manifest["accounts"] if row["provider_account_id"]]
+    if len(account_ids) != len(set(account_ids)):
+        raise ValueError("Canonical taxonomy has duplicate account identities")
+    account_names = [row["display_name"].casefold() for row in manifest["accounts"]]
+    if len(account_names) != len(set(account_names)):
+        raise ValueError("Canonical taxonomy has duplicate display names")
+    if set(row["provider_id"] for row in manifest["accounts"]) - known_providers:
+        raise ValueError("Every account provider requires a provider inventory")
+
+    for row in manifest["accounts"]:
+        actual = row["actual"]
+        identity = row["account_key"]
+        provider_id = row["provider_account_id"]
+        identity_status = row["provider_identity_status"]
+        identity_source = row["provider_identity_source"]
+        if identity_status == "EVIDENCED":
+            if not provider_id or not identity_source:
+                raise ValueError(f"Evidence-backed identity is incomplete: {identity}")
+            if not provider_id.startswith(f"{row['provider_id']}:" ):
+                raise ValueError(f"Provider identity is mismatched: {identity}")
+            _validate_identity_evidence(row)
+        elif provider_id is not None or identity_source is not None:
+            raise ValueError(f"Unavailable identity has provider metadata: {identity}")
+        if actual["bootstrap"] and row["lifecycle_status"] == "CLOSED":
+            raise ValueError(f"Closed account cannot be a bootstrap target: {identity}")
+        if actual["bootstrap"] and row["actual_account_name"] != actual["name"]:
+            raise ValueError(f"Bootstrap name must match actual account name: {identity}")
+        if row["balance_reconciliation_required"] and row["expected_balance_minor"] is None:
+            raise ValueError(f"Reconciled account has no expected balance: {identity}")
+        if row["expected_balance_minor"] is not None and row["balance_evidence_status"] != "EVIDENCED":
+            raise ValueError(f"Expected balance is not evidence-backed: {identity}")
+        if row["account_type"] in {"credit", "mortgage"} and row["balance_sign"] != "LIABILITY_NEGATIVE":
+            raise ValueError(f"Credit and mortgage accounts must use liability-negative balances: {identity}")
+        if row["lifecycle_status"] == "PLANNED" and (row["active"] or row["include_in_active_routing"]):
+            raise ValueError(f"Planned account cannot be active or routed: {identity}")
+        initial = actual.get("initial_balance_minor")
+        if initial is not None and row["balance_evidence_status"] == "EVIDENCED":
+            raise ValueError(f"Bootstrap initial balance cannot masquerade as live evidence: {identity}")
+
+    for key in ("tags", "payees"):
+        rows = manifest[key]
+        identity_key = "tag" if key == "tags" else "name"
+        identities = [row[identity_key].casefold() for row in rows]
+        if len(identities) != len(set(identities)):
+            raise ValueError(f"Canonical taxonomy has duplicate {key}")
+        if any(not row["bootstrap"] and not row["worker"] for row in rows):
+            raise ValueError(f"Every {key[:-1]} must have an explicit owner")
+    static_and_runtime_tags = _runtime_emitted_tags()
+    worker_tags = {row["tag"] for row in manifest["tags"] if row["worker"]}
+    if static_and_runtime_tags != worker_tags:
+        missing = sorted(static_and_runtime_tags - worker_tags)
+        extra = sorted(worker_tags - static_and_runtime_tags)
+        raise ValueError(f"Worker tag ownership drifted: missing={missing}, extra={extra}")
+
+
+def _bootstrap_account(row: dict[str, Any]) -> dict[str, Any]:
+    actual = row["actual"]
+    result: dict[str, Any] = {
+        "name": actual["name"],
+        "type": actual["type"],
+        "offbudget": actual["offbudget"],
+        "account_key": row["account_key"],
+    }
+    if row["provider_identity_status"] == "EVIDENCED":
+        result["provider_account_id"] = row["provider_account_id"]
+    for key in ("aliases", "card_code", "card_last4", "loan_code", "activation_note"):
+        if key in actual:
+            result[key] = copy.deepcopy(actual[key])
+    if actual.get("enabled") is False:
+        result["enabled"] = False
+    if "initial_balance_minor" in actual:
+        result["initial_balance"] = actual["initial_balance_minor"]
+    return result
+
+
+def _bootstrap_static_digest(current: dict[str, Any]) -> str:
+    static = {
+        key: value
+        for key, value in current.items()
+        if key not in {"accounts", "retired_accounts", "tags", "payees"}
+    }
+    payload = json.dumps(static, sort_keys=True, ensure_ascii=False, separators=(",", ":")) + "\n"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _build_bootstrap(manifest: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    actual_digest = _bootstrap_static_digest(current)
+    if actual_digest != manifest["bootstrap_static_sha256"]:
+        raise ValueError(
+            "actual-bootstrap static contract drifted: "
+            f"expected {manifest['bootstrap_static_sha256']}, got {actual_digest}"
+        )
+    result = copy.deepcopy(current)
+    result["accounts"] = [
+        _bootstrap_account(row)
+        for row in manifest["accounts"]
+        if row["actual"]["bootstrap"]
+    ]
+    result["retired_accounts"] = list(manifest["retired_accounts"])
+    result["tags"] = [
+        {"tag": row["tag"], "description": row["description"]}
+        for row in manifest["tags"]
+        if row["bootstrap"]
+    ]
+    result["payees"] = [
+        {"name": row["name"]}
+        for row in manifest["payees"]
+        if row["bootstrap"]
+    ]
+    return result
+
+
+def _replace_top_level_member(text: str, key: str, value: object) -> str:
+    match = re.search(rf'^  "{re.escape(key)}":', text, flags=re.MULTILINE)
+    if match is None:
+        raise ValueError(f"actual-bootstrap is missing generated member: {key}")
+    value_start = match.end()
+    while value_start < len(text) and text[value_start] in " \t":
+        value_start += 1
+    depth = 0
+    end = value_start
+    in_string = False
+    escaped = False
+    started = False
+    while end < len(text):
+        character = text[end]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character in "[{":
+            started = True
+            depth += 1
+        elif character in "]}":
+            depth -= 1
+            if started and depth == 0:
+                end += 1
+                break
+        elif not started and character == ",":
+            break
+        end += 1
+    if started and depth != 0:
+        raise ValueError(f"actual-bootstrap member is not valid JSON: {key}")
+    comma = "," if end < len(text) and text[end] == "," else ""
+    rendered = json.dumps(value, indent=2, ensure_ascii=False).replace("\n", "\n  ")
+    return text[:match.end()] + " " + rendered + comma + text[end + len(comma):]
+
+
+def _render_bootstrap(manifest: dict[str, Any], current: dict[str, Any]) -> str:
+    result = _build_bootstrap(manifest, current)
+    text = BOOTSTRAP.read_text(encoding="utf-8")
+    for key in ("accounts", "retired_accounts", "tags", "payees"):
+        text = _replace_top_level_member(text, key, result[key])
+    return text.rstrip("\n") + "\n"
+
+
+def _build_completeness(manifest: dict[str, Any]) -> dict[str, Any]:
+    fields = (
+        "provider_id", "account_key", "provider_account_id", "provider_identity_status",
+        "provider_identity_source", "display_name", "actual_account_name",
+        "account_type", "currency", "last4", "owner", "lifecycle_status", "active",
+        "retain_history", "include_in_active_routing", "include_in_actual", "actual_offbudget",
+        "include_in_net_worth", "balance_sign", "balance_evidence_status",
+        "expected_balance_minor", "balance_reconciliation_required", "balance_source", "balance_as_of",
+    )
+    return {
+        "schema_version": 1,
+        "scope": list(manifest["scope"]),
+        "providers": copy.deepcopy(manifest["providers"]),
+        "accounts": [{field: copy.deepcopy(row[field]) for field in fields} for row in manifest["accounts"]],
+    }
+
+
+def _build_worker_taxonomy(manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "source": "config/actual-account-taxonomy.json",
+        "tags": [copy.deepcopy(row) for row in manifest["tags"] if row["worker"]],
+        "payees": [copy.deepcopy(row) for row in manifest["payees"] if row["worker"]],
+    }
+
+
+def _expected(manifest: dict[str, Any]) -> dict[Path, str]:
+    return {
+        BOOTSTRAP: _render_bootstrap(manifest, _read(BOOTSTRAP)),
+        COMPLETENESS: _render(_build_completeness(manifest)),
+        WORKER_TAXONOMY: _render(_build_worker_taxonomy(manifest)),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--write", action="store_true", help="write generated projections")
+    mode.add_argument("--check", action="store_true", help="fail when projections are stale")
+    args = parser.parse_args(argv)
+    manifest = _read(CANONICAL)
+    _validate_manifest(manifest)
+    expected = _expected(manifest)
+    drift = [
+        path.relative_to(ROOT).as_posix()
+        for path, content in expected.items()
+        if not path.exists() or path.read_text(encoding="utf-8") != content
+    ]
+    if args.write:
+        for path, content in expected.items():
+            path.write_text(content, encoding="utf-8", newline="\n")
+        return 0
+    if drift:
+        print("actual taxonomy projections are stale: " + ", ".join(drift))
+        print("run: python scripts/generate-actual-account-taxonomy.py --write")
+        return 1
+    print("actual taxonomy projections are current")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

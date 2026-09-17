@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "accounts": [
+    {
+      "name": "ADCB Credit Card · 8833 / 6838",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": true
+    },
+    {
+      "name": "Emirates Islamic Amazon Credit Card · 0082",
+      "balance_minor": 75759,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB AED Savings Shared Property · 2006",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB Credit Card · 6031",
+      "balance_minor": -20351,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB Elite Gold Current Account · 2001",
+      "balance_minor": 22501145,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB Elite Gold Current Account · 2008",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB EUR Savings Shared Property · 2007",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB iSave · 2002",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "FAB Mortgage · 0203",
+      "balance_minor": -260595200,
+      "offbudget": true,
+      "closed": false
+    },
+    {
+      "name": "RAKBANK World Credit Card",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "Standard Chartered Platinum X Credit Card",
+      "balance_minor": 0,
+      "offbudget": false,
+      "closed": false
+    },
+    {
+      "name": "Wio Credit Card · 4113 / 5009",
+      "balance_minor": 27440,
+      "offbudget": false,
+      "closed": false
+    }
+  ],
+  "representative_transactions": [
+    {
+      "account_name": "ADCB Credit Card · 8833 / 6838",
+      "amount_minor": 5757783,
+      "date": "2026-08-19",
+      "imported_id": "reconcile:adcb:credit:8833-6838:2026-08-19",
+      "payee": null
+    },
+    {
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "amount_minor": 11505473,
+      "date": "2026-08-19",
+      "imported_id": "reconcile:fab:current:2001:2026-08-19",
+      "payee": null
+    },
+    {
+      "account_name": "FAB Mortgage · 0203",
+      "amount_minor": -260595200,
+      "date": "2026-08-19",
+      "imported_id": "reconcile:fab:loan:mortgage-0203:2026-08-19",
+      "payee": null
+    },
+    {
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "amount_minor": 331800,
+      "date": "2026-08-17",
+      "imported_id": "browser:fab:81b32e215da2702173fe1714",
+      "payee": "7c9457a9-4dd2-4dd4-b65d-17a976d9133b"
+    },
+    {
+      "account_name": "FAB Elite Gold Current Account · 2001",
+      "amount_minor": -49,
+      "date": "2026-08-16",
+      "imported_id": "browser:fab:e7de5699cf7a8385a945e957",
+      "payee": "a563f63d-b54e-48fe-8096-d8602a89d513"
+    }
+  ]
+}

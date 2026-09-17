@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
 from enum import Enum
 from typing import Iterable, Protocol
 
@@ -151,6 +150,11 @@ class ActualBudgetAdapter:
             # ingestion manifest. Actual notes stay human-facing: tags first,
             # then only compact facts that are useful in the ledger.
             semantic_tags: list[str] = []
+            topic_tag = topic_semantics(transaction.transaction_type).topic_tag
+            if topic_tag:
+                semantic_tags.append(topic_tag)
+                if transaction.transaction_type.upper() == "REVERSAL":
+                    semantic_tags.append("refund")
             if transaction.channel != "UNKNOWN":
                 semantic_tags.append(f"channel-{_actual_tag(transaction.channel)}")
             if transaction.tags:

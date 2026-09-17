@@ -3,6 +3,17 @@ let money = currencyFormatter(baseCurrency);
 const cardNames = new Map();
 const shortCardNames = new Map();
 
+function createNode(tagName, className, text) {
+  const node = document.createElement(tagName);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = String(text);
+  return node;
+}
+
+function setWidth(node, percentage) {
+  node.style.width = `${percentage}%`;
+}
+
 function currencyFormatter(currency) {
   return new Intl.NumberFormat(undefined, {
     style: "currency",
@@ -44,16 +55,29 @@ function tierLabel(tier) {
 
 function renderTierPosition(card, actual) {
   const tiers = (card.tiers || []).filter((tier) => Number(tier.minimum_spend_aed) > 0);
-  if (tiers.length < 2) return { next: card.safety_target_aed ? `/ ${compactMoney(card.safety_target_aed)}` : "this cycle", ladder: "" };
+  if (tiers.length < 2) return { next: card.safety_target_aed ? `/ ${compactMoney(card.safety_target_aed)}` : "this cycle", ladder: null };
   const lastThreshold = Number(tiers.at(-1).minimum_spend_aed);
   const nextTier = tiers.find((tier) => !tier.met);
-  const markers = tiers.map((tier) => {
+  const ladder = createNode("div", "tier-ladder");
+  const track = createNode("div", "track");
+  const progress = createNode("i");
+  setWidth(progress, Math.min(100, actual / lastThreshold * 100));
+  track.append(progress);
+  ladder.append(track);
+  tiers.forEach((tier) => {
     const position = Math.min(100, Number(tier.minimum_spend_aed) / lastThreshold * 100);
-    return `<span class="tier-marker${tier.met ? " met" : ""}" style="left:${position}%"><i></i><b>${tierLabel(tier)}</b><small>${compactMoney(tier.minimum_spend_aed)}</small></span>`;
-  }).join("");
+    const marker = createNode("span", `tier-marker${tier.met ? " met" : ""}`);
+    marker.style.left = `${position}%`;
+    marker.append(
+      createNode("i"),
+      createNode("b", "", tierLabel(tier)),
+      createNode("small", "", compactMoney(tier.minimum_spend_aed)),
+    );
+    ladder.append(marker);
+  });
   return {
     next: nextTier ? `Next ${tierLabel(nextTier)} at ${compactMoney(nextTier.minimum_spend_aed)}` : `${tierLabel(tiers.at(-1))} secured`,
-    ladder: `<div class="tier-ladder"><div class="track"><i style="width:${Math.min(100, actual / lastThreshold * 100)}%"></i></div>${markers}</div>`,
+    ladder,
   };
 }
 
@@ -143,19 +167,37 @@ function renderRecommendations(items) {
       const preferredCode = preferred?.card || item.use_card;
       const avoidCodes = item.avoid_cards || [];
       const avoid = avoidCodes.map(cardLabel);
-      const avoidMarkup = avoidCodes
-        .map((code) => `<span class="card-choice avoid" data-short="${compactCardLabel(code)}">${compactCardLabel(code)}</span>`)
-        .join("");
-      node.innerHTML = `
-        <summary class="route-main" aria-label="${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.">
-          <span class="route-type">${typeLabel(item)}</span>
-          <span class="route-cards">
-            <strong class="card-choice use" data-short="${compactCardLabel(preferredCode)}" title="Use ${routeHeading(item, preferred)}">${routeHeading(item, preferred, true)}</strong>
-            <span class="avoid-list" title="Avoid ${avoid.length ? avoid.join(", ") : "none"}">${avoidMarkup}</span>
-          </span>
-        </summary>
-        <div class="route-reason"><span>Why</span><p><b>Use ${routeHeading(item, preferred)}</b>${avoid.length ? ` · avoid ${avoid.join(", ")}` : ""}. ${compactReason(item)}</p></div>
-      `;
+      const summary = createNode("summary", "route-main");
+      summary.setAttribute(
+        "aria-label",
+        `${typeLabel(item)}: use ${routeHeading(item, preferred)}. Tap for routing details.`,
+      );
+      summary.append(createNode("span", "route-type", typeLabel(item)));
+
+      const cards = createNode("span", "route-cards");
+      const use = createNode("strong", "card-choice use", routeHeading(item, preferred, true));
+      use.dataset.short = compactCardLabel(preferredCode);
+      use.title = `Use ${routeHeading(item, preferred)}`;
+      cards.append(use);
+
+      const avoidList = createNode("span", "avoid-list");
+      avoidList.title = `Avoid ${avoid.length ? avoid.join(", ") : "none"}`;
+      avoidCodes.forEach((code) => {
+        const choice = createNode("span", "card-choice avoid", compactCardLabel(code));
+        choice.dataset.short = compactCardLabel(code);
+        avoidList.append(choice);
+      });
+      cards.append(avoidList);
+      summary.append(cards);
+
+      const reason = createNode("div", "route-reason");
+      reason.append(createNode("span", "", "Why"));
+      const reasonText = createNode("p");
+      reasonText.append(createNode("b", "", `Use ${routeHeading(item, preferred)}`));
+      if (avoid.length) reasonText.append(document.createTextNode(` · avoid ${avoid.join(", ")}`));
+      reasonText.append(document.createTextNode(`. ${compactReason(item)}`));
+      reason.append(reasonText);
+      node.append(summary, reason);
       return node;
     }),
   );
@@ -166,8 +208,19 @@ function renderDecisionTree(items) {
   const active = items.filter((item) => item.active !== false);
   const key = (item) => item.code || `${item.purchase_type}:${item.channel}:${item.currency}`;
   const previous = root.dataset.selectedKey;
-  root.innerHTML = `<label class="graph-selector"><span>Spend type</span><select aria-label="Decision-tree spend type">${active.map((item) => `<option value="${key(item)}">${typeLabel(item)}</option>`).join("")}</select></label><div class="spend-graph"></div>`;
-  const selector = root.querySelector("select");
+  root.replaceChildren();
+  const selectorLabel = createNode("label", "graph-selector");
+  selectorLabel.append(createNode("span", "", "Spend type"));
+  const selector = createNode("select");
+  selector.setAttribute("aria-label", "Decision-tree spend type");
+  active.forEach((item) => {
+    const option = createNode("option", "", typeLabel(item));
+    option.value = key(item);
+    selector.append(option);
+  });
+  selectorLabel.append(selector);
+  const graph = createNode("div", "spend-graph");
+  root.append(selectorLabel, graph);
   if (active.some((item) => key(item) === previous)) selector.value = previous;
 
   const show = () => {
@@ -190,10 +243,32 @@ function renderDecisionTree(items) {
         ? `${tierName(candidate.target_tier)} ${compactMoney(candidate.card_spend_aed)}/${compactMoney(threshold)} · ${compactMoney(candidate.tier_remaining_aed)} to tier`
         : `${tierName(candidate.target_tier)} has no minimum spend`;
       const switchText = treeSwitchReason(candidate);
-      return `<li class="candidate-node ${candidate.status.toLowerCase()}"><div class="candidate-rank"><b>${candidate.order}</b></div><div class="candidate-card"><strong title="${cardLabel(candidate.card)}">${compactCardLabel(candidate.card)}</strong><span>${bucketText}</span></div><div class="candidate-logic"><b>${candidateValueLabel(candidate)}</b><span>${tierText}</span><small>${switchText}</small></div></li>`;
-    }).join("");
+      const candidateNode = createNode("li", `candidate-node ${candidate.status.toLowerCase()}`);
+      const rank = createNode("div", "candidate-rank");
+      rank.append(createNode("b", "", candidate.order));
+      const candidateCard = createNode("div", "candidate-card");
+      const candidateName = createNode("strong", "", compactCardLabel(candidate.card));
+      candidateName.title = cardLabel(candidate.card);
+      candidateCard.append(candidateName, createNode("span", "", bucketText));
+      const logic = createNode("div", "candidate-logic");
+      logic.append(
+        createNode("b", "", candidateValueLabel(candidate)),
+        createNode("span", "", tierText),
+        createNode("small", "", switchText),
+      );
+      candidateNode.append(rank, candidateCard, logic);
+      return candidateNode;
+    });
     const methods = (item.methods || []).map((method) => method.replaceAll("_", " ")).join(" · ");
-    root.querySelector(".spend-graph").innerHTML = `<header><span>${methods} · ${item.currency}</span><strong>${typeLabel(item)} routing order</strong><small>Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics.</small></header><ol>${candidates}</ol>`;
+    const header = createNode("header");
+    header.append(
+      createNode("span", "", `${methods} · ${item.currency}`),
+      createNode("strong", "", `${typeLabel(item)} routing order`),
+      createNode("small", "", "Routes are ranked by category eligibility, whole-purchase headroom, portfolio pace and target gaps, then reward economics."),
+    );
+    const list = createNode("ol");
+    list.append(...candidates);
+    graph.replaceChildren(header, list);
   };
   selector.addEventListener("change", show);
   show();
@@ -324,54 +399,85 @@ function renderCards(cards) {
       if (card.position_mode === "UNLIMITED") {
         const node = document.createElement("article");
         node.className = "position-card unlimited-position-card";
-        node.innerHTML = `
-          <div class="position-card-header">
-            <div class="position-summary-copy">
-              <strong title="${card.name}">${card.short_name || card.name}</strong>
-              <span>${card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : "Open"}</span>
-            </div>
-            <div class="position-total unlimited-position">
-              <strong>${card.position_headline || "Unlimited"}</strong>
-              <span>${card.position_detail || "No minimum or cap"}</span>
-            </div>
-          </div>
-        `;
+        const header = createNode("div", "position-card-header");
+        const summary = createNode("div", "position-summary-copy");
+        const name = createNode("strong", "", card.short_name || card.name);
+        name.title = card.name;
+        summary.append(
+          name,
+          createNode("span", "", card.tracking_mode === "STATEMENT_ONLY" ? "Statement only" : "Open"),
+        );
+        const total = createNode("div", "position-total unlimited-position");
+        total.append(
+          createNode("strong", "", card.position_headline || "Unlimited"),
+          createNode("span", "", card.position_detail || "No minimum or cap"),
+        );
+        header.append(summary, total);
+        node.append(header);
         return node;
       }
       const target = Number(card.safety_target_aed || card.total_spend_aed || 1);
       const actual = Number(card.total_spend_aed);
       const percentage = Math.max(0, Math.min(100, (actual / target) * 100));
       const tierPosition = renderTierPosition(card, actual);
-      const buckets = card.buckets
-        .map((bucket) => {
-          if (!bucket.spend_cap_aed) {
-            return `<div class="bucket-row uncapped"><div><span>${bucket.code.replaceAll("_", " ")}</span><b>${money.format(bucket.spend_aed)} · uncapped</b></div></div>`;
-          }
-          const fill = Math.min(100, (Number(bucket.spend_aed) / Number(bucket.spend_cap_aed)) * 100);
-          const full = bucket.status === "FULL" ? " full" : "";
-          return `
-            <div class="bucket-row">
-              <div><span>${bucket.code.replaceAll("_", " ")}</span><b>${money.format(bucket.spend_aed)} / ${money.format(bucket.spend_cap_aed)}</b></div>
-              <div class="track${full}"><i style="width:${fill}%"></i></div>
-            </div>
-          `;
-        })
-        .join("");
+      const bucketList = createNode("div", "bucket-list");
+      card.buckets.forEach((bucket) => {
+        if (!bucket.spend_cap_aed) {
+          const row = createNode("div", "bucket-row uncapped");
+          const values = createNode("div");
+          values.append(
+            createNode("span", "", bucket.code.replaceAll("_", " ")),
+            createNode("b", "", `${money.format(bucket.spend_aed)} · uncapped`),
+          );
+          row.append(values);
+          bucketList.append(row);
+          return;
+        }
+        const fill = Math.min(100, (Number(bucket.spend_aed) / Number(bucket.spend_cap_aed)) * 100);
+        const full = bucket.status === "FULL" ? " full" : "";
+        const row = createNode("div", "bucket-row");
+        const values = createNode("div");
+        values.append(
+          createNode("span", "", bucket.code.replaceAll("_", " ")),
+          createNode("b", "", `${money.format(bucket.spend_aed)} / ${money.format(bucket.spend_cap_aed)}`),
+        );
+        const track = createNode("div", `track${full}`);
+        const progress = createNode("i");
+        setWidth(progress, fill);
+        track.append(progress);
+        row.append(values, track);
+        bucketList.append(row);
+      });
 
       const node = document.createElement("article");
       node.className = "position-card";
-      node.innerHTML = `
-        <div class="position-card-header">
-          <div class="position-summary-copy">
-            <strong title="${card.name}">${card.short_name || card.name}</strong>
-            <span>${card.tier.replaceAll("_", " ")} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}</span>
-          </div>
-          <div class="position-total"><strong>${money.format(actual)}</strong><span>${tierPosition.next}</span></div>
-        </div>
-        ${tierPosition.ladder || `<div class="track primary"><i style="width:${percentage}%"></i></div>`}
-        <div class="bucket-list">${buckets}</div>
-        ${Number(card.refund_effect_aed || 0) ? `<div class="source-state"><span>${money.format(card.refund_effect_aed)} refunded this cycle</span></div>` : ""}
-      `;
+      const header = createNode("div", "position-card-header");
+      const summary = createNode("div", "position-summary-copy");
+      const name = createNode("strong", "", card.short_name || card.name);
+      name.title = card.name;
+      summary.append(
+        name,
+        createNode("span", "", `${card.tier.replaceAll("_", " ")} · ${(card.pace?.status || "OPEN").replaceAll("_", " ")}`),
+      );
+      const total = createNode("div", "position-total");
+      total.append(createNode("strong", "", money.format(actual)), createNode("span", "", tierPosition.next));
+      header.append(summary, total);
+      node.append(header);
+      if (tierPosition.ladder) {
+        node.append(tierPosition.ladder);
+      } else {
+        const track = createNode("div", "track primary");
+        const progress = createNode("i");
+        setWidth(progress, percentage);
+        track.append(progress);
+        node.append(track);
+      }
+      node.append(bucketList);
+      if (Number(card.refund_effect_aed || 0)) {
+        const sourceState = createNode("div", "source-state");
+        sourceState.append(createNode("span", "", `${money.format(card.refund_effect_aed)} refunded this cycle`));
+        node.append(sourceState);
+      }
       return node;
     }),
   );
@@ -384,12 +490,12 @@ function renderPeriodHistory(periods) {
   if (!periods.length) {
     section.hidden = false;
     selector.hidden = true;
-    root.innerHTML = `
-      <article class="empty-state">
-        <strong>No finalized cycles yet</strong>
-        <span>History appears after a statement is imported, reconciled, and finalized.</span>
-      </article>
-    `;
+    const empty = createNode("article", "empty-state");
+    empty.append(
+      createNode("strong", "", "No finalized cycles yet"),
+      createNode("span", "", "History appears after a statement is imported, reconciled, and finalized."),
+    );
+    root.replaceChildren(empty);
     return;
   }
   section.hidden = false;
@@ -406,25 +512,41 @@ function renderPeriodHistory(periods) {
   const show = () => {
     const period = periods[Number(selector.value) || 0];
     const card = period.summary;
-    const buckets = (card.buckets || [])
+    const bucketRows = (card.buckets || [])
       .filter((bucket) => Number(bucket.spend_aed) || bucket.spend_cap_aed)
-      .map((bucket) => `<li><span>${bucket.code.replaceAll("_", " ")}</span><b>${money.format(bucket.spend_aed)}${bucket.spend_cap_aed ? ` / ${money.format(bucket.spend_cap_aed)}` : ""}</b></li>`)
-      .join("");
-    root.innerHTML = `
-      <article class="history-card">
-        <div class="history-title">
-          <div><span>${period.period_start} – ${period.period_end}</span><h3>${card.name}</h3></div>
-          <b>${period.status.replaceAll("_", " ")}</b>
-        </div>
-        <div class="history-metrics">
-          <div><span>Spend</span><strong>${money.format(card.total_spend_aed)}</strong></div>
-          <div><span>Expected cashback</span><strong>${money.format(card.expected_cashback_aed)}</strong></div>
-          <div><span>Tier</span><strong>${card.tier.replaceAll("_", " ")}</strong></div>
-        </div>
-        <p class="history-status">${period.reconciliation_status.replaceAll("_", " ")}</p>
-        ${buckets ? `<ul class="history-buckets">${buckets}</ul>` : ""}
-      </article>
-    `;
+      .map((bucket) => {
+        const row = createNode("li");
+        row.append(
+          createNode("span", "", bucket.code.replaceAll("_", " ")),
+          createNode("b", "", `${money.format(bucket.spend_aed)}${bucket.spend_cap_aed ? ` / ${money.format(bucket.spend_cap_aed)}` : ""}`),
+        );
+        return row;
+      });
+    const history = createNode("article", "history-card");
+    const title = createNode("div", "history-title");
+    const titleCopy = createNode("div");
+    titleCopy.append(
+      createNode("span", "", `${period.period_start} – ${period.period_end}`),
+      createNode("h3", "", card.name),
+    );
+    title.append(titleCopy, createNode("b", "", period.status.replaceAll("_", " ")));
+    const metrics = createNode("div", "history-metrics");
+    [
+      ["Spend", money.format(card.total_spend_aed)],
+      ["Expected cashback", money.format(card.expected_cashback_aed)],
+      ["Tier", card.tier.replaceAll("_", " ")],
+    ].forEach(([label, value]) => {
+      const metric = createNode("div");
+      metric.append(createNode("span", "", label), createNode("strong", "", value));
+      metrics.append(metric);
+    });
+    history.append(title, metrics, createNode("p", "history-status", period.reconciliation_status.replaceAll("_", " ")));
+    if (bucketRows.length) {
+      const bucketList = createNode("ul", "history-buckets");
+      bucketList.append(...bucketRows);
+      history.append(bucketList);
+    }
+    root.replaceChildren(history);
   };
   selector.addEventListener("change", show);
   show();
@@ -453,13 +575,17 @@ function renderAttention(payload) {
   const alertNode = (alert, checked) => {
       const node = document.createElement("article");
       node.className = "alert-card";
-      node.innerHTML = `
-        <div class="alert-copy"><strong>${alert.title}</strong><span>${alert.detail}</span></div>
-        <div class="alert-actions">
-          <label class="alert-toggle"><input type="checkbox" ${checked ? "checked" : ""}>${checked ? "Hidden" : "Hide"}</label>
-        </div>
-      `;
-      node.querySelector("input").addEventListener("change", async (event) => {
+      const copy = createNode("div", "alert-copy");
+      copy.append(createNode("strong", "", alert.title), createNode("span", "", alert.detail));
+      const actions = createNode("div", "alert-actions");
+      const toggle = createNode("label", "alert-toggle");
+      const input = createNode("input");
+      input.type = "checkbox";
+      input.checked = checked;
+      toggle.append(input, document.createTextNode(checked ? "Hidden" : "Hide"));
+      actions.append(toggle);
+      node.append(copy, actions);
+      input.addEventListener("change", async (event) => {
         event.currentTarget.disabled = true;
         try {
           await setAlertAcknowledgement(alert.key, event.currentTarget.checked);
@@ -475,7 +601,7 @@ function renderAttention(payload) {
   if (hidden.length) {
     const disclosure = document.createElement("details");
     disclosure.className = "hidden-alerts";
-    disclosure.innerHTML = `<summary>${hidden.length} hidden alert${hidden.length === 1 ? "" : "s"}</summary>`;
+    disclosure.append(createNode("summary", "", `${hidden.length} hidden alert${hidden.length === 1 ? "" : "s"}`));
     disclosure.append(...hidden.map((alert) => alertNode(alert, true)));
     root.append(disclosure);
   }
@@ -530,7 +656,7 @@ loadDashboard().catch((error) => {
   const status = document.querySelector("#as-of");
   status.className = "as-of stale";
   status.textContent = "Unavailable";
-  document.querySelector("#recommendations").innerHTML = `<p class="error">${error.message}</p>`;
+  document.querySelector("#recommendations").replaceChildren(createNode("p", "error", error.message));
 });
 
 setInterval(loadDashboard, 60_000);

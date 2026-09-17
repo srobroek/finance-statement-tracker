@@ -87,7 +87,7 @@ Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Du
 50,000.00 49,990.00 10.00 25/08/26 10.00 0.00 10.00`, 'emirates_islamic_v1');
   const rows = projectStatementToActual(statement);
   assert.deepEqual(rows.map(row => row.amount), [8000, 2000, -1000]);
-  const checked = assertPreparedOutbox({ schema_version: 1, outbox_id: 'ei', state: 'PREPARED', account_id: 'ei-account', execution_context: { trigger: 'SUBWORKFLOW', manual: false, mcp: false }, writer_lease: { resource_key: 'actual:ei', lease_id: 'lease', fencing_token: 1, expires_at: new Date(Date.now() + 60_000).toISOString() }, transactions: rows });
+  const checked = assertPreparedOutbox({ schema_version: 1, outbox_id: 'ei', state: 'PREPARED', account_id: 'ei-account', execution_context: { trigger: 'SUBWORKFLOW', manual: false, mcp: false }, writer_lease: { lease_id: 'lease', fencing_token: 1, expires_at: new Date(Date.now() + 60_000).toISOString() }, transactions: rows });
   assert.equal(checked.transactions.length, 3);
 });
 

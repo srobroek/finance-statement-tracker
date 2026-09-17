@@ -35,7 +35,12 @@ class OneDriveRootSetupWorkflowTests(unittest.TestCase):
         self.assertTrue(meta["scheduleForbidden"])
         self.assertEqual(meta["migrationStatus"], "READY_FOR_REVIEWED_MANUAL_IMPORT")
         self.assertNotIn("errorWorkflow", self.workflow["settings"])
-        self.assertEqual(meta["workflowFolder"]["name"], "90 Platform & Admin")
+        self.assertEqual(meta["workflowFolder"], {
+            "id": "f1000000-0000-4000-8000-000000000191",
+            "name": "Shared",
+            "project": "Global",
+            "placement": "EXPLICIT_SETUP_IMPORT_ONLY",
+        })
         self.assertEqual(self.workflow["nodes"][1]["type"], "n8n-nodes-base.manualTrigger")
         self.assertFalse(
             any(node["type"] == "n8n-nodes-base.scheduleTrigger" for node in self.workflow["nodes"])

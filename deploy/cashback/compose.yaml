@@ -1,16 +1,13 @@
 services:
   cashback-control:
-    image: ghcr.io/srobroek/finance-statement-tracker-cashback-control:main
-    pull_policy: always
+    image: ${CASHBACK_IMAGE:?CASHBACK_IMAGE must be the published immutable image reference}
+    pull_policy: never
     container_name: finance-cashback-control
     restart: unless-stopped
+    env_file:
+      - /opt/stacks/finance-runtime/.env
     environment:
       TZ: Asia/Dubai
-      CASHBACK_INGEST_TOKEN: "${CASHBACK_INGEST_TOKEN:-}"
-      CASHBACK_PUBLIC_URL: "${CASHBACK_PUBLIC_URL:-}"
-      CASHBACK_VAPID_PUBLIC_KEY: "${CASHBACK_VAPID_PUBLIC_KEY:-}"
-      CASHBACK_VAPID_PRIVATE_KEY: "${CASHBACK_VAPID_PRIVATE_KEY:-}"
-      CASHBACK_VAPID_SUBJECT: "${CASHBACK_VAPID_SUBJECT:-}"
       CASHBACK_PROGRAM_CONFIG_PATH: /etc/cashback/profile.json
       ACTUAL_BOOTSTRAP_CONFIG_PATH: /etc/cashback/actual-bootstrap.json
       STATIC_RULES_CONFIG_PATH: /etc/cashback/static-rules.json
@@ -20,7 +17,12 @@ services:
     security_opt:
       - no-new-privileges:true
     ports:
-      - "5010:5010"
+      # Cloudflare Tunnel reaches this private host origin.
+      - "172.20.10.20:5010:5010"
+    networks:
+      finance-runtime:
+        aliases:
+          - cashback
     volumes:
       - ${CASHBACK_DATA_DIR:-./data}:/var/lib/cashback-control
       - ./cashback-profile.json:/etc/cashback/profile.json:ro
@@ -28,8 +30,12 @@ services:
       - ./static-rules.json:/etc/cashback/static-rules.json:ro
       - ./transaction-email-sources.json:/etc/cashback/transaction-email-sources.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5010/api/health', timeout=5)\""]
+      test: ["CMD", "python", "apps/cashback-control/probe_health.py"]
       interval: 60s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+networks:
+  finance-runtime:
+    external: true

@@ -6,7 +6,7 @@
       "config_name": "ai-policies",
       "version": "1",
       "source_path": "config/ai-policies.json",
-      "content_sha256": "e7ca4da8861c2fcd5258037d5faf31082d0cdeea1933b769895546f450c86c56",
+      "content_sha256": "b224df4335e48707d41f11623d370859b9b49ce3334640910280cc8117529dff",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -15,7 +15,7 @@
       "config_name": "agent-providers",
       "version": "1",
       "source_path": "config/agent-providers.json",
-      "content_sha256": "0ca4ddd426f8b08e3e353e186d1a746667e320d213215fec9e122fa650f3b668",
+      "content_sha256": "1ad9885f705311090990607c9c32ea38356f835ccedc9f0a0462f3e9a1291e77",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
@@ -51,16 +51,16 @@
       "config_name": "browser-sources",
       "version": "1",
       "source_path": "config/browser-sources.json",
-      "content_sha256": "d35f281f258858450648b8a1a0a49cd474fe3ae9b55a763c744630c41cbf9a47",
+      "content_sha256": "ab134b07a5e21db3b93986b722cd4b16d563471807a0022fdc59a6a3c39a32ac",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false
     },
     {
       "config_name": "cashback-programs",
-      "version": "1",
+      "version": "2",
       "source_path": "config/cashback-programs.json",
-      "content_sha256": "fb9623bb9716684ca80bf37ce6c2ed719ef42d104473130b67b21b1758d1e253",
+      "content_sha256": "6cf341b7173a24a5373a5da8b658e8bd3a876c6121e734589126352938277b4c",
       "git_commit": "RUNTIME_BIND_GIT_COMMIT",
       "state": "ACTIVE",
       "readback_verified": false

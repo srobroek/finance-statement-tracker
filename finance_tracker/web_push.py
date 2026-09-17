@@ -332,7 +332,9 @@ class WebPushDispatcher:
         return bool(self.public_key and self.private_key and self.subject and self.public_url)
 
     def config(self) -> dict[str, Any]:
-        return {"enabled": self.enabled, "public_key": self.public_key, **self.store.stats()}
+        # Subscription counts and delivery state are operational metadata, not
+        # browser configuration. Keep them behind the private store boundary.
+        return {"enabled": self.enabled, "public_key": self.public_key}
 
     def evaluate(self, dashboard: dict[str, Any]) -> dict[str, int]:
         routing_json = json.dumps(_routing_map(dashboard), sort_keys=True, separators=(",", ":"))

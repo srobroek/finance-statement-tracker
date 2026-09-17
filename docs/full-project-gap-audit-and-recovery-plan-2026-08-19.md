@@ -141,7 +141,7 @@ An independent red-team review returned **NO-GO for production writes as origina
 
 1. Treat the FAB AED 115,054.73 difference as a replaceable derived adjustment, with formula, capture ID, as-of timestamp, covered transaction window, and confidence. Older history must reduce or replace it without double-counting.
 2. Keep Sarwa provider-native USD snapshots as the wealth source of truth. Define versioned USD/AED FX snapshots, rounding tolerance, freshness, and exact net-worth inclusion before projecting one aggregate AED valuation per portfolio into Actual.
-3. Sarwa refresh is explicitly interactive/user-assisted browser capture, matching FAB and Amazon. Preserve the pluggable provider boundary and explicit stale indicator, but do not pursue unattended Sarwa sessions or persist browser cookies/MFA state.
+3. Sarwa refresh is explicitly interactive/user-assisted browser capture, matching FAB. Merchant order evidence uses generic email enrichment. Preserve the pluggable provider boundary and explicit stale indicator, but do not pursue unattended Sarwa sessions or persist browser cookies/MFA state.
 4. Create failing regression fixtures before implementing semantic changes. Read-only phases may emit captures, proposed manifests, deltas, and exception reports only.
 5. Inventory manual Actual state—overrides, splits, reconciliations, transfer/schedule links, custom notes, and post-import corrections—before any rebuild. Manual state must survive by stable identity or block the write.
 6. Normalize debit/credit signs at the source adapter boundary. Static/AI rules may classify a transaction topic but can never change an amount.

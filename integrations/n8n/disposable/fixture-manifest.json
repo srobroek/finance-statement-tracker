@@ -4,108 +4,108 @@
   "production_import_forbidden": true,
   "required_acknowledgement": "DISPOSABLE_ONLY",
   "source_workflow_sha256": {
-    "09-ai-proposal.json": "aa11f81fca6f05b9dae52c11329a9c75fb5283d3bd67eb77fa4be88e59c07418",
-    "12-outlook-message-sweep.json": "6df7dec36f1a2f2e6e45f8e9460aa171e29fec132f2581b6de537e6e434368b7",
-    "16-operations-error-handler.json": "c2b6e5a8cfc8d325889ba9659ca35a87583a8fba3459444fde23b573f26a76d0",
-    "17-actual-outbox-recovery.json": "713151704ad3b5c1d7005c76cbac23249f6ee2498c5eda01999c0f0cd000ff3d",
-    "18-finance-writer-lease.json": "43cdbb58803cfc146cfcdc5df9336cfeb85c9306539f88b162726415364a610d",
-    "19-platform-data-table-bootstrap.json": "2f1ffffe48179d45fa19389df5fcc8f1d53d5b9ae9f91310913803ff2a051abd"
+    "09-ai-proposal.json": "8e10b8381f90488594f6ec6026fe577aaa7c800bec9aafd46d2be439701ba63e",
+    "12-outlook-message-sweep.json": "94c8de55dbeea02239cfcf75fd5e2d5eacc2cfc9ff23973eec8b1855826b401f",
+    "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
+    "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
+    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7",
+    "19-platform-data-table-bootstrap.json": "8dda4364af2bffc751e37b4a31edcfdc244bf81dc09e193ce45cea3d3aeeb15a"
   },
   "workflows": [
     {
       "file": "89-platform-data-table-bootstrap.json",
       "id": "90000000-0000-4000-8000-000000000019",
-      "sha256": "879940ff70fca6c2fc474f7ffa3b58af7d860be297f5b0ac964f9a12090ea1f1"
+      "sha256": "80a206a7e779e56b245beed2fd7675e1095a18a4dfe0b5f281cbb882aff9d7cd"
     },
     {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "c420286998d3da1febca73e4f2e6a240c9a052fb2178880812a63d46ef232720"
+      "sha256": "180b6c9ec644bd6173b740f29df2f4aadc2d7410b94cc648eb8531f63bd7aa06"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "90e76836b6e1925bcf888a87e7940f9910d7781a8c1611c395c52927960e76f3"
+      "sha256": "c480e133aa828bb0b072202104068817878cb7d3b0dd4d186745a73b5b747c30"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "78a135b6eba47a73dee18954482b49f45f9e678e5114e8b22d9e32758649aba7"
+      "sha256": "8954d95bf3b1cf3a561379776d84cd174bef8d9808b6e45a69ea25a79f1eb92b"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "be3f35f29dbe7bea3dcef71ef50c4f92f546ad2b8496452a5d9cbd7ecbf3383a"
+      "sha256": "34010de4cea9d64731306a9c0d689f9b655612d464064f5bec89f3e4332f2558"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "75bcade4e205fa0857d2fe6eb16b57e0580c74f7d2e9f80587f3da8a699f8137"
+      "sha256": "2365755705ddae55a66c177cc49dce4ffa2bf2b2e28ce2b023e31b6e8e6379d4"
     },
     {
       "file": "95-lease-acquire-a.json",
       "id": "90000000-0000-4000-8000-000000000905",
-      "sha256": "6eb1625ebbf3853b68830bf78c5cddd22f1b8dbd03d678f55dafec090520a37a"
+      "sha256": "fc43f41ede562e2a88cba11aaad099700dd12bedef48bad55db2ab06ad4fe36a"
     },
     {
       "file": "96-lease-acquire-b.json",
       "id": "90000000-0000-4000-8000-000000000906",
-      "sha256": "8eeeb4e55828a80bd9c4c4ab2d8552e6ec15f6d5abbdb85090b9f2a949ceb9f0"
+      "sha256": "717e8fed8cc138e0f80f2d40b9a7872195a82ccf58f24bfa0b3a1b36970496d8"
     },
     {
       "file": "97-lease-stale-assert.json",
       "id": "90000000-0000-4000-8000-000000000907",
-      "sha256": "cc543a7e889d28841e11f180b174357ff75b813bc9b191e7d5731303a0519113"
+      "sha256": "2e58212376e86fc5941c964de7844c7a8dd9e1677a1c1d580a61e1900e671548"
     },
     {
       "file": "98-ai-caller-model-rejected.json",
       "id": "90000000-0000-4000-8000-000000000908",
-      "sha256": "30e404c341470555a3491a73e2d1854984ff2a54831b8b41da6b68c14d3bb266"
+      "sha256": "057fc0baa52551206c1b12ad87adbebdf155dad0bb0f6208e450675d92d648a5"
     },
     {
       "file": "99-ai-locked-field-rejected.json",
       "id": "90000000-0000-4000-8000-000000000909",
-      "sha256": "12f712c3b6e1380ad058e10fd808473928ab521802df1e4233394681b03e214e"
+      "sha256": "7645590f4036dc967bc4bf765c0ac72a71bdd9c8aa388cf77290df3e850c01ee"
     },
     {
       "file": "100-ai-missing-policy-rejected.json",
       "id": "90000000-0000-4000-8000-000000000910",
-      "sha256": "56230a86a0727f94cf9cdfea164583dd2b50aaaa2fba0be627723308121a4b3c"
+      "sha256": "0e6624583c5e962633925c4c42347adf687f89626a7c621c8231a152d98c3ee8"
     },
     {
       "file": "106-ai-positive-luna.json",
       "id": "90000000-0000-4000-8000-000000000911",
-      "sha256": "7ebbd557054a318f8a077f0e1bf2ea3108789334b0b4d3fcdc0754e127b07875"
+      "sha256": "9e002acb0426c6ed7553a07ed2604543c5c54f83e3a112f8bd8bf167df1a3455"
     },
     {
       "file": "107-ai-positive-sol-gated.json",
       "id": "90000000-0000-4000-8000-000000000912",
-      "sha256": "98bfac94af26ab826635a717ef2da4a6ee623cbafeb9f7fc035733a916e8363a"
+      "sha256": "035b4d85e4c2dcf4b96367bbe2595a926f926cd1195c3271e98d68835e54ea2a"
     },
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "b0a92fe92a62043d94898966daf27b6a15b3363d887d067b5bdd21b9b4e5b01e"
+      "sha256": "c8abd5fbbd634509926b0d7dc48d75a3f26d8d746e6efe85c1044700dc274c9d"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "4fc1e4797dd4e98538d56c4c820cb79cb9891d1dc35185d5ade0b371f6d975fc"
+      "sha256": "2af6b82392ef397768298cb7b1607f35bfb38e26baff17c0dda42664455758c8"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "91b79d371b00fce8c31fa70c24ec5162ad31349abbad195edaff8e1325de82d4"
+      "sha256": "35b1bbdcdf3fd296a057b85d60c3903a59ac16deb00b1d5e56dbf6753e5bbe0a"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "9bbcb8804baed5057d13e80c9478720f4ca6be4bdcb523bc1b2677a455b7b5e4"
+      "sha256": "7d86b689616a96d2ff08e66c386f59c1172fceece944a7aa4ebbc04d80697130"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "15d1357afd7c3bdff26233b9f4d4b38430a48b4dd163427f4166cf53e3eb1824"
+      "sha256": "441eedf307143b8759b2daff6f5843a3430f2d126bc321540854729453698f15"
     }
   ],
   "scenario_contract": {
@@ -117,12 +117,22 @@
         "heartbeat": true
       }
     },
+    "sweep_one_no_attachments": {
+      "workflow_id": "90000000-0000-4000-8000-000000000012",
+      "expected_exit": 0,
+      "expected": {
+        "scanned_count": 1,
+        "matched_count": 1,
+        "attachment_identity_keys": []
+      }
+    },
     "sweep_101": {
       "workflow_id": "90000000-0000-4000-8000-000000000902",
       "expected_exit": 0,
       "expected": {
         "scanned_count": 101,
-        "matched_count": 101
+        "matched_count": 101,
+        "attachment_identity_keys": []
       }
     },
     "sweep_late_order": {
@@ -165,7 +175,7 @@
       "expected_exit": 0,
       "policy_id": "classify-unresolved",
       "expected_model": "gpt-5.6-luna",
-      "expected_reasoning_effort": "xhigh",
+      "expected_reasoning_effort": "max",
       "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
       "finance_writes": 0
     },
@@ -174,16 +184,16 @@
       "expected_exit": 0,
       "policy_id": "recommend-category",
       "expected_model": "gpt-5.6-sol",
-      "expected_reasoning_effort": "xhigh",
+      "expected_reasoning_effort": "medium",
       "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
       "finance_writes": 0,
-      "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH",
+      "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM",
       "default_execution_forbidden": true
     },
     "error_redaction": {
       "workflow_id": "90000000-0000-4000-8000-000000000916",
       "expected_exit": 0,
-      "receipt_table": "finance_execution_failures",
+      "receipt_sink": "n8n_execution_history",
       "forbidden_readback": [
         "DontLeak",
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",

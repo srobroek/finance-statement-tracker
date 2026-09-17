@@ -6,6 +6,8 @@ mutable_parent=/home/node/.n8n/nodes/node_modules
 mutable_link=${mutable_parent}/n8n-nodes-finance
 prodex_immutable=/opt/finance-n8n/community-extensions/node_modules/n8n-nodes-prodex
 prodex_link=${mutable_parent}/n8n-nodes-prodex
+sdk_immutable=/opt/finance-n8n/community-extensions/node_modules
+sdk_link=/home/node/node_modules
 
 node /opt/finance-n8n/verify-immutable-extension.cjs >/dev/null
 mkdir -p "${mutable_parent}" /tmp/finance-ai
@@ -31,6 +33,7 @@ ensure_link() {
   fi
 }
 
+ensure_link "${sdk_link}" "${sdk_immutable}"
 ensure_link "${mutable_link}" "${immutable}"
 ensure_link "${prodex_link}" "${prodex_immutable}"
 

@@ -1,3 +1,5 @@
+import shlex
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,8 @@ from finance_tracker.statements import DEFAULT_STATEMENT_ADAPTERS
 
 
 class StatementSourceTests(unittest.TestCase):
+    ROOT = Path(__file__).resolve().parents[1]
+
     def setUp(self) -> None:
         self.sources = load_statement_sources(Path("config/statement-sources.json"))
 
@@ -47,6 +51,45 @@ class StatementSourceTests(unittest.TestCase):
                 "communications@mail.wio.io",
             ),
         )
+
+    def test_runtime_passwords_never_appear_in_tracked_files(self) -> None:
+        envfile = Path("/tmp/finance-n8n-session.env")
+        if not envfile.is_file():
+            self.skipTest("protected finance runtime envfile unavailable")
+
+        passwords: dict[str, str] = {}
+        for raw_line in envfile.read_text(encoding="utf-8").splitlines():
+            if not raw_line or raw_line.lstrip().startswith("#") or "=" not in raw_line:
+                continue
+            key, raw_value = raw_line.split("=", 1)
+            values = shlex.split(raw_value, comments=False)
+            if key.endswith("_PASSWORD") and values and values[0]:
+                passwords[key] = values[0]
+        self.assertTrue(
+            {"ADCB_STATEMENT_PASSWORD", "EI_STATEMENT_PASSWORD"}.issubset(passwords),
+            "protected envfile must provide both statement password keys",
+        )
+
+        tracked_paths = subprocess.check_output(
+            ["git", "ls-files", "-z"], cwd=self.ROOT
+        ).split(b"\0")
+        for key, value in passwords.items():
+            needle = value.encode("utf-8")
+            matches: list[str] = []
+            for raw_path in tracked_paths:
+                if not raw_path:
+                    continue
+                path = self.ROOT / raw_path.decode("utf-8")
+                try:
+                    content = path.read_bytes()
+                except (OSError, ValueError):
+                    continue
+                if needle in content:
+                    matches.append(str(path.relative_to(self.ROOT)))
+            self.assertFalse(
+                matches,
+                f"runtime password key {key} appears in tracked files: {matches}",
+            )
 
 
 if __name__ == "__main__":

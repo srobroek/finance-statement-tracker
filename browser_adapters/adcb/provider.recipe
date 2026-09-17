@@ -1,4 +1,6 @@
 1. GOTO url: "https://www.adcb.com/en/ib-prelogin.aspx?page=conventional"
-2. NOTE Stop and let the user log in and complete OTP/2FA. Never enter or capture credentials or OTP codes. Continue only after the user confirms authentication.
-3. ASSERT condition: "authenticated SPA landing screen visible (#_frmLanding)"
-4. NOTE The authenticated area is a single-page app with no deep-linking. Reach data screens with CLICK or SELECT, never GOTO, or the session may log out.
+2. PAUSE_FOR_USER reason: "AUTHENTICATION_AND_MFA"
+3. NOTE The user completes login and OTP/2FA in the headed window; never type, inspect, copy, log, or store any authentication value.
+4. ASSERT condition: "authenticated SPA landing screen visible (#_frmLanding)"
+5. NOTE The authenticated area is a single-page app with no deep-linking. Reach data screens with CLICK or SELECT, never GOTO, or the session may log out.
+6. NOTE Produce only the redacted browser-capture-schema-v1 artifact and never write Actual or Cashback.

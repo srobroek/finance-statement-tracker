@@ -144,7 +144,7 @@
       {"type": "microsoftOneDriveOAuth2Api", "placeholder": "BIND_ONEDRIVE", "name": "Finance OneDrive"}
     ],
     "setupRequired": true,
-    "workflowFolder": {"id": "f1000000-0000-4000-8000-000000000090", "name": "90 Platform & Admin", "placement": "EXPLICIT_SETUP_IMPORT_ONLY"},
+    "workflowFolder": {"id": "f1000000-0000-4000-8000-000000000191", "name": "Shared", "project": "Global", "placement": "EXPLICIT_SETUP_IMPORT_ONLY"},
     "workflowTags": ["finance", "setup-required", "inactive"]
   },
   "nodeGroups": [

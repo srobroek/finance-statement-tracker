@@ -9,19 +9,7 @@ import {
   indexIncomingRecords,
   selectReplacementRows,
 } from "./production-rebuild.mjs";
-
-function parseArgs(values) {
-  const result = {};
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) continue;
-    const next = values[index + 1];
-    if (!next || next.startsWith("--")) throw new Error(`${token} requires a value`);
-    result[token.slice(2)] = next;
-    index += 1;
-  }
-  return result;
-}
+import { MANUAL_STATE_AUDIT_OPTIONS, parseCliArgs } from "./cli-args.mjs";
 
 export async function runManualStateAudit({ root, validationConfigPath, snapshotPath, outputPath }) {
   const resolvedRoot = path.resolve(root);
@@ -44,7 +32,7 @@ export async function runManualStateAudit({ root, validationConfigPath, snapshot
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseCliArgs(process.argv.slice(2), MANUAL_STATE_AUDIT_OPTIONS);
   for (const required of ["root", "validation", "snapshot", "output"]) {
     if (!args[required]) throw new Error(`Missing --${required}`);
   }

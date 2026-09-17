@@ -1,0 +1,2 @@
+REDACTED TEST-ONLY CASHBACK PROVENANCE FIXTURE
+This file contains no issuer claims and is used only to exercise digest validation.

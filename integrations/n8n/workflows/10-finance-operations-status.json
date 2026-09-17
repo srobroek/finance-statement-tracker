@@ -1,6 +1,6 @@
 {
   "id": "10000000-0000-4000-8000-000000000010",
-  "name": "Finance · Operations Status and Audited MCP Dispatch · Setup Required",
+  "name": "Finance · Operations Status and Audited MCP Dispatch",
   "active": false,
   "nodes": [
     {
@@ -49,10 +49,7 @@
         "resource": "execution",
         "operation": "getAll",
         "returnAll": false,
-        "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "limit": 100
       },
       "credentials": {
         "n8nApi": {
@@ -84,7 +81,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Validate Bounded MCP Dispatch. Keep this deterministic and fail closed.\nconst r = $json, allowed = new Set(['finance_status', 'artifact_submit_reviewed', 'document_request']), op = String(r.operation_code || '');\nif (!allowed.has(op))\n    throw new Error('MCP_OPERATION_NOT_ALLOWED');\nconst request_id = String(r._mcp_request_id || '');\nif (!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id))\n    throw new Error('MCP_REQUEST_ID_INVALID');\nconst specs = { finance_status: [], artifact_submit_reviewed: ['artifact_id', 'expected_sha256'], document_request: ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'] }, args = {};\nfor (const key of specs[op]) {\n    const value = String(r[key] || '');\n    if (!value || value.length > 256)\n        throw new Error(`MCP_ARGUMENT_INVALID:${key}`);\n    args[key] = value;\n}\nif (args.expected_sha256 && !/^[a-f0-9]{64}$/.test(args.expected_sha256))\n    throw new Error('MCP_HASH_INVALID');\nconst target = { finance_status: 'FINANCE_OPERATIONS_STATUS', artifact_submit_reviewed: 'INTERACTIVE_ARTIFACT_HANDOFF', document_request: 'DOCUMENT_EXTRACTION_REQUEST' }[op];\nreturn [{ json: { request_id, operation_code: op, target_workflow_code: target, args, request_canonical: JSON.stringify({ operation_code: op, args }) } }];\n"
+        "jsCode": "// Purpose: Validate Bounded MCP Dispatch. Keep this deterministic and fail closed.\nconst r = $json, allowed = new Set(['finance.status', 'artifact.submit_reviewed', 'document.request']), op = String(r.operation_code || '');\nif (!allowed.has(op))\n    throw new Error('MCP_OPERATION_NOT_ALLOWED');\nconst request_id = String(r._mcp_request_id || '');\nif (!/^[A-Za-z0-9:_-]{1,128}$/.test(request_id))\n    throw new Error('MCP_REQUEST_ID_INVALID');\nconst specs = { 'finance.status': [], 'artifact.submit_reviewed': ['artifact_id'], 'document.request': ['document_id', 'expected_sha256', 'document_profile', 'requested_schema_version'] }, args = {};\nfor (const key of specs[op]) {\n    const value = String(r[key] || '');\n    if (!value || value.length > 256)\n        throw new Error(`MCP_ARGUMENT_INVALID:${key}`);\n    args[key] = value;\n}\nif (args.expected_sha256 && !/^[a-f0-9]{64}$/.test(args.expected_sha256))\n    throw new Error('MCP_HASH_INVALID');\nconst target = { 'finance.status': 'FINANCE_OPERATIONS_STATUS', 'artifact.submit_reviewed': 'INTERACTIVE_ARTIFACT_HANDOFF', 'document.request': 'DOCUMENT_EXTRACTION_REQUEST' }[op];\nreturn [{ json: { request_id, operation_code: op, target_workflow_code: target, args, request_canonical: JSON.stringify({ operation_code: op, args }) } }];\n"
       }
     },
     {
@@ -227,7 +224,7 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.operation_code }}",
-                    "rightValue": "finance_status",
+                    "rightValue": "finance.status",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -246,7 +243,7 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.operation_code }}",
-                    "rightValue": "artifact_submit_reviewed",
+                    "rightValue": "artifact.submit_reviewed",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -265,7 +262,7 @@
                 "conditions": [
                   {
                     "leftValue": "={{ $json.operation_code }}",
-                    "rightValue": "document_request",
+                    "rightValue": "document.request",
                     "operator": {
                       "type": "string",
                       "operation": "equals"
@@ -295,10 +292,7 @@
         "resource": "execution",
         "operation": "getAll",
         "returnAll": false,
-        "limit": 100,
-        "filters": {
-          "status": "all"
-        }
+        "limit": 100
       },
       "credentials": {
         "n8nApi": {
@@ -335,14 +329,13 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000011",
           "mode": "list",
-          "cachedResultName": "Finance · Interactive Artifact Handoff · Setup Required"
+          "cachedResultName": "Finance · Interactive Artifact Handoff"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "operation_code": "artifact_submit_reviewed",
-            "artifact_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}",
-            "expected_sha256": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}"
+            "operation_code": "artifact.submit_reviewed",
+            "artifact_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.artifact_id }}"
           },
           "matchingColumns": [],
           "schema": []
@@ -367,12 +360,12 @@
           "__rl": true,
           "value": "10000000-0000-4000-8000-000000000013",
           "mode": "list",
-          "cachedResultName": "Finance · Request Document Extraction · Setup Required"
+          "cachedResultName": "Finance · Request Document Extraction"
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "operation_code": "document_request",
+            "operation_code": "document.request",
             "document_id": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_id }}",
             "expected_sha256": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.expected_sha256 }}",
             "document_profile": "={{ $('Compare ACCEPTED MCP Readback').item.json.args.document_profile }}",
@@ -617,54 +610,6 @@
       ],
       "parameters": {
         "jsCode": "// Purpose: Return Redacted MCP Result. Keep this deterministic and fail closed.\nconst r = $('SHA-256 MCP Result').first().json;\nif (r.state !== 'COMPLETED')\n    throw new Error(`MCP_DISPATCH_FAILED:${r.error_class}`);\nreturn [{ json: r.result }];\n"
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-1",
-      "name": "Stage 1 · 08:45 Daily Health Summary to Read Back ACCEPTED MCP Request",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        -180
-      ],
-      "parameters": {
-        "content": "## Stage 1 · 08:45 Daily Health Summary → Read Back ACCEPTED MCP Request\n**Input:** 08:45 Daily Health Summary  ·  **Output:** Read Back ACCEPTED MCP Request  ·  **Nodes:** 1–8\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-2",
-      "name": "Stage 2 · Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        200
-      ],
-      "parameters": {
-        "content": "## Stage 2 · Compare ACCEPTED MCP Readback → SHA-256 MCP Result\n**Input:** Compare ACCEPTED MCP Readback  ·  **Output:** SHA-256 MCP Result  ·  **Nodes:** 9–16\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
-      }
-    },
-    {
-      "id": "10000000-0000-4000-8000-000000000010-generated-note-3",
-      "name": "Stage 3 · Upsert Terminal MCP Request to Return Redacted MCP Result",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -1160,
-        580
-      ],
-      "parameters": {
-        "content": "## Stage 3 · Upsert Terminal MCP Request → Return Redacted MCP Result\n**Input:** Upsert Terminal MCP Request  ·  **Output:** Return Redacted MCP Result  ·  **Nodes:** 17–22\nAny rejected invariant stops this stage and routes only a redacted failure receipt to the shared error workflow.",
-        "height": 110,
-        "width": 2240,
-        "color": 7
       }
     }
   ],
@@ -929,8 +874,8 @@
     ],
     "setupRequired": true,
     "workflowFolder": {
-      "id": "f1000000-0000-4000-8000-000000000007",
-      "name": "07 Operations & Recovery",
+      "id": "f1000000-0000-4000-8000-000000000103",
+      "name": "Shared",
       "placement": "POST_IMPORT_REVIEWED_MIGRATION"
     },
     "workflowTags": [
@@ -941,7 +886,6 @@
   },
   "nodeGroups": [
     {
-      "id": "11fac547-85e8-5704-8ebf-d6460f5956e4",
       "name": "Stage 1: Get Scheduled Finance Executions to Summarize Scheduled Terminal State",
       "nodeIds": [
         "10003",
@@ -950,7 +894,6 @@
       "description": "Finance stage 1. Input starts at Get Scheduled Finance Executions; verified output leaves through Summarize Scheduled Terminal State."
     },
     {
-      "id": "4f9d4599-ca4e-5b18-b84c-86a417a68b0f",
       "name": "Stage 1: Validate Bounded MCP Dispatch to Read Back ACCEPTED MCP Request",
       "nodeIds": [
         "10010",
@@ -961,7 +904,6 @@
       "description": "Finance stage 1. Input starts at Validate Bounded MCP Dispatch; verified output leaves through Read Back ACCEPTED MCP Request."
     },
     {
-      "id": "f2c0bf2a-0997-58a2-b410-e658c5229b03",
       "name": "Stage 2: Compare ACCEPTED MCP Readback to SHA-256 MCP Result",
       "nodeIds": [
         "10014",
@@ -976,7 +918,6 @@
       "description": "Finance stage 2. Input starts at Compare ACCEPTED MCP Readback; verified output leaves through SHA-256 MCP Result."
     },
     {
-      "id": "6024a0a3-2abb-5bd6-a994-bf92270dbba7",
       "name": "Stage 3: Upsert Terminal MCP Request to Return Redacted MCP Result",
       "nodeIds": [
         "10022",

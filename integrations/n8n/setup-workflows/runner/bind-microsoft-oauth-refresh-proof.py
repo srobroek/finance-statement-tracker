@@ -10,12 +10,12 @@ import os
 import pathlib
 import re
 import sys
-
+from collections.abc import Mapping
 
 WORKFLOW_ID = "10000000-0000-4000-8000-000000000023"
 WORKFLOW_CODE = "MICROSOFT_OAUTH_REFRESH_PROOF"
-SOURCE_COMMIT = "f2f8d772bb3f397278d4aa5ded8c741a71d73466"
-SOURCE_SHA256 = "2e26bd188468cf007562d3f4f47670aeb3661fbd7a8e86053a62da2cc845d940"
+SOURCE_COMMIT = "b3bce6e197c6603d3e8708156bed987f26ac8513"
+SOURCE_SHA256 = "879d637a5ad71e5a35ec8a90001d33c00067e05115a3bcdd28a80a9191c7224e"
 PROVIDERS = {
     "n8n-nodes-base.microsoftOutlook": (
         "microsoftOutlookOAuth2Api",
@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("destination", type=pathlib.Path)
     parser.add_argument("--finance-commit", required=True)
+    parser.add_argument("--temporary-error-persistence", action="store_true")
     return parser.parse_args()
 
 
@@ -47,20 +48,36 @@ def require_identifier(environment_name: str) -> str:
     return value
 
 
-def main() -> int:
-    args = parse_args()
-    if not re.fullmatch(r"[0-9a-f]{40}", args.finance_commit):
+def validate_credential_ids(credential_ids: Mapping[str, str]) -> None:
+    if (
+        set(credential_ids) != set(PROVIDERS)
+        or any(
+            not isinstance(value, str) or not re.fullmatch(r"[0-9A-Za-z_-]{8,64}", value)
+            for value in credential_ids.values()
+        )
+        or len(set(credential_ids.values())) != len(credential_ids)
+    ):
+        raise SystemExit("EXACT_MICROSOFT_CREDENTIAL_IDS_REQUIRED")
+
+
+def bind_workflow(
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    finance_commit: str,
+    credential_ids: Mapping[str, str],
+    temporary_error_persistence: bool = False,
+) -> dict[str, object]:
+    """Bind one reviewed WF23 copy without changing the checked-in source."""
+
+    if not re.fullmatch(r"[0-9a-f]{40}", finance_commit):
         raise SystemExit("EXACT_FINANCE_COMMIT_REQUIRED")
-    credential_ids = {
-        node_type: require_identifier(contract[3])
-        for node_type, contract in PROVIDERS.items()
-    }
-    if not args.source.is_file() or args.source.is_symlink():
+    validate_credential_ids(credential_ids)
+    if not source.is_file() or source.is_symlink():
         raise SystemExit("REGULAR_SETUP_WORKFLOW_SOURCE_REQUIRED")
-    raw = args.source.read_bytes()
+    raw = source.read_bytes()
     if hashlib.sha256(raw).hexdigest() != SOURCE_SHA256:
         raise SystemExit("SETUP_WORKFLOW_SOURCE_SHA256_MISMATCH")
-    if args.destination.exists():
+    if destination.exists():
         raise SystemExit("SETUP_WORKFLOW_DESTINATION_MUST_NOT_EXIST")
 
     workflow = json.loads(raw)
@@ -85,6 +102,9 @@ def main() -> int:
         or settings.get("saveDataSuccessExecution") != "none"
     ):
         raise SystemExit("SETUP_WORKFLOW_EXECUTION_PERSISTENCE_FORBIDDEN")
+
+    if temporary_error_persistence:
+        settings["saveDataErrorExecution"] = "all"
 
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list):
@@ -125,25 +145,42 @@ def main() -> int:
         binding.update(configured=True, action_required=False)
         binding.pop("credential_id", None)
 
-    args.destination.parent.mkdir(mode=0o700, parents=True, exist_ok=False)
-    args.destination.write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    args.destination.chmod(0o600)
+    destination.parent.mkdir(mode=0o700, parents=True, exist_ok=False)
+    destination.write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    destination.chmod(0o600)
     receipt = {
         "schema_version": 1,
         "status": "VERIFIED",
         "scope": "WF23_RUNTIME_BINDING",
         "workflow_id": WORKFLOW_ID,
-        "finance_commit": args.finance_commit,
+        "finance_commit": finance_commit,
         "source_commit": SOURCE_COMMIT,
         "source_sha256": SOURCE_SHA256,
         "provider_node_count": 2,
         "credential_ids_recorded": False,
         "secret_values_recorded": False,
         "portable_source_modified": False,
+        "temporary_error_persistence": temporary_error_persistence,
     }
-    receipt_path = args.destination.parent / "binding-receipt.json"
+    receipt_path = destination.parent / "binding-receipt.json"
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     receipt_path.chmod(0o600)
+    return receipt
+
+
+def main() -> int:
+    args = parse_args()
+    credential_ids = {
+        node_type: require_identifier(contract[3])
+        for node_type, contract in PROVIDERS.items()
+    }
+    bind_workflow(
+        args.source,
+        args.destination,
+        args.finance_commit,
+        credential_ids,
+        args.temporary_error_persistence,
+    )
     print("Created one inactive WF23 runtime copy with two provider bindings; identifiers were not printed.")
     return 0
 

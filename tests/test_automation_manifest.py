@@ -35,7 +35,7 @@ class AutomationManifestTests(unittest.TestCase):
             ROOT,
         )
 
-        self.assertEqual(len(manifest["automations"]), 6)
+        self.assertEqual(len(manifest["automations"]), 3)
         self.assertEqual(
             next(row for row in manifest["automations"] if row["id"] == "rakbank-morning-cashback-scan")["rrule"],
             "FREQ=DAILY;BYHOUR=8;BYMINUTE=5",
@@ -53,8 +53,8 @@ class AutomationManifestTests(unittest.TestCase):
             result = audit_automations(manifest, automation_root)
 
             self.assertEqual(result.status, "ok")
-            self.assertEqual(result.expected_count, 6)
-            self.assertEqual(result.actual_count, 6)
+            self.assertEqual(result.expected_count, 3)
+            self.assertEqual(result.actual_count, 3)
             self.assertEqual(result.drift, ())
 
     def test_schedule_model_prompt_and_extra_drift_are_reported(self) -> None:
@@ -103,4 +103,3 @@ class AutomationManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

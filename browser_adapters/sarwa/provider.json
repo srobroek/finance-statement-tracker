@@ -4,6 +4,15 @@
   "display_name": "Sarwa",
   "portal_url": "https://www.sarwa.co/login",
   "mobile_only": false,
+  "execution": {
+    "mode": "HEADED_ON_DEMAND",
+    "authentication": "USER_COMPLETED",
+    "session_persistence": false,
+    "capture_schema": "browser-capture-schema-v1",
+    "handoff_workflow": "INTERACTIVE_ARTIFACT_HANDOFF",
+    "actual_mutation": false,
+    "cashback_mutation": false
+  },
   "recipe": "provider.recipe",
   "migrated_from": "bank-statements 1.1.0"
 }

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-data-table-migration-receipt-v1.json",
+  "title": "Finance Data Table migration receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "migration_id",
+    "source_digest",
+    "target_digest",
+    "target_schema_sha256",
+    "backup_digest",
+    "source_schemas",
+    "source_row_counts",
+    "target_row_counts",
+    "old_table_names",
+    "old_tables_preserved",
+    "runtime_cutover",
+    "deletion_authorized",
+    "changed",
+    "second_run_noop"
+  ],
+  "properties": {
+    "schema_version": {"const": "data-table-migration-receipt-v1"},
+    "migration_id": {"type": "string", "pattern": "^15-to-4:[0-9a-f]{64}$"},
+    "source_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "target_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "target_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "backup_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_schemas": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["idempotency_key", "columns"],
+        "properties": {
+          "idempotency_key": {"type": "array", "items": {"type": "string"}},
+          "columns": {"type": "object", "additionalProperties": {"type": "string"}},
+          "allowed_states": {"type": "array", "items": {"type": "string"}},
+          "allowed_review_states": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "source_row_counts": {"$ref": "#/$defs/counts"},
+    "target_row_counts": {"$ref": "#/$defs/counts"},
+    "old_table_names": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "old_tables_preserved": {"const": true},
+    "runtime_cutover": {"const": false},
+    "deletion_authorized": {"const": false},
+    "changed": {"type": "boolean"},
+    "second_run_noop": {"type": "boolean"}
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

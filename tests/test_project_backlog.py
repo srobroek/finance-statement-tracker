@@ -39,13 +39,17 @@ class ProjectBacklogTests(unittest.TestCase):
         self.assertIn("From list", " ".join(tasks["N8N-008"]["contradictions"]))
         agent_text = " ".join(tasks["AGENT-005"]["contradictions"])
         self.assertIn("n8n-nodes-prodex@0.5.1", agent_text)
+        self.assertNotIn("claude", agent_text.lower())
         self.assertIn("disposable", tasks["AGENT-005"]["next_action"].lower())
 
     def test_implementation_audit_is_mapped_to_relevant_requirements(self) -> None:
         tasks = {row["id"]: row for row in self.payload["tasks"]}
         self.assertIn("finance_tracker/transaction_semantics.py", tasks["ACTUAL-010"]["evidence_paths"])
         self.assertIn("config/actual-note-contract.json", tasks["ACTUAL-011"]["evidence_paths"])
-        self.assertIn("services/codex-agent-runner", tasks["AGENT-003"]["evidence_paths"])
+        self.assertIn(
+            "integrations/n8n/workflows/21-subscription-agent-adapter.json",
+            tasks["AGENT-003"]["evidence_paths"],
+        )
         self.assertNotIn("CURRENT_TEST_FAILURES", tasks["AGENT-003"]["blockers"])
         self.assertIn("CODEX_SUBSCRIPTION_AUTH_COMPATIBILITY_BLOCKED", tasks["AGENT-003"]["blockers"])
 

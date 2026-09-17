@@ -98,6 +98,16 @@ class WealthSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot.portfolios[0].reconciliation.status, "MISMATCH")
         self.assertIn("POSITION_TOTAL_MISMATCH", proposal["blockers"])
 
+    def test_duplicate_instrument_rows_are_rejected(self) -> None:
+        raw = json.loads(CAPTURE.read_text(encoding="utf-8"))
+        raw["invest_accounts"][0]["positions"].append(
+            dict(raw["invest_accounts"][0]["positions"][0])
+        )
+        config = json.loads(CONFIG.read_text(encoding="utf-8"))
+
+        with self.assertRaisesRegex(ValueError, "Duplicate Sarwa instrument"):
+            SarwaProvider(config["providers"]["sarwa"]).parse_capture(raw)
+
     def test_capability_result_requires_user_assisted_capture_without_sessions(self) -> None:
         config = json.loads(CONFIG.read_text(encoding="utf-8"))
         capability = SarwaProvider(config["providers"]["sarwa"]).capability()

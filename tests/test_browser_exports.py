@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from finance_tracker.browser_exports import build_capture_from_export
+from finance_tracker.browser_exports import (
+    build_capture_from_export,
+    capture_binary_sha256,
+    serialize_capture_for_handoff,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,11 +63,24 @@ class BrowserExportTests(unittest.TestCase):
                 '30/07/2026,"REFUND",CR,"20.00"\n',
                 encoding="utf-8",
             )
+            source_content_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
             capture = build_capture_from_export(
                 "adcb", "credit-card-transactions", path, ACCOUNT,
                 adapters_root=ROOT / "browser_adapters", captured_at=self.captured_at,
             )
         self.assertEqual("TRANSACTION_ROWS", capture["artifact"]["kind"])
+        self.assertEqual(capture["capture_id"], capture["provenance"]["capture_id"])
+        self.assertEqual(
+            capture["artifact"]["source_content_sha256"],
+            capture["provenance"]["source_content_sha256"],
+        )
+        self.assertEqual(capture["artifact"]["source_content_sha256"], source_content_sha256)
+        capture_binary = serialize_capture_for_handoff(capture)
+        self.assertEqual(capture, json.loads(capture_binary))
+        self.assertEqual(capture_binary_sha256(capture), hashlib.sha256(capture_binary).hexdigest())
+        self.assertNotEqual(capture_binary_sha256(capture), capture["artifact"]["source_content_sha256"])
+        self.assertEqual("SHA-256", capture["provenance"]["hash_algorithm"])
+        self.assertFalse(capture["capture_contract"]["actual_mutation"])
         self.assertEqual(["8833", "6838"], [row["account_last4"] for row in capture["rows"]])
         self.assertEqual(["primary", "supplementary"], [row["card_role"] for row in capture["rows"]])
         self.assertEqual("CREDIT", capture["rows"][1]["direction"])
@@ -163,6 +182,11 @@ class BrowserExportTests(unittest.TestCase):
                 adapters_root=ROOT / "browser_adapters", captured_at=self.captured_at,
             )
         self.assertEqual("STATEMENT_PDF", capture["artifact"]["kind"])
+        self.assertEqual(capture["capture_id"], capture["provenance"]["capture_id"])
+        self.assertEqual(
+            capture["artifact"]["source_content_sha256"],
+            capture["provenance"]["source_content_sha256"],
+        )
         self.assertEqual("OFFICIAL_EXPORT", capture["source"]["capture_method"])
 
 

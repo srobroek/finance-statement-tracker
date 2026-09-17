@@ -10,25 +10,9 @@ import {
   isVerifiedEmptyManifest,
   loadFullRebuildManifests,
 } from "./full-rebuild.mjs";
+import { parseCliArgs, PRODUCTION_REBUILD_OPTIONS } from "./cli-args.mjs";
 
 const normalized = value => String(value ?? "").trim().toLocaleLowerCase();
-
-function parseArgs(values) {
-  const result = {};
-  for (let index = 0; index < values.length; index += 1) {
-    const token = values[index];
-    if (!token.startsWith("--")) continue;
-    const key = token.slice(2);
-    const next = values[index + 1];
-    if (next && !next.startsWith("--")) {
-      result[key] = next;
-      index += 1;
-    } else {
-      result[key] = true;
-    }
-  }
-  return result;
-}
 
 export function assertReplacementGate(apply, environment = process.env) {
   if (!apply) return;
@@ -239,12 +223,22 @@ export async function runProductionRebuild({
   resultPath,
   apply,
   preservationApprovalSha256,
+  environment = process.env,
+  dependencies = {},
 }) {
-  assertReplacementGate(apply);
+  const {
+    api = actual,
+    openBudget: openBudgetImpl = openBudget,
+    snapshot: snapshotImpl = snapshot,
+    bootstrap: bootstrapImpl = bootstrap,
+    importEnvelopes: importEnvelopesImpl = importEnvelopes,
+    loadFullRebuildManifests: loadFullRebuildManifestsImpl = loadFullRebuildManifests,
+  } = dependencies;
+  assertReplacementGate(apply, environment);
   const resolvedRoot = path.resolve(root);
   const validation = JSON.parse(await fs.readFile(validationConfigPath, "utf8"));
   const bootstrapConfig = JSON.parse(await fs.readFile(bootstrapConfigPath, "utf8"));
-  const manifests = await loadFullRebuildManifests(resolvedRoot, validation);
+  const manifests = await loadFullRebuildManifestsImpl(resolvedRoot, validation);
   const manifestPayloads = [];
   for (const manifest of manifests) {
     manifestPayloads.push({
@@ -253,9 +247,9 @@ export async function runProductionRebuild({
     });
   }
   const incomingById = indexIncomingRecords(manifestPayloads);
-  await openBudget();
+  await openBudgetImpl();
   try {
-    const before = await snapshot(start, end);
+    const before = await snapshotImpl(start, end);
     const targets = selectReplacementRows(before, validation.snapshot_scope ?? {});
     const preservation = buildPreservationReport(before, targets, incomingById);
     const plan = {
@@ -277,9 +271,10 @@ export async function runProductionRebuild({
       preservation,
       apply,
       preservationApprovalSha256,
+      environment,
     );
 
-    const backup = await actual.exportBudget();
+    const backup = await api.exportBudget();
     if (!(backup instanceof Uint8Array) || backup.byteLength < 1024) {
       throw new Error("Actual export backup is unexpectedly small or invalid");
     }
@@ -290,7 +285,7 @@ export async function runProductionRebuild({
       `${JSON.stringify({ sha256: backupHash, size_bytes: backup.byteLength }, null, 2)}\n`,
     );
 
-    for (const row of targets) await actual.deleteTransaction(row.id);
+    for (const row of targets) await api.deleteTransaction(row.id);
 
     const imports = [];
     for (const manifest of manifestPayloads) {
@@ -303,7 +298,7 @@ export async function runProductionRebuild({
         });
         continue;
       }
-      const result = await importEnvelopes(payload, true, {
+      const result = await importEnvelopesImpl(payload, true, {
         syncRemote: false,
         reimportDeleted: true,
       });
@@ -316,14 +311,14 @@ export async function runProductionRebuild({
         verification: result.verification,
       });
     }
-    const bootstrapResult = await bootstrap(
+    const bootstrapResult = await bootstrapImpl(
       bootstrapConfig,
       true,
       bootstrapConfigPath,
       { syncRemote: false },
     );
-    await actual.sync();
-    const after = await snapshot(start, end);
+    await api.sync();
+    const after = await snapshotImpl(start, end);
     const preservationVerification = verifyPreservedRows(preservation, after);
     if (preservationVerification.status !== "PASS") {
       throw new Error(
@@ -352,12 +347,12 @@ export async function runProductionRebuild({
     await fs.writeFile(resultPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
     return result;
   } finally {
-    await actual.shutdown();
+    await api.shutdown();
   }
 }
 
 async function main() {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseCliArgs(process.argv.slice(2), PRODUCTION_REBUILD_OPTIONS);
   for (const required of [
     "root", "validation", "bootstrap", "start", "end", "backup", "snapshot", "result",
   ]) {
@@ -372,7 +367,7 @@ async function main() {
     backupPath: path.resolve(args.backup),
     snapshotPath: path.resolve(args.snapshot),
     resultPath: path.resolve(args.result),
-    apply: Boolean(args.apply),
+    apply: args.apply,
     preservationApprovalSha256: args["approve-preservation-sha256"],
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

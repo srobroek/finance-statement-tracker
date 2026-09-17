@@ -13,7 +13,7 @@ export interface StatementTransaction {
   amount_aed: string;
   signed_amount_aed: string;
   direction: 'DEBIT' | 'CREDIT';
-  transaction_type: 'PURCHASE' | 'PAYMENT' | 'REFUND' | 'REWARD_CREDIT' | 'FEE' | 'CREDIT';
+  transaction_type: 'PURCHASE' | 'PAYMENT' | 'REFUND' | 'REWARD_CREDIT' | 'FEE';
   amount_original: string | null;
   currency_original: string;
   exchange_rate: string | null;
@@ -72,46 +72,13 @@ const MONTHS: Record<string, number> = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5,
 function isoWord(day: string, month: string, year: string | number): string {
   const monthNumber = MONTHS[month.toUpperCase()];
   if (!monthNumber) throw new Error(`Invalid month: ${month}`);
-  const numericYear = Number(year);
-  const numericDay = Number(day);
-  const date = new Date(Date.UTC(numericYear, monthNumber - 1, numericDay));
-  if (!Number.isInteger(numericYear) || date.getUTCFullYear() !== numericYear || date.getUTCMonth() + 1 !== monthNumber || date.getUTCDate() !== numericDay) {
-    throw new Error(`Invalid date: ${day} ${month} ${year}`);
-  }
-  return date.toISOString().slice(0, 10);
-}
-
-function statementTimestamp(value: string): number {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return Number.NaN;
-  const timestamp = Date.parse(`${value}T00:00:00Z`);
-  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString().slice(0, 10) !== value) return Number.NaN;
-  return timestamp;
-}
-
-function resolveStatementDate(day: string, month: string, periodStart: string | null, periodEnd: string | null): string {
-  if (!periodStart || !periodEnd) throw new Error(`Cannot resolve ${day} ${month} without authoritative statement bounds`);
-  const start = statementTimestamp(periodStart);
-  const end = statementTimestamp(periodEnd);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) throw new Error('Invalid authoritative statement bounds');
-  const candidates: string[] = [];
-  for (let year = Number(periodStart.slice(0, 4)); year <= Number(periodEnd.slice(0, 4)); year += 1) {
-    try {
-      const value = isoWord(day, month, year);
-      const timestamp = statementTimestamp(value);
-      if (Number.isFinite(timestamp) && timestamp >= start && timestamp <= end) candidates.push(value);
-    } catch {
-      // Invalid calendar dates are not candidates.
-    }
-  }
-  if (candidates.length !== 1) throw new Error(`Ambiguous or out-of-period statement date: ${day} ${month}`);
-  return candidates[0];
+  return `${String(year).padStart(4, '0')}-${String(monthNumber).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
 }
 
 function transactionType(description: string, direction: 'DEBIT' | 'CREDIT'): StatementTransaction['transaction_type'] {
   const value = description.toUpperCase();
   if (['PAYMENT RECEIVED', 'CREDIT REPAYMENT', 'CARD REPAYMENT'].some(token => value.includes(token))) return 'PAYMENT';
-  if (value.includes('REFUND')) return 'REFUND';
-  if ((value.includes('CASHBACK') || value.includes('REWARD CREDIT')) && direction === 'CREDIT') return 'REWARD_CREDIT';
+  if (value.includes('CASHBACK') && direction === 'CREDIT') return 'REWARD_CREDIT';
   if (value.includes('FEE') || value.startsWith('VAT ON')) return 'FEE';
   return direction === 'CREDIT' ? 'REFUND' : 'PURCHASE';
 }
@@ -159,6 +126,7 @@ function parseEmiratesIslamic(text: string, sourceFile: string): NormalizedState
   const end = /(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3})\s+(\d{4})\s*\nTo:/i.exec(text) ?? /To:\s*(\d{1,2})(?:st|nd|rd|th)\s+([A-Za-z]{3})\s+(\d{4})/i.exec(text);
   const periodStart = start ? isoWord(start[1], start[2], start[3]) : null;
   const periodEnd = end ? isoWord(end[1], end[2], end[3]) : null;
+  const year = Number((periodEnd ?? new Date().toISOString()).slice(0, 4));
   const opening = new RegExp(`OPENING BALANCE\\s+(${MONEY})`, 'i').exec(text)?.[1];
   const last4 = /PRIMARY CARD NO:\s*\d{4}X+(\d{4})/i.exec(text)?.[1] ?? null;
   const metadata = new RegExp(`Card Limit Available Limit Minimum Payment Due Payment Due Date Total Payment Due Profit/Other Charges \\(AED\\) Current Balance \\(AED\\)\\s+${MONEY}\\s+${MONEY}\\s+(${MONEY})\\s+(\\d{2}/\\d{2}/\\d{2})\\s+(${MONEY})\\s+${MONEY}\\s+(${MONEY})`, 'i').exec(text);
@@ -168,8 +136,8 @@ function parseEmiratesIslamic(text: string, sourceFile: string): NormalizedState
     const match = row.exec(line);
     if (!match) return;
     drafts.push({
-      transaction_date: resolveStatementDate(match[3], match[4], periodStart, periodEnd),
-      post_date: resolveStatementDate(match[1], match[2], periodStart, periodEnd),
+      transaction_date: isoWord(match[3], match[4], year),
+      post_date: isoWord(match[1], match[2], year),
       card_last4: last4,
       description: match[5].trim(),
       amount_aed: moneyValue(match[6])!,
@@ -276,7 +244,6 @@ function parseWio(text: string, sourceFile: string): NormalizedStatement {
     warnings: transactions.length ? [] : ['No transaction rows were parsed'],
   });
 }
-
 
 export function parseStatement(text: string, profile: IssuerProfile, sourceFile = ''): NormalizedStatement {
   if (typeof text !== 'string' || text.trim().length < 20 || text.length > 10_000_000) throw new Error('extracted statement text must contain 20..10000000 characters');

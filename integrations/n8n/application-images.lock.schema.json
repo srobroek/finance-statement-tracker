@@ -1,0 +1,286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/finance-n8n-application-images-lock-v1.json",
+  "title": "Finance n8n application image lock",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "application",
+    "generated_at_utc",
+    "source_commit",
+    "base_image",
+    "extension_image",
+    "finance_package",
+    "community_node_lock"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["SPEC_ONLY", "LOCKED_DISPOSABLE", "LOCKED_PRODUCTION"]},
+    "application": {"const": "finance-statement-tracker"},
+    "generated_at_utc": {"type": ["string", "null"], "format": "date-time"},
+    "source_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "base_image": {"$ref": "#/$defs/baseImage"},
+    "extension_image": {"$ref": "#/$defs/extensionImage"},
+    "support_images": {"$ref": "#/$defs/supportImages"},
+    "finance_package": {"$ref": "#/$defs/packageLock"},
+    "community_node_lock": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact"},
+        {"properties": {"path": {"const": "integrations/n8n/community-node-lock.json"}}}
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SPEC_ONLY"}}},
+      "then": {
+        "properties": {
+          "generated_at_utc": {"type": "null"},
+          "source_commit": {"type": "null"},
+          "extension_image": {
+            "properties": {
+              "image_digest": {"type": "null"},
+              "source_commit": {"type": "null"},
+              "sbom_sha256": {"type": "null"},
+              "scan_sha256": {"type": "null"},
+              "scan": {
+                "properties": {
+                  "tool": {"type": "null"},
+                  "result": {"const": "NOT_RUN"},
+                  "high": {"type": "null"},
+                  "critical": {"type": "null"}
+                }
+              },
+              "attestation": {
+                "properties": {
+                  "type": {"type": "null"},
+                  "predicate_type": {"type": "null"},
+                  "subject_digest": {"type": "null"},
+                  "source_commit": {"type": "null"},
+                  "sha256": {"type": "null"},
+                  "status": {"const": "NOT_AVAILABLE"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "required": ["source_commit", "support_images"],
+        "properties": {
+          "source_commit": {"$ref": "#/$defs/commit"},
+          "extension_image": {"$ref": "#/$defs/verifiedExtensionImage"},
+          "support_images": {"$ref": "#/$defs/verifiedSupportImages"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "baseImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "digest", "source_path"],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "source_path": {"const": "packages/n8n-nodes-finance/base-image.txt"}
+      }
+    },
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "result", "high", "critical"],
+      "properties": {
+        "tool": {"type": ["string", "null"]},
+        "result": {"enum": ["NOT_RUN", "PASS", "FAIL"]},
+        "high": {"type": ["integer", "null"], "minimum": 0},
+        "critical": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "predicate_type", "subject_digest", "source_commit", "sha256", "status"],
+      "properties": {
+        "type": {"type": ["string", "null"]},
+        "predicate_type": {"type": ["string", "null"]},
+        "subject_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "source_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "status": {"enum": ["NOT_AVAILABLE", "UNVERIFIED", "VERIFIED"]}
+      }
+    },
+    "extensionImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "image_digest",
+        "source_commit",
+        "base_image_digest",
+        "sbom_sha256",
+        "scan_sha256",
+        "scan",
+        "attestation",
+        "receipt"
+      ],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+(?::[A-Za-z0-9_.-]+|@sha256:[0-9a-f]{64})$"},
+        "image_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "source_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "base_image_digest": {"$ref": "#/$defs/digest"},
+        "sbom_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "scan_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "scan": {"$ref": "#/$defs/scan"},
+        "attestation": {"$ref": "#/$defs/attestation"},
+        "receipt": {
+          "allOf": [
+            {"$ref": "#/$defs/artifact"},
+            {"properties": {"path": {"const": "packages/n8n-nodes-finance/finance-image-build-receipt.json"}}}
+          ]
+        }
+      }
+    },
+    "verifiedExtensionImage": {
+      "allOf": [
+        {"$ref": "#/$defs/extensionImage"},
+        {
+          "properties": {
+            "reference": {"pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+            "image_digest": {"$ref": "#/$defs/digest"},
+            "source_commit": {"$ref": "#/$defs/commit"},
+            "sbom_sha256": {"$ref": "#/$defs/sha256"},
+            "scan_sha256": {"$ref": "#/$defs/sha256"},
+            "scan": {
+              "properties": {
+                "tool": {"type": "string", "minLength": 1},
+                "result": {"const": "PASS"},
+                "high": {"const": 0},
+                "critical": {"const": 0}
+              }
+            },
+            "attestation": {
+              "properties": {
+                "type": {"type": "string", "minLength": 1},
+                "predicate_type": {"type": "string", "minLength": 1},
+                "subject_digest": {"$ref": "#/$defs/digest"},
+                "source_commit": {"$ref": "#/$defs/commit"},
+                "sha256": {"$ref": "#/$defs/sha256"},
+                "status": {"const": "VERIFIED"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "supportImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_utility", "task_runners", "cashback"],
+      "properties": {
+        "pdf_utility": {"$ref": "#/$defs/supportImage"},
+        "task_runners": {"$ref": "#/$defs/supportImage"},
+        "cashback": {"$ref": "#/$defs/supportImage"}
+      }
+    },
+    "verifiedSupportImages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pdf_utility", "task_runners", "cashback"],
+      "properties": {
+        "pdf_utility": {"$ref": "#/$defs/verifiedSupportImage"},
+        "task_runners": {"$ref": "#/$defs/verifiedSupportImage"},
+        "cashback": {"$ref": "#/$defs/verifiedSupportImage"}
+      }
+    },
+    "supportImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "image_digest",
+        "source_commit",
+        "sbom_sha256",
+        "scan_sha256",
+        "scan",
+        "attestation",
+        "receipt"
+      ],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^[^\\s@]+@sha256:[0-9a-f]{64}$"},
+        "image_digest": {"$ref": "#/$defs/digest"},
+        "source_commit": {"$ref": "#/$defs/commit"},
+        "promoted_with_finance_commit": {"$ref": "#/$defs/commit"},
+        "sbom_sha256": {"$ref": "#/$defs/sha256"},
+        "scan_sha256": {"$ref": "#/$defs/sha256"},
+        "scan": {"$ref": "#/$defs/scan"},
+        "attestation": {
+          "allOf": [
+            {"$ref": "#/$defs/attestation"},
+            {"properties": {
+              "type": {"type": "string", "minLength": 1},
+              "predicate_type": {"type": "string", "minLength": 1},
+              "subject_digest": {"$ref": "#/$defs/digest"},
+              "source_commit": {"$ref": "#/$defs/commit"},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "status": {"const": "VERIFIED"}
+            }}
+          ]
+        },
+        "receipt": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "verifiedSupportImage": {
+      "allOf": [
+        {"$ref": "#/$defs/supportImage"},
+        {
+          "properties": {
+            "scan": {
+              "properties": {
+                "tool": {"type": "string", "minLength": 1},
+                "result": {"const": "PASS"},
+                "high": {"const": 0},
+                "critical": {"const": 0}
+              }
+            },
+            "attestation": {
+              "properties": {
+                "type": {"type": "string", "minLength": 1},
+                "predicate_type": {"type": "string", "minLength": 1},
+                "subject_digest": {"$ref": "#/$defs/digest"},
+                "source_commit": {"$ref": "#/$defs/commit"},
+                "sha256": {"$ref": "#/$defs/sha256"},
+                "status": {"const": "VERIFIED"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[^/].*"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "packageLock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "lockfile", "lockfile_sha256"],
+      "properties": {
+        "name": {"const": "n8n-nodes-finance"},
+        "version": {"const": "0.1.0"},
+        "lockfile": {"const": "packages/n8n-nodes-finance/package-lock.json"},
+        "lockfile_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

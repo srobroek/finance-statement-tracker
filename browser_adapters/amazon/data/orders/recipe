@@ -1,4 +1,0 @@
-1. SELECT field: "Orders placed in", option: "<year>"
-2. NOTE Walk every order-history page for the selected year. Capture only order ID, order date, displayed order total and currency, product title, ASIN or stable product reference, and order status. Record missing or zero displayed totals explicitly; never infer them.
-3. NOTE Deduplicate orders by order ID. This capture is purchase evidence for matching against an authoritative bank transaction; it must not create a second ledger transaction.
-4. UPLOAD as: "amazon-orders-<year>.json"

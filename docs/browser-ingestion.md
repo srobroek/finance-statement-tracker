@@ -1,58 +1,90 @@
 # Browser ingestion
 
-FAB, Sarwa, and Amazon acquisition is user-assisted. The authenticated browser
-may download an official artifact or create an explicit visible-data capture,
-but it never writes to Actual.
+Browser acquisition collects user-authenticated finance data in an on-demand
+headed session. The browser task emits one immutable redacted export and never
+writes Actual or Cashback.
 
 ```mermaid
 flowchart LR
-    R["Versioned provider recipe"] --> B["Authenticated browser"]
-    B --> A["Official export or immutable capture"]
-    A --> O["OneDrive evidence archive"]
-    O --> N["n8n browser-ingestion workflow"]
-    N --> P["Parse and normalize"]
-    P --> G["Rules, AI proposals, and review"]
-    G --> V["Validate and reconcile"]
-    V --> X["Direct Actual custom node"]
+    R["Versioned provider recipe"] --> B["Headed browser task"]
+    B --> U["User completes login and MFA"]
+    U --> C["Immutable redacted capture"]
+    C --> N["Inactive n8n archive and receipt"]
+    N --> A["Validate, enrich, match, retry"]
+    A --> W["Single fenced Actual writer"]
+    A --> K["Cashback close path"]
 ```
 
 ## Source coverage
 
-| Provider | Data | Canonical path |
+| Provider | Capture scope | Result |
 |---|---|---|
-| Amazon UAE | Order evidence | Browser capture to evidence matching |
-| FAB | Non-credit-card accounts and transactions | Official export/capture to transaction pipeline |
-| Sarwa | Portfolio holdings and values | Interactive capture to `wealth_snapshot_v1` |
+| FAB | Debit/current-account balance and transaction export | AED transaction or account capture |
+| Sarwa | Authenticated holdings and portfolio values | USD wealth snapshot with an as-of timestamp |
+| Amazon UAE | Order history evidence | Supplemental evidence for transaction matching |
+| ADCB | Historical credit-card export or statement | Redacted historical capture |
 
-ADCB is closed and historical. Other legacy browser sources are not part of the
-greenfield scope unless explicitly re-enabled.
+Each registered provider declares `HEADED_ON_DEMAND` execution,
+`USER_COMPLETED` authentication, disabled session persistence, and the
+`browser-capture-schema-v1` output contract.
 
 ## Operator flow
 
-1. Validate the provider/data recipe and the intended account mapping.
-2. Open the provider URL. The user completes credentials, MFA, or OTP.
-3. Prefer an official CSV, XLSX, or PDF. If unavailable, create an immutable
-   visible-data capture with limitations recorded.
-4. Archive the original in OneDrive and calculate its SHA-256 identity.
-5. Invoke the inactive `INTERACTIVE_BROWSER_INGESTION` n8n workflow with the
-   source code and archived-object identity. Do not pass arbitrary local paths.
-6. Review parse completeness, account coverage, source balance, classification
-   exceptions, and AI proposals.
-7. Enable the write branch only after preflight succeeds. The fixed-purpose
-   Actual node serializes writes and verifies imported IDs after persistence.
+1. Choose one provider, one account label, and one data scope.
+2. Validate the provider registry and render the provider and data recipes.
+3. Open the provider URL in a headed browser and pause at the login page.
+4. The user completes login, MFA, OTP, passkey, or reCAPTCHA in the browser.
+5. Follow the deterministic recipe and prefer the official CSV, XLSX, PDF, or
+   provider-native export.
+6. If only visible rows or a balance is available, record the date/as-of value
+   and the limitation in the capture. Do not infer omitted values.
+7. Set `artifact.source_content_sha256` and
+   `provenance.source_content_sha256` to the original export's SHA-256.
+   Include the capture ID, UTC timestamp, and `SHA-256` algorithm in
+   `provenance`.
+8. Serialize the capture with sorted keys, UTF-8, and compact JSON separators.
+   Set the envelope's `expected_capture_sha256` to the SHA-256 of those exact
+   bytes. Send the same bytes as binary `data` with `artifact_id` and
+   `expected_source_sha256` in the envelope to the inactive
+   `INTERACTIVE_ARTIFACT_HANDOFF` workflow.
+9. n8n parses the binary, rejects forbidden fields, validates the canonical
+   schema with AJV, and checks the artifact identity before any upload.
+10. A new artifact is uploaded to the configured Finance Evidence root. An
+    exact match of both source and capture-binary hashes reuses its durable
+    receipt without uploading again. A changed source or capture-binary hash
+    for an existing `artifact_id` fails with an exact conflict.
+11. n8n writes and reads back `finance_document_operations`, verifies the
+    archived hash, and dispatches to the inactive `SHARED_STATEMENT_PIPELINE`
+    route.
+12. Review n8n validation, enrichment, transaction matching, retry state,
+    archive receipt, and writer preflight before any production promotion.
 
-Visible-row captures remain review-required until the owner approves that exact
-immutable capture. Approval never clears other currency, account, balance,
-classification, or evidence gates.
+The handoff envelope contains only `artifact_id`, `expected_source_sha256`, and
+`expected_capture_sha256`; the capture JSON is a single binary attachment. n8n
+records the source hash and the capture-binary hash separately in the durable
+receipt. It does not log the capture payload.
 
-Sarwa produces off-budget wealth valuations rather than ordinary transactions.
-Its refresh remains interactive, stores no browser session, excludes insurance
-coverage from net worth, and records an explicit as-of timestamp and FX
-snapshot.
+## Ownership boundary
+
+| Surface | Owner | Allowed result |
+|---|---|---|
+| Headed browser | User-assisted Codex task | Visible data or official export |
+| Capture archive and validation | Inactive n8n | Hash-bound artifact and redacted receipt |
+| Enrichment and transaction matching | n8n | Proposed or staged normalized data |
+| Actual ledger mutation | Single fenced Actual writer | Reviewed outbox delta only |
+| Cashback mutation and close | Cashback companion and its n8n flow | Source-scoped cashback state |
+
+The headed task never activates n8n, calls Actual, calls Cashback, or creates a
+second ledger writer. Amazon order captures remain supplemental evidence and do
+not create ledger transactions.
 
 ## Security boundary
 
-Recipes accept only non-secret selectors. Never persist passwords, PINs, CVVs,
-OTPs, cookies, access tokens, session storage, recovery codes, or full account
-numbers. There is no HTTP ingestion bridge, SSH uploader, or generic command
-runner.
+The user completes authentication in the headed window. Automation never
+requests, reads, types, copies, stores, logs, or returns credentials, OTPs,
+cookies, session state, PINs, CVVs, recovery codes, full account numbers, or
+full payment numbers. Captures retain only user-approved labels or last four
+digits. Recorded URLs omit query strings and fragments.
+
+Use the [copy-paste browser task prompt](original-codex-browser-task-prompt.md)
+when starting an acquisition from the original Codex app.

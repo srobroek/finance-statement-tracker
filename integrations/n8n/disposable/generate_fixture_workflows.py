@@ -19,6 +19,39 @@ BOOTSTRAP_FIXTURE_ID = "90000000-0000-4000-8000-000000000019"
 SWEEP_FIXTURE_ID = "90000000-0000-4000-8000-000000000012"
 RECOVERY_FIXTURE_ID = "90000000-0000-4000-8000-000000000017"
 
+INLINE_SOURCE_FILES = {
+    "10000000-0000-4000-8000-000000000001": "01-outlook-finance-acquisition.json",
+    AI_ID: "09-ai-proposal.json",
+    LEASE_ID: "18-finance-writer-lease.json",
+    "10000000-0000-4000-8000-000000000020": "20-actual-outbox-apply.json",
+    "10000000-0000-4000-8000-000000000021": "21-subscription-agent-adapter.json",
+}
+
+ALLOWED_INLINE_EDGES = {
+    "90000000-0000-4000-8000-000000000901": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000902": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000903": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000904": frozenset({SWEEP_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000905": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000906": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000907": frozenset({LEASE_ID}),
+    "90000000-0000-4000-8000-000000000908": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000909": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000910": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000911": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000912": frozenset({AI_ID}),
+    "90000000-0000-4000-8000-000000000918": frozenset({RECOVERY_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000919": frozenset({RECOVERY_FIXTURE_ID}),
+    "90000000-0000-4000-8000-000000000920": frozenset({RECOVERY_FIXTURE_ID}),
+    SWEEP_FIXTURE_ID: frozenset({
+        "10000000-0000-4000-8000-000000000001",
+        "10000000-0000-4000-8000-000000000021",
+    }),
+    AI_ID: frozenset({"10000000-0000-4000-8000-000000000021"}),
+    RECOVERY_FIXTURE_ID: frozenset({"10000000-0000-4000-8000-000000000020"}),
+    "10000000-0000-4000-8000-000000000020": frozenset({LEASE_ID}),
+}
+
 
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -112,6 +145,56 @@ def wrapper(workflow_id: str, name: str, input_js: str, target_id: str) -> dict:
     }
 
 
+def build_archive_fixture() -> dict:
+    """Synthetic W01 archive boundary; no mailbox, OneDrive, or legacy tables."""
+    trigger = {
+        "id": "fixture-w01-trigger",
+        "name": "Called by Trusted Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.1,
+        "position": [-300, 0],
+        "parameters": {"inputSource": "passthrough"},
+    }
+    emit = code_node(
+        "fixture-w01-archive",
+        "Emit Synthetic Archive Barrier",
+        "const input=$json||{}; return [{json:{...input, status:'ARCHIVED', archive_ready:true, attachment_verification_barrier:'VERIFIED', attachment_ids_verified:true, attachments_verified:Number(input.attachments_verified||0), email_evidence_receipt_barrier:'VERIFIED', email_evidence_receipts_verified:Number(input.email_evidence_receipts_verified||input.matched_count||0), email_evidence_identity_keys:Array.isArray(input.email_evidence_identity_keys)?input.email_evidence_identity_keys:[], archive_identity_keys:Array.isArray(input.attachment_identity_keys)?input.attachment_identity_keys:[], archive_readback_verified:true}}];",
+        [0, 0],
+    )
+    return {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "DISPOSABLE ONLY · Synthetic Outlook archive boundary",
+        "active": False,
+        "nodes": [trigger, emit],
+        "connections": {trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}},
+        "settings": fixture_settings(),
+        "pinData": {},
+        "meta": {"disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacement": "Synthetic archive barrier"},
+    }
+
+
+def build_ai_fixture_source() -> dict:
+    workflow = copy.deepcopy(read_json(PRODUCTION / "09-ai-proposal.json"))
+    for node in workflow["nodes"]:
+        if node["name"] == "Load Trusted Proposal Archive Contract":
+            node.pop("alwaysOutputData", None)
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"}
+        elif node["name"] == "Archive Proposal Artifact in OneDrive":
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"}
+            node.pop("credentials", None)
+        elif node["name"] == "Read Back Proposal Artifact":
+            node["type"] = "n8n-nodes-base.code"
+            node["typeVersion"] = 2
+            node["parameters"] = {"jsCode": "return [{json:{},binary:$binary}];"}
+            node.pop("credentials", None)
+    workflow["meta"] = {**workflow.get("meta", {}), "disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacements": ["OneDrive archive", "source contract resolver"]}
+    return workflow
+
+
 def build_sweep_core() -> dict:
     workflow = copy.deepcopy(read_json(PRODUCTION / "12-outlook-message-sweep.json"))
     workflow["id"] = SWEEP_FIXTURE_ID
@@ -125,6 +208,25 @@ def build_sweep_core() -> dict:
     }
     for node in workflow["nodes"]:
         if node["name"] != "Exhaust Outlook Pagination":
+            if node["name"] == "List Immutable Message Attachments":
+                node.pop("credentials", None)
+                node.pop("alwaysOutputData", None)
+                node["type"] = "n8n-nodes-base.code"
+                node["typeVersion"] = 2
+                node["parameters"] = {
+                    "jsCode": (
+                        "return $input.all().flatMap(item => { "
+                        "const attachments=Array.isArray(item.json.attachment_inventory) ? item.json.attachment_inventory : []; "
+                        "return attachments.length ? attachments.map(attachment => ({json: attachment})) : [{json:{}}]; "
+                        "});"
+                    )
+                }
+            elif node["name"] == "Search Outlook Evidence":
+                node.pop("credentials", None)
+                node.pop("alwaysOutputData", None)
+                node["type"] = "n8n-nodes-base.code"
+                node["typeVersion"] = 2
+                node["parameters"] = {"jsCode": "return [{json:{}}];"}
             continue
         node.pop("credentials", None)
         node.pop("alwaysOutputData", None)
@@ -134,8 +236,9 @@ def build_sweep_core() -> dict:
             "jsCode": (
                 "const c=$('Freeze Trusted Cursor Window').first().json,kind=String(c.fixture_case||''); "
                 "if(kind==='pagination-failure') throw new Error('FIXTURE_PAGE_2_FAILURE token=SHOULD_REDACT'); "
+                "const mk=(id,offset,attachments=[])=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}},attachment_inventory:attachments}}); "
                 "if(kind==='zero') return [{json:{}}]; "
-                "const mk=(id,offset)=>({json:{id,subject:c.subjects[0],receivedDateTime:new Date(new Date(c.window_start).getTime()+offset).toISOString(),from:{emailAddress:{address:c.senders[0]}}}}); "
+                "if(kind==='one-no-attachments') return [mk('m001',1000)]; "
                 "if(kind==='one-hundred-one') return Array.from({length:101},(_,i)=>mk(`m${String(i+1).padStart(3,'0')}`,(i+1)*1000)); "
                 "if(kind==='late-out-of-order') return [mk('m3',3000),mk('m1',1000),mk('m2',2000)]; "
                 "throw new Error('UNKNOWN_SWEEP_FIXTURE');"
@@ -218,11 +321,11 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
         AI_ID,
     )
     workflow["meta"]["agentProfileExpected"] = (
-        "LUNA_MAX" if profile == "luna" else "SOL_XHIGH"
+        "LUNA_MAX" if profile == "luna" else "SOL_MEDIUM"
     )
     workflow["meta"]["financeWritesImpossible"] = True
     if profile == "sol":
-        workflow["meta"]["executionGate"] = "DISPOSABLE_ALLOW_SOL_XHIGH"
+        workflow["meta"]["executionGate"] = "DISPOSABLE_ALLOW_SOL_MEDIUM"
         workflow["meta"]["defaultExecutionForbidden"] = True
     return workflow
 
@@ -328,11 +431,11 @@ def build_recovery_core() -> dict:
         ),
         "SHA-256 Recovered Delta": (
             "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.payload_sha256}}));"},
+            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.delta_sha256}}));"},
         ),
         "Extract Recovered Delta JSON": (
             "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.artifact_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.imported_id,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
+            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
         ),
         "Recovery Actual Preflight": (
             "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
@@ -359,14 +462,14 @@ def build_recovery_core() -> dict:
 def outbox_upsert_node(state: str) -> dict:
     suffix = state.lower().replace("_", "-")
     value = {
-        "outbox_id": f"fixture-recovery-{suffix}",
+        "batch_id": f"fixture-recovery-{suffix}",
         "run_id": f"fixture-recovery-{suffix}",
-        "imported_id": f"fixture:recovery:{suffix}",
+        "idempotency_key": f"fixture:recovery:{suffix}",
         "actual_file_id": "fixture_actual",
-        "payload_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
-        "artifact_item_id": f"fixture-artifact-{suffix}",
-        "artifact_etag": "fixture-etag",
-        "artifact_schema_version": "statement-delta-v1",
+        "delta_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
+        "delta_artifact_item_id": f"fixture-artifact-{suffix}",
+        "delta_artifact_etag": "fixture-etag",
+        "delta_schema_version": "statement-delta-v1",
         "config_version": "fixture-v1",
         "parser_version": "fixture-v1",
         "state": state,
@@ -382,10 +485,10 @@ def outbox_upsert_node(state: str) -> dict:
         "parameters": {
             "resource": "row",
             "operation": "upsert",
-            "dataTableId": {"__rl": True, "value": "finance_actual_outbox", "mode": "name"},
+            "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
             "matchType": "allConditions",
             "filters": {"conditions": [{
-                "keyName": "outbox_id", "condition": "eq", "keyValue": value["outbox_id"]
+                "keyName": "batch_id", "condition": "eq", "keyValue": value["batch_id"]
             }]},
             "columns": {
                 "mappingMode": "defineBelow",
@@ -441,7 +544,121 @@ def build_all() -> dict[str, dict]:
         "104-recover-actual-observed.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"),
         "105-recover-verified.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000920", "VERIFIED"),
     }
-    return workflows
+    catalog = {workflow["id"]: workflow for workflow in workflows.values()}
+    catalog["10000000-0000-4000-8000-000000000001"] = build_archive_fixture()
+    catalog[AI_ID] = build_ai_fixture_source()
+    for workflow_id, filename in INLINE_SOURCE_FILES.items():
+        workflow = read_json(PRODUCTION / filename)
+        if workflow.get("id") != workflow_id:
+            raise ValueError(f"inline workflow ID mismatch for {filename}")
+        if workflow_id not in {"10000000-0000-4000-8000-000000000001", AI_ID}:
+            catalog[workflow_id] = workflow
+    inlined = {
+        name: inline_execute_workflows(workflow, catalog)
+        for name, workflow in workflows.items()
+    }
+    for workflow in inlined.values():
+        validate_inline_workflow(workflow)
+    return inlined
+
+
+def database_target_id(node: dict) -> str:
+    parameters = node.get("parameters")
+    if not isinstance(parameters, dict) or parameters.get("source", "database") != "database":
+        raise ValueError(f"ExecuteWorkflow node {node.get('name')} is not a database-ID call")
+    selector = parameters.get("workflowId")
+    if not isinstance(selector, dict) or not isinstance(selector.get("value"), str):
+        raise TypeError(f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID")
+    target_id = selector["value"]
+    if not target_id:
+        raise ValueError(f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID")
+    return target_id
+
+
+def inline_execute_workflows(
+    workflow: dict,
+    catalog: dict[str, dict],
+    allowed_edges: dict[str, frozenset[str]] = ALLOWED_INLINE_EDGES,
+    ancestors: tuple[str, ...] = (),
+) -> dict:
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("id"), str):
+        raise TypeError("inline workflow must be an object with a string ID")
+    workflow_id = workflow["id"]
+    if workflow_id in ancestors:
+        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+    nodes = workflow.get("nodes")
+    if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
+        raise TypeError(f"inline workflow {workflow_id} is malformed")
+
+    result = copy.deepcopy(workflow)
+    path = (*ancestors, workflow_id)
+    for node in result["nodes"]:
+        if not isinstance(node, dict):
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node")
+        node_type = node.get("type")
+        if not isinstance(node_type, str) or not node_type:
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node type")
+        if node_type != "n8n-nodes-base.executeWorkflow":
+            continue
+        target_id = database_target_id(node)
+        if target_id not in allowed_edges.get(workflow_id, frozenset()):
+            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+        target = catalog.get(target_id)
+        if target is None:
+            raise ValueError(f"inline target {target_id} is unknown")
+        child = inline_execute_workflows(target, catalog, allowed_edges, path)
+        options = node["parameters"].get("options", {})
+        node["parameters"] = {
+            "source": "parameter",
+            "workflowJson": canonical(child),
+            "options": options,
+        }
+    return result
+
+
+def validate_inline_workflow(
+    workflow: dict,
+    allowed_edges: dict[str, frozenset[str]] = ALLOWED_INLINE_EDGES,
+    ancestors: tuple[str, ...] = (),
+) -> None:
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("id"), str):
+        raise TypeError("inline workflow must be an object with a string ID")
+    workflow_id = workflow["id"]
+    if workflow_id in ancestors:
+        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+    nodes = workflow.get("nodes")
+    if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
+        raise TypeError(f"inline workflow {workflow_id} is malformed")
+
+    path = (*ancestors, workflow_id)
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node")
+        node_type = node.get("type")
+        if not isinstance(node_type, str) or not node_type:
+            raise TypeError(f"inline workflow {workflow_id} has a malformed node type")
+        if node_type != "n8n-nodes-base.executeWorkflow":
+            continue
+        parameters = node.get("parameters")
+        if not isinstance(parameters, dict) or parameters.get("source") != "parameter":
+            raise ValueError(f"residual database-ID ExecuteWorkflow in {workflow_id}")
+        if "workflowId" in parameters:
+            raise ValueError(f"residual workflow ID in {workflow_id}")
+        workflow_json = parameters.get("workflowJson")
+        if not isinstance(workflow_json, str):
+            raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
+        try:
+            child = json.loads(workflow_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"inline workflow JSON in {workflow_id} is malformed") from error
+        if not isinstance(child, dict) or not isinstance(child.get("id"), str):
+            raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
+        target_id = child["id"]
+        if target_id not in allowed_edges.get(workflow_id, frozenset()):
+            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+        if workflow_json != canonical(child):
+            raise ValueError(f"inline workflow JSON in {workflow_id} is not canonical")
+        validate_inline_workflow(child, allowed_edges, path)
 
 
 def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict:
@@ -456,6 +673,37 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "19-platform-data-table-bootstrap.json",
         )
     }
+    scenario_contract = {
+            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
+            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000012", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
+            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
+            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
+            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
+            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
+            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
+            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
+            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
+            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
+            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "n8n_execution_history", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
+            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
+        }
+    fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}
+    scenario_workflow_ids: set[str] = set()
+    for scenario in scenario_contract.values():
+        workflow_id = scenario.get("workflow_id")
+        if isinstance(workflow_id, str):
+            scenario_workflow_ids.add(workflow_id)
+        workflow_ids = scenario.get("workflow_ids")
+        if isinstance(workflow_ids, list):
+            scenario_workflow_ids.update(
+                workflow_id for workflow_id in workflow_ids if isinstance(workflow_id, str)
+            )
+    missing_workflow_ids = sorted(scenario_workflow_ids - fixture_workflow_ids)
+    if missing_workflow_ids:
+        raise ValueError(
+            "scenario workflow IDs are missing from fixture manifest: "
+            + ", ".join(missing_workflow_ids)
+        )
     return {
         "schema_version": 1,
         "contract_status": "DISPOSABLE_ONLY",
@@ -470,19 +718,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             }
             for name, workflow in workflows.items()
         ],
-        "scenario_contract": {
-            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
-            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101}},
-            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
-            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
-            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
-            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
-            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
-            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "xhigh", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
-            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "xhigh", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_XHIGH", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_table": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
-            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
-        },
+        "scenario_contract": scenario_contract,
         "blocked_runtime_scenarios": {
             "bounded_mcp_network_negative": "Facade remains unpublished/inactive; an MCP transport test would require disposable publication and is outside the activation-disabled harness.",
             "real_actual_recovery_write": "Forbidden in disposable fixtures; custom-node unit tests cover mutation guards and exact readback while derived recovery uses no-op external replacements.",

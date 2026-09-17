@@ -18,7 +18,7 @@
     {
       "policy_id": "recommend-category",
       "version": 1,
-      "agent_profile": "SOL_XHIGH",
+      "agent_profile": "SOL_MEDIUM",
       "name": "Recommend a missing category",
       "priority": 15,
       "instruction": "Only when no configured category fits after static rules and history matching, propose a category_recommendation object with a concise name, the best existing or proposed group, and an evidence-based reason. Do not create or assign the category. The proposal must remain review-required until an owner adds the category and reruns classification.",
@@ -50,7 +50,7 @@
     {
       "policy_id": "enrich-property",
       "version": 2,
-      "agent_profile": "SOL_XHIGH",
+      "agent_profile": "SOL_MEDIUM",
       "name": "Enrich property and rental unit",
       "priority": 30,
       "instruction": "Use explicit transaction or linked email evidence to identify only a configured property and rental unit. Never guess a unit from amount alone. The deterministic property registry adds reporting tags after the identity is accepted.",
@@ -103,7 +103,7 @@
     {
       "policy_id": "recommend-static-rule",
       "version": 1,
-      "agent_profile": "SOL_XHIGH",
+      "agent_profile": "SOL_MEDIUM",
       "name": "Recommend a repeated-pattern rule",
       "priority": 90,
       "instruction": "Only when transaction metadata contains at least three consistent reviewed examples for the same normalized merchant pattern, propose a disabled canonical static-rule draft. Include the evidence count and never execute the recommendation.",

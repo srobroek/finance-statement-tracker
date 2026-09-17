@@ -1,0 +1,73 @@
+{
+  "currency": "AED",
+  "profile": {
+    "name": "<img src=x onerror=\"document.body.dataset.xss='profile'\">"
+  },
+  "cards": [
+    {
+      "card": "CARD_ALPHA",
+      "name": "<img src=x onerror=\"document.body.dataset.xss='card-name'\">",
+      "short_name": "<svg onload=\"document.body.dataset.xss='card-short'\">",
+      "position_mode": "UNLIMITED",
+      "tracking_mode": "STATEMENT_ONLY",
+      "position_headline": "<b onmouseover=\"document.body.dataset.xss='headline'\">",
+      "position_detail": "<script>document.body.dataset.xss='detail'</script>"
+    },
+    {
+      "card": "CARD_LIMITED",
+      "name": "<img src=x onerror=\"document.body.dataset.xss='limited-name'\">",
+      "short_name": "<b onmouseover=\"document.body.dataset.xss='limited-short'\">",
+      "position_mode": "LIMITED",
+      "total_spend_aed": "245",
+      "safety_target_aed": "1000",
+      "tier": "TIER_3",
+      "pace": {"status": "ON_PACE"},
+      "tiers": [
+        {"code": "TIER_3", "minimum_spend_aed": "500", "met": false},
+        {"code": "TIER_5", "minimum_spend_aed": "1000", "met": false}
+      ],
+      "buckets": [
+        {"code": "RAK_GROCERY", "spend_aed": "245", "spend_cap_aed": "300", "status": "OPEN"},
+        {"code": "RAK_STANDARD", "spend_aed": "0", "spend_cap_aed": null, "status": "OPEN"}
+      ],
+      "refund_effect_aed": "12"
+    }
+  ],
+  "routing_graphs": [
+    {
+      "code": "<option value='bad' onfocus=\"document.body.dataset.xss='rule-code'\">",
+      "label": "<img src=x onerror=\"document.body.dataset.xss='rule-label'\">",
+      "purchase_type": "ONLINE_PURCHASE",
+      "channel": "ONLINE",
+      "currency": "AED",
+      "methods": ["<img src=x onerror=\"document.body.dataset.xss='method'\">"],
+      "use_card": "CARD_SAFE",
+      "ranked_cards": [
+        {
+          "card": "CARD_ALPHA",
+          "status": "PREFERRED",
+          "order": "<img src=x onerror=\"document.body.dataset.xss='order'\">",
+          "payment_channel": "ONLINE",
+          "position_mode": "UNLIMITED",
+          "target_rate_percent": "6",
+          "tier_threshold_aed": "0",
+          "card_spend_aed": "0",
+          "tier_remaining_aed": "0"
+        }
+      ],
+      "reason": "Safe reason"
+    }
+  ],
+  "alerts": [
+    {
+      "key": "fixture:alert",
+      "title": "<img src=x onerror=\"document.body.dataset.xss='alert-title'\">",
+      "detail": "<svg onload=\"document.body.dataset.xss='alert-detail'\">"
+    }
+  ],
+  "data_status": {
+    "is_stale": false,
+    "variance_count": 0,
+    "acknowledged_alerts": []
+  }
+}

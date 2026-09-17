@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "n8n_version": "2.36.2",
+  "contract_status": "DISPOSABLE_ONLY",
+  "workflow_id": "90000000-0000-4000-8000-000000000012",
+  "create": {
+    "name": "DISPOSABLE ONLY - Payload Contract Probe",
+    "nodes": [
+      {
+        "id": "fixture-trigger",
+        "name": "Run Disposable Fixture",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {}
+      }
+    ],
+    "connections": {},
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "staticData": null,
+    "pinData": {},
+    "tags": []
+  },
+  "create_response": {
+    "id": "90000000-0000-4000-8000-000000000112"
+  },
+  "publish": {
+    "id": "90000000-0000-4000-8000-000000000112"
+  }
+}

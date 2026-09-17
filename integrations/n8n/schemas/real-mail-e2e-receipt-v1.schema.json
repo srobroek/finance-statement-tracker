@@ -1,0 +1,372 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vxsan.com/schemas/real-mail-e2e-receipt-v1.json",
+  "title": "Synthetic real-mail n8n ingestion acceptance receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "proof_kind", "provider_proof", "provider_proof_status",
+    "external_provider_calls", "run_id", "source", "source_bindings",
+    "enumeration", "archive", "pipeline", "data_tables", "actual", "cashback",
+    "cursor_cas", "replay", "restart", "cleanup", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "real-mail-e2e-receipt-v1"},
+    "proof_kind": {"const": "SYNTHETIC_OFFLINE"},
+    "provider_proof": {"const": false},
+    "provider_proof_status": {"const": "NOT_PROVEN"},
+    "external_provider_calls": {"const": false},
+    "run_id": {"type": "string", "pattern": "^synthetic:(EI_AMAZON|WIO_CREDIT):[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_code", "mailbox", "folder_id", "window_start", "run_upper_bound"],
+      "properties": {
+        "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+        "mailbox": {"const": "synthetic://outlook/inbox"},
+        "folder_id": {"const": "synthetic-outlook-inbox"},
+        "window_start": {"type": "string", "format": "date-time"},
+        "run_upper_bound": {"type": "string", "format": "date-time"}
+      }
+    },
+    "source_bindings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_sha256", "config_sha256", "image_digest", "workflow_sha256", "source_artifacts"],
+      "properties": {
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "config_sha256": {"$ref": "#/$defs/sha256"},
+        "image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "workflow_sha256": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/sha256"}
+        },
+        "source_artifacts": {
+          "type": "array", "minItems": 2, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      }
+    },
+    "enumeration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workflow_chain", "scanned_count", "matched_count", "ordered_message_ids", "message_records", "message_fingerprints", "attachment_fingerprints", "enumerated_exactly_once"],
+      "properties": {
+        "workflow_chain": {"type": "array", "minItems": 6, "items": {"type": "string"}},
+        "scanned_count": {"type": "integer", "minimum": 0},
+        "matched_count": {"type": "integer", "minimum": 0},
+        "ordered_message_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "message_records": {"type": "array", "items": {"$ref": "#/$defs/messageRecord"}},
+        "message_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/messageFingerprint"}},
+        "attachment_fingerprints": {"type": "array", "items": {"$ref": "#/$defs/attachmentFingerprint"}},
+        "enumerated_exactly_once": {"const": true}
+      }
+    },
+    "archive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["email_rows", "attachment_rows", "rows_sha256", "email_writes", "attachment_writes", "non_pdf_count", "readback_verified", "duplicate_writes"],
+      "properties": {
+        "email_rows": {"type": "array", "items": {"$ref": "#/$defs/emailArchive"}},
+        "attachment_rows": {"type": "array", "items": {"$ref": "#/$defs/attachmentArchive"}},
+        "rows_sha256": {"$ref": "#/$defs/sha256"},
+        "email_writes": {"type": "integer", "minimum": 0},
+        "attachment_writes": {"type": "integer", "minimum": 0},
+        "non_pdf_count": {"type": "integer", "minimum": 0},
+        "readback_verified": {"const": true},
+        "duplicate_writes": {"const": 0}
+      }
+    },
+    "pipeline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "accepted_count", "outbox_rows", "outbox_rows_sha256", "actual_readback", "cashback_readback", "terminal_readback_verified"],
+      "properties": {
+        "state": {"const": "COMMITTED"},
+        "accepted_count": {"type": "integer", "minimum": 0},
+        "outbox_rows": {"type": "array", "items": {"$ref": "#/$defs/outbox"}},
+        "outbox_rows_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_readback": {"$ref": "#/$defs/actual"},
+        "cashback_readback": {"$ref": "#/$defs/cashback"},
+        "terminal_readback_verified": {"const": true}
+      }
+    },
+    "data_tables": {
+      "type": "object", "additionalProperties": false,
+      "required": ["email_archive", "attachment_archive", "pipeline_outbox", "cursor_cas"],
+      "properties": {
+        "email_archive": {"$ref": "#/$defs/table"},
+        "attachment_archive": {"$ref": "#/$defs/table"},
+        "pipeline_outbox": {"$ref": "#/$defs/table"},
+        "cursor_cas": {"$ref": "#/$defs/table"}
+      }
+    },
+    "actual": {"$ref": "#/$defs/actual"},
+    "cashback": {"$ref": "#/$defs/cashback"},
+    "cursor_cas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_code", "before_version", "after_version", "cursor", "writes", "conflicts", "readback_verified"],
+      "properties": {
+        "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+        "before_version": {"const": 0},
+        "after_version": {"const": 1},
+        "cursor": {"type": "string", "format": "date-time"},
+        "writes": {"const": 1},
+        "conflicts": {"const": 0},
+        "readback_verified": {"const": true}
+      }
+    },
+    "replay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["idempotent", "archive_new_writes", "attachment_new_writes", "actual_new_writes", "cashback_new_writes", "cursor_new_writes", "first_run_counts", "final_counts"],
+      "properties": {
+        "idempotent": {"const": true},
+        "archive_new_writes": {"const": 0},
+        "attachment_new_writes": {"const": 0},
+        "actual_new_writes": {"const": 0},
+        "cashback_new_writes": {"const": 0},
+        "cursor_new_writes": {"const": 0},
+        "first_run_counts": {"$ref": "#/$defs/counts"},
+        "final_counts": {"$ref": "#/$defs/counts"}
+      }
+    },
+    "restart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["injections", "all_recovered"],
+      "properties": {
+        "injections": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/restart"}},
+        "all_recovered": {"const": true}
+      }
+    },
+    "cleanup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "containers", "networks", "volumes", "provider_sessions", "production_writes"],
+      "properties": {
+        "status": {"const": "CLEAN"},
+        "containers": {"const": 0},
+        "networks": {"const": 0},
+        "volumes": {"const": 0},
+        "provider_sessions": {"const": 0},
+        "production_writes": {"const": 0}
+      }
+    },
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "required": ["source_code"],
+            "properties": {"source_code": {"const": "EI_AMAZON"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cashback": {"$ref": "#/$defs/cashbackVerifiedRoute"},
+          "pipeline": {"properties": {"cashback_readback": {"$ref": "#/$defs/cashbackVerifiedRoute"}}}
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "required": ["source_code"],
+            "properties": {"source_code": {"const": "WIO_CREDIT"}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cashback": {"$ref": "#/$defs/cashbackNaRoute"},
+          "pipeline": {"properties": {"cashback_readback": {"$ref": "#/$defs/cashbackNaRoute"}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["email_archive", "attachment_archive", "actual", "cashback", "cursor"],
+      "properties": {
+        "email_archive": {"type": "integer", "minimum": 0},
+        "attachment_archive": {"type": "integer", "minimum": 0},
+        "actual": {"type": "integer", "minimum": 0},
+        "cashback": {"type": "integer", "minimum": 0},
+        "cursor": {"type": "integer", "minimum": 0}
+      }
+    },
+    "messageFingerprint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["message_id", "sha256"],
+      "properties": {"message_id": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "messageRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "receivedDateTime", "from", "subject", "body", "attachments"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "receivedDateTime": {"type": "string", "format": "date-time"},
+        "from": {"type": "string", "format": "idn-email"},
+        "subject": {"type": "string"},
+        "body": {"type": "string"},
+        "attachments": {"type": "array", "items": {"$ref": "#/$defs/attachmentRecord"}}
+      }
+    },
+    "attachmentRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "content_type", "content_base64", "amount_minor"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "content_type": {"type": "string"},
+        "content_base64": {"type": "string", "minLength": 1},
+        "amount_minor": {"type": ["integer", "null"]}
+      }
+    },
+    "attachmentFingerprint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["message_id", "attachment_id", "name", "content_type", "content_base64", "content_sha256", "size_bytes", "amount_minor", "identity_key", "fingerprint_sha256"],
+      "properties": {
+        "message_id": {"type": "string", "minLength": 1},
+        "attachment_id": {"type": "string", "minLength": 1},
+        "name": {"type": "string"},
+        "content_type": {"type": "string"},
+        "content_base64": {"type": "string", "minLength": 1},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "amount_minor": {"type": ["integer", "null"]},
+        "identity_key": {"type": "string", "minLength": 3},
+        "fingerprint_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "emailArchive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["message_id", "source_sha256", "readback_sha256", "onedrive_item_id"],
+      "properties": {
+        "message_id": {"type": "string", "minLength": 1},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "readback_sha256": {"$ref": "#/$defs/sha256"},
+        "onedrive_item_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "attachmentArchive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity_key", "message_id", "attachment_id", "source_sha256", "readback_sha256", "onedrive_item_id"],
+      "properties": {
+        "identity_key": {"type": "string", "minLength": 3},
+        "message_id": {"type": "string", "minLength": 1},
+        "attachment_id": {"type": "string", "minLength": 1},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "readback_sha256": {"$ref": "#/$defs/sha256"},
+        "onedrive_item_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "outbox": {
+      "type": "object", "additionalProperties": false,
+      "required": ["idempotency_key", "workflow", "source_code", "actual_identity_key", "state"],
+      "properties": {
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "workflow": {"const": "W22_SHARED_MONTHLY_STATEMENT_CYCLE"},
+        "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+        "actual_identity_key": {"type": "string", "minLength": 1},
+        "state": {"const": "COMMITTED"}
+      }
+    },
+    "actual": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "economic_rows", "economic_readback_sha256", "api_readback_sha256", "ui_readback_sha256", "write_count"],
+      "properties": {
+        "status": {"const": "VERIFIED"},
+        "economic_rows": {"type": "array", "items": {"$ref": "#/$defs/economicRow"}},
+        "economic_readback_sha256": {"$ref": "#/$defs/sha256"},
+        "api_readback_sha256": {"$ref": "#/$defs/sha256"},
+        "ui_readback_sha256": {"$ref": "#/$defs/sha256"},
+        "write_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "economicRow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["idempotency_key", "identity_key", "account_id", "amount_minor", "currency", "topic", "readback_verified"],
+      "properties": {
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "identity_key": {"type": "string", "minLength": 3},
+        "account_id": {"type": "string", "minLength": 1},
+        "amount_minor": {"type": "integer", "exclusiveMinimum": 0},
+        "currency": {"const": "AED"},
+        "topic": {"const": "PURCHASE"},
+        "readback_verified": {"const": true}
+      }
+    },
+    "cashbackVerifiedRoute": {
+      "type": "object",
+      "required": ["status"],
+      "not": {"required": ["reason"]},
+      "properties": {"status": {"const": "VERIFIED"}}
+    },
+    "cashbackNaRoute": {
+      "type": "object",
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"const": "N/A"},
+        "reason": {"const": "SOURCE_HAS_NO_CASHBACK_ROUTE_IN_SYNTHETIC_FIXTURE"},
+        "rows": {"maxItems": 0},
+        "readback_sha256": {"const": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"},
+        "write_count": {"const": 0}
+      }
+    },
+    "cashback": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "rows", "readback_sha256", "write_count"],
+      "properties": {
+        "status": {"enum": ["VERIFIED", "N/A"]},
+        "reason": {"type": "string", "minLength": 1},
+        "rows": {"type": "array", "items": {"$ref": "#/$defs/cashbackRow"}},
+        "readback_sha256": {"$ref": "#/$defs/sha256"},
+        "write_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cashbackRow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event_id", "identity_key", "source_code", "amount_minor", "readback_verified"],
+      "properties": {
+        "event_id": {"type": "string", "minLength": 1},
+        "identity_key": {"type": "string", "minLength": 3},
+        "source_code": {"enum": ["EI_AMAZON", "WIO_CREDIT"]},
+        "amount_minor": {"type": "integer", "exclusiveMinimum": 0},
+        "readback_verified": {"const": true}
+      }
+    },
+    "table": {
+      "type": "object", "additionalProperties": false,
+      "required": ["table", "row_count", "rows", "rows_sha256"],
+      "properties": {
+        "table": {"type": "string", "minLength": 1},
+        "row_count": {"type": "integer", "minimum": 0},
+        "rows": {"type": "array"},
+        "rows_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "restart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["point", "injected", "status", "idempotent_replay", "archive_writes", "actual_writes", "cashback_writes", "cursor_writes"],
+      "properties": {
+        "point": {"enum": ["after_archive", "after_actual", "after_cashback", "after_cursor_cas"]},
+        "injected": {"const": true},
+        "status": {"const": "RECOVERED"},
+        "idempotent_replay": {"const": true},
+        "archive_writes": {"type": "integer", "minimum": 0},
+        "actual_writes": {"type": "integer", "minimum": 0},
+        "cashback_writes": {"type": "integer", "minimum": 0},
+        "cursor_writes": {"const": 1}
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -8,8 +9,10 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Iterable
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 from .models import Transaction, money
-from .transaction_semantics import CASHBACK_TOPICS, is_finalized_for_consumption
+from .transaction_semantics import CASHBACK_TOPICS
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,12 +238,6 @@ class PaceStatus:
     weekly_target_aed: Decimal
 
 
-def _period_transactions(
-    transactions: Iterable[Transaction], card: str
-) -> list[Transaction]:
-    return [transaction for transaction in transactions if transaction.card == card]
-
-
 def _as_of_date(value: date | datetime | None) -> date:
     """Resolve one explicit UTC boundary date for provenance validation.
 
@@ -257,64 +254,37 @@ def _as_of_date(value: date | datetime | None) -> date:
         return value
     raise TypeError("as_of must be a date, datetime, or None")
 
-def _transaction_type(transaction: Transaction) -> str:
-    return str(transaction.transaction_type or "PURCHASE").strip().upper()
 
-def _is_refund(transaction: Transaction) -> bool:
-    return transaction.is_refund or _transaction_type(transaction) in {
-        "REFUND",
-        "REIMBURSEMENT",
-        "REVERSAL",
-    }
+def _period_transactions(transactions: Iterable[Transaction], card: str) -> list[Transaction]:
+    return [transaction for transaction in transactions if transaction.card == card]
 
-def _is_purchase(transaction: Transaction) -> bool:
-    return not _is_refund(transaction) and _transaction_type(transaction) == "PURCHASE"
 
 def total_spend(transactions: Iterable[Transaction], card: str) -> Decimal:
-    """Return qualifying purchase spend, excluding refund deductions."""
     return sum(
         (
-            transaction.amount_aed
+            transaction.spend_aed
             for transaction in transactions
             if transaction.card == card
-            and is_finalized_for_consumption(transaction)
-            and _is_purchase(transaction)
-            and _transaction_type(transaction) in CASHBACK_TOPICS
+            and transaction.transaction_type in CASHBACK_TOPICS
         ),
         Decimal("0"),
     )
 
 
 def bucket_spend(transactions: Iterable[Transaction], card: str) -> dict[str, Decimal]:
-    """Return purchase spend used for reward rates and caps.
-
-    Refunds are intentionally excluded. They reduce earned cashback only; they
-    do not restore qualifying spend or bucket cap headroom.
-    """
     result: dict[str, Decimal] = {}
     for transaction in transactions:
         if (
             transaction.card != card
-            or not is_finalized_for_consumption(transaction)
-            or not _is_purchase(transaction)
-            or _transaction_type(transaction) not in CASHBACK_TOPICS
+            or transaction.transaction_type not in CASHBACK_TOPICS
             or not transaction.reward_bucket
         ):
             continue
-        result[transaction.reward_bucket] = (
-            result.get(transaction.reward_bucket, Decimal("0")) + transaction.amount_aed
-        )
+        result[transaction.reward_bucket] = result.get(transaction.reward_bucket, Decimal("0")) + transaction.spend_aed
     return result
 
 
-def reward_total(
-    program: CardProgram,
-    total: Decimal,
-    buckets: dict[str, Decimal],
-    *,
-    refund_deductions: Decimal = Decimal("0"),
-) -> Decimal:
-    """Calculate capped cashback after an optional current-period deduction."""
+def reward_total(program: CardProgram, total: Decimal, buckets: dict[str, Decimal]) -> Decimal:
     tier = program.tier_for(total, buckets)
     bucket_defs = {bucket.code: bucket for bucket in program.buckets}
     reward = Decimal("0")
@@ -324,71 +294,11 @@ def reward_total(
         fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
         cap = tier.cashback_cap(code, fallback_cap)
         reward += min(earned, cap) if cap is not None else earned
-    reward = max(reward - max(refund_deductions, Decimal("0")), Decimal("0"))
     if program.rounding_behavior == "CURRENCY_MINOR_UNIT":
         return reward.quantize(Decimal("0.01"))
     if program.rounding_behavior != "NONE":
-        raise ValueError(
-            f"Unsupported reward rounding behavior: {program.rounding_behavior}"
-        )
+        raise ValueError(f"Unsupported reward rounding behavior: {program.rounding_behavior}")
     return reward
-
-
-def _refund_cashback_deduction(
-    program: CardProgram,
-    transactions: Iterable[Transaction],
-    total: Decimal,
-    buckets: dict[str, Decimal],
-) -> Decimal:
-    """Return cashback deducted by refunds at their event-time positions."""
-    del total, buckets
-
-    def event_key(transaction: Transaction) -> tuple[datetime, int, str, str]:
-        occurred_at = transaction.transaction_at
-        if occurred_at.tzinfo is None:
-            occurred_at = occurred_at.replace(tzinfo=UTC)
-        else:
-            occurred_at = occurred_at.astimezone(UTC)
-        return (occurred_at, 0 if _is_purchase(transaction) else 1,
-                str(transaction.transaction_id or "").strip(),
-                _transaction_type(transaction))
-
-    bucket_defs = {bucket.code: bucket for bucket in program.buckets}
-    purchase_total = Decimal("0")
-    purchase_buckets: dict[str, Decimal] = {}
-    seen_ids: set[str] = set()
-    deductions: dict[str, Decimal] = {}
-    for transaction in sorted((row for row in transactions if row.card == program.card), key=event_key):
-        if (is_finalized_for_consumption(transaction) and _is_purchase(transaction)
-                and _transaction_type(transaction) in CASHBACK_TOPICS):
-            purchase_total += transaction.amount_aed
-            code = transaction.reward_bucket
-            if code:
-                purchase_buckets[code] = purchase_buckets.get(code, Decimal("0")) + transaction.amount_aed
-            continue
-        if (not is_finalized_for_consumption(transaction) or not _is_refund(transaction)
-                or _transaction_type(transaction) not in CASHBACK_TOPICS):
-            continue
-        transaction_id = str(transaction.transaction_id or "").strip()
-        if transaction_id and transaction_id in seen_ids:
-            continue
-        if transaction_id:
-            seen_ids.add(transaction_id)
-        code = transaction.reward_bucket
-        if not code:
-            continue
-        tier = program.tier_for(purchase_total, purchase_buckets)
-        rate = tier.rates.get(code, Decimal("0"))
-        if rate <= 0:
-            continue
-        earned = max(purchase_buckets.get(code, Decimal("0")), Decimal("0")) * rate
-        fallback_cap = bucket_defs.get(code).cap_aed if code in bucket_defs else None
-        cap = tier.cashback_cap(code, fallback_cap)
-        earned = min(earned, cap) if cap is not None else earned
-        already_deducted = deductions.get(code, Decimal("0"))
-        remaining = max(earned - already_deducted, Decimal("0"))
-        deductions[code] = already_deducted + min(transaction.amount_aed * rate, remaining)
-    return sum(deductions.values(), Decimal("0"))
 
 
 def evaluate_card(
@@ -409,36 +319,17 @@ def evaluate_card(
     ]
     if not eligible:
         return None
-    refund_deduction = _refund_cashback_deduction(
-        program, existing, current_total, current_buckets
-    )
-    before_reward = reward_total(
-        program,
-        current_total,
-        current_buckets,
-        refund_deductions=refund_deduction,
-    )
+    before_reward = reward_total(program, current_total, current_buckets)
     best: CardValue | None = None
     for bucket in eligible:
         after_buckets = dict(current_buckets)
-        after_buckets[bucket.code] = after_buckets.get(
-            bucket.code, Decimal("0")
-        ) + money(intent.amount_aed)
+        after_buckets[bucket.code] = after_buckets.get(bucket.code, Decimal("0")) + money(intent.amount_aed)
         after_total = current_total + money(intent.amount_aed)
-        after_reward = reward_total(
-            program,
-            after_total,
-            after_buckets,
-            refund_deductions=refund_deduction,
-        )
-        target_total = (
-            program.safety_target if program.safety_target is not None else after_total
-        )
+        after_reward = reward_total(program, after_total, after_buckets)
+        target_total = program.safety_target if program.safety_target is not None else after_total
         target_tier = program.target_tier(target_total, after_buckets)
         target_rate = target_tier.rates.get(bucket.code, Decimal("0"))
-        current_bucket_spend = max(
-            current_buckets.get(bucket.code, Decimal("0")), Decimal("0")
-        )
+        current_bucket_spend = max(current_buckets.get(bucket.code, Decimal("0")), Decimal("0"))
         spend_capacity = None
         if bucket.spend_cap_aed is not None:
             spend_capacity = bucket.spend_cap_aed
@@ -487,9 +378,7 @@ def evaluate_card(
             target_rate=target_rate,
             card_spend_before_aed=current_total,
             tier_threshold_aed=target_tier.minimum_spend,
-            tier_remaining_aed=max(
-                target_tier.minimum_spend - current_total, Decimal("0")
-            ),
+            tier_remaining_aed=max(target_tier.minimum_spend - current_total, Decimal("0")),
             bucket_spend_before_aed=current_bucket_spend,
             bucket_spend_cap_aed=spend_capacity,
             bucket_remaining_aed=bucket_remaining,
@@ -683,7 +572,279 @@ def _merged_policy(
     return {**base, **override}
 
 
-def validate_program_configuration(source: dict[str, object]) -> None:
+def _provenance_claim_paths(program: dict[str, object]) -> dict[str, str]:
+    paths = {"programme": "PROGRAMME"}
+    for tier in program.get("tiers") or []:
+        if not isinstance(tier, dict):
+            continue
+        code = str(tier.get("code") or "")
+        if not code:
+            continue
+        paths[f"tiers.{code}"] = "TIER"
+        for bucket in (tier.get("rates") or {}):
+            paths[f"tiers.{code}.rates.{bucket}"] = "RATE"
+        for bucket, value in (tier.get("cashback_caps_aed") or {}).items():
+            if value is not None:
+                paths[f"tiers.{code}.cashback_caps_aed.{bucket}"] = "CAP"
+    for bucket in program.get("buckets") or []:
+        if not isinstance(bucket, dict):
+            continue
+        code = str(bucket.get("code") or "")
+        if not code:
+            continue
+        for field in ("cashback_cap", "cashback_cap_aed", "spend_cap", "spend_cap_aed"):
+            if bucket.get(field) is not None:
+                paths[f"buckets.{code}.{field}"] = "CAP"
+        for field in ("excluded_categories", "excluded_channels"):
+            for index, value in enumerate(bucket.get(field) or []):
+                if value:
+                    paths[f"buckets.{code}.{field}[{index}]"] = "EXCLUSION"
+    for index, value in enumerate(program.get("exclusions") or []):
+        if value:
+            paths[f"exclusions[{index}]"] = "EXCLUSION"
+    return paths
+
+
+def _provenance_interval_covers(
+    reference_start: date,
+    reference_end: date | None,
+    claim_start: date,
+    claim_end: date | None,
+) -> bool:
+    return (
+        reference_start <= claim_start
+        and (reference_end is None or (claim_end is not None and claim_end <= reference_end))
+    )
+
+
+def _validate_provenance_references(
+    card: str,
+    references: object,
+) -> dict[str, dict[str, object]]:
+    if not isinstance(references, list):
+        raise ValueError(f"Cashback program {card} source_references must be a list")
+    references_by_id: dict[str, dict[str, object]] = {}
+    for reference in references:
+        if not isinstance(reference, dict):
+            raise ValueError(f"Cashback program {card} contains invalid provenance evidence")
+        reference_id = str(reference.get("id") or "")
+        if not reference_id or reference_id in references_by_id:
+            raise ValueError(f"Cashback program {card} contains duplicate provenance reference ids")
+        reference_authority = str(reference.get("authority") or "")
+        if reference_authority not in {"AUTHORITATIVE", "NON_AUTHORITATIVE"}:
+            raise ValueError(f"Cashback program {card} has invalid evidence authority")
+        if "effective_start" not in reference or "effective_end" not in reference:
+            raise ValueError(f"Cashback program {card} evidence requires an effective interval")
+        try:
+            reference_start = _iso_date(reference.get("effective_start"))
+            reference_end = _iso_date(reference.get("effective_end"))
+        except ValueError as exc:
+            raise ValueError(f"Cashback program {card} evidence has invalid dates") from exc
+        if reference_start and reference_end and reference_end < reference_start:
+            raise ValueError(f"Cashback program {card} evidence has an invalid date range")
+        references_by_id[reference_id] = reference
+    return references_by_id
+
+
+def _validate_provenance_interval_coverage(
+    *,
+    card: str,
+    authority: str,
+    claim: dict[str, object],
+    program_start: date | None,
+    configured_program_end: date | None,
+    program_end: date,
+    references_by_id: dict[str, dict[str, object]],
+) -> None:
+    claim_start = _iso_date(claim.get("effective_start"))
+    claim_end = _iso_date(claim.get("effective_end"))
+    path = str(claim.get("path") or "")
+    if claim_start is None:
+        raise ValueError(f"Cashback program {card} claim {path} is undated")
+    if claim_end and claim_end < claim_start:
+        raise ValueError(f"Cashback program {card} claim {path} has an invalid date range")
+    if program_start and claim_start < program_start:
+        raise ValueError(f"Cashback program {card} claim {path} starts before the programme")
+    if program_end and claim_start > program_end:
+        raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+    if configured_program_end and (claim_end is None or claim_end > configured_program_end):
+        raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+    if not configured_program_end and claim_end and claim_end > program_end:
+        raise ValueError(f"Cashback program {card} claim {path} exceeds the programme interval")
+    claim_coverage_end = claim_end
+    if authority == "AUTHORITATIVE":
+        if claim_start != program_start:
+            raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+        if configured_program_end:
+            if claim_end != configured_program_end:
+                raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+        elif claim_end not in (None, program_end):
+            raise ValueError(f"Cashback program {card} claim {path} does not span the programme interval")
+        claim_coverage_end = claim_end or program_end
+    reference_ids = claim.get("reference_ids")
+    if not isinstance(reference_ids, list) or not reference_ids:
+        raise ValueError(f"Cashback program {card} claim {path} requires evidence references")
+    covered = False
+    for reference_id in reference_ids:
+        reference = references_by_id.get(str(reference_id))
+        if reference is None:
+            raise ValueError(f"Cashback program {card} claim {path} references unknown evidence")
+        if authority == "AUTHORITATIVE" and reference.get("authority") != "AUTHORITATIVE":
+            raise ValueError(f"Cashback program {card} claim {path} uses non-authoritative evidence")
+        reference_start = _iso_date(reference.get("effective_start"))
+        reference_end = _iso_date(reference.get("effective_end"))
+        if reference_start and reference_end and reference_end < reference_start:
+            raise ValueError(f"Cashback program {card} evidence has an invalid date range")
+        if reference_start and _provenance_interval_covers(
+            reference_start, reference_end, claim_start, claim_coverage_end
+        ):
+            covered = True
+    if authority == "AUTHORITATIVE" and not covered:
+        raise ValueError(f"Cashback program {card} evidence does not cover claim interval {path}")
+
+
+def _validate_provenance_claims(
+    *,
+    card: str,
+    authority: str,
+    program: dict[str, object],
+    source: dict[str, object],
+    claims: object,
+    references_by_id: dict[str, dict[str, object]],
+    as_of: date,
+) -> None:
+    if not isinstance(claims, list):
+        raise ValueError(f"Cashback program {card} provenance claims must be a list")
+    expected_paths = _provenance_claim_paths(program)
+    if authority == "AUTHORITATIVE":
+        if not claims:
+            raise ValueError(f"Cashback program {card} requires authoritative provenance claims")
+        actual_paths = {str(claim.get("path") or "") for claim in claims if isinstance(claim, dict)}
+        if len(actual_paths) != len(claims):
+            raise ValueError(f"Cashback program {card} contains duplicate provenance claims")
+        if actual_paths != set(expected_paths):
+            missing = ", ".join(sorted(set(expected_paths) - actual_paths))
+            extra = ", ".join(sorted(actual_paths - set(expected_paths)))
+            detail = (f"; missing={missing}" if missing else "") + (f"; extra={extra}" if extra else "")
+            raise ValueError(f"Cashback program {card} has incomplete provenance claims{detail}")
+    program_start = _iso_date(program.get("effective_start") or source.get("effective_from"))
+    configured_program_end = _iso_date(program.get("effective_end") or source.get("effective_end"))
+    # An open-ended current programme is only applicable through this validation
+    # instant. Without this boundary, a current seed could attest to arbitrary
+    # future rates or issuer evidence that has not been observed yet.
+    program_end = configured_program_end or as_of
+    if program_start and program_end and program_end < program_start:
+        raise ValueError(f"Cashback program {card} has an invalid effective interval")
+    if authority == "AUTHORITATIVE" and program_start is None:
+        raise ValueError(f"Cashback program {card} requires an effective programme start")
+    for claim in claims:
+        if not isinstance(claim, dict):
+            raise ValueError(f"Cashback program {card} contains invalid provenance claim")
+        path = str(claim.get("path") or "")
+        if path not in expected_paths:
+            raise ValueError(f"Cashback program {card} references an unknown provenance path {path}")
+        if str(claim.get("kind") or "") != expected_paths[path]:
+            raise ValueError(f"Cashback program {card} claim {path} has an invalid kind")
+        _validate_provenance_interval_coverage(
+            card=card,
+            authority=authority,
+            claim=claim,
+            program_start=program_start,
+            configured_program_end=configured_program_end,
+            program_end=program_end,
+            references_by_id=references_by_id,
+        )
+
+
+def _validate_provenance_fixture_digests(
+    card: str,
+    references: list[object],
+    evidence_root: Path,
+) -> None:
+    for reference in references:
+        if reference.get("authority") != "AUTHORITATIVE":
+            continue
+        reference_start = _iso_date(reference.get("effective_start"))
+        if reference_start is None:
+            raise ValueError(f"Cashback program {card} authoritative evidence is undated")
+        sha256 = str(reference.get("sha256") or "")
+        fixture = str(reference.get("fixture") or "")
+        if len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256):
+            raise ValueError(f"Cashback program {card} authoritative evidence requires a SHA-256")
+        if not fixture:
+            raise ValueError(f"Cashback program {card} authoritative evidence requires content")
+        fixture_path = (evidence_root / fixture).resolve()
+        try:
+            fixture_path.relative_to(evidence_root.resolve())
+        except ValueError as exc:
+            raise ValueError(f"Cashback program {card} evidence fixture escapes repository") from exc
+        if not fixture_path.is_file():
+            raise ValueError(f"Cashback program {card} evidence fixture is missing")
+        observed = hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+        if observed != sha256:
+            raise ValueError(f"Cashback program {card} evidence digest drift for {reference['id']}")
+
+
+def _profile_schema_path(schema_version: int) -> Path:
+    return Path(__file__).resolve().parent.parent / "config" / f"cashback-profile-schema-v{schema_version}.json"
+
+
+def _validate_profile_schema(source: dict[str, object], schema_version: int) -> None:
+    schema_path = _profile_schema_path(schema_version)
+    if not schema_path.is_file():
+        raise ValueError(f"Cashback profile schema is missing for version {schema_version}")
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Cashback profile schema cannot be loaded for version {schema_version}") from exc
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    errors = sorted(validator.iter_errors(source), key=lambda error: list(error.absolute_path))
+    if errors:
+        location = ".".join(str(part) for part in errors[0].absolute_path) or "$"
+        raise ValueError(f"Cashback profile schema error at {location}: {errors[0].message}")
+
+
+def validate_program_provenance(
+    source: dict[str, object],
+    *,
+    as_of: date | datetime | None = None,
+) -> None:
+    validation_date = _as_of_date(as_of)
+    if int(source.get("schema_version", 1)) < 2:
+        return
+    programs = source.get("programs") or []
+    evidence_root = Path(__file__).resolve().parent.parent
+    for item in programs:
+        if not isinstance(item, dict):
+            continue
+        card = str(item.get("card") or "")
+        provenance = item.get("provenance")
+        if not isinstance(provenance, dict):
+            raise ValueError(f"Cashback program {card} requires provenance in schema version 2")
+        authority = str(provenance.get("authority") or "")
+        if authority not in {"AUTHORITATIVE", "NON_AUTHORITATIVE"}:
+            raise ValueError(f"Cashback program {card} has invalid provenance authority")
+        references = item.get("source_references") or []
+        references_by_id = _validate_provenance_references(card, references)
+        claims = provenance.get("claims")
+        _validate_provenance_claims(
+            card=card,
+            authority=authority,
+            program=item,
+            source=source,
+            claims=claims,
+            references_by_id=references_by_id,
+            as_of=validation_date,
+        )
+        _validate_provenance_fixture_digests(card, references, evidence_root)
+
+
+def validate_program_configuration(
+    source: dict[str, object],
+    *,
+    as_of: date | datetime | None = None,
+) -> None:
+    validate_program_provenance(source, as_of=as_of)
     programs = source.get("programs") or []
     if not isinstance(programs, list) or not programs:
         raise ValueError("Cashback configuration must define at least one program")
@@ -889,8 +1050,10 @@ def configured_reward_bucket(
 def programs_from_config(
     source: dict[str, object],
     period_date: date | None = None,
+    *,
+    as_of: date | datetime | None = None,
 ) -> tuple[CardProgram, ...]:
-    validate_program_configuration(source)
+    validate_program_configuration(source, as_of=as_of)
     base_currency = str(source.get("currency") or "AED").upper()
     programs = []
     for item in source.get("programs", []):
@@ -1074,15 +1237,28 @@ def payment_intents_from_config(source: dict[str, object]) -> tuple[PaymentInten
     )
 
 
-def load_program_configuration(path: Path | None = None) -> dict[str, object]:
+def load_program_configuration(
+    path: Path | None = None,
+    *,
+    as_of: date | datetime | None = None,
+) -> dict[str, object]:
     resolved = path or Path(__file__).resolve().parent.parent / "config" / "cashback-programs.json"
     source = json.loads(resolved.read_text(encoding="utf-8"))
-    if int(source.get("schema_version", 0)) != 1:
+    try:
+        schema_version = int(source.get("schema_version", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Unsupported cashback program schema version") from exc
+    if schema_version not in {1, 2}:
         raise ValueError("Unsupported cashback program schema version")
-    validate_program_configuration(source)
+    _validate_profile_schema(source, schema_version)
+    validate_program_configuration(source, as_of=as_of)
     return source
 
 
 def poc_programs(period_date: date | None = None) -> tuple[CardProgram, ...]:
     """Load the versioned POC programme assumptions; verify before production use."""
-    return programs_from_config(load_program_configuration(), period_date)
+    return programs_from_config(
+        load_program_configuration(as_of=period_date),
+        period_date,
+        as_of=period_date,
+    )

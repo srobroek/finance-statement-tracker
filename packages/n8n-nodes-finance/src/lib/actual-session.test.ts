@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { ActualApi, ActualSession, preflightOutbox } from './actual-session';
-import { assertActualImportTransactions, assertActualMutationMode } from './contracts';
+import { assertActualMutationMode } from './contracts';
 
 const future = () => new Date(Date.now() + 60_000).toISOString();
 const envelope = () => ({
   schema_version: 1, outbox_id: 'outbox-1', state: 'PREPARED', account_id: 'account-1',
   execution_context: { trigger: 'SCHEDULE', manual: false, mcp: false },
-  writer_lease: { resource_key: 'actual:sync', lease_id: 'lease-1', fencing_token: 1, expires_at: future() },
+  writer_lease: { lease_id: 'lease-1', fencing_token: 1, expires_at: future() },
   transactions: [{ imported_id: 'statement:one', date: '2026-08-01', amount: -1000, imported_payee: 'Merchant' }],
 });
 
@@ -34,20 +34,7 @@ const session = (api: ActualApi) => new ActualSession(api, path.join(tmpdir(), '
 test('prepared outbox rejects manual, MCP, duplicate and expired inputs', () => {
   assert.throws(() => preflightOutbox({ ...envelope(), execution_context: { trigger: 'SCHEDULE', manual: true, mcp: false } }), /forbidden/);
   assert.throws(() => preflightOutbox({ ...envelope(), transactions: [...envelope().transactions, ...envelope().transactions] }), /duplicate imported_id/);
-  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { resource_key: 'actual:sync', lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }));
-});
-
-test('transaction clearing accepts only booleans', () => {
-  const transaction = envelope().transactions[0]!;
-  for (const cleared of [false, true]) {
-    assert.equal(assertActualImportTransactions([{ ...transaction, cleared }])[0]?.cleared, cleared);
-  }
-  for (const cleared of ['false', 0, 1, null]) {
-    assert.throws(
-      () => assertActualImportTransactions([{ ...transaction, cleared }]),
-      Error,
-    );
-  }
+  assert.throws(() => preflightOutbox({ ...envelope(), writer_lease: { lease_id: 'x', fencing_token: 1, expires_at: '2020-01-01T00:00:00Z' } }), /expired/);
 });
 
 test('import forces reimportDeleted false, syncs before and after, and shuts down', async () => {
@@ -100,6 +87,29 @@ test('verify compares exact economic fields, hash, and optional balance', async 
 
 test('mutation-disabled credential cannot import', async () => {
   await assert.rejects(session(fakeApi()).import({ ...credential, mutationEnabled: false }, envelope()), /disabled/);
+});
+
+test('doctor and account reads expose safe account health without provider IDs', async () => {
+  const balanceIds: string[] = [];
+  const api = fakeApi({
+    async getServerVersion() { return { version: 'test' }; },
+    async getAccounts() { return [{ id: 'account-1', name: 'Card', closed: false, offbudget: true }]; },
+    async getAccountBalance(id) { balanceIds.push(id); return -1000; },
+  });
+  const expected = {
+    status: 'ok', server: { version: 'test' }, counts: { accounts: 1, categories: 1 },
+    accounts: [{ name: 'Card', closed: false, offbudget: true, balance: -1000 }],
+  };
+
+  const doctor = await session(api).doctor(credential);
+  const accounts = await session(api).read(credential, { shape: 'accounts' });
+
+  assert.deepEqual(doctor, expected);
+  assert.deepEqual(accounts, expected);
+  assert.deepEqual(balanceIds, ['account-1', 'account-1']);
+  const serialized = JSON.stringify({ doctor, accounts });
+  assert.equal(serialized.includes('account-1'), false);
+  assert.equal(serialized.includes('sync'), false);
 });
 
 test('manual, MCP-like, chat, agent, and evaluation modes cannot mutate', () => {

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "enabled": false,
+  "transport": "n8n-mcp-server-trigger",
+  "path": "/mcp/finance-operations-v1",
+  "instance_mcp": false,
+  "authentication": {
+    "cloudflare": "service-auth",
+    "origin": "dedicated-bearer-credential"
+  },
+  "operations": [
+    {
+      "name": "finance.status.v1",
+      "internal_operation_code": "finance.status",
+      "mode": "read-only",
+      "input_schema": "finance-status-request-v1",
+      "target": "FINANCE_OPERATIONS_STATUS"
+    },
+    {
+      "name": "finance.document.request.v1",
+      "internal_operation_code": "document.request",
+      "mode": "request-only",
+      "input_schema": "finance-document-request-v1",
+      "target": "DOCUMENT_EXTRACTION_REQUEST"
+    },
+    {
+      "name": "finance.reviewed-artifact.handoff.v1",
+      "internal_operation_code": "artifact.submit_reviewed",
+      "mode": "reviewed-artifact-only",
+      "input_schema": "finance-reviewed-artifact-v1",
+      "target": "INTERACTIVE_ARTIFACT_HANDOFF"
+    }
+  ],
+  "caller_forbidden_fields": [
+    "command",
+    "filesystem_path",
+    "url",
+    "mailbox_folder",
+    "sender",
+    "subject",
+    "credential_id",
+    "actual_account_id",
+    "commit",
+    "activate",
+    "workflow_id",
+    "data_table_id"
+  ],
+  "mutation_policy": "MCP executions cannot enter finance mutation mode."
+}

@@ -110,5 +110,4 @@ writeReviewed(files.prodexSetup, (source) => replaceOnce(
   'prodex-setup-disabled',
 ));
 
-
 process.stdout.write('community AI runtime hardening applied\n');

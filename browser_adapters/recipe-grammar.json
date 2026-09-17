@@ -2,6 +2,7 @@
   "schema_version": 1,
   "actions": {
     "GOTO": {"where": "provider", "required": ["url"], "optional": [], "terminal": false},
+    "PAUSE_FOR_USER": {"where": "provider", "required": ["reason"], "optional": [], "terminal": false},
     "CLICK": {"where": "both", "required": ["selector"], "optional": ["button"], "terminal": false},
     "SELECT": {"where": "both", "required": ["field", "option"], "optional": [], "terminal": false},
     "READ": {"where": "both", "required": ["selector", "as"], "optional": [], "terminal": true},

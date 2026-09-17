@@ -43,6 +43,7 @@ FROM ${PYTHON_IMAGE} AS runtime
 ARG N8N_VERSION=2.36.2
 ARG N8N_SOURCE_COMMIT=bc9090e8c61d0dc84aa85528e62142dfb7001243
 ARG LAUNCHER_SOURCE_COMMIT=fad71fc0dab52a6b6558765d1431c7846cfd816f
+ARG FINANCE_SOURCE_COMMIT=UNVERIFIED
 
 ENV NODE_ENV=production \
     N8N_VERSION=${N8N_VERSION} \
@@ -79,6 +80,7 @@ LABEL org.opencontainers.image.title="Finance n8n task runners" \
       org.opencontainers.image.description="Source-rebuilt n8n JavaScript/Python task runners and launcher" \
       org.opencontainers.image.version="${N8N_VERSION}" \
       org.opencontainers.image.source="https://github.com/n8n-io/n8n/tree/${N8N_SOURCE_COMMIT}" \
+      finance.finance_source_commit="${FINANCE_SOURCE_COMMIT}" \
       finance.n8n.source_commit="${N8N_SOURCE_COMMIT}" \
       finance.launcher.source_commit="${LAUNCHER_SOURCE_COMMIT}" \
       finance.launcher.security_override="golang.org/x/text@v0.39.0"

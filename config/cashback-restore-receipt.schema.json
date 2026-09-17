@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://finance.example.invalid/schema/cashback-restore-receipt-v1.json",
+  "title": "Disposable Cashback SQLite restore receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "redacted",
+    "started_at",
+    "completed_at",
+    "backup",
+    "runtime",
+    "source_provenance",
+    "requested_runs",
+    "runs",
+    "cleanup_verified",
+    "production_mutated",
+    "retained_mutated",
+    "secret_values_recorded",
+    "error"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["passed", "failed", "blocked"]},
+    "mode": {"const": "disposable"},
+    "redacted": {"const": true},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "backup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "archive_sha256", "archive_bytes", "verified"],
+      "properties": {
+        "name": {"type": ["string", "null"]},
+        "archive_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "archive_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "verified": {"type": "boolean"}
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "image", "image_digest", "available", "verified"],
+      "properties": {
+        "engine": {"type": ["string", "null"]},
+        "image": {"type": "string", "minLength": 1},
+        "image_digest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "available": {"type": "boolean"},
+        "verified": {"type": "boolean"}
+      }
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "script_sha256"],
+      "properties": {
+        "commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "script_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "requested_runs": {"type": "integer", "minimum": 2},
+    "runs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "run_index",
+          "sidecar_id",
+          "pre_state_sha256",
+          "post_state_sha256",
+          "exact_state_match",
+          "health_authorized",
+          "restart_verified",
+          "cleanup_verified",
+          "status"
+        ],
+        "properties": {
+          "run_index": {"type": "integer", "minimum": 1},
+          "sidecar_id": {"type": "string", "minLength": 1},
+          "pre_state_sha256": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "post_state_sha256": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "exact_state_match": {"type": "boolean"},
+          "health_authorized": {"type": "boolean"},
+          "restart_verified": {"type": "boolean"},
+          "cleanup_verified": {"type": "boolean"},
+          "status": {"enum": ["passed", "failed"]}
+        }
+      }
+    },
+    "cleanup_verified": {"type": "boolean"},
+    "production_mutated": {"const": false},
+    "retained_mutated": {"const": false},
+    "secret_values_recorded": {"const": false},
+    "error": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["code", "stage"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "stage": {"type": "string", "minLength": 1},
+        "detail": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "passed"}}},
+      "then": {
+        "properties": {
+          "backup": {"properties": {"verified": {"const": true}}},
+          "runtime": {
+            "properties": {
+              "available": {"const": true},
+              "verified": {"const": true},
+              "image_digest": {"type": "string"}
+            }
+          },
+          "runs": {
+            "minItems": 2,
+            "items": {
+              "properties": {
+                "status": {"const": "passed"},
+                "pre_state_sha256": {"type": "string"},
+                "post_state_sha256": {"type": "string"},
+                "exact_state_match": {"const": true},
+                "health_authorized": {"const": true},
+                "restart_verified": {"const": true},
+                "cleanup_verified": {"const": true}
+              }
+            }
+          },
+          "cleanup_verified": {"const": true},
+          "error": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "blocked"}}},
+      "then": {
+        "properties": {
+          "error": {"type": "object"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "failed"}}},
+      "then": {
+        "properties": {
+          "error": {"type": "object"}
+        }
+      }
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # Finance tracker implementation status
 
 Date: 2026-08-19
-Audited revision: `f4436d8` plus a large uncommitted n8n/agent-runner refactor
+Audited revision: `f4436d8` plus a large uncommitted n8n/agent refactor
 Production writes performed by this audit: **none**
 
 > Baseline snapshot: the test and worktree findings below describe the audited
@@ -13,8 +13,8 @@ Production writes performed by this audit: **none**
 
 The repository is not ready for production promotion. Important deterministic
 components exist and are well tested, but the current shared worktree is not
-green: the Python suite has one n8n bootstrap failure and the Codex agent runner
-has two envelope-contract failures. The n8n refactor is also uncommitted and has
+green: the Python suite has one n8n bootstrap failure and the subscription
+adapter has two envelope-contract failures. The n8n refactor is also uncommitted and has
 not been executed end to end in a disposable runtime. Older production and
 replay artifacts do not certify these changed bytes or the expanded FAB/Sarwa
 account scope.
@@ -35,7 +35,7 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
 | Transaction semantics | Direction/topic locking, EI Amazon refund behavior, generic positive merchant credits, immutable amounts, and ADCB closing-payment transfer behavior have regression coverage. | Not deployed or full-corpus audited. |
 | Note contract v2 | Tags-first minimal grammar, removal of routine FX/source/message/derived-cashback clutter, evidence formatting, and technical-tag rejection are tested in Python and Node. | Existing production/UI rows are not proven migrated. |
 | FAB/Sarwa inventory model | Stable redacted identities and source captures exist; account, wealth, and acceptance validators have tests. | Fresh Sarwa/FX and authenticated Actual UI/API readback remain open. |
-| Browser adapter foundation | ADCB, EI, FAB, Amazon, Wio, and Sarwa report ready in the registry and browser tests pass. | RAK/SC statement adapters and the greenfield n8n end-to-end route remain missing. |
+| Browser adapter foundation | ADCB, EI, FAB, Wio, and Sarwa report ready in the registry and browser tests pass. Generic merchant order enrichment uses email evidence. | RAK/SC statement adapters and the greenfield n8n end-to-end route remain missing. |
 | Cashback companion | Configurable app, separate compose, CI image flow, deterministic routing, and push foundations exist. | Current public health/mobile/push and n8n live-feed cutover were not independently revalidated. |
 
 ## Current contradictions and stale evidence
@@ -64,12 +64,12 @@ domain prefixes (`architecture.`, `accounts.`, `transactions.`,
 | `python -m unittest discover -s tests -v` | **FAIL** — 351 run, 350 passed, 1 failed, 6 skipped. Failure: n8n platform-bootstrap seed/readback assertion. |
 | `python -m unittest tests.test_n8n_workflows -v` | **FAIL** — 36 run, 35 passed, 1 failed (same bootstrap contract mismatch). |
 | `npm test --prefix integrations/actual` | **PASS** — 48/48. |
-| `npm test --prefix services/codex-agent-runner` | **FAIL** — 14/16 passed; both failures are `agent_provider` envelope mismatches. |
+| Subscription adapter contract suite | **FAIL** — 14/16 passed; both failures are `agent_provider` envelope mismatches. |
 | HTTPS read-only health probes | **UNVERIFIED** — the audit host failed before HTTP with Windows Schannel `SEC_E_NO_CREDENTIALS`; this is not evidence that either service is down. |
 
 ## Production blockers in execution order
 
-1. Stabilize and commit the n8n/runner refactor; regenerate contracts and make
+1. Stabilize and commit the n8n subscription-adapter refactor; regenerate contracts and make
    every suite green.
 2. Acquire fresh interactive Sarwa holdings and a versioned FX snapshot.
 3. Prove the complete FAB non-credit and Sarwa account set through both Actual

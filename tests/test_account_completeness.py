@@ -7,13 +7,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from finance_tracker.account_completeness import (
+    _parse_account_row,
+    _parse_provider_inventory,
+    _validate_account_lifecycle_and_balance,
     load_account_completeness_manifest,
     validate_account_completeness,
 )
 from finance_tracker.account_proposals import (
     build_adcb_closed_zero_assertion,
     build_fab_inventory_proposal,
-    build_fab_opening_anchor_proposal,
     build_sarwa_position_sidecar,
 )
 from finance_tracker.wealth import parse_registered_wealth_capture
@@ -29,6 +31,68 @@ RECONCILIATION_RECEIPT = ROOT / "config" / "evidence" / "production-account-reco
 
 
 class AccountCompletenessTests(unittest.TestCase):
+    def test_private_parsers_preserve_manifest_projection_and_errors(self) -> None:
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        identities: set[str] = set()
+        parsed_accounts = []
+        for raw in payload["accounts"]:
+            account = _parse_account_row(raw, identities)
+            _validate_account_lifecycle_and_balance(account)
+            parsed_accounts.append(account)
+
+        provider_ids: set[str] = set()
+        parsed_providers = [
+            _parse_provider_inventory(raw, provider_ids)
+            for raw in payload["providers"]
+        ]
+        manifest = load_account_completeness_manifest(payload)
+
+        self.assertEqual(tuple(parsed_accounts), manifest.accounts)
+        self.assertEqual(tuple(parsed_providers), manifest.providers)
+        self.assertEqual(len(parsed_accounts), 18)
+        self.assertEqual(len(identities), 12)
+        self.assertEqual(len(parsed_accounts) - len(identities), 6)
+
+        invalid_account = json.loads(json.dumps(payload))
+        invalid_account["accounts"][0]["active"] = True
+        with self.assertRaises(ValueError) as public_error:
+            load_account_completeness_manifest(invalid_account)
+        with self.assertRaises(ValueError) as parser_error:
+            account = _parse_account_row(invalid_account["accounts"][0], set())
+            _validate_account_lifecycle_and_balance(account)
+        self.assertEqual(str(parser_error.exception), str(public_error.exception))
+
+        invalid_provider = json.loads(json.dumps(payload))
+        invalid_provider["providers"][0]["inventory_status"] = "UNKNOWN"
+        with self.assertRaises(ValueError) as public_error:
+            load_account_completeness_manifest(invalid_provider)
+        with self.assertRaises(ValueError) as parser_error:
+            _parse_provider_inventory(invalid_provider["providers"][0], set())
+        self.assertEqual(str(parser_error.exception), str(public_error.exception))
+
+    def test_manifest_rejects_truthy_boolean_values(self) -> None:
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        account_fields = (
+            "include_in_actual",
+            "actual_offbudget",
+            "include_in_net_worth",
+            "active",
+            "retain_history",
+            "include_in_active_routing",
+            "balance_reconciliation_required",
+        )
+        for field in account_fields:
+            with self.subTest(field=field):
+                candidate = json.loads(json.dumps(payload))
+                candidate["accounts"][0][field] = "false"
+                with self.assertRaisesRegex(ValueError, field):
+                    load_account_completeness_manifest(candidate)
+
+        candidate = json.loads(json.dumps(payload))
+        candidate["providers"][0]["discovery_required"] = 0
+        with self.assertRaisesRegex(ValueError, "discovery_required"):
+            load_account_completeness_manifest(candidate)
+
     def test_production_reconciliation_receipt_is_redacted_and_hash_bound(self) -> None:
         receipt = json.loads(RECONCILIATION_RECEIPT.read_text(encoding="utf-8"))
         rendered = json.dumps(receipt)
@@ -52,8 +116,10 @@ class AccountCompletenessTests(unittest.TestCase):
     def test_manifest_uses_unique_safe_stable_identities(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
 
-        identities = [row.provider_account_id for row in manifest.accounts]
+        identities = [row.provider_account_id for row in manifest.accounts if row.provider_account_id]
         self.assertEqual(len(identities), len(set(identities)))
+        self.assertEqual(manifest.account_count, 18)
+        self.assertEqual(len(manifest.provider_identity_candidates()), 12)
         self.assertIn("fab:current:2001", identities)
         self.assertIn("fab:loan:mortgage-0203", identities)
         self.assertIn("sarwa:invest:personal", identities)
@@ -249,39 +315,62 @@ class AccountCompletenessTests(unittest.TestCase):
         self.assertEqual(proposal["sarwa"]["wealth_snapshot_id"], snapshot.snapshot_id)
         self.assertEqual(proposed_values, expected_values)
 
-    def test_fab_anchor_fails_closed_for_stale_or_future_capture(self) -> None:
-        capture = {
-            "capture_id": "fixture-fab-current-2001",
-            "source": {"provider": "fab"},
-            "account": {
-                "account_last4": "2001",
-                "currency": "AED",
-                "balance": "0.00",
-                "balance_as_of": "2026-08-18T12:00:00Z",
-            },
-        }
-        as_of = datetime.fromisoformat(
-            capture["account"]["balance_as_of"].replace("Z", "+00:00")
+    def test_fab_inventory_proposal_fails_closed_for_stale_or_future_capture(self) -> None:
+        manifest = load_account_completeness_manifest(MANIFEST)
+        inventory = json.loads(FAB_INVENTORY.read_text(encoding="utf-8"))
+        evaluated_at = datetime(2026, 8, 19, tzinfo=timezone.utc)
+        fresh = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at,
+            stale_after_seconds=86400,
         )
-        common = {
-            "capture": capture,
-            "provider_account_id": "fab:current:2001",
-            "account_name": "FAB Elite Gold Current Account · 2001",
-            "inventory_complete": False,
-            "stale_after_seconds": 86400,
-        }
-        stale = build_fab_opening_anchor_proposal(
-            evaluated_at=as_of + timedelta(days=2), **common
+        self.assertEqual(fresh["status"], "READY_FOR_REVIEW")
+        self.assertEqual(fresh["blockers"], [])
+        self.assertFalse(fresh["actual_writes_allowed"])
+
+        identities = [
+            "fab:current:2001",
+            "fab:current:2008",
+            "fab:loan:mortgage-0203",
+            "fab:savings:isave-2002",
+            "fab:savings:shared-property-aed-2006",
+            "fab:savings:shared-property-eur-2007",
+        ]
+        stale = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at + timedelta(days=2),
+            stale_after_seconds=86400,
         )
-        future = build_fab_opening_anchor_proposal(
-            evaluated_at=as_of - timedelta(seconds=1), **common
+        self.assertEqual(
+            stale["blockers"],
+            [f"FAB_BALANCE_SNAPSHOT_STALE:{identity}" for identity in identities],
+        )
+        self.assertEqual(stale["status"], "BLOCKED")
+        self.assertFalse(stale["actual_writes_allowed"])
+        self.assertTrue(
+            all(row["opening_balance_anchor"]["freshness"] == "STALE" for row in stale["accounts"])
         )
 
-        self.assertIn("FAB_PORTAL_ACCOUNT_INVENTORY_REQUIRED", stale["blockers"])
-        self.assertIn("FAB_BALANCE_SNAPSHOT_STALE", stale["blockers"])
-        self.assertIn("FAB_BALANCE_AS_OF_IN_FUTURE", future["blockers"])
-        self.assertFalse(stale["actual_writes_allowed"])
+        future = build_fab_inventory_proposal(
+            inventory,
+            manifest,
+            evaluated_at=evaluated_at - timedelta(seconds=1),
+            stale_after_seconds=86400,
+        )
+        self.assertEqual(
+            future["blockers"],
+            [f"FAB_BALANCE_AS_OF_IN_FUTURE:{identity}" for identity in identities],
+        )
+        self.assertEqual(future["status"], "BLOCKED")
         self.assertFalse(future["actual_writes_allowed"])
+        self.assertTrue(
+            all(
+                row["opening_balance_anchor"]["freshness"] == "AS_OF_IN_FUTURE"
+                for row in future["accounts"]
+            )
+        )
 
     def test_complete_fab_inventory_proposal_rejects_set_or_sign_drift(self) -> None:
         manifest = load_account_completeness_manifest(MANIFEST)
@@ -292,6 +381,7 @@ class AccountCompletenessTests(unittest.TestCase):
             evaluated_at=datetime(2026, 8, 19, tzinfo=timezone.utc),
         )
         self.assertEqual(proposal["status"], "READY_FOR_REVIEW")
+        self.assertEqual(proposal["blockers"], [])
         self.assertFalse(proposal["actual_writes_allowed"])
 
         missing = json.loads(json.dumps(inventory))

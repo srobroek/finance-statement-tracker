@@ -111,6 +111,23 @@ class WebPushStoreTests(unittest.TestCase):
             self.assertEqual(payload["notification"]["tag"], candidate.key)
             self.assertEqual(calls[0]["headers"], {"Urgency": "high"})
 
+    def test_public_push_config_contains_no_subscription_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = WebPushStore(Path(temporary) / "cashback.sqlite3")
+            store.upsert_subscription(_subscription())
+            dispatcher = WebPushDispatcher(
+                store,
+                public_key="vapid-public",
+                private_key="vapid-private",
+                subject="https://cashback.example",
+                public_url="https://cashback.example",
+            )
+
+            self.assertEqual(
+                dispatcher.config(),
+                {"enabled": True, "public_key": "vapid-public"},
+            )
+
     def test_first_dashboard_does_not_create_a_routing_change_notification(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             calls: list[dict[str, object]] = []

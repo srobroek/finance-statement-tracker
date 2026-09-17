@@ -304,16 +304,21 @@ class SarwaProvider:
         label = _required_text(raw.get("label"), "invest_account.label")
         identity = self._identity(label)
         positions: list[PositionSnapshot] = []
+        instrument_ids: set[str] = set()
         for index, item in enumerate(raw.get("positions") or []):
             if not isinstance(item, Mapping):
                 raise ValueError(f"invest_account.positions[{index}] must be an object")
             ticker = _required_text(item.get("ticker"), f"positions[{index}].ticker").upper()
+            instrument_id = f"ticker:{ticker}"
+            if instrument_id in instrument_ids:
+                raise ValueError(f"Duplicate Sarwa instrument in portfolio {label}: {ticker}")
+            instrument_ids.add(instrument_id)
             units = _decimal(item.get("units"), f"positions[{index}].units")
             market_value = _decimal(
                 item.get("market_value_usd"), f"positions[{index}].market_value_usd"
             )
             positions.append(PositionSnapshot(
-                instrument_id=f"ticker:{ticker}",
+                instrument_id=instrument_id,
                 ticker=ticker,
                 name=_required_text(item.get("name"), f"positions[{index}].name"),
                 exchange=None,

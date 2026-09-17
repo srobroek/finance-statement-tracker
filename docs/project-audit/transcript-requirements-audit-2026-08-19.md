@@ -20,7 +20,7 @@ The most important distinction is:
   the actionable review queue, and successful-run task cleanup were explicitly
   reported wrong or missing.
 - **Repository/assistant claim only:** the fenced n8n writer, deduplication and
-  quarantine, bounded Codex runner, rule ownership, and several recovery
+  quarantine, bounded subscription adapter, rule ownership, and several recovery
   controls have code/spec/test evidence but no production acceptance.
 - **Requested but unverified:** secure PDF extraction, selective evidence,
   budgets, schedules, owners, many reports, production n8n, 1Password runtime
@@ -36,7 +36,7 @@ The machine-readable ledger contains **74** stable requirements:
 | --- | --- | ---: |
 | `N8N-*` | n8n platform and workflows | 9 |
 | `DOC-*` | Outlook, OneDrive and document evidence | 7 |
-| `AGENT-*` | AI providers, Codex runner and community-node policy | 5 |
+| `AGENT-*` | AI providers, subscription adapter and community-node policy | 5 |
 | `ACTUAL-*` | Accounts, ledger, rules, budgets and reports | 21 |
 | `CASHBACK-*` | Live cashback companion | 14 |
 | `BROWSER-*` | FAB, Sarwa and Amazon acquisition | 4 |
@@ -108,7 +108,7 @@ These overrides must be applied before interpreting older requests:
 ## Current evidence boundary
 
 The repository now contains extensive n8n workflow exports, custom-node and PDF
-utility code, an isolated Codex runner, schema/config work, FAB/Sarwa account
+utility code, a bounded subscription adapter, schema/config work, FAB/Sarwa account
 inventories, wealth contracts, rules, dashboards and tests. That is meaningful
 implementation evidence but not deployment evidence.
 
