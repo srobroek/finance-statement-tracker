@@ -15,6 +15,7 @@ MANIFEST = HERE / "fixture-manifest.json"
 
 LEASE_ID = "10000000-0000-4000-8000-000000000018"
 AI_ID = "10000000-0000-4000-8000-000000000009"
+BOOTSTRAP_FIXTURE_ID = "90000000-0000-4000-8000-000000000019"
 SWEEP_FIXTURE_ID = "90000000-0000-4000-8000-000000000012"
 RECOVERY_FIXTURE_ID = "90000000-0000-4000-8000-000000000017"
 
@@ -73,8 +74,23 @@ def fixture_settings() -> dict:
         "executionOrder": "v1",
         "timezone": "Asia/Dubai",
         "saveDataErrorExecution": "none",
-        "saveDataSuccessExecution": "none",
+        "saveDataSuccessExecution": "all",
     }
+
+
+def build_bootstrap_fixture() -> dict:
+    workflow = copy.deepcopy(read_json(PRODUCTION / "19-platform-data-table-bootstrap.json"))
+    workflow["id"] = BOOTSTRAP_FIXTURE_ID
+    workflow["name"] = "DISPOSABLE ONLY · Platform Data Table Bootstrap"
+    workflow["settings"]["saveDataSuccessExecution"] = "all"
+    workflow["meta"] = {
+        **workflow["meta"],
+        "disposableOnly": True,
+        "productionImportForbidden": True,
+        "derivedFrom": "19-platform-data-table-bootstrap.json",
+        "sourceWorkflowId": workflow["meta"].get("financeWorkflowCode"),
+    }
+    return workflow
 
 
 def wrapper(workflow_id: str, name: str, input_js: str, target_id: str) -> dict:
@@ -405,6 +421,7 @@ def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
 
 def build_all() -> dict[str, dict]:
     workflows = {
+        "89-platform-data-table-bootstrap.json": build_bootstrap_fixture(),
         "90-derived-outlook-sweep-core.json": build_sweep_core(),
         "91-sweep-zero.json": wrapper("90000000-0000-4000-8000-000000000901", "DISPOSABLE ONLY · Sweep zero messages", sweep_input("zero"), SWEEP_FIXTURE_ID),
         "92-sweep-101.json": wrapper("90000000-0000-4000-8000-000000000902", "DISPOSABLE ONLY · Sweep 101 messages", sweep_input("one-hundred-one"), SWEEP_FIXTURE_ID),
@@ -436,6 +453,7 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
             "16-operations-error-handler.json",
             "17-actual-outbox-recovery.json",
             "18-finance-writer-lease.json",
+            "19-platform-data-table-bootstrap.json",
         )
     }
     return {

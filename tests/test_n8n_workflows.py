@@ -834,11 +834,18 @@ class N8nWorkflowTests(unittest.TestCase):
         self.assertEqual(manifest["contract_status"], "DISPOSABLE_ONLY")
         self.assertTrue(manifest["production_import_forbidden"])
         self.assertEqual(manifest["required_acknowledgement"], "DISPOSABLE_ONLY")
-        self.assertEqual(len(manifest["workflows"]), 18)
+        self.assertEqual(len(manifest["workflows"]), 19)
         for row in manifest["workflows"]:
             path = generated / row["file"]
             self.assertTrue(path.is_file())
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), row["sha256"])
+        bootstrap = load_json(generated / "89-platform-data-table-bootstrap.json")
+        self.assertEqual(bootstrap["id"], "90000000-0000-4000-8000-000000000019")
+        self.assertEqual(bootstrap["settings"]["saveDataSuccessExecution"], "all")
+        self.assertEqual(
+            load_json(WORKFLOWS / "19-platform-data-table-bootstrap.json")["settings"]["saveDataSuccessExecution"],
+            "none",
+        )
 
     def test_disposable_fixtures_are_inactive_manual_and_external_write_free(self) -> None:
         generated = N8N / "disposable" / "generated"
@@ -859,6 +866,7 @@ class N8nWorkflowTests(unittest.TestCase):
                 self.assertNotIn(workflow["id"], production_ids)
                 self.assertTrue(workflow["meta"]["disposableOnly"])
                 self.assertTrue(workflow["meta"]["productionImportForbidden"])
+                self.assertEqual(workflow["settings"]["saveDataSuccessExecution"], "all")
                 self.assertFalse({node["type"] for node in workflow["nodes"]} & forbidden)
                 self.assertTrue(any(
                     node["type"] in {
