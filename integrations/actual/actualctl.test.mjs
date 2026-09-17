@@ -1,11 +1,17 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
   assertCommitEnabled,
   canonicalActualImportProjection,
+  classifyDoctorError,
+  createDoctorReceipt,
   compareActualImportProjections,
   doctor,
+  openBudget,
   enrichTransactions,
   exportDashboardDocument,
   fetchActualTransferRows,
@@ -396,45 +402,109 @@ test("Actual write gate is case insensitive but rejects other values", () => {
   );
 });
 
-test("doctor redacts sync and provider account identifiers while retaining health data", async () => {
-  const syncId = "sync-secret-123";
-  const providerAccountId = "account-provider-secret-456";
-  const previousSyncId = process.env.ACTUAL_SYNC_ID;
-  process.env.ACTUAL_SYNC_ID = syncId;
-  try {
-    const result = await doctor({
-      getServerVersion: async () => ({ version: "26.8.1" }),
-      getAccounts: async () => [{
-        id: providerAccountId,
-        name: "FAB Current",
-        offbudget: false,
-        closed: false,
-      }],
-      getCategories: async () => [{ id: "category-1" }],
-      getCategoryGroups: async () => [{ id: "group-1" }],
-      getTags: async () => [{ id: "tag-1" }],
-      getRules: async () => [{ id: "rule-1" }],
-      getSchedules: async () => [{ id: "schedule-1" }],
-      getAccountBalance: async id => {
-        assert.equal(id, providerAccountId);
-        return -4200;
-      },
-    });
+test("doctor errors use only the bounded public classifications", () => {
+  const cases = [
+    [{ code: "ECONNREFUSED", message: "connect ECONNREFUSED 127.0.0.1:5006" }, "unreachable"],
+    [{ status: 401, message: "password=super-secret" }, "auth"],
+    [{ name: "TimeoutError", message: "request timed out after 10s" }, "timeout"],
+    [new SyntaxError("Unexpected token in JSON at position 2"), "malformed"],
+  ];
 
-    const serialized = JSON.stringify(result);
-    assert.equal(result.sync_id_present, true);
-    assert.equal(result.counts.accounts, 1);
-    assert.equal(result.accounts[0].id, "[REDACTED]");
-    assert.equal(result.accounts[0].name, "FAB Current");
-    assert.equal(result.accounts[0].balance, -4200);
-    assert.equal(result.accounts[0].closed, false);
-    assert.equal(result.accounts[0].offbudget, false);
-    assert.ok(!serialized.includes(syncId));
-    assert.ok(!serialized.includes(providerAccountId));
-  } finally {
-    if (previousSyncId === undefined) delete process.env.ACTUAL_SYNC_ID;
-    else process.env.ACTUAL_SYNC_ID = previousSyncId;
+  for (const [error, expected] of cases) {
+    assert.equal(classifyDoctorError(error), expected);
   }
+});
+
+test("doctor receipt has stable redacted target identity and no raw failure data", () => {
+  const receipt = createDoctorReceipt({
+    error: new Error("token=raw-secret account=123456 balance=999"),
+    env: {
+      ACTUAL_SERVER_URL: "https://operator:secret@actual.example.test/private?token=abc",
+      ACTUAL_SYNC_ID: "private-project-id",
+      ACTUAL_PASSWORD: "actual-password",
+    },
+    now: new Date("2026-09-17T12:34:56.000Z"),
+  });
+
+  assert.deepEqual(Object.keys(receipt), [
+    "schema_version",
+    "generated_at",
+    "status",
+    "evidence",
+    "error_class",
+    "read_only",
+  ]);
+  assert.equal(receipt.generated_at, "2026-09-17T12:34:56.000Z");
+  assert.equal(receipt.evidence.endpoint, "https://actual.example.test");
+  assert.equal(receipt.evidence.transport, "https");
+  assert.match(receipt.evidence.project_identity, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(receipt.error_class, "malformed");
+  assert.equal(receipt.read_only, true);
+  const serialized = JSON.stringify(receipt);
+  for (const forbidden of ["operator", "secret", "/private", "token", "account", "balance", "123456", "999"]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("doctor performs only a server read and emits no financial records", async () => {
+  let serverReads = 0;
+  const receipt = await doctor({
+    async getServerVersion() {
+      serverReads += 1;
+      return { version: "26.9.0", sensitive: "must-not-escape" };
+    },
+  }, {
+    env: {
+      ACTUAL_SERVER_URL: "http://actual.test:5006",
+      ACTUAL_SYNC_ID: "project-id",
+    },
+    now: new Date("2026-09-17T00:00:00.000Z"),
+  });
+
+  assert.equal(serverReads, 1);
+  assert.equal(receipt.status, "ok");
+  assert.equal(receipt.error_class, null);
+  assert.equal(receipt.evidence.endpoint, "http://actual.test:5006");
+  assert.equal(receipt.evidence.transport, "http");
+  assert.equal(
+    receipt.evidence.project_identity,
+    "sha256:e1c59e2a6ab7b140915e2218b3ee6fb9476aeb208e486d75bfdf6ec77b5bbb8f",
+  );
+  assert.equal(JSON.stringify(receipt).includes("sensitive"), false);
+});
+
+test("doctor budget initialization downloads read-only state without syncing", async () => {
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "actual-doctor-"));
+  const calls = [];
+  const api = {
+    async init(options) {
+      calls.push(["init", options]);
+      return {};
+    },
+    async downloadBudget(syncId, options) {
+      calls.push(["downloadBudget", syncId, options]);
+    },
+    async sync() {
+      calls.push(["sync"]);
+    },
+  };
+
+  try {
+    await openBudget({
+      api,
+      env: {
+        ACTUAL_DATA_DIR: dataDir,
+        ACTUAL_SERVER_URL: "https://actual.example.test",
+        ACTUAL_PASSWORD: "password",
+        ACTUAL_SYNC_ID: "project-id",
+      },
+      syncRemote: false,
+    });
+  } finally {
+    await fs.rm(dataDir, { recursive: true, force: true });
+  }
+
+  assert.deepEqual(calls.map(([name]) => name), ["init", "downloadBudget"]);
 });
 
 test("unique statement rows already captured by a browser export are suppressed", () => {

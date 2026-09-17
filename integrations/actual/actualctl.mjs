@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -18,8 +19,8 @@ import { ACTUALCTL_OPTIONS, parseCliArgs } from "./cli-args.mjs";
 
 let actualInternal = null;
 
-function requireEnv(name) {
-  const value = process.env[name];
+function requireEnv(name, env = process.env) {
+  const value = env[name];
   if (!value) throw new Error(`Missing ${name}`);
   return value;
 }
@@ -314,61 +315,116 @@ async function withoutActualReconciliationNoise(callback) {
   }
 }
 
+async function withoutActualDoctorNoise(callback) {
+  const originals = {
+    log: console.log,
+    warn: console.warn,
+    error: console.error,
+  };
+  console.log = () => {};
+  console.warn = () => {};
+  console.error = () => {};
+  try {
+    return await callback();
+  } finally {
+    console.log = originals.log;
+    console.warn = originals.warn;
+    console.error = originals.error;
+  }
+}
+
 export { selectRetiredRuleIds, selectStageMigrationRuleIds } from "./bootstrap-resources.mjs";
 
-export async function openBudget() {
-  const dataDir = path.resolve(process.env.ACTUAL_DATA_DIR || ".actual-cache");
+export async function openBudget({
+  api = actual,
+  env = process.env,
+  syncRemote = true,
+} = {}) {
+  const dataDir = path.resolve(env.ACTUAL_DATA_DIR || ".actual-cache");
   await fs.mkdir(dataDir, { recursive: true });
-  actualInternal = await actual.init({
+  actualInternal = await api.init({
     dataDir,
-    serverURL: requireEnv("ACTUAL_SERVER_URL"),
-    password: requireEnv("ACTUAL_PASSWORD"),
-    verbose: process.env.ACTUAL_VERBOSE === "true",
+    serverURL: requireEnv("ACTUAL_SERVER_URL", env),
+    password: requireEnv("ACTUAL_PASSWORD", env),
+    verbose: env.ACTUAL_VERBOSE === "true",
   });
-  const syncId = requireEnv("ACTUAL_SYNC_ID");
-  const encryptionPassword = process.env.ACTUAL_ENCRYPTION_PASSWORD;
-  await actual.downloadBudget(
+  const syncId = requireEnv("ACTUAL_SYNC_ID", env);
+  const encryptionPassword = env.ACTUAL_ENCRYPTION_PASSWORD;
+  await api.downloadBudget(
     syncId,
     encryptionPassword ? { password: encryptionPassword } : undefined,
   );
-  // A cached budget may be older than the server. Always pull remote changes
-  // before a read, preflight, or bootstrap decision.
-  await actual.sync();
+  // Operational commands need a fresh remote view. Doctor deliberately stops
+  // at the read-only download and never enters Actual's sync path.
+  if (syncRemote) await api.sync();
 }
 
-export async function doctor(api = actual) {
-  const server = await api.getServerVersion();
-  const accounts = await api.getAccounts();
-  const categories = await api.getCategories();
-  const groups = await api.getCategoryGroups();
-  const tags = await api.getTags();
-  const rules = await api.getRules();
-  const schedules = await api.getSchedules();
-  const syncId = requireEnv("ACTUAL_SYNC_ID");
-  const balances = [];
-  for (const account of accounts) {
-    balances.push({
-      id: "[REDACTED]",
-      name: account.name,
-      offbudget: Boolean(account.offbudget),
-      closed: Boolean(account.closed),
-      balance: await api.getAccountBalance(account.id),
-    });
+const DOCTOR_ERROR_CLASSES = new Set(["unreachable", "auth", "timeout", "malformed"]);
+
+function doctorTarget(env) {
+  let endpoint = "unavailable";
+  let transport = "unknown";
+  try {
+    const url = new URL(String(env.ACTUAL_SERVER_URL ?? ""));
+    if (!["http:", "https:"].includes(url.protocol) || !url.hostname) throw new Error();
+    endpoint = url.origin;
+    transport = url.protocol.slice(0, -1);
+  } catch {
+    // Keep the receipt reproducible even when target configuration is malformed.
+  }
+
+  const syncId = String(env.ACTUAL_SYNC_ID ?? "");
+  const projectIdentity = syncId
+    ? `sha256:${createHash("sha256").update(syncId).digest("hex")}`
+    : "unavailable";
+  return { endpoint, transport, project_identity: projectIdentity };
+}
+
+export function classifyDoctorError(error) {
+  const code = String(error?.code ?? "").toUpperCase();
+  const status = Number(error?.status ?? error?.statusCode ?? error?.response?.status);
+  const name = String(error?.name ?? "").toLowerCase();
+  const message = String(error?.message ?? "").toLowerCase();
+
+  if (status === 401 || status === 403 ||
+      ["EAUTH", "UNAUTHORIZED", "FORBIDDEN", "INVALID_CREDENTIALS"].includes(code) ||
+      /\b(auth|credential|password|unauthori[sz]ed|forbidden)\b/.test(message)) {
+    return "auth";
+  }
+  if (name === "timeouterror" || name === "aborterror" ||
+      ["ETIMEDOUT", "ESOCKETTIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT"].includes(code) ||
+      /\b(timed? ?out|timeout)\b/.test(message)) {
+    return "timeout";
+  }
+  if (["ECONNREFUSED", "ECONNRESET", "ENETUNREACH", "EHOSTUNREACH", "ENOTFOUND", "EAI_AGAIN"].includes(code) ||
+      /\b(connection refused|connection reset|host unreachable|network unreachable|dns|fetch failed|socket hang up)\b/.test(message)) {
+    return "unreachable";
+  }
+  return "malformed";
+}
+
+export function createDoctorReceipt({
+  error = null,
+  env = process.env,
+  now = new Date(),
+} = {}) {
+  const errorClass = error ? classifyDoctorError(error) : null;
+  if (errorClass !== null && !DOCTOR_ERROR_CLASSES.has(errorClass)) {
+    throw new Error("Invalid doctor error classification");
   }
   return {
-    status: "ok",
-    server,
-    sync_id_present: Boolean(syncId),
-    counts: {
-      accounts: accounts.length,
-      category_groups: groups.length,
-      categories: categories.length,
-      tags: tags.length,
-      rules: rules.length,
-      schedules: schedules.length,
-    },
-    accounts: balances,
+    schema_version: 1,
+    generated_at: now.toISOString(),
+    status: error ? "error" : "ok",
+    evidence: doctorTarget(env),
+    error_class: errorClass,
+    read_only: true,
   };
+}
+
+export async function doctor(api = actual, options = {}) {
+  await api.getServerVersion();
+  return createDoctorReceipt(options);
 }
 
 export async function snapshot(start, end) {
@@ -1325,14 +1381,30 @@ async function main() {
   if (command === "delete-transactions") assertCommitEnabled(args.apply);
   if (command === "dashboard-apply") assertCommitEnabled(args.apply);
   if (command === "budget-automation") assertCommitEnabled(args.apply);
+  let result;
+  if (command === "doctor") {
+    try {
+      result = await withoutActualDoctorNoise(async () => {
+        try {
+          await openBudget({ syncRemote: false });
+          return await doctor();
+        } finally {
+          await actual.shutdown();
+        }
+      });
+    } catch (error) {
+      result = createDoctorReceipt({ error });
+      process.exitCode = 1;
+    }
+    await writeResult(args.result, result);
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return;
+  }
   await openBudget();
   try {
-    let result;
     if (command === "account-reconciliation") {
       if (!args.plan) throw new Error("account-reconciliation requires --plan <file>");
       result = await reconcileAccounts(actual, await readJson(args.plan), args.apply);
-    } else if (command === "doctor") {
-      result = await doctor();
     } else if (command === "budget-automation") {
       result = await budgetAutomation(args.config, args.apply);
     } else if (command === "dashboard-audit") {
