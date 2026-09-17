@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import date, datetime
 from pathlib import Path
 from unittest import TestCase
@@ -12,6 +13,7 @@ from finance_tracker.actual_snapshot import cashback_dashboard, transactions_fro
 from finance_tracker.cashback import (
     configured_reward_bucket,
     payment_intents_from_config,
+    load_program_configuration,
     programs_from_config,
     validate_program_configuration,
 )
@@ -47,6 +49,18 @@ class PublicCashbackProfileTests(TestCase):
         for path in sorted(PROFILES.glob("*.json")):
             with self.subTest(profile=path.name):
                 validate_program_configuration(json.loads(path.read_text(encoding="utf-8")))
+
+    def test_runtime_loader_accepts_v2_profile_contract(self) -> None:
+        source = json.loads(
+            (ROOT / "config" / "cashback-programs.json").read_text(encoding="utf-8")
+        )
+        source["schema_version"] = 2
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "profile.json"
+            profile.write_text(json.dumps(source), encoding="utf-8")
+            loaded = load_program_configuration(profile)
+
+        self.assertEqual(loaded["schema_version"], 2)
 
     def test_flat_rate_profile_routes_travel_and_everyday_without_issuer_assumptions(self) -> None:
         result = dashboard(load_profile("flat-rate-usd.json"), date(2026, 5, 12))
