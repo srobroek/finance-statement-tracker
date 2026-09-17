@@ -4,7 +4,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/stacks/finance-actual-poc/backup.sh
+ExecStart=/opt/stacks/finance-actual/backup.sh
 User=root
 Group=root
 # Podman may launch a replacement conmon while unpausing a container. That

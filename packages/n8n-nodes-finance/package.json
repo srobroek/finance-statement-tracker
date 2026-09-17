@@ -17,7 +17,7 @@
     "pack:check": "npm pack --dry-run"
   },
   "dependencies": {
-    "@actual-app/api": "26.8.1",
+    "@actual-app/api": "26.9.0",
     "re2js": "2.8.6"
   },
   "devDependencies": {

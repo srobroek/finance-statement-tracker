@@ -329,7 +329,7 @@ def build_guarded_migration_plan(
     plan = {
         "schema_version": "actual-corpus-migration-v1",
         "mode": "DRY_RUN_ONLY",
-        "expected_server_version": str(snapshot.get("server", {}).get("version") or "26.8.1"),
+        "expected_server_version": str(snapshot.get("server", {}).get("version") or "26.9.0"),
         "source_snapshot_generated_at": snapshot.get("generated_at"),
         "amount_mutation_count": 0,
         "changes": sorted(changes, key=lambda item: item["imported_id"]),

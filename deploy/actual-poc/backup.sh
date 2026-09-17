@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual-poc}"
+ACTUAL_STACK_DIR="${FINANCE_ACTUAL_STACK_DIR:-/opt/stacks/finance-actual}"
 CASHBACK_STACK_DIR="${FINANCE_CASHBACK_STACK_DIR:-/opt/stacks/finance-cashback}"
-BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual-poc}"
+BACKUP_ROOT="${FINANCE_BACKUP_ROOT:-/opt/backups/finance-actual}"
 RETENTION_DAYS="${FINANCE_BACKUP_RETENTION_DAYS:-30}"
 
 ACTUAL_DATA_DIR="${FINANCE_ACTUAL_DATA_DIR:-${ACTUAL_STACK_DIR}/data}"
@@ -20,10 +20,10 @@ resolved() {
 }
 
 if [[ "${EUID}" -ne 0 ]]; then fail "root_required"; fi
-[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual-poc" ]] || fail "unexpected_actual_stack_path"
+[[ "$(resolved "${ACTUAL_STACK_DIR}")" == "/opt/stacks/finance-actual" ]] || fail "unexpected_actual_stack_path"
 [[ "$(resolved "${CASHBACK_STACK_DIR}")" == "/opt/stacks/finance-cashback" ]] || fail "unexpected_cashback_stack_path"
 backup_root_resolved="$(resolved "${BACKUP_ROOT}")"
-[[ "${backup_root_resolved}" == "/opt/backups/finance-actual-poc" || "${backup_root_resolved}" == /opt/backups/finance-actual-poc/* ]] || fail "unexpected_backup_root"
+[[ "${backup_root_resolved}" == "/opt/backups/finance-actual" || "${backup_root_resolved}" == /opt/backups/finance-actual/* ]] || fail "unexpected_backup_root"
 [[ "$(resolved "${ACTUAL_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/data" ]] || fail "unexpected_actual_data_path"
 [[ "$(resolved "${CASHBACK_DATA_DIR}")" == "${ACTUAL_STACK_DIR}/cashback-data" ]] || fail "unexpected_cashback_data_path"
 [[ "$(resolved "${VERIFY_SCRIPT}")" == "${ACTUAL_STACK_DIR}/verify-backup.py" ]] || fail "unexpected_verify_script_path"
@@ -97,10 +97,10 @@ tar -C "${payload}" -czf "${working}/finance-data.tar.gz" .
 rm -rf -- "${payload}"
 (
   cd "${working}"
-  sha256sum finance-data.tar.gz > SHA256SUMS
+  sha256sum finance-data.tar.gz >SHA256SUMS
   sha256sum -c SHA256SUMS >/dev/null
 )
-cat > "${working}/manifest.json" <<EOF
+cat >"${working}/manifest.json" <<EOF
 {"schema_version":3,"created_at":"${stamp}","includes":["actual-data","cashback-data","configuration"],"secrets_included":false,"containers":{"actual":"finance-actual-poc","proxy":"finance-actual-proxy","cashback":"finance-cashback-control"}}
 EOF
 
@@ -118,7 +118,7 @@ python3 "${VERIFY_SCRIPT}" \
   --backup-path "${destination}" \
   --write-receipt
 
-if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && (( RETENTION_DAYS > 0 )); then
+if [[ "${RETENTION_DAYS}" =~ ^[0-9]+$ ]] && ((RETENTION_DAYS > 0)); then
   find "${BACKUP_ROOT}" -mindepth 1 -maxdepth 1 -type d -name '20??????T??????Z' -mtime "+${RETENTION_DAYS}" -exec rm -rf -- {} +
 fi
 
