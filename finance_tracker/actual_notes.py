@@ -202,7 +202,7 @@ def validate_actual_notes(notes: str) -> None:
 def build_actual_note_cleanup_plan(
     snapshot: dict[str, Any],
     *,
-    expected_server_version: str = "26.9.0",
+    expected_server_version: str = "26.8.1",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Build an exact-state, notes-only enrichment plan from an Actual snapshot."""
     changes: list[dict[str, Any]] = []

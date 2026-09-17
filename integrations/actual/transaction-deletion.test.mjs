@@ -6,7 +6,7 @@ import { validateTransactionDeletionPlan } from "./actualctl.mjs";
 test("transaction deletion plan pins an exact unimported row", () => {
   const plan = {
     schema_version: "actual-transaction-deletion-v1",
-    expected_server_version: "26.9.0",
+    expected_server_version: "26.8.1",
     reason: "Remove duplicate zero rows",
     deletions: [{
       transaction_id: "tx-1",

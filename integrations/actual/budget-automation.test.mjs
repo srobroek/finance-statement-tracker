@@ -10,7 +10,7 @@ import {
 
 const config = {
   schema_version: "actual-budget-automation-v1",
-  required_actual_version: "26.9.0",
+  required_actual_version: "26.8.1",
   categories: [
     {
       category: "Electricity & Water",

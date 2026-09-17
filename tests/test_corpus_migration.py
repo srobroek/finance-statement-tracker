@@ -119,7 +119,7 @@ class CorpusMigrationTests(unittest.TestCase):
         desired = {row["imported_id"]: row for row in decisions}
         snapshot = {
             "generated_at": "2026-08-19T00:00:00Z",
-            "server": {"version": "26.9.0"},
+            "server": {"version": "26.8.1"},
             "transactions": [
                 {"imported_id": "ei:refund", "account_name": "EI", "date": "2026-07-12", "amount": 355, "category_name": "Online Shopping", "notes": "#amazon #cashback-ei_amazon | Bought for guest"},
                 {"imported_id": "ei:purchase", "account_name": "EI", "date": "2026-07-20", "amount": -2499, "category_name": "Online Shopping", "notes": "#amazon"},
