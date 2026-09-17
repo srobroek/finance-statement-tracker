@@ -670,7 +670,7 @@ test("transaction repair refuses amount drift", async () => {
 
 const enrichmentPlan = () => ({
   schema_version: "actual-transaction-enrichment-v1",
-  expected_server_version: "26.8.1",
+  expected_server_version: "26.9.0",
   reason: "Backfill explicit rental property evidence",
   changes: [{
     imported_id: "statement:adcb:test-row",
@@ -710,7 +710,7 @@ test("transaction enrichment plans, applies, verifies, and replays idempotently"
   }];
   let syncCount = 0;
   const api = {
-    getServerVersion: async () => "26.8.1",
+    getServerVersion: async () => "26.9.0",
     getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
     getCategories: async () => [{ id: "category-1", name: "Electricity & Water" }],
     getTransactions: async () => rows,
@@ -752,7 +752,7 @@ test("transaction enrichment uses the same split category id for preflight and r
     is_parent: false,
   }];
   const api = {
-    getServerVersion: async () => "26.8.1",
+    getServerVersion: async () => "26.9.0",
     getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
     getCategories: async () => [{ id: "category-1", name: "Electricity & Water" }],
     getTransactions: async () => rows,
@@ -790,7 +790,7 @@ const postWriteSplitFixture = mutateAfterWrite => {
   return {
     plan,
     api: {
-      getServerVersion: async () => "26.8.1",
+      getServerVersion: async () => "26.9.0",
       getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
       getCategories: async () => [category],
       getTransactions: async () => rows,
@@ -825,7 +825,7 @@ test("transaction enrichment rejects a split category identity drift during post
 
 test("transaction enrichment refuses note drift and server version drift", async () => {
   const base = {
-    getServerVersion: async () => "26.8.1",
+    getServerVersion: async () => "26.9.0",
     getAccounts: async () => [{ id: "account-1", name: "ADCB Credit Card" }],
     getCategories: async () => [],
     getTransactions: async () => [{
@@ -838,7 +838,7 @@ test("transaction enrichment refuses note drift and server version drift", async
   };
   await assert.rejects(() => enrichTransactions(enrichmentPlan(), false, base), /notes or split state drifted/);
   await assert.rejects(
-    () => enrichTransactions(enrichmentPlan(), false, { ...base, getServerVersion: async () => "26.9.0" }),
+    () => enrichTransactions(enrichmentPlan(), false, { ...base, getServerVersion: async () => "26.8.1" }),
     /server version drifted/,
   );
 });
@@ -846,7 +846,7 @@ test("transaction enrichment refuses note drift and server version drift", async
 test("transaction enrichment accepts the production server-version response shape", async () => {
   const plan = {
     schema_version: "actual-transaction-enrichment-v1",
-    expected_server_version: "26.8.1",
+    expected_server_version: "26.9.0",
     reason: "test",
     changes: [{
       imported_id: "statement:test:one",
@@ -858,7 +858,7 @@ test("transaction enrichment accepts the production server-version response shap
     }],
   };
   const api = {
-    getServerVersion: async () => ({ version: "26.8.1" }),
+    getServerVersion: async () => ({ version: "26.9.0" }),
     getAccounts: async () => [{ id: "account-1", name: "Card" }],
     getCategories: async () => [],
     getTransactions: async () => [{
