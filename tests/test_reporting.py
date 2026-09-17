@@ -44,3 +44,21 @@ class ReportingTests(TestCase):
         self.assertTrue(ReportFilter(tags_any=frozenset({"business", "shared"})).matches(row))
         self.assertTrue(ReportFilter(tags_all=frozenset({"shared", "rental"})).matches(row))
         self.assertFalse(ReportFilter(tags_none=frozenset({"rental"})).matches(row))
+
+    def test_tag_filters_reject_non_set_and_non_string_values(self) -> None:
+        for field_name in ("tags_any", "tags_all", "tags_none", "tags"):
+            with self.subTest(field_name=field_name, value="shared"):
+                with self.assertRaisesRegex(TypeError, rf"{field_name} must be a set\[str\]"):
+                    ReportFilter(**{field_name: "shared"})
+            with self.subTest(field_name=field_name, value=["shared"]):
+                with self.assertRaisesRegex(TypeError, rf"{field_name} must be a set\[str\]"):
+                    ReportFilter(**{field_name: ["shared"]})
+            with self.subTest(field_name=field_name, value={1}):
+                with self.assertRaisesRegex(TypeError, rf"{field_name} must contain only strings"):
+                    ReportFilter(**{field_name: {1}})
+
+    def test_unknown_tag_filter_is_valid_but_does_not_match(self) -> None:
+        row = Transaction("tagged", datetime(2026, 8, 1), "CARD", "SHOP", Decimal("100"), tags={"Shared"})
+
+        self.assertFalse(ReportFilter(tags_any={"not-configured"}).matches(row))
+        self.assertFalse(ReportFilter(tags_all={"not-configured"}).matches(row))

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Iterable
+import hashlib
 
 from .models import Transaction
 
@@ -61,19 +62,42 @@ def month_category_totals(transactions: Iterable[Transaction], month: str) -> di
     return dict(sorted(totals.items(), key=lambda item: item[1], reverse=True))
 
 
-def month_close_markdown(transactions: Iterable[Transaction], month: str) -> str:
+def month_close_markdown(
+    transactions: Iterable[Transaction],
+    month: str,
+    *,
+    source_identity: str = "transactions",
+    source_sha256: str | None = None,
+) -> str:
+    """Render a static close snapshot with deterministic source provenance."""
+    if not source_identity.strip():
+        raise ValueError("source_identity must not be empty")
+    if source_sha256 is not None:
+        if len(source_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in source_sha256
+        ):
+            raise ValueError("source_sha256 must be a lowercase SHA-256 hex digest")
     totals = month_category_totals(transactions, month)
-    generated = date.today().isoformat()
-    pie_lines = [f'    "{_label(category)}" : {amount.quantize(Decimal("0.01"))}' for category, amount in totals.items()]
+    pie_lines = [
+        f'    "{_label(category)}" : {amount.quantize(Decimal("0.01"))}'
+        for category, amount in totals.items()
+    ]
     if not pie_lines:
         pie_lines = ['    "No spend" : 1']
     table_lines = ["| Category | Spend (AED) |", "|---|---:|"]
-    table_lines.extend(f"| {category} | {amount.quantize(Decimal('0.01'))} |" for category, amount in totals.items())
+    table_lines.extend(
+        f"| {category} | {amount.quantize(Decimal('0.01'))} |"
+        for category, amount in totals.items()
+    )
+    digest = source_sha256 or hashlib.sha256(b"").hexdigest()
     return "\n".join(
         [
             f"# Month close: {month}",
             "",
-            f"Generated {generated}. This page is a static close snapshot; later transaction corrections require regeneration.",
+            "Source identity: "
+            f"{_label(source_identity)}",
+            f"Source SHA-256: {digest}",
+            "This page is a static close snapshot; later transaction corrections require regeneration.",
             "",
             "```mermaid",
             "pie showData",

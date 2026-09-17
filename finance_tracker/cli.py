@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import hashlib
 import json
 from dataclasses import asdict
 from datetime import date, datetime
@@ -641,10 +642,21 @@ def main(argv: list[str] | None = None) -> int:
         }, indent=2))
         return 2
     transactions = _load_transactions(args.input)
-    report = month_close_markdown(transactions, args.month)
+    source_sha256 = hashlib.sha256(args.input.read_bytes()).hexdigest()
+    report = month_close_markdown(
+        transactions,
+        args.month,
+        source_identity=args.input.name,
+        source_sha256=source_sha256,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(report, encoding="utf-8")
-    print(args.output)
+    print(json.dumps({
+        "output_path": str(args.output),
+        "generated_at": datetime.now().astimezone().isoformat(),
+        "source_identity": args.input.name,
+        "source_sha256": source_sha256,
+    }, indent=2))
     return 0
 
 

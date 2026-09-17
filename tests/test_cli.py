@@ -1,8 +1,10 @@
+import hashlib
+import io
 import json
+from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
-
 from finance_tracker.cli import main
 
 
@@ -113,3 +115,40 @@ class ActualExportCliTests(TestCase):
             rows = json.loads(catalogue.read_text(encoding="utf-8"))
             self.assertEqual(rows[0]["entity_id"], "transaction-group:YYM26Y")
             self.assertEqual(rows[0]["transaction_ids"], ["tx-1", "tx-2"])
+
+    def test_month_close_receipt_and_report_include_source_provenance(self) -> None:
+        rows = [{
+            "transaction_id": "tx-1",
+            "transaction_at": "2026-08-01T00:00:00",
+            "card": "CARD",
+            "merchant_raw": "Cafe",
+            "amount_aed": "10",
+            "category": "Dining",
+        }]
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "transactions.json"
+            statuses = root / "statuses.json"
+            output = root / "report.md"
+            source.write_text(json.dumps(rows), encoding="utf-8")
+            statuses.write_text(json.dumps({"CARD": "RECEIVED"}), encoding="utf-8")
+            stdout = io.StringIO()
+            with redirect_stdout(stdout):
+                result = main([
+                    "month-close",
+                    "--input", str(source),
+                    "--month", "2026-08",
+                    "--statement-status", str(statuses),
+                    "--as-of", "2026-09-02",
+                    "--output", str(output),
+                ])
+
+            receipt = json.loads(stdout.getvalue())
+            source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+            self.assertEqual(result, 0)
+            self.assertEqual(receipt["output_path"], str(output))
+            self.assertEqual(receipt["source_identity"], "transactions.json")
+            self.assertEqual(receipt["source_sha256"], source_sha256)
+            report = output.read_text(encoding="utf-8")
+            self.assertIn("Source identity: transactions.json", report)
+            self.assertIn(f"Source SHA-256: {source_sha256}", report)
