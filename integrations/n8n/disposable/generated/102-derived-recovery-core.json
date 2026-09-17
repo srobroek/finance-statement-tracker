@@ -103,7 +103,7 @@
     "executionOrder": "v1",
     "timezone": "Asia/Dubai",
     "saveDataErrorExecution": "none",
-    "saveDataSuccessExecution": "none"
+    "saveDataSuccessExecution": "all"
   },
   "pinData": {},
   "meta": {

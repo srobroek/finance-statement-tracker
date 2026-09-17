@@ -8,98 +8,104 @@
     "12-outlook-message-sweep.json": "94c8de55dbeea02239cfcf75fd5e2d5eacc2cfc9ff23973eec8b1855826b401f",
     "16-operations-error-handler.json": "e86d80103e304bdfa8c8b0de27858d38346f5b7cbef4553ef9e49b33beb130ac",
     "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
-    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
+    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7",
+    "19-platform-data-table-bootstrap.json": "8dda4364af2bffc751e37b4a31edcfdc244bf81dc09e193ce45cea3d3aeeb15a"
   },
   "workflows": [
     {
+      "file": "89-platform-data-table-bootstrap.json",
+      "id": "90000000-0000-4000-8000-000000000019",
+      "sha256": "80a206a7e779e56b245beed2fd7675e1095a18a4dfe0b5f281cbb882aff9d7cd"
+    },
+    {
       "file": "90-derived-outlook-sweep-core.json",
       "id": "90000000-0000-4000-8000-000000000012",
-      "sha256": "456b2002ec0b62b30e9544de159c895d9436e7aa129673b3a2ce265370f86980"
+      "sha256": "180b6c9ec644bd6173b740f29df2f4aadc2d7410b94cc648eb8531f63bd7aa06"
     },
     {
       "file": "91-sweep-zero.json",
       "id": "90000000-0000-4000-8000-000000000901",
-      "sha256": "d46de8f68a564696e6bcfce1895897fa22c2a08b170b920e2c6f1a13fb094508"
+      "sha256": "c480e133aa828bb0b072202104068817878cb7d3b0dd4d186745a73b5b747c30"
     },
     {
       "file": "92-sweep-101.json",
       "id": "90000000-0000-4000-8000-000000000902",
-      "sha256": "03b310240ba86e4242dc59980269600da21385fabb216da0ee02e1c6c927465b"
+      "sha256": "8954d95bf3b1cf3a561379776d84cd174bef8d9808b6e45a69ea25a79f1eb92b"
     },
     {
       "file": "93-sweep-late-order.json",
       "id": "90000000-0000-4000-8000-000000000903",
-      "sha256": "3c3003f2b38a1b7ee323be272b277cd851d1005a56991bfea6163f57a78fc5e7"
+      "sha256": "34010de4cea9d64731306a9c0d689f9b655612d464064f5bec89f3e4332f2558"
     },
     {
       "file": "94-sweep-pagination-failure.json",
       "id": "90000000-0000-4000-8000-000000000904",
-      "sha256": "72f12b6f454313d848ce0bc54e7cc1739889f229c8a63ec2bb682f50d7b3ff2e"
+      "sha256": "2365755705ddae55a66c177cc49dce4ffa2bf2b2e28ce2b023e31b6e8e6379d4"
     },
     {
       "file": "95-lease-acquire-a.json",
       "id": "90000000-0000-4000-8000-000000000905",
-      "sha256": "9d335da26056c667538f3d108f933182e3c59edaf1162047500172f1ac4fe116"
+      "sha256": "fc43f41ede562e2a88cba11aaad099700dd12bedef48bad55db2ab06ad4fe36a"
     },
     {
       "file": "96-lease-acquire-b.json",
       "id": "90000000-0000-4000-8000-000000000906",
-      "sha256": "f0338a34e776072525a0f58a7fce840278b56bd0c9f82f6bbd0b18012c87a15d"
+      "sha256": "717e8fed8cc138e0f80f2d40b9a7872195a82ccf58f24bfa0b3a1b36970496d8"
     },
     {
       "file": "97-lease-stale-assert.json",
       "id": "90000000-0000-4000-8000-000000000907",
-      "sha256": "faf87b6a025ada10b0831b7f804493e3b0c24b29de88236a5e4ab48ea9aa2f70"
+      "sha256": "2e58212376e86fc5941c964de7844c7a8dd9e1677a1c1d580a61e1900e671548"
     },
     {
       "file": "98-ai-caller-model-rejected.json",
       "id": "90000000-0000-4000-8000-000000000908",
-      "sha256": "f71f630437eb1fc053325ad9ddd314d37b92edfdb1d87dfb52debca204e052b7"
+      "sha256": "057fc0baa52551206c1b12ad87adbebdf155dad0bb0f6208e450675d92d648a5"
     },
     {
       "file": "99-ai-locked-field-rejected.json",
       "id": "90000000-0000-4000-8000-000000000909",
-      "sha256": "5c442c705519390d68fa4dfa021c992900ce5bf6af0ce48013e319e6c0e2ea64"
+      "sha256": "7645590f4036dc967bc4bf765c0ac72a71bdd9c8aa388cf77290df3e850c01ee"
     },
     {
       "file": "100-ai-missing-policy-rejected.json",
       "id": "90000000-0000-4000-8000-000000000910",
-      "sha256": "fe25ea40150a22fc7d10f535434291318c38edbffc48527a570fe52d3eb82706"
+      "sha256": "0e6624583c5e962633925c4c42347adf687f89626a7c621c8231a152d98c3ee8"
     },
     {
       "file": "106-ai-positive-luna.json",
       "id": "90000000-0000-4000-8000-000000000911",
-      "sha256": "d0b2d84105b99a8e74f2c9cbee5911c41a24d047c10d733ce7adf85866ffa593"
+      "sha256": "9e002acb0426c6ed7553a07ed2604543c5c54f83e3a112f8bd8bf167df1a3455"
     },
     {
       "file": "107-ai-positive-sol-gated.json",
       "id": "90000000-0000-4000-8000-000000000912",
-      "sha256": "91ef770a172dad629505da9c68cb519f3e0970ab47b356677db21e628a85ab60"
+      "sha256": "035b4d85e4c2dcf4b96367bbe2595a926f926cd1195c3271e98d68835e54ea2a"
     },
     {
       "file": "101-error-redaction.json",
       "id": "90000000-0000-4000-8000-000000000916",
-      "sha256": "fef6a536a8ded59ee177dc542c4be7b9cf062b9781c618859e9873091634c15d"
+      "sha256": "c8abd5fbbd634509926b0d7dc48d75a3f26d8d746e6efe85c1044700dc274c9d"
     },
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "a45cdb82c75ff12349afe588617b89790ff4b26fe7dd0cfe964da848da3ccbd6"
+      "sha256": "2af6b82392ef397768298cb7b1607f35bfb38e26baff17c0dda42664455758c8"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "8ec59fd5f61aafbcaa713bf2103653e2e02204a233b70593d7517137dfcd5608"
+      "sha256": "35b1bbdcdf3fd296a057b85d60c3903a59ac16deb00b1d5e56dbf6753e5bbe0a"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "08ce5e8be400fb95b72aea8ce2c346cc3cff03be3a16379b27de075295b7823e"
+      "sha256": "7d86b689616a96d2ff08e66c386f59c1172fceece944a7aa4ebbc04d80697130"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "9cc2ce7b7467b1cca71f7a87e673f891e0934b72154cd68bc84d4b3cbc720f23"
+      "sha256": "441eedf307143b8759b2daff6f5843a3430f2d126bc321540854729453698f15"
     }
   ],
   "scenario_contract": {
