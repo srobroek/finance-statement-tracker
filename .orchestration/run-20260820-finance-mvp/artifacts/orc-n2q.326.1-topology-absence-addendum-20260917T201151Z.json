@@ -1,0 +1,607 @@
+{
+  "bead": "orc-n2q.326.1",
+  "contract_result": {
+    "auth_mutation_performed": false,
+    "child_orc-n2q.326.1": "BLOCKED_ON_OBSOLETE_RUNTIME_RESIDUE",
+    "cleanup_performed": false,
+    "database_mutation_performed": false,
+    "parent_orc-n2q.326": "KEEP_OPEN",
+    "provider_call_performed": false,
+    "restart_performed": false
+  },
+  "correlation": {
+    "terminal_proof": {
+      "auth_hash_and_inode_equal_across_restart": true,
+      "downstream_mutation": false,
+      "exact_auth_metadata_restored": true,
+      "missing_auth_execution_ids": [
+        "303",
+        "304"
+      ],
+      "missing_auth_status": "FAIL_LOUD:NO_CODEX_AUTH",
+      "positive_execution_ids": [
+        "298",
+        "302",
+        "305"
+      ],
+      "restart_healthy": true,
+      "runtime_and_w21_byte_or_semantic_rollback_exact": true,
+      "sentinel_before_after_equal": true,
+      "workflow_baseline": 69
+    },
+    "terminal_receipt": ".orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.3-final-20260917T175417Z.json",
+    "terminal_receipt_mode": "0600",
+    "terminal_receipt_sha256": "14026f48ddc3c79479e1a42d8094346b842e99f79e2a20c6b2e9511aee1cf377"
+  },
+  "derived": {
+    "container_matches_prodex_codex_api_key": [],
+    "container_matches_runner": [
+      "identity|b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee|n8n-task-runners-1|ghcr.io/srobroek/finance-n8n-task-runners@sha256:4692ff297da2f2ff8e543cb0874b4338590aef83ba9fb0e239a5c0b7214cd78c|c733f319a0ff94ecced041ca1b47d3f1aa7331e6c4ee8882e7ab5fffdfb1c9cf",
+      "networks|{\"n8n_runner-control\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.6.1\",\"IPAddress\":\"10.89.6.45\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"96:d1:e3:b8:e2:37\",\"NetworkID\":\"n8n_runner-control\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n-task-runners-1\",\"task-runners\",\"b3913b21cfd4\"]}}",
+      "entrypoint|\"tini -- /usr/local/bin/task-runner-launcher\"",
+      "networks|{\"application-runtime\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.11.1\",\"IPAddress\":\"10.89.11.114\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"aa:d2:9b:c9:e5:f3\",\"NetworkID\":\"application-runtime\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.9.1\",\"IPAddress\":\"10.89.9.108\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"76:48:69:34:21:a3\",\"NetworkID\":\"n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_provider-egress\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.5.1\",\"IPAddress\":\"10.89.5.91\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"aa:4a:30:9e:ab:e8\",\"NetworkID\":\"n8n_provider-egress\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_runner-control\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.6.1\",\"IPAddress\":\"10.89.6.98\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"ee:58:fa:ac:87:20\",\"NetworkID\":\"n8n_runner-control\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]}}"
+    ],
+    "obsolete_or_candidate_paths": [
+      "__UTC__=2026-09-17T20:11:19Z",
+      "",
+      "__UTC__=2026-09-17T20:11:20Z",
+      "d|700|1000:1000|4096|/home/ci/.codex",
+      "d|700|1000:1000|4096|/home/ci/.codex-n8n-community",
+      "d|700|1000:1000|4096|/home/ci/prodex-recovery-20260917T155820Z",
+      "f|600|1000:1000|128|/tmp/finance-codex-ephemeral-r2-summary",
+      "f|600|1000:1000|16531|/tmp/codex-sdk-index.js",
+      "f|600|1000:1000|286291184|/home/ci/prodex-recovery-20260917T155820Z/codex-0.142.1.original",
+      "f|600|1000:1000|378|/tmp/finance-codex-ephemeral-r3-summary"
+    ],
+    "process_or_service_matches": [
+      "__UTC__=2026-09-17T20:11:18Z",
+      "    686 gitlab-runner",
+      "1562344 task-runner-lau",
+      "2460356 Runner.Listener",
+      "",
+      "__UTC__=2026-09-17T20:11:19Z",
+      "  actions.runner.srobroek-finance-statement-tracker.finance-ci.service                      loaded    active   running GitHub Actions Runner (srobroek-finance-statement-tracker.finance-ci)",
+      "  gitlab-runner.service                                                                     loaded    active   running GitLab Runner"
+    ]
+  },
+  "environment_values_recorded": false,
+  "kiss_verdict": {
+    "architecture": "SIMPLE",
+    "basis": "One pinned n8n image hosts the direct W21 ProDex path using ChatGPT subscription auth; the generic n8n task-runner is isolated on its standard runner-control network; no ProDex service, API-key path, listener, network, or image was introduced.",
+    "closure": "BLOCKED",
+    "exact_gap": "Obsolete protected recovery/temporary compatibility residue remains on the retained host. Scope explicitly forbids cleanup, so absence cannot be asserted."
+  },
+  "mutations_performed": false,
+  "receipt_kind": "PRODEX_DEPLOYED_ABSENCE_ADDENDUM",
+  "recorded_at_utc": "2026-09-17T20:14:14Z",
+  "records": [
+    {
+      "label": "utc_hostname",
+      "returncode": 1,
+      "sha256": "4831882b32eda66fcea4ca47877e5609d86942d637c6adafd6260a092be00ff2",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 date -u +%Y-%m-%dT%H:%M:%SZ; hostname",
+      "stderr": "<3>WSL (1692736 - ) ERROR: UtilAcceptVsock:273: accept4 failed 110\n",
+      "stdout": ""
+    },
+    {
+      "label": "rootful_listeners",
+      "returncode": 0,
+      "sha256": "51966ef08540d1985a237d13dea357200784719e188db797577c3a21311b1806",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n ss -H -lntup",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:53Z\nudp UNCONN 0      0               10.89.11.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=37))                   \nudp UNCONN 0      0               10.89.13.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=36))                   \nudp UNCONN 0      0               10.89.12.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=35))                   \nudp UNCONN 0      0                10.89.2.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=34))                   \nudp UNCONN 0      0                10.89.0.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=33))                   \nudp UNCONN 0      0                10.89.9.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=32))                   \nudp UNCONN 0      0                10.89.6.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=16))                   \nudp UNCONN 0      0                10.89.5.1:53    0.0.0.0:* users:((\"aardvark-dns\",pid=1135,fd=15))                   \nudp UNCONN 0      0               127.0.0.54:53    0.0.0.0:* users:((\"systemd-resolve\",pid=2458403,fd=19))             \nudp UNCONN 0      0            127.0.0.53%lo:53    0.0.0.0:* users:((\"systemd-resolve\",pid=2458403,fd=17))             \nudp UNCONN 0      0      172.20.10.20%enp1s0:68    0.0.0.0:* users:((\"systemd-network\",pid=2458442,fd=23))             \nudp UNCONN 0      0                  0.0.0.0:5353  0.0.0.0:* users:((\"systemd-resolve\",pid=2458403,fd=11))             \nudp UNCONN 0      0                        *:59922       *:* users:((\"cloudflared\",pid=4008238,fd=7))                  \nudp UNCONN 0      0                        *:60939       *:* users:((\"cloudflared\",pid=4008238,fd=9))                  \nudp UNCONN 0      0                        *:48740       *:* users:((\"cloudflared\",pid=4008238,fd=8))                  \nudp UNCONN 0      0                        *:53699       *:* users:((\"cloudflared\",pid=4008238,fd=6))                  \nudp UNCONN 0      0                     [::]:5353     [::]:* users:((\"systemd-resolve\",pid=2458403,fd=12))             \ntcp LISTEN 0      4096               0.0.0.0:5006  0.0.0.0:* users:((\"conmon\",pid=1776270,fd=5))                       \ntcp LISTEN 0      4096             127.0.0.1:18888 0.0.0.0:* users:((\"rootlessport\",pid=1375726,fd=11))                \ntcp LISTEN 0      2048             127.0.0.1:3001  0.0.0.0:* users:((\"python3\",pid=2519665,fd=28))                     \ntcp LISTEN 0      4096             127.0.0.1:3000  0.0.0.0:* users:((\"conmon\",pid=2176950,fd=5))                       \ntcp LISTEN 0      4096               0.0.0.0:22    0.0.0.0:* users:((\"sshd\",pid=2458390,fd=3),(\"systemd\",pid=1,fd=168))\ntcp LISTEN 0      4096             127.0.0.1:20241 0.0.0.0:* users:((\"cloudflared\",pid=4008238,fd=3))                  \ntcp LISTEN 0      4096          172.20.10.20:3000  0.0.0.0:* users:((\"conmon\",pid=2176950,fd=6))                       \ntcp LISTEN 0      128              127.0.0.1:8642  0.0.0.0:* users:((\"hermes\",pid=2576779,fd=30))                      \ntcp LISTEN 0      128              127.0.0.1:8651  0.0.0.0:* users:((\"hermes\",pid=2519799,fd=27))                      \ntcp LISTEN 0      128              127.0.0.1:8650  0.0.0.0:* users:((\"hermes\",pid=2519819,fd=24))                      \ntcp LISTEN 0      4096          172.20.10.20:5678  0.0.0.0:* users:((\"conmon\",pid=1977414,fd=5))                       \ntcp LISTEN 0      5                127.0.0.1:4822  0.0.0.0:* users:((\"guacd\",pid=2458367,fd=4))                        \ntcp LISTEN 0      4096         127.0.0.53%lo:53    0.0.0.0:* users:((\"systemd-resolve\",pid=2458403,fd=18))             \ntcp LISTEN 0      4096          172.20.10.20:5010  0.0.0.0:* users:((\"conmon\",pid=1777401,fd=5))                       \ntcp LISTEN 0      2048             127.0.0.1:18123 0.0.0.0:* users:((\"hermes\",pid=2519776,fd=8))                       \ntcp LISTEN 0      4096            127.0.0.54:53    0.0.0.0:* users:((\"systemd-resolve\",pid=2458403,fd=20))             \ntcp LISTEN 0      4096                  [::]:22       [::]:* users:((\"sshd\",pid=2458390,fd=4),(\"systemd\",pid=1,fd=169))\n"
+    },
+    {
+      "label": "rootful_container_ids",
+      "returncode": 0,
+      "sha256": "c647b37c37885ad486d48f350a2a8196a5bc8835cd2471e825ae6f6974e2171c",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker ps -aq --no-trunc",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:53Z\n7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba\nca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3\n645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403\ne2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc\n944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d\nbe7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35\na6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460\n9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b\n34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921\n03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4\n1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10\nb3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee\nb038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d\nb7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc\nbe6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921\nda67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf\nee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6\n"
+    },
+    {
+      "label": "container_7fe383fb745b",
+      "returncode": 0,
+      "sha256": "b16c97c536e4b2f0c3ff338343769ed6d4178f6b0e3b6a8aaff18c1849dd47d9",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:54Z\nidentity|7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba|dockge|docker.io/louislam/dockge:1|e85d511b2a8b883da8a1ac2fde39ecddacdc011734e9f89a14b7798d82d5a0d3\nports|{\"5001/tcp\":[{\"HostIp\":\"\",\"HostPort\":\"5001\"}]}\nnetworks|{\"dockge_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.0.1\",\"IPAddress\":\"10.89.0.5\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"9a:1b:6f:42:98:9c\",\"NetworkID\":\"dockge_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"dockge\",\"7fe383fb745b\"]}}\nentrypoint|\"/usr/bin/dumb-init --\"\ncommand|[\"tsx\",\"./backend/index.ts\"]\n"
+    },
+    {
+      "label": "container_ca2f5da16f31",
+      "returncode": 0,
+      "sha256": "c0363ee634c9ca7586fc642ff0c1f066ccb15be87b5e921fbf280245d2597852",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:54Z\nidentity|ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3|guacamole|docker.io/guacamole/guacamole:latest|9a8e0e5c8ddba0339c1419181466143301c49fe908fab61ded0ac8d1c17b7e18\nports|{\"8080/tcp\":[{\"HostIp\":\"\",\"HostPort\":\"8080\"}]}\nnetworks|{\"guacamole_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.2.1\",\"IPAddress\":\"10.89.2.8\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"ae:70:5f:6f:f4:74\",\"NetworkID\":\"guacamole_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"guacamole\",\"guacamole\",\"ca2f5da16f31\"]}}\nentrypoint|\"/bin/sh\"\ncommand|[\"-c\",\"export MYSQL_PASSWORD=<redacted>\"$(cat /run/secrets/guacamole_mysql_password)\\\"\\nexec /opt/guacamole/bin/entrypoint.sh\\n\"]\n"
+    },
+    {
+      "label": "container_645bb5a8c943",
+      "returncode": 0,
+      "sha256": "bfd33d42ba54e6592b572080da1115cc6ab4be24640b584dff712bcdda6175d2",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:55Z\nidentity|645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403|guacamole-mysql|docker.io/library/mysql:8.4|0a9d1e47c5714526f5467c50c6c3969743660f2bcf01de642033de8792c1802a\nports|{}\nnetworks|{\"guacamole_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.2.1\",\"IPAddress\":\"10.89.2.10\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"fe:65:fc:5b:04:0e\",\"NetworkID\":\"guacamole_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"guacamole-mysql\",\"mysql\",\"645bb5a8c943\"]}}\nentrypoint|\"docker-entrypoint.sh\"\ncommand|[\"mysqld\"]\n"
+    },
+    {
+      "label": "container_e2790c40cdb6",
+      "returncode": 0,
+      "sha256": "33343051f29099b057f6f70ac8a39fa0a1fedeaaf70a10370dfda530183999c1",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:56Z\nidentity|e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc|guacamole-guacd|docker.io/guacamole/guacd:latest|8f919ea5d9fb054a64ed2fc88e6c4e0d523de9b1fbba8e74214052fd32eef872\nports|{}\nnetworks|{\"guacamole_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.2.1\",\"IPAddress\":\"10.89.2.9\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"16:2d:c4:c3:22:75\",\"NetworkID\":\"guacamole_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"guacamole-guacd\",\"guacd\",\"e2790c40cdb6\"]}}\nentrypoint|\"/opt/guacamole/entrypoint.sh\"\ncommand|null\n"
+    },
+    {
+      "label": "container_944fbf163eab",
+      "returncode": 0,
+      "sha256": "1fa092ff0daea50b59d84532798946fcd404f11aa26ae5c4360cecc02042e01a",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:56Z\nidentity|944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d|finance-n8n-postgres-manual|localhost/finance-postgres:test|590955c229126c2e2f12654f102751d2de7f88306eb3a2e90c060453cc5ef3d6\nports|{}\nnetworks|{\"finance-n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"finance-n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"postgres\",\"944fbf163eab\"]}}\nentrypoint|\"docker-entrypoint.sh\"\ncommand|[\"postgres\"]\n"
+    },
+    {
+      "label": "container_be7e5294a56e",
+      "returncode": 0,
+      "sha256": "0b7d0406158107eff65e72f5a65e4b13db620e1958fae0a0d34c8d0367ecd2bd",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:57Z\nidentity|be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35|n8n-postgres-bootstrap-1|ghcr.io/srobroek/n8n-postgres@sha256:b8709c0767f6f57c6509fe4d2d002c7000b141a26affe00e7b5e052c15adc296|590955c229126c2e2f12654f102751d2de7f88306eb3a2e90c060453cc5ef3d6\nports|{}\nnetworks|{\"n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n-postgres-bootstrap-1\",\"postgres-bootstrap\",\"be7e5294a56e\"]}}\nentrypoint|\"sh -ec\"\ncommand|[\"test \\\"${POSTGRES_USER}\\\" = \\\"${EXPECTED_POSTGRES_USER}\\\" || { echo POSTGRES_BOOTSTRAP_USER_MISMATCH >&2; exit 1; }; test \\\"${POSTGRES_DB}\\\" = \\\"${EXPECTED_POSTGRES_DATABASE}\\\" || { echo POSTGRES_BOOTSTRAP_DATABASE_MISMATCH >&2; exit 1; }; current_user=\\\"$(psql --no-password -XAtqc 'select current_user')\\\" || { echo POSTGRES_BOOTSTRAP_CONNECT_FAILED >&2; exit 1; }; current_database=\\\"$(psql --no-password -XAtqc 'select current_database()')\\\" || { echo POSTGRES_BOOTSTRAP_DATABASE_READ_FAILED >&2; exit 1; }; database_owner=\\\"$(psql --no-password -XAtqc 'select pg_get_userbyid(datdba) from pg_database where datname = current_database()')\\\" || { echo POSTGRES_BOOTSTRAP_OWNER_READ_FAILED >&2; exit 1; }; test \\\"${current_user}\\\" = \\\"${EXPECTED_POSTGRES_USER}\\\" || { echo POSTGRES_BOOTSTRAP_ROLE_MISSING >&2; exit 1; }; test \\\"${current_database}\\\" = \\\"${EXPECTED_POSTGRES_DATABASE}\\\" || { echo POSTGRES_BOOTSTRAP_DATABASE_MISSING >&2; exit 1; }; test \\\"${database_owner}\\\" = \\\"${EXPECTED_POSTGRES_USER}\\\" || { echo POSTGRES_BOOTSTRAP_OWNER_MISMATCH >&2; exit 1; }; echo POSTGRES_BOOTSTRAP_VERIFIED\"]\n"
+    },
+    {
+      "label": "container_a6fdf60bfe81",
+      "returncode": 0,
+      "sha256": "a67f02d01df991e3853526487cb3c35763cfec5264dbfd245f42bd763500642f",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:57Z\nidentity|a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460|n8n-pdf-runtime-init-1|ghcr.io/srobroek/finance-pdf-utility@sha256:20a988d35164c5d2e8fbc16816077083f19fb9f7ff868ae3a278520af1abe11a|7c98d130bbb9bdc6fcf0e7ac20e36841caf4fdca125b23ea53cc68484acdb617\nports|{}\nnetworks|{\"none\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"none\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null}}\nentrypoint|\"python -c\"\ncommand|[\"import os; os.makedirs('/run/platform-pdf', exist_ok=True); os.chown('/run/platform-pdf', 1000, 1000); os.chmod('/run/platform-pdf', 0o770)\"]\n"
+    },
+    {
+      "label": "container_9430a20ca7ec",
+      "returncode": 0,
+      "sha256": "848bfd6031ac745113b6bd988a47bb54a435a1962e055c62e78d74f3897754e7",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:58Z\nidentity|9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b|n8n-pdf-utility-1|ghcr.io/srobroek/finance-pdf-utility@sha256:20a988d35164c5d2e8fbc16816077083f19fb9f7ff868ae3a278520af1abe11a|7c98d130bbb9bdc6fcf0e7ac20e36841caf4fdca125b23ea53cc68484acdb617\nports|{}\nnetworks|{\"none\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"none\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null}}\nentrypoint|\"python /opt/platform-pdf/server.py\"\ncommand|null\n"
+    },
+    {
+      "label": "container_34d6268c1e3d",
+      "returncode": 0,
+      "sha256": "ba1beb00fce2f074b26e290687892dbceac6ae04f152cc5fe25c78f6211e7f27",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:59Z\nidentity|34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921|upsnap|ghcr.io/seriousm4x/upsnap:latest|f496f5bab9cfb1a809ae594c0e38ace1cf5e98aae7e5a005a48d4c09ceb5ec12\nports|{}\nnetworks|{\"host\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"host\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null}}\nentrypoint|\"/app/upsnap\"\ncommand|[\"serve\",\"--http\",\"${UPSNAP_HTTP_LISTEN}\"]\n"
+    },
+    {
+      "label": "container_03f9d5bf3cbe",
+      "returncode": 0,
+      "sha256": "23215447ac45020f550780dc972c979f1677b6ebc4dcc9d484ae65b4466f7b11",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:10:59Z\nidentity|03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4|finance-actual|docker.io/actualbudget/actual-server@sha256:552beab3dec8c93d46b8b9245612d63c3f123b8a45063a474f53e229b17621d3|cfacf9b19b21268807a6e6c6289f7a27dfc5adfc2539aa35a15ed38cfba236ab\nports|{}\nnetworks|{\"finance-actual_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.13.1\",\"IPAddress\":\"10.89.13.4\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"5a:c0:63:c1:ae:5b\",\"NetworkID\":\"finance-actual_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"finance-actual\",\"actual\",\"03f9d5bf3cbe\"]}}\nentrypoint|\"/usr/bin/tini -g --\"\ncommand|[\"node\",\"app.js\"]\n"
+    },
+    {
+      "label": "container_1f574cb3beb3",
+      "returncode": 0,
+      "sha256": "a7abd86b1a91777c7b7b6f66dbdaa261de06b5e8cfe0e7575f9cff9a7ba875d6",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:00Z\nidentity|1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10|finance-actual-proxy|ghcr.io/nginx/nginx-unprivileged@sha256:ecc08db2dde19b7bf63b3f4c55fcff2836bd280e1a33a2b20b765e1e2883ff68|368c2b77d1129199a3e4cd5c3ca609316f3e3721df161f9ebc71928c65d760eb\nports|{\"8080/tcp\":[{\"HostIp\":\"\",\"HostPort\":\"5006\"}]}\nnetworks|{\"finance-actual_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.13.1\",\"IPAddress\":\"10.89.13.5\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"92:09:18:dc:71:7c\",\"NetworkID\":\"finance-actual_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"finance-actual-proxy\",\"actual-proxy\",\"1f574cb3beb3\"]}}\nentrypoint|\"/docker-entrypoint.sh\"\ncommand|[\"nginx\",\"-g\",\"daemon off;\"]\n"
+    },
+    {
+      "label": "container_b3913b21cfd4",
+      "returncode": 0,
+      "sha256": "4fac363b72d36167f8cbdb81db20c28dda494111b80cb498d824aa750f788ce7",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:01Z\nidentity|b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee|n8n-task-runners-1|ghcr.io/srobroek/finance-n8n-task-runners@sha256:4692ff297da2f2ff8e543cb0874b4338590aef83ba9fb0e239a5c0b7214cd78c|c733f319a0ff94ecced041ca1b47d3f1aa7331e6c4ee8882e7ab5fffdfb1c9cf\nports|{}\nnetworks|{\"n8n_runner-control\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.6.1\",\"IPAddress\":\"10.89.6.45\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"96:d1:e3:b8:e2:37\",\"NetworkID\":\"n8n_runner-control\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n-task-runners-1\",\"task-runners\",\"b3913b21cfd4\"]}}\nentrypoint|\"tini -- /usr/local/bin/task-runner-launcher\"\ncommand|[\"javascript\",\"python\"]\n"
+    },
+    {
+      "label": "container_b038d9fe341d",
+      "returncode": 0,
+      "sha256": "a3e9e12fa8c9ca3b89ea35225d650b879e120937f216991435c467fe7a96a805",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:01Z\nidentity|b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d|wud|docker.io/getwud/wud:8.4|5f3f7fa521fd799427461991aaeb45014eb519e6dae7a8d08a0bb624d4a21971\nports|{\"3000/tcp\":[{\"HostIp\":\"127.0.0.1\",\"HostPort\":\"3000\"},{\"HostIp\":\"172.20.10.20\",\"HostPort\":\"3000\"}]}\nnetworks|{\"wud_default\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.12.1\",\"IPAddress\":\"10.89.12.9\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"b6:22:52:2b:ee:59\",\"NetworkID\":\"wud_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"wud\",\"whatsupdocker\",\"b038d9fe341d\"]}}\nentrypoint|\"/usr/bin/entrypoint.sh\"\ncommand|[\"node\",\"dist/index\"]\n"
+    },
+    {
+      "label": "container_b7f6e6064eeb",
+      "returncode": 0,
+      "sha256": "742589030aa54ffaa930d067ba3896df4abbe1667f201090720027eafa43782c",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:02Z\nidentity|b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc|code-server|docker.io/codercom/code-server:latest|1e9ba23b04dbe434b8f3d1df9f5f5d48d8a17493a7ab323023601d9ad15fdcba\nports|{\"8080/tcp\":[{\"HostIp\":\"\",\"HostPort\":\"8081\"}]}\nnetworks|{\"code-server_default\":{\"EndpointID\":\"\",\"Gateway\":\"\",\"IPAddress\":\"\",\"IPPrefixLen\":0,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"\",\"NetworkID\":\"code-server_default\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"code-server\",\"code-server\",\"b7f6e6064eeb\",\"3e30ec66f54b\"]}}\nentrypoint|\"/usr/bin/entrypoint.sh --bind-addr 0.0.0.0:8080 .\"\ncommand|[\"--bind-addr\",\"0.0.0.0:8080\",\".\"]\n"
+    },
+    {
+      "label": "container_be6f0e2b61df",
+      "returncode": 0,
+      "sha256": "0d3e1fd18d955561bf39a960a3283da624b5c4a67061906a409841be4ba34dc0",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:02Z\nidentity|be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921|n8n-postgres-1|ghcr.io/srobroek/n8n-postgres@sha256:b8709c0767f6f57c6509fe4d2d002c7000b141a26affe00e7b5e052c15adc296|590955c229126c2e2f12654f102751d2de7f88306eb3a2e90c060453cc5ef3d6\nports|{}\nnetworks|{\"n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.9.1\",\"IPAddress\":\"10.89.9.53\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"02:cc:fc:b4:8a:42\",\"NetworkID\":\"n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n-postgres-1\",\"postgres\",\"be6f0e2b61df\"]}}\nentrypoint|\"docker-entrypoint.sh\"\ncommand|[\"postgres\"]\n"
+    },
+    {
+      "label": "container_da67c281b407",
+      "returncode": 0,
+      "sha256": "64069a14d00db7e61193cc8a9fae61920396bc0d1b906b559a120ce69429e6e7",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:03Z\nidentity|da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf|n8n|ghcr.io/srobroek/finance-n8n@sha256:3991f3b0157dbf954bca61ef203569c6d516d8e1fb51e7ae0765acea549917e7|595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7\nports|{\"5678/tcp\":[{\"HostIp\":\"172.20.10.20\",\"HostPort\":\"5678\"}]}\nnetworks|{\"application-runtime\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.11.1\",\"IPAddress\":\"10.89.11.114\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"aa:d2:9b:c9:e5:f3\",\"NetworkID\":\"application-runtime\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.9.1\",\"IPAddress\":\"10.89.9.108\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"76:48:69:34:21:a3\",\"NetworkID\":\"n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_provider-egress\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.5.1\",\"IPAddress\":\"10.89.5.91\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"aa:4a:30:9e:ab:e8\",\"NetworkID\":\"n8n_provider-egress\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_runner-control\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.6.1\",\"IPAddress\":\"10.89.6.98\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"ee:58:fa:ac:87:20\",\"NetworkID\":\"n8n_runner-control\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]}}\nentrypoint|\"tini -- /opt/finance-n8n/finance-entrypoint.sh\"\ncommand|null\n"
+    },
+    {
+      "label": "container_ee93ffa5da4a",
+      "returncode": 0,
+      "sha256": "e8829c41d7b44130ed9fef99fe5610e329e66ee07d62562a047f6ea490ab8823",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 printf 'identity|'; sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6; printf 'ports|'; sudo -n docker inspect -f '{{json .HostConfig.PortBindings}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6; printf 'networks|'; sudo -n docker inspect -f '{{json .NetworkSettings.Networks}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6; printf 'entrypoint|'; sudo -n docker inspect -f '{{json .Config.Entrypoint}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6; printf 'command|'; sudo -n docker inspect -f '{{json .Config.Cmd}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:04Z\nidentity|ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6|finance-cashback-control|localhost/finance-cashback:55b5f47|e27f8496edd4268d8e54fc385793e6d23bfee2a9f900337c9b212887d8d61585\nports|{\"5010/tcp\":[{\"HostIp\":\"172.20.10.20\",\"HostPort\":\"5010\"}]}\nnetworks|{\"application-runtime\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.11.1\",\"IPAddress\":\"10.89.11.63\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"3a:be:cb:61:6d:3c\",\"NetworkID\":\"application-runtime\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"finance-cashback-control\",\"cashback-control\",\"cashback\",\"ee93ffa5da4a\"]}}\nentrypoint|\"\"\ncommand|[\"python\",\"apps/cashback-control/server.py\"]\n"
+    },
+    {
+      "label": "image_0a9d1e47c571",
+      "returncode": 0,
+      "sha256": "b2ed8ecb4d9bf73c8fdd03c59ba70188b0ec522a30480a0881eb1ebd2c6a8be8",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 0a9d1e47c5714526f5467c50c6c3969743660f2bcf01de642033de8792c1802a",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:04Z\n0a9d1e47c5714526f5467c50c6c3969743660f2bcf01de642033de8792c1802a|[\"docker.io/library/mysql@sha256:21d5c55b7f74a97dcbd281dfbb10356a16b1199da956a63b55493418afe2b940\",\"docker.io/library/mysql@sha256:fb2cf554aae5a4afdbed0a2b1c43e722bd61b8f64c372b5059bccc96c0cc2d22\"]|[\"docker.io/library/mysql:8.4\"]\n"
+    },
+    {
+      "label": "image_1e9ba23b04db",
+      "returncode": 0,
+      "sha256": "3205ac2d3cfef91d246fe1602c5f412711316be73eacd506b4df579beafb608f",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 1e9ba23b04dbe434b8f3d1df9f5f5d48d8a17493a7ab323023601d9ad15fdcba",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:05Z\n1e9ba23b04dbe434b8f3d1df9f5f5d48d8a17493a7ab323023601d9ad15fdcba|[\"docker.io/codercom/code-server@sha256:64565c5d227ef373b9fbdf818d613e8bc188970defe3768f4f950d9ab79e1359\",\"docker.io/codercom/code-server@sha256:c6eec5b3d5035fc121661fb6179c61bcb4dc14c81e410efc5a779e7ee0e20cdf\"]|[\"docker.io/codercom/code-server:latest\"]\n"
+    },
+    {
+      "label": "image_368c2b77d112",
+      "returncode": 0,
+      "sha256": "06d5a75e4e05224380d4c3776ce7f2f3ea018ac46c3be3ba887ebb59c6422c67",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 368c2b77d1129199a3e4cd5c3ca609316f3e3721df161f9ebc71928c65d760eb",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:05Z\n368c2b77d1129199a3e4cd5c3ca609316f3e3721df161f9ebc71928c65d760eb|[\"ghcr.io/nginx/nginx-unprivileged@sha256:e21c6ac87a92b5742820e1f38f43404069cbdda92fe006eb23f1f1e0ec2f9b60\",\"ghcr.io/nginx/nginx-unprivileged@sha256:ecc08db2dde19b7bf63b3f4c55fcff2836bd280e1a33a2b20b765e1e2883ff68\"]|[]\n"
+    },
+    {
+      "label": "image_590955c22912",
+      "returncode": 0,
+      "sha256": "f3325bb30602b0b8b30f1a0d27a6906c659d6ec3fbf569e8107bb5e4c22c2023",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 590955c229126c2e2f12654f102751d2de7f88306eb3a2e90c060453cc5ef3d6",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:05Z\n590955c229126c2e2f12654f102751d2de7f88306eb3a2e90c060453cc5ef3d6|[\"ghcr.io/srobroek/n8n-postgres@sha256:b8709c0767f6f57c6509fe4d2d002c7000b141a26affe00e7b5e052c15adc296\",\"ghcr.io/srobroek/n8n-postgres@sha256:e406552e295dea17e8c4f53dda9e135bbd184e01910ac5b3dacd82dbfd742b02\",\"localhost/finance-postgres@sha256:b8709c0767f6f57c6509fe4d2d002c7000b141a26affe00e7b5e052c15adc296\",\"localhost/finance-postgres@sha256:e406552e295dea17e8c4f53dda9e135bbd184e01910ac5b3dacd82dbfd742b02\"]|[\"ghcr.io/srobroek/n8n-postgres:preprod-recovery-20260824\",\"localhost/finance-postgres:test\"]\n"
+    },
+    {
+      "label": "image_595f2366cb94",
+      "returncode": 0,
+      "sha256": "ba387a37007e52b2482c6993fd9cd679b097830d7d97cfdd3dd72a81a3c8ce52",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:06Z\n595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7|[\"ghcr.io/srobroek/finance-n8n@sha256:3991f3b0157dbf954bca61ef203569c6d516d8e1fb51e7ae0765acea549917e7\"]|[]\n"
+    },
+    {
+      "label": "image_5f3f7fa521fd",
+      "returncode": 0,
+      "sha256": "f57305b91d56f55338ca926b071adbbd5d7e8612f4b7acf5a97a6b07eae88978",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 5f3f7fa521fd799427461991aaeb45014eb519e6dae7a8d08a0bb624d4a21971",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:06Z\n5f3f7fa521fd799427461991aaeb45014eb519e6dae7a8d08a0bb624d4a21971|[\"docker.io/getwud/wud@sha256:0cd1207161156bad57ce8446991d571387f4a7ced87c976709886b29e31fecf1\",\"docker.io/getwud/wud@sha256:3765bc5b7303cf6c80d89ecfb41e3a9c2767729826e080be963c48f43b4ee150\"]|[\"docker.io/getwud/wud:8.4\",\"docker.io/getwud/wud:8.4.0\"]\n"
+    },
+    {
+      "label": "image_7c98d130bbb9",
+      "returncode": 0,
+      "sha256": "e557b313b92d900c9859b6bd3a003cb2108f7b2198f3d64cea32484a1592fbe7",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 7c98d130bbb9bdc6fcf0e7ac20e36841caf4fdca125b23ea53cc68484acdb617",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:07Z\n7c98d130bbb9bdc6fcf0e7ac20e36841caf4fdca125b23ea53cc68484acdb617|[\"ghcr.io/srobroek/finance-pdf-utility@sha256:20a988d35164c5d2e8fbc16816077083f19fb9f7ff868ae3a278520af1abe11a\"]|[]\n"
+    },
+    {
+      "label": "image_8f919ea5d9fb",
+      "returncode": 0,
+      "sha256": "dd81e0bf16d8a32ecb2ec11adc4309d75d360b38ecf68122f24b2cfad0673747",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 8f919ea5d9fb054a64ed2fc88e6c4e0d523de9b1fbba8e74214052fd32eef872",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:07Z\n8f919ea5d9fb054a64ed2fc88e6c4e0d523de9b1fbba8e74214052fd32eef872|[\"docker.io/guacamole/guacd@sha256:2d266a525a72ad55d8ea7cd4ca8342a1b44075759b03660d8684821b3636a922\"]|[\"docker.io/guacamole/guacd:latest\"]\n"
+    },
+    {
+      "label": "image_9a8e0e5c8ddb",
+      "returncode": 0,
+      "sha256": "acc4b1b391269bf06998ebb7fa86daa28c06156537fc9cebe6ce040b899881a3",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' 9a8e0e5c8ddba0339c1419181466143301c49fe908fab61ded0ac8d1c17b7e18",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:08Z\n9a8e0e5c8ddba0339c1419181466143301c49fe908fab61ded0ac8d1c17b7e18|[\"docker.io/guacamole/guacamole@sha256:1d3a2ce78d928fca610b01a644c51853dc72719d083e41260f6a4319ca054d96\"]|[\"docker.io/guacamole/guacamole:latest\"]\n"
+    },
+    {
+      "label": "image_c733f319a0ff",
+      "returncode": 0,
+      "sha256": "e37686f78ad14f872ddf2dcc2fdf627debe35b8768966980f535dd4c51708797",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' c733f319a0ff94ecced041ca1b47d3f1aa7331e6c4ee8882e7ab5fffdfb1c9cf",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:08Z\nc733f319a0ff94ecced041ca1b47d3f1aa7331e6c4ee8882e7ab5fffdfb1c9cf|[\"ghcr.io/srobroek/finance-n8n-task-runners@sha256:4692ff297da2f2ff8e543cb0874b4338590aef83ba9fb0e239a5c0b7214cd78c\"]|[]\n"
+    },
+    {
+      "label": "image_cfacf9b19b21",
+      "returncode": 0,
+      "sha256": "0e869f6e451a4d9364c9c6c8936a9e6518da3927cf0a667c05eab523090a1b14",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' cfacf9b19b21268807a6e6c6289f7a27dfc5adfc2539aa35a15ed38cfba236ab",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:08Z\ncfacf9b19b21268807a6e6c6289f7a27dfc5adfc2539aa35a15ed38cfba236ab|[\"docker.io/actualbudget/actual-server@sha256:552beab3dec8c93d46b8b9245612d63c3f123b8a45063a474f53e229b17621d3\",\"docker.io/actualbudget/actual-server@sha256:59cab86c77e764855119e2d5ddd96b9c9cefd90913f4feed7f4ee1433a6482c5\"]|[]\n"
+    },
+    {
+      "label": "image_e27f8496edd4",
+      "returncode": 0,
+      "sha256": "ffcf144e7c2e13de243def326c68bb7db81eb11967688b18e97307e7600f848b",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' e27f8496edd4268d8e54fc385793e6d23bfee2a9f900337c9b212887d8d61585",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:09Z\ne27f8496edd4268d8e54fc385793e6d23bfee2a9f900337c9b212887d8d61585|[\"localhost/finance-cashback@sha256:45c1d468c86f352113f0d9f2f855595db4d0914c0337657c01b632a61d7f00ae\"]|[\"localhost/finance-cashback:55b5f47\"]\n"
+    },
+    {
+      "label": "image_e85d511b2a8b",
+      "returncode": 0,
+      "sha256": "12e36ee69547b511df3c409826c481ac29cb668134829fadb129f163dd02723c",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' e85d511b2a8b883da8a1ac2fde39ecddacdc011734e9f89a14b7798d82d5a0d3",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:09Z\ne85d511b2a8b883da8a1ac2fde39ecddacdc011734e9f89a14b7798d82d5a0d3|[\"docker.io/louislam/dockge@sha256:335c6368b880ecc203236ed89e6e5232e0d6578e8ef5920e4a502390451502bf\",\"docker.io/louislam/dockge@sha256:edee39b74f238378ebfe0d9d12b3833f9d1e123aea9dfaf5149ad45c9afe2527\"]|[\"docker.io/louislam/dockge:1\"]\n"
+    },
+    {
+      "label": "image_f496f5bab9cf",
+      "returncode": 0,
+      "sha256": "ecbe3f4924f407a7112851197a0e8be10865b04dde8b4ba0e413abc24c6e65e2",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' f496f5bab9cfb1a809ae594c0e38ace1cf5e98aae7e5a005a48d4c09ceb5ec12",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:10Z\nf496f5bab9cfb1a809ae594c0e38ace1cf5e98aae7e5a005a48d4c09ceb5ec12|[\"ghcr.io/seriousm4x/upsnap@sha256:266450815c0ddf1002aca827474256e5730cdd3f90db4a378f8cc521253485f1\",\"ghcr.io/seriousm4x/upsnap@sha256:d00125c02c8565327c37bd92124b2bd804fe5e29d30b19be374f456262c11a27\"]|[\"ghcr.io/seriousm4x/upsnap:latest\"]\n"
+    },
+    {
+      "label": "n8n_networks",
+      "returncode": 0,
+      "sha256": "c3b2de0456352b210e50c36ba52b4f5fbc8434999d89d2b058aead4561c6c4b5",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.Image}}|{{json .NetworkSettings.Networks}}' n8n",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:10Z\nda67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf|n8n|ghcr.io/srobroek/finance-n8n@sha256:3991f3b0157dbf954bca61ef203569c6d516d8e1fb51e7ae0765acea549917e7|595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7|{\"application-runtime\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.11.1\",\"IPAddress\":\"10.89.11.115\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"46:5a:40:cc:dc:89\",\"NetworkID\":\"application-runtime\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_database\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.9.1\",\"IPAddress\":\"10.89.9.109\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"36:19:21:78:ab:18\",\"NetworkID\":\"n8n_database\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_provider-egress\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.5.1\",\"IPAddress\":\"10.89.5.92\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"56:6b:d9:1b:3b:a1\",\"NetworkID\":\"n8n_provider-egress\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]},\"n8n_runner-control\":{\"EndpointID\":\"\",\"Gateway\":\"10.89.6.1\",\"IPAddress\":\"10.89.6.99\",\"IPPrefixLen\":24,\"IPv6Gateway\":\"\",\"GlobalIPv6Address\":\"\",\"GlobalIPv6PrefixLen\":0,\"MacAddress\":\"0a:bb:df:80:3f:73\",\"NetworkID\":\"n8n_runner-control\",\"DriverOpts\":null,\"IPAMConfig\":null,\"Links\":null,\"Aliases\":[\"n8n\",\"n8n\",\"da67c281b407\"]}}\n"
+    },
+    {
+      "label": "n8n_image_digests",
+      "returncode": 0,
+      "sha256": "8c33a6d421b95f3060a19feee5f27145f8eb654a6642172c0c63e08e7527f7d4",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker image inspect -f '{{.Id}}|{{json .RepoDigests}}|{{json .RepoTags}}' $(sudo -n docker inspect -f '{{.Image}}' n8n)",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:11Z\n595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7|[\"ghcr.io/srobroek/finance-n8n@sha256:3991f3b0157dbf954bca61ef203569c6d516d8e1fb51e7ae0765acea549917e7\"]|[]\n"
+    },
+    {
+      "label": "env_key_names_7fe383fb745b",
+      "returncode": 0,
+      "sha256": "20be41797391d8af4f3b105d23d58e136b4cc12fe60d83df347e3d6754d8dce1",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 7fe383fb745b2efb16c81cd8347f3a83e530c35e11b02db795d88407c9e88eba | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:11Z\n"
+    },
+    {
+      "label": "env_key_names_ca2f5da16f31",
+      "returncode": 0,
+      "sha256": "20be41797391d8af4f3b105d23d58e136b4cc12fe60d83df347e3d6754d8dce1",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' ca2f5da16f31a2072548a2919ef6320b99f9488be66708b7f9ae71eb74ec38c3 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:11Z\n"
+    },
+    {
+      "label": "env_key_names_645bb5a8c943",
+      "returncode": 0,
+      "sha256": "fd07868680efec55df18b198378e3daaceba96f79bccc77a958211c7631c844a",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 645bb5a8c943845cb6d802db7ba8baea2b561d28c0e7c80badd5c5424d5fd403 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:12Z\nMYSQL_PASSWORD_FILE\nMYSQL_RANDOM_ROOT_PASSWORD\n"
+    },
+    {
+      "label": "env_key_names_e2790c40cdb6",
+      "returncode": 0,
+      "sha256": "1bce20179320b803626bdaac00c36ac7892476ee8ffb3e88413c3d00f832ce50",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' e2790c40cdb616589727d234c24e60bbdc81ede64120ba868ccfe3aaff983fdc | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:12Z\n"
+    },
+    {
+      "label": "env_key_names_944fbf163eab",
+      "returncode": 0,
+      "sha256": "d891f28cfac0f840ff05e7d1504cbced0208d9fdc6dfe085ac1ab0c71040c352",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 944fbf163eab188dcbc174c1e7ad4023da95ed9ebb838e7850947c34eb8dab2d | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:13Z\nPOSTGRES_PASSWORD\n"
+    },
+    {
+      "label": "env_key_names_be7e5294a56e",
+      "returncode": 0,
+      "sha256": "3bada56b8361d994ecdd533c5f85a461f1758cb98da6c58746685c48874eaf60",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' be7e5294a56e36d9ede13f85c2451e4f7419af88a783c9cd6aeb49d3a1923d35 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:13Z\nPGPASSWORD\n"
+    },
+    {
+      "label": "env_key_names_a6fdf60bfe81",
+      "returncode": 0,
+      "sha256": "fc97f2d9da68cb60f876451cda3c4cd4c90e072357f4ce3d6ae24b13e5f4bcff",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' a6fdf60bfe811efe1254a60e82bc3ae95acac94378a18fbed17cc9d93021e460 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:14Z\n"
+    },
+    {
+      "label": "env_key_names_9430a20ca7ec",
+      "returncode": 0,
+      "sha256": "fc97f2d9da68cb60f876451cda3c4cd4c90e072357f4ce3d6ae24b13e5f4bcff",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 9430a20ca7ecd90b2a679ff32c16848840e1420d2261e02ee4dd759232eaef5b | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:14Z\n"
+    },
+    {
+      "label": "env_key_names_34d6268c1e3d",
+      "returncode": 0,
+      "sha256": "fc97f2d9da68cb60f876451cda3c4cd4c90e072357f4ce3d6ae24b13e5f4bcff",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 34d6268c1e3d4cc8e6c4525693b02dde16402ddfae3ef4030b9cd7a7a175c921 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:14Z\n"
+    },
+    {
+      "label": "env_key_names_03f9d5bf3cbe",
+      "returncode": 0,
+      "sha256": "f6f088f7cda40bbef610c4344692b9db0c9f209c09c86b0538dd04413f9a67f1",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 03f9d5bf3cbed87219633d0e5d37408ab89a15169b5414693934870493ae02c4 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:15Z\n"
+    },
+    {
+      "label": "env_key_names_1f574cb3beb3",
+      "returncode": 0,
+      "sha256": "f6f088f7cda40bbef610c4344692b9db0c9f209c09c86b0538dd04413f9a67f1",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' 1f574cb3beb3e4546e611f7673b27b32d0dd0691c6d34a250987074b21313a10 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:15Z\n"
+    },
+    {
+      "label": "env_key_names_b3913b21cfd4",
+      "returncode": 0,
+      "sha256": "cf309721fdccf7f5229b17c2c4668f8d6c59500c9a9cf312d9b8432ddf186355",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' b3913b21cfd43f47b40d01e4e81371bd1a3e3990cedb437253c8db2a8e1467ee | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:16Z\nN8N_RUNNERS_AUTH_TOKEN\n"
+    },
+    {
+      "label": "env_key_names_b038d9fe341d",
+      "returncode": 0,
+      "sha256": "270de0fa6c98e5e6dc06e12e6c3492582e41e9192ebdbd0c72685366b8c8b130",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' b038d9fe341da4aac630e5aed09af67e6b7c6aad97f6cb1119ba4989b4dbef3d | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:16Z\nWUD_REGISTRY_GHCR_PUBLIC_TOKEN\n"
+    },
+    {
+      "label": "env_key_names_b7f6e6064eeb",
+      "returncode": 0,
+      "sha256": "27d14ad3fcad522b83fddfa50878ca7c54e7438be0df8a31ad398125fb203ad6",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' b7f6e6064eebf334d30ec630e794f997c76da42ba131e6a9183f4681b395fedc | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:17Z\nPASSWORD\n"
+    },
+    {
+      "label": "env_key_names_be6f0e2b61df",
+      "returncode": 0,
+      "sha256": "3d2aea26669d3a5f4679203a08f64ac540878bfda7a0042bed838ceb266d9a2c",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' be6f0e2b61df6a227403f896dcd316e3bec6cb96229e54ddb90f33bf7a5d0921 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:17Z\nPOSTGRES_PASSWORD\n"
+    },
+    {
+      "label": "env_key_names_da67c281b407",
+      "returncode": 0,
+      "sha256": "49b6e5ec0ee0190554f219889a2d466a691f257f9a1f983693bfe099043ff39d",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:18Z\nDB_POSTGRESDB_PASSWORD\nN8N_RUNNERS_AUTH_TOKEN\n"
+    },
+    {
+      "label": "env_key_names_ee93ffa5da4a",
+      "returncode": 0,
+      "sha256": "ff2f54bbe714a5fbef0bf58d649d9ac24bdd22efc51d0edb6074435cea6cd7ce",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' ee93ffa5da4a09ec111703913c101c0de8d5b7e164796bf963726a8006209bd6 | sed 's/=.*//' | grep -Ei 'API.*KEY|KEY.*API|TOKEN|SECRET|PASSWORD|CREDENTIAL' | sort -u || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:18Z\nACTUAL_PASSWORD\nADCB_STATEMENT_PASSWORD\nCASHBACK_INGEST_TOKEN\nCASHBACK_VAPID_PRIVATE_KEY\nCASHBACK_VAPID_PUBLIC_KEY\nEI_STATEMENT_PASSWORD\nFINANCE_INGEST_TOKEN\n"
+    },
+    {
+      "label": "matching_process_names",
+      "returncode": 0,
+      "sha256": "ed96fbc4ea46b23d643b1872e2ce07137558ba40bf7ce36bcde887a1b93264aa",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n ps -eo pid=,comm= | grep -Ei 'prodex|codex|runner|api[-_]?key' || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:18Z\n    686 gitlab-runner\n1562344 task-runner-lau\n2460356 Runner.Listener\n"
+    },
+    {
+      "label": "matching_systemd_services",
+      "returncode": 0,
+      "sha256": "d4e82aa5d0a623cc60ba2978c81a3a216026b63873239a82c656721d772cbe0f",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n systemctl list-units --all --type=service --no-legend --no-pager | grep -Ei 'prodex|codex|runner|api[-_ ]?key' || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:19Z\n  actions.runner.srobroek-finance-statement-tracker.finance-ci.service                      loaded    active   running GitHub Actions Runner (srobroek-finance-statement-tracker.finance-ci)\n  gitlab-runner.service                                                                     loaded    active   running GitLab Runner\n"
+    },
+    {
+      "label": "exact_obsolete_paths",
+      "returncode": 0,
+      "sha256": "6b53e95196ff42bce4842361f8a572c1996a53c66c6d51e51bed5f61ef3bcdcb",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n stat -c '%F|%a|%U:%G|%s|%n' /tmp/prodex-w21-live-client.js /tmp/w21-prodex-live-client.js 2>/dev/null || true",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:19Z\n"
+    },
+    {
+      "label": "candidate_path_inventory",
+      "returncode": 0,
+      "sha256": "2cac17606dc2923dbeeb3ee040de85f0be1be5103158f7656d5e4f095a062bbc",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 sudo -n find /tmp /home/ci /opt/stacks/finance-runtime -maxdepth 2 -xdev \\( -iname '*prodex*' -o -iname '*codex*' \\) -printf '%y|%m|%U:%G|%s|%p\\n' 2>/dev/null | sort",
+      "stderr": "",
+      "stdout": "__UTC__=2026-09-17T20:11:20Z\nd|700|1000:1000|4096|/home/ci/.codex\nd|700|1000:1000|4096|/home/ci/.codex-n8n-community\nd|700|1000:1000|4096|/home/ci/prodex-recovery-20260917T155820Z\nf|600|1000:1000|128|/tmp/finance-codex-ephemeral-r2-summary\nf|600|1000:1000|16531|/tmp/codex-sdk-index.js\nf|600|1000:1000|286291184|/home/ci/prodex-recovery-20260917T155820Z/codex-0.142.1.original\nf|600|1000:1000|378|/tmp/finance-codex-ephemeral-r3-summary\n"
+    },
+    {
+      "label": "utc_hostname_retry",
+      "returncode": 0,
+      "sha256": "7df379a2d696e8180ca0c47a8462feb1c28cfef81998c3bd1759228d71a9be31",
+      "ssh_command": "/mnt/c/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=10 ci@172.20.10.20 date -u +%Y-%m-%dT%H:%M:%SZ; hostname; id; exit",
+      "stderr": "",
+      "stdout": "2026-09-17T20:11:51Z\nnightwatch-ci\nuid=1000(ci) gid=1000(ci) groups=1000(ci),4(adm),20(dialout),24(cdrom),27(sudo),30(dip),46(plugdev),101(lxd),990(docker)\n"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "strictly_read_only_prodex_topology",
+  "secrets_recorded": false,
+  "source_readonly_receipt_sha256": "61422a3edd984d246d436292f76c737614944faa6c72477bb47e542132921a06",
+  "target": "ci@172.20.10.20",
+  "topology_assessment": {
+    "active_auth_paths_not_obsolete": [
+      "/home/ci/.codex",
+      "/home/ci/.codex-n8n-community"
+    ],
+    "capture_window_utc": [
+      "2026-09-17T20:10:53Z",
+      "2026-09-17T20:11:51Z"
+    ],
+    "distinct_image_count": 14,
+    "exact_client_paths_absent": [
+      "/tmp/prodex-w21-live-client.js",
+      "/tmp/w21-prodex-live-client.js"
+    ],
+    "failed_record_count": 1,
+    "failed_record_disposition": "Initial identity transport failed at the WSL interop boundary; the identical read-only identity query succeeded as utc_hostname_retry. No host command overlapped and no mutation occurred.",
+    "image_classification": "All 14 distinct deployed image IDs were inspected with RepoDigests/RepoTags; no ProDex/Codex/API-key image exists. The direct implementation is inside the pinned finance-n8n image.",
+    "listener_classification": "Rootful ss inventory is complete for the capture timestamp. The only ProDex-serving surface is the n8n container publication at 172.20.10.20:5678; no prodex/codex/api-key process owns any listener.",
+    "n8n_container": {
+      "container_id": "da67c281b4073e1559f912eff35884a970008b6085cdb725277f774fcd1eb5bf",
+      "image_digest": "ghcr.io/srobroek/finance-n8n@sha256:3991f3b0157dbf954bca61ef203569c6d516d8e1fb51e7ae0765acea549917e7",
+      "image_id": "595f2366cb94227d5883df902940b400275522452e8d19f1c6c37c1150b0c4b7",
+      "name": "n8n",
+      "networks": [
+        "application-runtime",
+        "n8n_database",
+        "n8n_provider-egress",
+        "n8n_runner-control"
+      ],
+      "published_listener": "172.20.10.20:5678/tcp"
+    },
+    "n8n_sensitive_environment_names": [
+      "DB_POSTGRESDB_PASSWORD",
+      "N8N_RUNNERS_AUTH_TOKEN"
+    ],
+    "n8n_sensitive_environment_values_recorded": false,
+    "network_classification": "n8n is attached only to application-runtime, n8n_database, n8n_provider-egress, and n8n_runner-control; no separate ProDex/Codex network exists.",
+    "obsolete_runtime_residue_present": [
+      "/home/ci/prodex-recovery-20260917T155820Z",
+      "/home/ci/prodex-recovery-20260917T155820Z/codex-0.142.1.original",
+      "/tmp/finance-codex-ephemeral-r2-summary",
+      "/tmp/finance-codex-ephemeral-r3-summary",
+      "/tmp/codex-sdk-index.js"
+    ],
+    "openai_api_key_environment_name_present": false,
+    "record_count": 58,
+    "rootful_container_count": 17,
+    "runner_classification": {
+      "host_runner_matches": [
+        "GitHub Actions Runner",
+        "GitLab Runner"
+      ],
+      "n8n-task-runners-1": "generic n8n task-runner service on n8n_runner-control; no published port and no ProDex/Codex identity",
+      "separate_prodex_runner_present": false
+    },
+    "separate_prodex_codex_api_key_container": false,
+    "separate_prodex_codex_api_key_process_or_service": false,
+    "successful_record_count": 57
+  }
+}
