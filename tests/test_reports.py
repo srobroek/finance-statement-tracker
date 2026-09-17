@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from hashlib import sha256
 from unittest import TestCase
 
 from finance_tracker.models import Transaction
@@ -44,3 +45,27 @@ class ReportTests(TestCase):
         self.assertIn("```mermaid", output)
         self.assertIn('"Groceries" : 100.00', output)
         self.assertIn("| Dining | 50.00 |", output)
+
+    def test_month_close_records_deterministic_source_provenance(self) -> None:
+        transactions = [
+            Transaction("1", datetime(2026, 8, 1), "RAK_WORLD", "Market", "100", category="Groceries"),
+        ]
+        source_digest = sha256(b'{"transactions":[1]}').hexdigest()
+
+        first = month_close_markdown(
+            transactions,
+            "2026-08",
+            source_identity="sample_transactions.json",
+            source_sha256=source_digest,
+        )
+        second = month_close_markdown(
+            transactions,
+            "2026-08",
+            source_identity="sample_transactions.json",
+            source_sha256=source_digest,
+        )
+
+        self.assertEqual(first, second)
+        self.assertIn("Source identity: sample_transactions.json", first)
+        self.assertIn(f"Source SHA-256: {source_digest}", first)
+        self.assertNotIn("Generated ", first)

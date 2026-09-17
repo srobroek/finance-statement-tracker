@@ -11,6 +11,13 @@ from .models import Transaction
 
 @dataclass(frozen=True, slots=True)
 class ReportFilter:
+    """Typed filters for the callable reporting API.
+
+    CLI or other untrusted input must be parsed and authorized before building
+    this object; tag filters are deliberately set-valued, not comma-separated
+    strings or arbitrary iterables.  Unknown tag names remain valid and simply
+    produce no matches.
+    """
     start: date | None = None
     end: date | None = None
     accounts: frozenset[str] = frozenset()
@@ -22,6 +29,15 @@ class ReportFilter:
     tags_all: frozenset[str] = frozenset()
     tags_none: frozenset[str] = frozenset()
     tags: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        for field_name in ("tags_any", "tags_all", "tags_none", "tags"):
+            value = getattr(self, field_name)
+            if not isinstance(value, (set, frozenset)):
+                raise TypeError(f"{field_name} must be a set[str] or frozenset[str]")
+            if any(not isinstance(tag, str) for tag in value):
+                raise TypeError(f"{field_name} must contain only strings")
+
 
     def matches(self, transaction: Transaction) -> bool:
         when = transaction.transaction_at.date()
