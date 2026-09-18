@@ -58,8 +58,9 @@ class StatementCashbackContractTests(unittest.TestCase):
     def test_cross_month_posting_matches_original_notification_and_counts_only_in_posted_month(self):
         row={'transaction_id':'late-post','transaction_type':'PURCHASE','transaction_date':'2026-06-30','post_date':'2026-07-01','amount_aed':'36.70','description':'AMAZON.COM','reward_bucket':'EI_AMAZON','channel':'ONLINE'}
         request=self.build([row])
+        request['card_code']='RAK_WORLD'
         self.assertEqual(request['transactions'][0]['post_date'],'2026-07-01')
-        notification={'source_event_id':'mail:late','occurred_at':'2026-06-30T10:00:00+04:00','card_code':'EI_AMAZON','amount_aed':'36.70','currency':'AED','purchase_type':'AMAZON','channel':'ONLINE','merchant':'AMAZON.COM','bucket_code':'EI_AMAZON','source':'outlook'}
+        notification={'source_event_id':'mail:late','occurred_at':'2026-06-30T10:00:00+04:00','card_code':'RAK_WORLD','amount_aed':'36.70','currency':'AED','purchase_type':'AMAZON','channel':'ONLINE','merchant':'AMAZON.COM','bucket_code':'RAK_STANDARD','source':'outlook'}
         unrelated={**notification,'source_event_id':'mail:unrelated','merchant':'OTHER','amount_aed':'12.00'}
         with tempfile.TemporaryDirectory() as directory:
             store=CashbackEventStore(Path(directory)/'events.sqlite3')

@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Iterable
 
-from .actual_snapshot import cashback_dashboard
+from .actual_snapshot import cashback_dashboard, eligible_card_codes
 from .cashback import (
     PaymentIntent,
     configured_reward_bucket,
@@ -21,21 +21,24 @@ from .cashback import (
     programs_from_config,
     statement_period,
 )
-from .models import Transaction, money
+from .models import StatementReceipt, Transaction, money
 from .sync_health import scheduled_sync_health
 from .transaction_semantics import CASHBACK_TOPICS
-from .fx import FxConversionError, FxConversionRequest, convert
 from .statement_cycles import (
     BANK_CLOSED,
     PROCESSING_STATES,
     RECONCILIATION_STATES,
+    receipt_period_bounds,
     normalize_statement_receipt,
     receipt_view,
 )
+
 ACTIVE_STATUSES = frozenset({"ACTIVE"})
 VALID_STATUSES = ACTIVE_STATUSES | {"IGNORED", "REVERSED"}
 VALID_EVENT_TYPES = CASHBACK_TOPICS
-VALID_RECONCILIATION_STATUSES = frozenset({"UNMATCHED", "MATCHED", "VARIANCE", "RECONCILED"})
+VALID_RECONCILIATION_STATUSES = frozenset(
+    {"UNMATCHED", "MATCHED", "VARIANCE", "RECONCILED"}
+)
 # An event's canonical economics are immutable observations from an upstream
 # source.  Enrichment and reconciliation metadata may change independently, so
 # they are intentionally excluded from replay identity.  A source replay must
@@ -49,6 +52,19 @@ EVENT_CANONICAL_FIELDS = (
     "merchant",
     "event_type",
     "reversal_of",
+)
+# Once a statement has established authoritative evidence for an event, its
+# matching facts cannot be edited in place. A new statement reconciliation is
+# required so the receipt and rows continue to describe the same economics.
+RECONCILIATION_FACT_FIELDS = frozenset(
+    {
+        "occurred_at",
+        "card_code",
+        "amount_aed",
+        "currency",
+        "merchant",
+        "event_type",
+    }
 )
 CORRECTABLE_EVENT_FIELDS = frozenset(
     {
@@ -84,21 +100,8 @@ AI_CORRECTABLE_EVENT_FIELDS = frozenset(
         "ai_trace",
     }
 )
-# Once a statement has established authoritative evidence for an event, its
-# matching facts cannot be edited in place.  A new statement reconciliation is
-# required so the receipt and rows continue to describe the same economics.
-RECONCILIATION_FACT_FIELDS = frozenset(
-    {
-        "occurred_at",
-        "card_code",
-        "amount_aed",
-        "currency",
-        "merchant",
-        "event_type",
-        "status",
-    }
-)
 _MERCHANT_TOKEN = re.compile(r"[^A-Z0-9]+")
+_LEGACY_DATE_PERIOD = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _CURRENCY_CODE = re.compile(r"^[A-Z]{3}$")
 _MINOR_UNIT = Decimal("0.01")
@@ -133,16 +136,11 @@ class IngestCursorConflict(ValueError):
     """Raised when a cursor commit cannot be proven to be the next commit."""
 
 
-def _date_range_bounds(start: date, end: date) -> tuple[str, str]:
-    """Return lexically indexable bounds for ISO timestamps preserving local dates."""
-    if end < start:
-        raise ValueError("date range end cannot be before start")
-    return f"{start.isoformat()}T00:00:00", f"{(end + timedelta(days=1)).isoformat()}T00:00:00"
-
-
 def _json_digest(value: object) -> str:
     return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")
     ).hexdigest()
 
 
@@ -156,7 +154,9 @@ def _sha256_field(value: object, field_name: str) -> str:
     return digest
 
 
-def _payload_sha256(payload: dict[str, Any], fields: tuple[str, ...], label: str) -> str:
+def _payload_sha256(
+    payload: dict[str, Any], fields: tuple[str, ...], label: str
+) -> str:
     """Read one digest under its supported contract aliases and reject conflicts."""
     values = {
         _sha256_field(payload[field], field)
@@ -210,10 +210,14 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         )
     for field in ("outbox_id", "actual_file_id", "account_id", "card_code"):
         if not isinstance(receipt[field], str) or not receipt[field].strip():
-            raise ValueError(f"actual_import_receipt.{field} must be a non-empty identity")
+            raise ValueError(
+                f"actual_import_receipt.{field} must be a non-empty identity"
+            )
     version = receipt["verification_version"]
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise ValueError("actual_import_receipt.verification_version must be a positive integer")
+        raise ValueError(
+            "actual_import_receipt.verification_version must be a positive integer"
+        )
     if receipt["invariants_passed"] is not True:
         raise ValueError("actual_import_receipt invariants must pass")
     if receipt["state"] != "COMMITTED":
@@ -224,20 +228,24 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
         try:
             date.fromisoformat(str(receipt[field]))
         except ValueError as error:
-            raise ValueError(f"actual_import_receipt.{field} must be an ISO date") from error
+            raise ValueError(
+                f"actual_import_receipt.{field} must be an ISO date"
+            ) from error
     if date.fromisoformat(str(receipt["period_end"])) < date.fromisoformat(
         str(receipt["period_start"])
     ):
-        raise ValueError("actual_import_receipt period_end cannot be before period_start")
+        raise ValueError(
+            "actual_import_receipt period_end cannot be before period_start"
+        )
     verified_at = receipt["verified_at"]
     if not isinstance(verified_at, str) or not verified_at.strip():
         raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp")
     try:
-        parsed_verified_at = datetime.fromisoformat(verified_at.replace("Z", "+00:00"))
+        datetime.fromisoformat(verified_at)
     except ValueError as error:
-        raise ValueError("actual_import_receipt.verified_at must be an ISO timestamp") from error
-    if parsed_verified_at.tzinfo is None:
-        raise ValueError("actual_import_receipt.verified_at must include a timezone")
+        raise ValueError(
+            "actual_import_receipt.verified_at must be an ISO timestamp"
+        ) from error
 
     expected_values = {
         _sha256_field(receipt[field], field)
@@ -258,7 +266,9 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
     expected_digest = expected_values.pop()
     observed_digest = observed_values.pop()
     if expected_digest != observed_digest:
-        raise ValueError("actual_import_receipt expected and observed payload digests differ")
+        raise ValueError(
+            "actual_import_receipt expected and observed payload digests differ"
+        )
 
     embedded_digest = None
     if "receipt_sha256" in receipt and receipt["receipt_sha256"] not in (None, ""):
@@ -276,26 +286,32 @@ def _trusted_actual_receipt(payload: dict[str, Any]) -> tuple[dict[str, Any], st
     if top_level_digest is None and embedded_digest is None:
         raise ValueError("actual_import_receipt_sha256 is required")
     canonical_receipt = {
-        key: value for key, value in receipt.items() if key not in _ACTUAL_RECEIPT_DIGEST_KEYS
+        key: value
+        for key, value in receipt.items()
+        if key not in _ACTUAL_RECEIPT_DIGEST_KEYS
     }
     computed_digest = _json_digest(canonical_receipt)
     for supplied_digest in (top_level_digest, embedded_digest):
         if supplied_digest is not None and supplied_digest != computed_digest:
-            raise ValueError("Actual import receipt digest does not match its readback content")
+            raise ValueError(
+                "Actual import receipt digest does not match its readback content"
+            )
     return receipt, computed_digest
 
 
 def _legacy_recovery_digest(row: sqlite3.Row | dict[str, Any]) -> str:
     """Return the deterministic proof key for a pre-digest reconciliation row."""
-    return _json_digest({
-        "statement_reference": str(row["statement_reference"]),
-        "card_code": str(row["card_code"]),
-        "period_start": str(row["period_start"]),
-        "period_end": str(row["period_end"]),
-        "matched_count": int(row["matched_count"]),
-        "statement_only_count": int(row["statement_only_count"]),
-        "notification_only_count": int(row["notification_only_count"]),
-    })
+    return _json_digest(
+        {
+            "statement_reference": str(row["statement_reference"]),
+            "card_code": str(row["card_code"]),
+            "period_start": str(row["period_start"]),
+            "period_end": str(row["period_end"]),
+            "matched_count": int(row["matched_count"]),
+            "statement_only_count": int(row["statement_only_count"]),
+            "notification_only_count": int(row["notification_only_count"]),
+        }
+    )
 
 
 def _legacy_statement_content_digest(
@@ -323,32 +339,40 @@ def _legacy_statement_content_digest(
     for row in rows:
         source_event_id = str(row["source_event_id"])
         if not source_event_id.startswith(prefix):
-            raise ValueError("legacy statement rows have an invalid transaction identity")
+            raise ValueError(
+                "legacy statement rows have an invalid transaction identity"
+            )
         transaction_ids.append(source_event_id.removeprefix(prefix))
-        statement_events.append(_normalize_event({
-            "source_event_id": source_event_id,
-            "occurred_at": row["occurred_at"],
-            "card_code": row["card_code"],
-            "amount": str(Decimal(int(row["amount_aed_minor"])) / Decimal(100)),
-            "currency": row["currency"],
-            "purchase_type": row["purchase_type"],
-            "channel": row["channel"],
-            "merchant": row["merchant"],
-            "bucket_code": row["bucket_code"],
-            "event_type": row["event_type"],
-            "source": row["source"],
-            "status": row["status"],
-            "tags": json.loads(str(row["tags_json"] or "[]")),
-            "confidence": row["confidence"],
-            "review_required": row["review_required"],
-            "reconciliation_status": row["reconciliation_status"],
-            "statement_reference": row["statement_reference"],
-            "email_reference": row["email_reference"],
-            "document_url": row["document_url"],
-            "reversal_of": row["reversal_of"],
-            "decision_trace": json.loads(str(row["decision_trace_json"] or "[]")),
-            "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
-        }))
+        statement_events.append(
+            _normalize_event(
+                {
+                    "source_event_id": source_event_id,
+                    "occurred_at": row["occurred_at"],
+                    "card_code": row["card_code"],
+                    "amount": str(Decimal(int(row["amount_aed_minor"])) / Decimal(100)),
+                    "currency": row["currency"],
+                    "purchase_type": row["purchase_type"],
+                    "channel": row["channel"],
+                    "merchant": row["merchant"],
+                    "bucket_code": row["bucket_code"],
+                    "event_type": row["event_type"],
+                    "source": row["source"],
+                    "status": row["status"],
+                    "tags": json.loads(str(row["tags_json"] or "[]")),
+                    "confidence": row["confidence"],
+                    "review_required": row["review_required"],
+                    "reconciliation_status": row["reconciliation_status"],
+                    "statement_reference": row["statement_reference"],
+                    "email_reference": row["email_reference"],
+                    "document_url": row["document_url"],
+                    "reversal_of": row["reversal_of"],
+                    "decision_trace": json.loads(
+                        str(row["decision_trace_json"] or "[]")
+                    ),
+                    "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
+                }
+            )
+        )
     return _statement_content_digest(
         statement_events,
         transaction_ids,
@@ -371,22 +395,112 @@ def _statement_content_digest(
     """Hash normalized statement content in a stable transaction-id order."""
     content = []
     for transaction_id, event in zip(transaction_ids, statement_events, strict=True):
-        content.append({
-            "statement_transaction_id": transaction_id,
-            "event": {
-                key: value
-                for key, value in event.items()
-                if key not in {"source_event_id", "identity_key"}
-            },
-        })
+        content.append(
+            {
+                "statement_transaction_id": transaction_id,
+                "event": {
+                    key: value
+                    for key, value in event.items()
+                    if key not in {"source_event_id", "identity_key"}
+                },
+            }
+        )
     content.sort(key=lambda item: str(item["statement_transaction_id"]))
-    return _json_digest({
-        "statement_reference": statement_reference,
-        "card_code": card_code,
-        "period_start": period_start.isoformat(),
-        "period_end": period_end.isoformat(),
-        "transactions": content,
-    })
+    return _json_digest(
+        {
+            "statement_reference": statement_reference,
+            "card_code": card_code,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "transactions": content,
+        }
+    )
+
+
+def _legacy_statement_content_digest_from_payload(
+    payload: dict[str, Any],
+    statement_events: list[dict[str, Any]],
+    statement_transaction_ids: list[str],
+    *,
+    statement_reference: str,
+    card_code: str,
+    period_start: date,
+    period_end: date,
+) -> str:
+    """Hash legacy statement content while retaining source timestamp spelling."""
+    rows = payload.get("transactions")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("transactions must be a list of statement transaction objects")
+    raw_timestamps = {
+        str(row.get("statement_transaction_id") or "").strip(): row.get("occurred_at")
+        for row in rows
+    }
+    legacy_events = []
+    for transaction_id, event in zip(
+        statement_transaction_ids, statement_events, strict=True
+    ):
+        raw_timestamp = raw_timestamps.get(transaction_id)
+        if raw_timestamp in (None, ""):
+            raise ValueError(
+                f"statement transaction {transaction_id} is missing occurred_at"
+            )
+        try:
+            legacy_timestamp = datetime.fromisoformat(
+                str(raw_timestamp).strip().replace("Z", "+00:00")
+            ).isoformat()
+        except ValueError as error:
+            raise ValueError(
+                f"statement transaction {transaction_id} has invalid occurred_at"
+            ) from error
+        legacy_events.append({**event, "occurred_at": legacy_timestamp})
+    return _statement_content_digest(
+        legacy_events,
+        statement_transaction_ids,
+        statement_reference=statement_reference,
+        card_code=card_code,
+        period_start=period_start,
+        period_end=period_end,
+    )
+
+
+def _statement_period_is_valid(
+    payload: dict[str, Any],
+    *,
+    period_start: date,
+    period_end: date,
+    legacy_local_date: bool,
+) -> None:
+    rows = payload.get("transactions")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise ValueError("transactions must be a list of statement transaction objects")
+    for row in rows:
+        transaction_id = str(row.get("statement_transaction_id") or "").strip()
+        posting = row.get("post_date")
+        if posting not in (None, ""):
+            try:
+                occurred = date.fromisoformat(str(posting))
+            except ValueError as error:
+                raise ValueError(
+                    f"statement transaction {transaction_id} has invalid post_date"
+                ) from error
+        else:
+            raw_timestamp = row.get("occurred_at")
+            try:
+                parsed = datetime.fromisoformat(
+                    str(raw_timestamp).strip().replace("Z", "+00:00")
+                )
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    f"statement transaction {transaction_id} has invalid occurred_at"
+                ) from error
+            occurred = (
+                parsed.date() if legacy_local_date else parsed.astimezone(UTC).date()
+            )
+        if occurred < period_start or occurred > period_end:
+            raise ValueError(
+                f"statement transaction {transaction_id} falls outside the statement period"
+            )
+
 
 def _canonical_statement_events(
     payload: dict[str, Any],
@@ -395,6 +509,7 @@ def _canonical_statement_events(
     card_code: str,
     period_start: date,
     period_end: date,
+    validate_period: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     rows = payload.get("transactions")
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
@@ -406,35 +521,45 @@ def _canonical_statement_events(
     for row in rows:
         transaction_id = str(row.get("statement_transaction_id") or "").strip()
         if not transaction_id:
-            raise ValueError("statement_transaction_id is required for every statement transaction")
+            raise ValueError(
+                "statement_transaction_id is required for every statement transaction"
+            )
         if transaction_id in transaction_ids:
             raise ValueError(f"Duplicate statement_transaction_id: {transaction_id}")
         transaction_ids.add(transaction_id)
-        occurrence = _iso_datetime(row.get("occurred_at"))
-        posting = row.get("post_date")
         canonical_row = dict(row)
-        if posting is not None:
+        posting = row.get("post_date")
+        if posting not in (None, ""):
             posting_date = date.fromisoformat(str(posting))
-            if posting_date < date.fromisoformat(occurrence[:10]):
-                raise ValueError("statement posting date precedes transaction date")
-            canonical_row["occurred_at"] = posting_date.isoformat() + "T00:00:00+04:00"
-            canonical_row["decision_trace"] = [*(row.get("decision_trace") or []), {
-                "stage": "STATEMENT_POSTING_DATE", "transaction_occurred_at": occurrence,
-                "post_date": posting_date.isoformat(),
-            }]
-        event = _normalize_event({
-            **canonical_row,
-            "source_event_id": f"statement:{statement_reference}:{transaction_id}",
-            "card_code": card_code,
-            "source": "statement",
-            "status": "ACTIVE",
-            "confidence": 1,
-            "reconciliation_status": "RECONCILED",
-            "statement_reference": statement_reference,
-        })
+            canonical_row["occurred_at"] = (
+                f"{posting_date.isoformat()}T00:00:00+00:00"
+            )
+            canonical_row["decision_trace"] = [
+                *(row.get("decision_trace") or []),
+                {
+                    "stage": "STATEMENT_POSTING_DATE",
+                    "transaction_occurred_at": row.get("occurred_at"),
+                    "post_date": posting_date.isoformat(),
+                },
+            ]
+        event = _normalize_event(
+            {
+                **canonical_row,
+                "source_event_id": f"statement:{statement_reference}:{transaction_id}",
+                "card_code": card_code,
+                "source": "statement",
+                "status": "ACTIVE",
+                "confidence": 1,
+                "reconciliation_status": "RECONCILED",
+                "statement_reference": statement_reference,
+            },
+            allow_statement_only=True,
+        )
         occurred = date.fromisoformat(event["occurred_at"][:10])
-        if occurred < period_start or occurred > period_end:
-            raise ValueError(f"statement transaction {transaction_id} falls outside the statement period")
+        if validate_period and (occurred < period_start or occurred > period_end):
+            raise ValueError(
+                f"statement transaction {transaction_id} falls outside the statement period"
+            )
         statement_events.append(event)
         statement_transaction_ids.append(transaction_id)
 
@@ -442,7 +567,6 @@ def _canonical_statement_events(
 
 
 def _statement_transaction_date(event: dict[str, Any]) -> date:
-    """Match original notification dates; posted statement events use ledger dates."""
     trace = json.loads(str(event.get("decision_trace_json") or "[]"))
     for entry in reversed(trace):
         if entry.get("stage") == "STATEMENT_POSTING_DATE":
@@ -454,29 +578,22 @@ def _rank_statement_candidates(
     event: dict[str, Any],
     candidates: Iterable[dict[str, Any]],
 ) -> list[tuple[int, int, str]]:
-    event_date = _statement_transaction_date(event)
+    event_date = date.fromisoformat(event["occurred_at"][:10])
     ranked = []
     for candidate in candidates:
         if candidate["amount_aed_minor"] != event["amount_aed_minor"]:
             continue
-        if (
-            str(candidate["currency"] or "").strip().upper()
-            != event["currency"]
-        ):
+        if str(candidate["currency"] or "").strip().upper() != event["currency"]:
             continue
         if _event_polarity(candidate["event_type"]) != _event_polarity(
             event["event_type"]
         ):
             continue
-        candidate_date = date.fromisoformat(
-            str(candidate["occurred_at"])[:10]
-        )
+        candidate_date = date.fromisoformat(str(candidate["occurred_at"])[:10])
         day_gap = abs((event_date - candidate_date).days)
         if day_gap > 3:
             continue
-        merchant_score = _merchant_match_score(
-            candidate["merchant"], event["merchant"]
-        )
+        merchant_score = _merchant_match_score(candidate["merchant"], event["merchant"])
         if merchant_score == 0:
             continue
         ranked.append(
@@ -511,8 +628,74 @@ def _iso_datetime(value: object) -> str:
         raise ValueError("occurred_at is required")
     parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        raise ValueError("occurred_at must include a timezone")
-    return parsed.isoformat()
+        raise ValueError("occurred_at must include a UTC offset")
+    return parsed.astimezone(UTC).isoformat()
+
+
+def _utc_datetime(value: object) -> datetime:
+    parsed = (
+        value
+        if isinstance(value, datetime)
+        else datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    )
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _period_iso_datetime(value: object, field_name: str) -> str:
+    """Return one canonical UTC spelling for a cashback period bound."""
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError(f"{field_name} is required")
+    try:
+        parsed = (
+            value
+            if isinstance(value, datetime)
+            else datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        )
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an ISO datetime") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{field_name} must include a UTC offset")
+    return (
+        parsed.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    )
+
+
+def _legacy_date_period_bounds(
+    period_start: object, period_end: object
+) -> tuple[str, str] | None:
+    """Convert one legacy inclusive date period to fixed UTC half-open bounds."""
+    start_raw = str(period_start or "").strip()
+    end_raw = str(period_end or "").strip()
+    if not (
+        _LEGACY_DATE_PERIOD.fullmatch(start_raw)
+        and _LEGACY_DATE_PERIOD.fullmatch(end_raw)
+    ):
+        return None
+    try:
+        start = date.fromisoformat(start_raw)
+        end = date.fromisoformat(end_raw)
+    except ValueError as exc:
+        raise ValueError("legacy cashback period bounds must be ISO dates") from exc
+    if end < start:
+        raise ValueError("legacy cashback period_end cannot be before period_start")
+    return (
+        _period_iso_datetime(
+            datetime.combine(start, datetime.min.time(), tzinfo=UTC), "period_start"
+        ),
+        _period_iso_datetime(
+            datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=UTC),
+            "period_end",
+        ),
+    )
+
+
+def _same_instant(left: object, right: object) -> bool:
+    """Compare persisted timestamps without making timezone spelling significant."""
+
+    return _utc_datetime(left) == _utc_datetime(right)
 
 
 def _amount_minor(value: object) -> int:
@@ -523,7 +706,9 @@ def _amount_minor(value: object) -> int:
     if not amount.is_finite():
         raise ValueError("amount must be finite")
     if amount <= 0:
-        raise ValueError("amount must be greater than zero; use event_type REFUND for credits")
+        raise ValueError(
+            "amount must be greater than zero; use event_type REFUND for credits"
+        )
     try:
         if amount != amount.quantize(_MINOR_UNIT):
             raise ValueError("amount must have no more than two decimal places")
@@ -579,193 +764,40 @@ def _trace_json(value: object, field_name: str) -> str:
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise ValueError(f"{field_name} must be a list of objects")
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
-def _event_value(source: dict[str, Any], *names: str) -> object:
-    for name in names:
-        value = source.get(name)
-        if value not in (None, ""):
-            return value
-    return None
 
 
-def _trace_items(value: object) -> list[dict[str, Any]]:
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except (TypeError, ValueError):
-            return []
-    return value if isinstance(value, list) and all(isinstance(item, dict) for item in value) else []
-
-
-def _latest_trace(value: object, stage: str) -> dict[str, Any] | None:
-    for item in reversed(_trace_items(value)):
-        if item.get("stage") == stage:
-            return item
-    return None
-
-
-def _latest_fx_trace(value: object) -> dict[str, Any] | None:
-    return _latest_trace(value, "FX_CONVERSION")
-
-
-def _fx_trace(result: Any) -> dict[str, Any]:
-    return {"stage": "FX_CONVERSION", **result.to_dict()}
-
-
-def _fx_failure_trace(
-    error: FxConversionError | ValueError,
-    *,
-    source: str,
-    original_amount: object,
-    original_currency: str,
-    amount_aed: object,
-) -> dict[str, Any]:
-    failure = error.to_dict() if isinstance(error, FxConversionError) else {
-        "status": "FAILED",
-        "error": type(error).__name__,
-        "message": str(error),
-        "retryable": True,
-        "review_required": True,
-        "provenance": {
-            "original_amount": None if original_amount is None else str(original_amount),
-            "original_currency": original_currency,
-            "source": source,
-        },
-    }
-    return {
-        "stage": "FX_CONVERSION",
-        "status": "REVIEW_REQUIRED",
-        "error_type": failure["error"],
-        "error": failure["message"],
-        "source": source,
-        "original_amount": None if original_amount is None else str(original_amount),
-        "original_currency": original_currency,
-        "amount_aed": None if amount_aed is None else str(amount_aed),
-        "retryable": bool(failure.get("retryable", True)),
-        "provenance": failure.get("provenance", {}),
-    }
-
-
-def _event_fx_inputs(
-    source: dict[str, Any],
-    *,
-    currency: str,
-    replay_fx: dict[str, Any] | None,
-) -> tuple[object, str, object, object]:
-    original_amount = _event_value(source, "original_amount", "amount_original")
-    original_currency_value = _event_value(source, "original_currency", "currency_original")
-    original_currency = str(original_currency_value or currency).strip().upper()
-    settlement_trace = _latest_trace(source.get("decision_trace"), "STATEMENT_SETTLEMENT")
-    if settlement_trace is not None:
-        if original_amount is None:
-            original_amount = settlement_trace.get("original_amount")
-        if original_currency_value is None:
-            original_currency = str(
-                settlement_trace.get("original_currency") or original_currency
-            ).strip().upper()
-    explicit_original = original_amount is not None
-    bank_posted = _event_value(source, "bank_posted_aed", "posted_aed")
-    if bank_posted is None and explicit_original:
-        bank_posted = _event_value(source, "amount_aed")
-        if bank_posted is None and currency == "AED":
-            bank_posted = _event_value(source, "amount")
-    if (
-        original_amount is None
-        and currency != "AED"
-        and source.get("amount") not in (None, "")
-    ):
-        original_amount = source["amount"]
-        if source.get("amount_aed") not in (None, ""):
-            bank_posted = source["amount_aed"]
-    quote = _event_value(source, "quote", "fx_quote")
-    if replay_fx is not None:
-        if original_amount is None:
-            original_amount = replay_fx.get("original_amount")
-        if not _event_value(source, "original_currency", "currency_original"):
-            original_currency = str(replay_fx.get("original_currency") or original_currency).upper()
-        if quote is None:
-            quote = replay_fx.get("quote")
-        if bank_posted is None:
-            bank_posted = replay_fx.get("bank_posted_aed")
-    return original_amount, original_currency, bank_posted, quote
-
-
-def _event_display_amount(source: dict[str, Any], bank_posted: object) -> object:
-    if bank_posted not in (None, ""):
-        return bank_posted
-    if str(source.get("currency") or "AED").strip().upper() == "AED":
-        return _event_amount(source)
-    if source.get("amount_aed") not in (None, ""):
-        return source["amount_aed"]
-    raise ValueError("bank_posted_aed is required when a foreign conversion fails")
-
-
-def _event_fx_enrichment(
-    source: dict[str, Any],
-    *,
-    currency: str,
-    occurred_at: str,
-    fx_provider: Any | None,
-    replay_fx: dict[str, Any] | None,
-) -> tuple[object, dict[str, Any] | None, bool]:
-    original_amount, original_currency, bank_posted, quote = _event_fx_inputs(
-        source, currency=currency, replay_fx=replay_fx
+def _economic_identity(
+    occurred_at: object,
+    card_code: object,
+    amount_aed_minor: object,
+    currency: object,
+    event_type: object,
+    merchant: object,
+) -> str:
+    canonical = "|".join(
+        (
+            _utc_datetime(occurred_at).isoformat(),
+            str(card_code),
+            str(amount_aed_minor),
+            str(currency),
+            str(event_type),
+            _merchant_key(merchant),
+        )
     )
-    if original_currency == "AED":
-        return _event_amount(source), None, False
-    if replay_fx is not None:
-        try:
-            same_source = (
-                original_amount not in (None, "")
-                and str(replay_fx.get("original_currency") or "").upper() == original_currency
-                and Decimal(str(replay_fx.get("original_amount"))) == Decimal(str(original_amount))
-            )
-        except (InvalidOperation, TypeError, ValueError):
-            same_source = False
-        if same_source:
-            replay_status = str(replay_fx.get("status") or "")
-            if replay_status in {"POSTED", "ESTIMATED"}:
-                stored_amount = replay_fx.get("amount_aed")
-                if stored_amount not in (None, ""):
-                    return stored_amount, replay_fx, False
-            if replay_status == "REVIEW_REQUIRED":
-                stored_amount = replay_fx.get("amount_aed")
-                if stored_amount not in (None, ""):
-                    return stored_amount, replay_fx, True
-                return _event_display_amount(source, bank_posted), replay_fx, True
-    request = FxConversionRequest(
-        original_amount=original_amount,
-        original_currency=original_currency,
-        transaction_date=occurred_at,
-        source=source["source_event_id"],
-        bank_posted_aed=bank_posted,
-        bank_posted_source=(
-            str(_event_value(source, "bank_posted_source", "posted_aed_source") or "").strip()
-            or source["source_event_id"]
-        ),
-        quote=quote,
-    )
-    try:
-        conversion = convert(request, provider=fx_provider)
-    except FxConversionError as error:
-        try:
-            amount_aed = _event_display_amount(source, bank_posted)
-        except ValueError:
-            raise error
-        return amount_aed, _fx_failure_trace(
-            error,
-            source=source["source_event_id"],
-            original_amount=original_amount,
-            original_currency=original_currency,
-            amount_aed=amount_aed,
-        ), True
-    return conversion.amount_aed, _fx_trace(conversion), False
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _legacy_collision_identity(identity_key: str, source_event_id: str) -> str:
+    return hashlib.sha256(
+        f"{identity_key}|legacy:{source_event_id}".encode("utf-8")
+    ).hexdigest()
 
 
 def _normalize_event(
     source: dict[str, Any],
     *,
-    fx_provider: Any | None = None,
-    replay_fx: dict[str, Any] | None = None,
+    statement_only_cards: frozenset[str] = frozenset(),
+    allow_statement_only: bool = False,
 ) -> dict[str, Any]:
     source_event_id = str(source.get("source_event_id") or "").strip()
     card_code = str(source.get("card_code") or "").strip().upper()
@@ -773,94 +805,81 @@ def _normalize_event(
         raise ValueError("source_event_id is required")
     if not card_code:
         raise ValueError("card_code is required")
-    status = str(source.get("status") or "ACTIVE").strip().upper()
+    if card_code in statement_only_cards and not allow_statement_only:
+        raise ValueError(
+            f"{card_code} uses STATEMENT_ONLY tracking; "
+            "use statement evidence instead of a live event"
+        )
+    status = str(source.get("status") or "ACTIVE").upper()
     # Accept legacy envelopes while storing one user-facing transaction state.
     if status in {"PROVISIONAL", "CONFIRMED"}:
         status = "ACTIVE"
     if status not in VALID_STATUSES:
         raise ValueError(f"status must be one of {sorted(VALID_STATUSES)}")
-    event_type = str(source.get("event_type") or "PURCHASE").strip().upper()
+    event_type = str(source.get("event_type") or "PURCHASE").upper()
     if event_type not in VALID_EVENT_TYPES:
         raise ValueError(f"event_type must be one of {sorted(VALID_EVENT_TYPES)}")
     reversal_of = str(source.get("reversal_of") or "").strip() or None
     if event_type == "REVERSAL" and not reversal_of:
         raise ValueError("reversal_of is required for REVERSAL events")
-    reconciliation_status = str(source.get("reconciliation_status") or "UNMATCHED").strip().upper()
+    reconciliation_status = str(
+        source.get("reconciliation_status") or "UNMATCHED"
+    ).upper()
     if reconciliation_status not in VALID_RECONCILIATION_STATUSES:
         raise ValueError(
             f"reconciliation_status must be one of {sorted(VALID_RECONCILIATION_STATUSES)}"
         )
     confidence = _confidence(source.get("confidence"))
-    review_required = _boolean(source.get("review_required"), default=confidence < 0.8)
+    explicit_review = source.get("review_required")
+    raw_purchase_type = source.get("purchase_type")
+    raw_channel = source.get("channel")
+    purchase_type = str(raw_purchase_type or "GENERAL").strip().upper()
+    channel = str(raw_channel or "UNKNOWN").strip().upper()
+    category_uncertain = raw_purchase_type in (None, "") or purchase_type == "UNKNOWN"
+    channel_uncertain = raw_channel in (None, "") or channel == "UNKNOWN"
+    review_required = _boolean(
+        explicit_review,
+        default=confidence < 0.8 or category_uncertain or channel_uncertain,
+    )
     tags = source.get("tags") or []
     if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
         raise ValueError("tags must be a list of strings")
-    currency = str(source.get("currency") or "AED").strip().upper()
-    if not _CURRENCY_CODE.fullmatch(currency):
-        raise ValueError("currency must be a three-letter ISO code")
-    occurred_at = _iso_datetime(source.get("occurred_at"))
-    replay_fx = replay_fx or _latest_fx_trace(source.get("decision_trace"))
-    amount_aed, fx_trace, fx_review_required = _event_fx_enrichment(
-        source,
-        currency=currency,
-        occurred_at=occurred_at,
-        fx_provider=fx_provider,
-        replay_fx=replay_fx,
-    )
-    if fx_trace is not None and fx_trace.get("status") in {"POSTED", "ESTIMATED"}:
-        # Cashback event economics are stored in settlement currency; source
-        # currency and amount remain in the FX trace for audit/replay.
-        currency = "AED"
-    decision_trace = source.get("decision_trace")
-    if fx_trace is not None:
-        if decision_trace in (None, ""):
-            decision_trace = []
-        if not isinstance(decision_trace, list):
-            raise ValueError("decision_trace must be a list of objects")
-        if fx_trace not in decision_trace:
-            decision_trace = [*decision_trace, fx_trace]
     normalized = {
         "source_event_id": source_event_id,
-        "occurred_at": occurred_at,
+        "occurred_at": _iso_datetime(source.get("occurred_at")),
         "card_code": card_code,
-        "amount_aed_minor": _amount_minor(amount_aed),
-        "currency": currency,
-        "purchase_type": str(source.get("purchase_type") or "GENERAL").strip().upper() or "GENERAL",
-        "channel": str(source.get("channel") or "UNKNOWN").strip().upper() or "UNKNOWN",
-        "merchant": str(source.get("merchant") or "Unknown").strip() or "Unknown",
+        "amount_aed_minor": _amount_minor(_event_amount(source)),
+        "currency": str(source.get("currency") or "AED").strip().upper(),
+        "purchase_type": purchase_type,
+        "channel": channel,
+        "merchant": str(source.get("merchant") or "Unknown").strip(),
         "bucket_code": str(source.get("bucket_code") or "").strip().upper() or None,
         "event_type": event_type,
-        "source": str(source.get("source") or "email").strip() or "email",
+        "source": str(source.get("source") or "email").strip(),
         "status": status,
         "tags_json": json.dumps(sorted(set(tags))),
         "confidence": confidence,
-        "review_required": int(review_required or fx_review_required),
+        "review_required": int(review_required),
         "reconciliation_status": reconciliation_status,
-        "statement_reference": str(source.get("statement_reference") or "").strip() or None,
+        "statement_reference": str(source.get("statement_reference") or "").strip()
+        or None,
         "email_reference": str(source.get("email_reference") or "").strip() or None,
         "document_url": str(source.get("document_url") or "").strip() or None,
         "reversal_of": reversal_of,
-        "decision_trace_json": _trace_json(decision_trace, "decision_trace"),
+        "decision_trace_json": _trace_json(
+            source.get("decision_trace"), "decision_trace"
+        ),
         "ai_trace_json": _trace_json(source.get("ai_trace"), "ai_trace"),
     }
-    identity_parts = [
+    normalized["identity_key"] = _economic_identity(
         normalized["occurred_at"],
         normalized["card_code"],
-        str(normalized["amount_aed_minor"]),
+        normalized["amount_aed_minor"],
         normalized["currency"],
         normalized["event_type"],
-        _merchant_key(normalized["merchant"]),
-    ]
-    # ``reversal_of`` is the transaction identity for a reversal.  Keep
-    # separate reversals when an issuer reports two same-day, same-amount,
-    # same-merchant events, while still deduplicating a replay of the same
-    # reversal target.
-    if normalized["event_type"] == "REVERSAL" and normalized["reversal_of"]:
-        identity_parts.append(str(normalized["reversal_of"] or ""))
-    identity = "|".join(identity_parts)
-    normalized["identity_key"] = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+        normalized["merchant"],
+    )
     return normalized
-
 
 
 def _merchant_key(value: object) -> str:
@@ -889,8 +908,10 @@ def _event_polarity(value: object) -> str:
     return "CREDIT" if str(value).upper() in {"REFUND", "REVERSAL"} else "DEBIT"
 
 
-def prepare_statement_reconciliation(payload: dict[str, Any], configuration: dict[str, object]) -> dict[str, Any]:
-    """Resolve ledger labels through the versioned Cashback mapping, never as bucket enums."""
+def prepare_statement_reconciliation(
+    payload: dict[str, Any], configuration: dict[str, object]
+) -> dict[str, Any]:
+    """Resolve ledger labels through the versioned Cashback mapping."""
     rows = payload.get("transactions")
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
         raise ValueError("transactions must be a list of statement transaction objects")
@@ -899,9 +920,14 @@ def prepare_statement_reconciliation(payload: dict[str, Any], configuration: dic
         "transactions": [
             {
                 **row,
-                "purchase_type": str(row.get("purchase_type") or purchase_type_from_config(
-                    configuration, str(row.get("ledger_category") or ""), str(row.get("merchant") or "")
-                )).upper(),
+                "purchase_type": str(
+                    row.get("purchase_type")
+                    or purchase_type_from_config(
+                        configuration,
+                        str(row.get("ledger_category") or ""),
+                        str(row.get("merchant") or ""),
+                    )
+                ).upper(),
             }
             for row in rows
         ],
@@ -911,9 +937,14 @@ def prepare_statement_reconciliation(payload: dict[str, Any], configuration: dic
 class CashbackEventStore:
     """Small operational store for live reward events, not a finance ledger."""
 
-    def __init__(self, path: Path, *, fx_provider: Any | None = None):
+    def __init__(
+        self,
+        path: Path,
+        *,
+        program_config_path: Path | None = None,
+    ):
         self.path = path
-        self.fx_provider = fx_provider
+        self.program_config_path = program_config_path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as connection:
             with connection:
@@ -973,6 +1004,21 @@ class CashbackEventStore:
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS statement_receipts (
+                        receipt_id TEXT NOT NULL,
+                        source_identity TEXT NOT NULL,
+                        card_code TEXT NOT NULL,
+                        original_received_at TEXT NOT NULL,
+                        period_id TEXT,
+                        receipt_sha256 TEXT NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY(card_code, receipt_id),
+                        UNIQUE(card_code, source_identity)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS bank_statement_receipts (
                         receipt_id TEXT PRIMARY KEY,
                         receipt_sha256 TEXT NOT NULL UNIQUE,
                         source TEXT NOT NULL,
@@ -999,8 +1045,8 @@ class CashbackEventStore:
                     """
                 )
                 connection.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_statement_receipts_card_received "
-                    "ON statement_receipts(card_code, received_at DESC, receipt_id)"
+                    "CREATE INDEX IF NOT EXISTS idx_bank_receipts_card_received "
+                    "ON bank_statement_receipts(card_code, received_at DESC, receipt_id)"
                 )
                 connection.execute(
                     """
@@ -1029,6 +1075,8 @@ class CashbackEventStore:
                         accepted_count INTEGER NOT NULL,
                         event_ids_json TEXT NOT NULL,
                         event_digests_json TEXT NOT NULL,
+                        receipt_kind TEXT NOT NULL DEFAULT 'BATCH',
+                        receipt_payload_json TEXT,
                         state TEXT NOT NULL DEFAULT 'READY',
                         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         committed_at TEXT,
@@ -1036,6 +1084,24 @@ class CashbackEventStore:
                     )
                     """
                 )
+                ingest_receipt_columns = {
+                    str(row["name"])
+                    for row in connection.execute(
+                        "PRAGMA table_info(ingest_receipts)"
+                    ).fetchall()
+                }
+                if "receipt_kind" not in ingest_receipt_columns:
+                    connection.execute(
+                        "ALTER TABLE ingest_receipts "
+                        "ADD COLUMN receipt_kind TEXT NOT NULL DEFAULT 'BATCH'"
+                    )
+                if "receipt_payload_json" not in ingest_receipt_columns:
+                    # The digest alone cannot reconstruct held REVIEW identities;
+                    # exact source replay safely restores historical payloads.
+                    connection.execute(
+                        "ALTER TABLE ingest_receipts "
+                        "ADD COLUMN receipt_payload_json TEXT"
+                    )
                 connection.execute(
                     """
                     CREATE TABLE IF NOT EXISTS alert_acknowledgements (
@@ -1074,34 +1140,33 @@ class CashbackEventStore:
                     )
                     """
                 )
-                if "receipt_kind" not in {row["name"] for row in connection.execute("PRAGMA table_info(ingest_receipts)")}:
-                    connection.execute("ALTER TABLE ingest_receipts ADD COLUMN receipt_kind TEXT NOT NULL DEFAULT 'BATCH'")
-                if "receipt_payload_json" not in {row["name"] for row in connection.execute("PRAGMA table_info(ingest_receipts)")}:
-                    # Preserve historical receipts. Their digest alone cannot reconstruct
-                    # held REVIEW identities; exact source replay can safely restore them.
-                    connection.execute("ALTER TABLE ingest_receipts ADD COLUMN receipt_payload_json TEXT")
                 self._migrate_event_columns(connection)
                 self._migrate_ingest_state_columns(connection)
                 self._migrate_period_columns(connection)
                 self._migrate_reconciliation_columns(connection)
+                connection.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_card_periods_period_id "
+                    "ON card_periods(period_id) WHERE period_id IS NOT NULL"
+                )
+                connection.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_statement_receipts_source "
+                    "ON statement_receipts(card_code, source_identity)"
+                )
                 connection.execute(
                     "UPDATE cashback_events SET status='ACTIVE' WHERE status IN ('PROVISIONAL', 'CONFIRMED')"
                 )
                 connection.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS idx_cashback_events_identity ON cashback_events(identity_key) WHERE identity_key IS NOT NULL"
                 )
-                connection.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_cashback_events_status_occurred ON cashback_events(status, occurred_at, source_event_id)"
-                )
-                connection.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_cashback_events_reconcile ON cashback_events(card_code, status, source, occurred_at, source_event_id)"
-                )
 
     @staticmethod
     def _migrate_event_columns(connection: sqlite3.Connection) -> None:
+        connection.execute("BEGIN IMMEDIATE")
         existing = {
             str(row["name"])
-            for row in connection.execute("PRAGMA table_info(cashback_events)").fetchall()
+            for row in connection.execute(
+                "PRAGMA table_info(cashback_events)"
+            ).fetchall()
         }
         additions = {
             "confidence": "REAL NOT NULL DEFAULT 1",
@@ -1120,100 +1185,96 @@ class CashbackEventStore:
                 connection.execute(
                     f"ALTER TABLE cashback_events ADD COLUMN {column} {definition}"
                 )
-        seen: set[str] = set()
-        for row in connection.execute(
-            "SELECT source_event_id, occurred_at, card_code, amount_aed_minor, currency, event_type, merchant, reversal_of FROM cashback_events WHERE identity_key IS NULL ORDER BY created_at, source_event_id"
+        expected_index = "idx_cashback_events_identity"
+        for index_row in connection.execute(
+            "PRAGMA index_list(cashback_events)"
         ).fetchall():
-            canonical = "|".join(
-                (
-                    str(row["occurred_at"]),
-                    str(row["card_code"]),
-                    str(row["amount_aed_minor"]),
-                    str(row["currency"]),
-                    str(row["event_type"]),
-                    _merchant_key(row["merchant"]),
-                )
-            )
-            if (
-                str(row["event_type"]).upper() == "REVERSAL"
-                and row["reversal_of"]
-            ):
-                canonical += f"|{str(row['reversal_of'] or '')}"
-            identity = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-            if identity in seen:
-                identity = hashlib.sha256(
-                    f"{canonical}|legacy:{row['source_event_id']}".encode("utf-8")
-                ).hexdigest()
-            seen.add(identity)
-            connection.execute(
-                "UPDATE cashback_events SET identity_key = ? WHERE source_event_id = ?",
-                (identity, row["source_event_id"]),
-            )
-
-        # Releases before reversal targets participated in identity generated
-        # reversal keys without ``reversal_of``.  Rebuild those keys so a
-        # replay with a different source id cannot insert a duplicate after an
-        # upgrade.  Statement collision identities intentionally add a second
-        # discriminator; carry that discriminator forward instead of
-        # flattening a statement-only row onto the canonical identity.
-        targeted_reversals = connection.execute(
-            """
-            SELECT source_event_id, occurred_at, card_code, amount_aed_minor,
-                   currency, event_type, merchant, reversal_of, source,
-                   identity_key
-            FROM cashback_events
-            WHERE identity_key IS NOT NULL
-              AND event_type = 'REVERSAL'
-              AND reversal_of IS NOT NULL
-            ORDER BY created_at, source_event_id
-            """
-        ).fetchall()
-        for row in targeted_reversals:
-            canonical = "|".join(
-                (
-                    str(row["occurred_at"]),
-                    str(row["card_code"]),
-                    str(row["amount_aed_minor"]),
-                    str(row["currency"]),
-                    str(row["event_type"]),
-                    _merchant_key(row["merchant"]),
-                )
-            )
-            old_identity = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-            new_identity = hashlib.sha256(
-                f"{canonical}|{str(row['reversal_of'])}".encode("utf-8")
-            ).hexdigest()
-            current_identity = str(row["identity_key"])
-            replacement: str | None = None
-            if current_identity == old_identity:
-                replacement = new_identity
-            elif str(row["source"]) == "statement":
-                old_collision = hashlib.sha256(
-                    f"{old_identity}|statement:{row['source_event_id']}".encode("utf-8")
-                ).hexdigest()
-                if current_identity == old_collision:
-                    replacement = hashlib.sha256(
-                        f"{new_identity}|statement:{row['source_event_id']}".encode("utf-8")
-                    ).hexdigest()
-            if replacement is None or replacement == current_identity:
+            index_name = str(index_row["name"])
+            escaped_name = index_name.replace('"', '""')
+            index_columns = [
+                str(info["name"])
+                for info in connection.execute(
+                    f'PRAGMA index_info("{escaped_name}")'
+                ).fetchall()
+            ]
+            if index_columns != ["identity_key"]:
                 continue
+            if int(index_row["unique"]) != 1:
+                continue
+            if index_name != expected_index:
+                raise ValueError(
+                    "incompatible unique cashback identity index: " + index_name
+                )
+        expected = next(
+            (
+                row
+                for row in connection.execute(
+                    "PRAGMA index_list(cashback_events)"
+                ).fetchall()
+                if str(row["name"]) == expected_index
+            ),
+            None,
+        )
+        if expected is not None:
+            expected_columns = [
+                str(info["name"])
+                for info in connection.execute(
+                    f'PRAGMA index_info("{expected_index}")'
+                ).fetchall()
+            ]
+            if int(expected["unique"]) != 1 or expected_columns != ["identity_key"]:
+                raise ValueError("incompatible cashback identity index definition")
+            connection.execute(f'DROP INDEX "{expected_index}"')
 
-            # A partially upgraded database may already contain the new key.
-            # Keep both rows addressable and deterministic if that happens;
-            # future replays still resolve to the canonical new key.
-            candidate = replacement
-            suffix = 0
-            while connection.execute(
-                "SELECT 1 FROM cashback_events WHERE identity_key = ? AND source_event_id != ?",
-                (candidate, row["source_event_id"]),
-            ).fetchone():
-                suffix += 1
-                candidate = hashlib.sha256(
-                    f"{replacement}|legacy:{row['source_event_id']}:{suffix}".encode("utf-8")
-                ).hexdigest()
+        rows = connection.execute(
+            "SELECT * FROM cashback_events ORDER BY created_at, source_event_id"
+        ).fetchall()
+        plans: list[tuple[str, str, str]] = []
+        base_keys: set[str] = set()
+        for row in rows:
+            source_event_id = str(row["source_event_id"])
+            try:
+                occurred_at = _iso_datetime(row["occurred_at"])
+            except ValueError as error:
+                raise ValueError(
+                    f"legacy cashback event {source_event_id} has invalid occurred_at; "
+                    "migration aborted"
+                ) from error
+            identity = _economic_identity(
+                occurred_at,
+                row["card_code"],
+                row["amount_aed_minor"],
+                row["currency"],
+                row["event_type"],
+                row["merchant"],
+            )
+            plans.append((source_event_id, occurred_at, identity))
+            base_keys.add(identity)
+
+        base_owners: set[str] = set()
+        target_owners: dict[str, str] = {}
+        for source_event_id, occurred_at, identity in plans:
+            target = identity
+            if identity in base_owners:
+                target = _legacy_collision_identity(identity, source_event_id)
+                if target in base_keys:
+                    raise ValueError(
+                        "incompatible cashback identity collision during migration"
+                    )
+            else:
+                base_owners.add(identity)
+            if target in target_owners:
+                raise ValueError(
+                    "incompatible cashback identity collision during migration"
+                )
+            target_owners[target] = source_event_id
             connection.execute(
-                "UPDATE cashback_events SET identity_key = ? WHERE source_event_id = ?",
-                (candidate, row["source_event_id"]),
+                """
+                UPDATE cashback_events
+                SET occurred_at = ?, identity_key = ?
+                WHERE source_event_id = ?
+                """,
+                (occurred_at, target, source_event_id),
             )
 
     @staticmethod
@@ -1244,18 +1305,54 @@ class CashbackEventStore:
             "statement_content_sha256": "TEXT NOT NULL DEFAULT ''",
             "actual_import_receipt_sha256": "TEXT",
             "actual_verification_sha256": "TEXT",
+            "period_id": "TEXT",
+            "closed_by_receipt_id": "TEXT",
+            "original_received_at": "TEXT",
         }
         for column, definition in additions.items():
             if column not in existing:
                 connection.execute(
                     f"ALTER TABLE card_periods ADD COLUMN {column} {definition}"
                 )
+        legacy_rows = connection.execute(
+            """
+            SELECT card_code, period_start, period_end
+            FROM card_periods
+            """
+        ).fetchall()
+        for row in legacy_rows:
+            bounds = _legacy_date_period_bounds(row["period_start"], row["period_end"])
+            if bounds is None:
+                continue
+            connection.execute(
+                """
+                UPDATE card_periods
+                SET period_start = ?, period_end = ?
+                WHERE card_code = ? AND period_start = ? AND period_end = ?
+                """,
+                (
+                    bounds[0],
+                    bounds[1],
+                    row["card_code"],
+                    row["period_start"],
+                    row["period_end"],
+                ),
+            )
+        connection.execute(
+            """
+            UPDATE card_periods
+            SET period_id = 'cashback-period:' || card_code || ':' || period_start || ':' || period_end
+            WHERE period_id IS NULL
+            """
+        )
 
     @staticmethod
     def _migrate_reconciliation_columns(connection: sqlite3.Connection) -> None:
         existing = {
             str(row["name"])
-            for row in connection.execute("PRAGMA table_info(reconciliation_runs)").fetchall()
+            for row in connection.execute(
+                "PRAGMA table_info(reconciliation_runs)"
+            ).fetchall()
         }
         additions = {
             "statement_sha256": "TEXT NOT NULL DEFAULT ''",
@@ -1272,16 +1369,22 @@ class CashbackEventStore:
         connection.row_factory = sqlite3.Row
         return connection
 
-    def upsert(
-        self,
-        events: Iterable[dict[str, Any]],
-        *,
-        fx_provider: Any | None = None,
-    ) -> dict[str, int]:
-        raw_events = list(events)
-        if not raw_events:
+    def _statement_only_cards(self) -> frozenset[str]:
+        configuration = load_program_configuration(self.program_config_path)
+        return frozenset(
+            program.card.upper()
+            for program in programs_from_config(configuration)
+            if program.tracking_mode == "STATEMENT_ONLY"
+        )
+
+    def upsert(self, events: Iterable[dict[str, Any]]) -> dict[str, int]:
+        statement_only_cards = self._statement_only_cards()
+        normalized = [
+            _normalize_event(event, statement_only_cards=statement_only_cards)
+            for event in events
+        ]
+        if not normalized:
             raise ValueError("At least one event is required")
-        provider = self.fx_provider if fx_provider is None else fx_provider
         inserted = 0
         updated = 0
         unchanged = 0
@@ -1289,32 +1392,24 @@ class CashbackEventStore:
         with closing(self._connect()) as connection:
             with connection:
                 connection.execute("BEGIN IMMEDIATE")
-                for source in raw_events:
-                    source_event_id = str(source.get("source_event_id") or "").strip()
-                    existing = (
-                        connection.execute(
-                            "SELECT * FROM cashback_events WHERE source_event_id = ?",
-                            (source_event_id,),
-                        ).fetchone()
-                        if source_event_id
-                        else None
-                    )
-                    replay_fx = (
-                        _latest_fx_trace(existing["decision_trace_json"])
-                        if existing is not None
-                        else None
-                    )
-                    event = _normalize_event(
-                        source,
-                        fx_provider=None if existing is not None else provider,
-                        replay_fx=replay_fx,
-                    )
+                for event in normalized:
+                    existing = connection.execute(
+                        "SELECT * FROM cashback_events WHERE source_event_id = ?",
+                        (event["source_event_id"],),
+                    ).fetchone()
                     if existing:
                         differences = [
                             field
                             for field in EVENT_CANONICAL_FIELDS
                             if existing[field] != event[field]
                         ]
+                        if (
+                            differences
+                            and existing["statement_reference"]
+                            and existing["reconciliation_status"] == "RECONCILED"
+                        ):
+                            unchanged += 1
+                            continue
                         if differences:
                             raise ValueError(
                                 "source_event_id already exists with different event fields: "
@@ -1327,14 +1422,18 @@ class CashbackEventStore:
                         "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
                         (event["identity_key"],),
                     ).fetchone()
-                    if identity_owner and identity_owner["source_event_id"] != event["source_event_id"]:
+                    if (
+                        identity_owner
+                        and identity_owner["source_event_id"]
+                        != event["source_event_id"]
+                    ):
                         duplicates += 1
                         continue
                     columns = tuple(event)
                     placeholders = ", ".join("?" for _ in columns)
                     connection.execute(
                         f"""
-                        INSERT INTO cashback_events ({', '.join(columns)})
+                        INSERT INTO cashback_events ({", ".join(columns)})
                         VALUES ({placeholders})
                         """,
                         tuple(event[column] for column in columns),
@@ -1350,21 +1449,16 @@ class CashbackEventStore:
             "duplicates": duplicates,
         }
 
-    def validate(
-        self,
-        events: Iterable[dict[str, Any]],
-        *,
-        fx_provider: Any | None = None,
-    ) -> list[dict[str, Any]]:
+    def validate(self, events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
         """Validate events without persisting them or exposing normalized payloads."""
+        statement_only_cards = self._statement_only_cards()
         normalized = [
-            _normalize_event(event, fx_provider=fx_provider)
+            _normalize_event(event, statement_only_cards=statement_only_cards)
             for event in events
         ]
         if not normalized:
             raise ValueError("At least one event is required")
         return normalized
-
 
     @staticmethod
     def _ingest_fields(source: dict[str, Any]) -> tuple[str, str, int, int, str]:
@@ -1372,19 +1466,17 @@ class CashbackEventStore:
         if not source_name:
             raise ValueError("source is required")
         completed_at = _iso_datetime(source.get("completed_at"))
-        scanned_value = source.get("scanned_count")
-        accepted_value = source.get("accepted_count")
-        if (
-            isinstance(scanned_value, bool)
-            or not isinstance(scanned_value, int)
-            or isinstance(accepted_value, bool)
-            or not isinstance(accepted_value, int)
-        ):
-            raise ValueError("scanned_count and accepted_count must be integers")
-        scanned_count = scanned_value
-        accepted_count = accepted_value
+        try:
+            scanned_count = int(source.get("scanned_count"))
+            accepted_count = int(source.get("accepted_count"))
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                "scanned_count and accepted_count must be integers"
+            ) from error
         if scanned_count < 0 or accepted_count < 0 or accepted_count > scanned_count:
-            raise ValueError("ingest counts must be non-negative and accepted cannot exceed scanned")
+            raise ValueError(
+                "ingest counts must be non-negative and accepted cannot exceed scanned"
+            )
         cursor = str(source.get("cursor") or "").strip()
         if not cursor:
             raise ValueError("cursor is required")
@@ -1400,21 +1492,27 @@ class CashbackEventStore:
         receipt_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Persist the exact service result that is eligible for one cursor commit."""
-        source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
+        source_name, completed_at, scanned_count, accepted_count, cursor = (
+            self._ingest_fields(source)
+        )
         raw_ids = [str(event_id).strip() for event_id in event_ids]
         raw_digests = [str(digest).strip() for digest in event_digests]
         if len(raw_ids) != len(raw_digests):
             raise ValueError("event ids and event digests must have equal cardinality")
-        if any(not event_id for event_id in raw_ids) or any(not digest for digest in raw_digests):
+        if any(not event_id for event_id in raw_ids) or any(
+            not digest for digest in raw_digests
+        ):
             raise ValueError("event ids and event digests must be non-empty")
         if len(set(raw_ids)) != len(raw_ids):
             raise ValueError("event ids must be unique within an ingest receipt")
         if len(raw_ids) != accepted_count:
-            raise ValueError("accepted_count must equal the number of event ids in the receipt")
-        pairs = sorted(zip(raw_ids, raw_digests), key=lambda pair: pair[0])
+            raise ValueError(
+                "accepted_count must equal the number of event ids in the receipt"
+            )
+        pairs = sorted(zip(raw_ids, raw_digests, strict=True), key=lambda pair: pair[0])
         ids = [event_id for event_id, _ in pairs]
         digests = [digest for _, digest in pairs]
-        payload = {
+        payload: dict[str, Any] = {
             "source": source_name,
             "completed_at": completed_at,
             "cursor": cursor,
@@ -1443,8 +1541,8 @@ class CashbackEventStore:
                         """
                         INSERT INTO ingest_receipts (
                             receipt_id, receipt_sha256, source, completed_at, cursor,
-                            scanned_count, accepted_count, event_ids_json, event_digests_json, receipt_kind,
-                            receipt_payload_json
+                            scanned_count, accepted_count, event_ids_json,
+                            event_digests_json, receipt_kind, receipt_payload_json
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
@@ -1458,31 +1556,41 @@ class CashbackEventStore:
                             json.dumps(ids, separators=(",", ":")),
                             json.dumps(digests, separators=(",", ":")),
                             receipt_kind,
-                            json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                            json.dumps(
+                                payload, sort_keys=True, separators=(",", ":")
+                            ),
                         ),
                     )
                 else:
                     if existing["receipt_sha256"] != receipt_sha256:
                         raise IngestCursorConflict("service receipt identity collision")
                     if existing["receipt_payload_json"] is None:
-                        # The exact content reproduces the existing immutable digest.
-                        # Never synthesize or discard historical review dispositions.
                         connection.execute(
-                            "UPDATE ingest_receipts SET receipt_payload_json=? WHERE receipt_id=? AND receipt_payload_json IS NULL",
-                            (json.dumps(payload, sort_keys=True, separators=(",", ":")), receipt_id),
+                            """
+                            UPDATE ingest_receipts
+                            SET receipt_payload_json=?
+                            WHERE receipt_id=? AND receipt_payload_json IS NULL
+                            """,
+                            (
+                                json.dumps(
+                                    payload, sort_keys=True, separators=(",", ":")
+                                ),
+                                receipt_id,
+                            ),
                         )
                 connection.commit()
             except Exception:
                 connection.rollback()
                 raise
-        # Return independently read durable content, not the request held in memory.
         return self.ingest_receipt(receipt_id, receipt_sha256)
 
     @staticmethod
     def _durable_receipt_payload(row: sqlite3.Row) -> dict[str, Any]:
         raw = row["receipt_payload_json"]
         if raw is None:
-            raise IngestCursorConflict("historical receipt requires exact source replay before cursor commit")
+            raise IngestCursorConflict(
+                "historical receipt requires exact source replay before cursor commit"
+            )
         try:
             payload = json.loads(raw)
         except (TypeError, ValueError) as error:
@@ -1490,8 +1598,11 @@ class CashbackEventStore:
         if not isinstance(payload, dict) or _json_digest(payload) != row["receipt_sha256"]:
             raise IngestCursorConflict("durable receipt payload digest mismatch")
         expected = {
-            "source": row["source"], "completed_at": row["completed_at"], "cursor": row["cursor"],
-            "scanned_count": int(row["scanned_count"]), "accepted_count": int(row["accepted_count"]),
+            "source": row["source"],
+            "completed_at": row["completed_at"],
+            "cursor": row["cursor"],
+            "scanned_count": int(row["scanned_count"]),
+            "accepted_count": int(row["accepted_count"]),
             "event_ids": json.loads(row["event_ids_json"]),
             "event_digests": json.loads(row["event_digests_json"]),
         }
@@ -1501,24 +1612,31 @@ class CashbackEventStore:
             raise IngestCursorConflict("durable receipt kind mismatch")
         return payload
 
-    def ingest_receipt(self, receipt_id: str, receipt_sha256: str) -> dict[str, Any]:
-        """Read the exact durable receipt, including held source dispositions.
-
-        Source and message identity link each REVIEW disposition to the immutable
-        acquisition archive; raw mail and credentials never belong in this receipt.
-        """
+    def ingest_receipt(
+        self, receipt_id: str, receipt_sha256: str
+    ) -> dict[str, Any]:
+        """Read the exact durable receipt, including held source dispositions."""
         with closing(self._connect()) as connection:
-            row = connection.execute("SELECT * FROM ingest_receipts WHERE receipt_id=?", (receipt_id,)).fetchone()
+            row = connection.execute(
+                "SELECT * FROM ingest_receipts WHERE receipt_id = ?",
+                (receipt_id,),
+            ).fetchone()
             if row is None or row["receipt_sha256"] != receipt_sha256:
                 raise IngestCursorConflict("service receipt is unknown or mismatched")
             payload = self._durable_receipt_payload(row)
-            return {"receipt_id": receipt_id, "receipt_sha256": receipt_sha256,
-                    **payload, "state": str(row["state"])}
+            return {
+                "receipt_id": receipt_id,
+                "receipt_sha256": receipt_sha256,
+                **payload,
+                "state": str(row["state"]),
+            }
 
     def ingest_transaction(self, source: dict[str, Any]) -> dict[str, Any]:
         """Persist one normalized transaction; never advance an acquisition cursor."""
         if set(source) != {"source", "completed_at", "cursor", "event"}:
-            raise ValueError("Transaction payload requires only source, completed_at, cursor and event")
+            raise ValueError(
+                "Transaction payload requires only source, completed_at, cursor and event"
+            )
         self._validate_transaction_window(source)
         event = source["event"]
         if not isinstance(event, dict):
@@ -1529,98 +1647,211 @@ class CashbackEventStore:
         normalized = self.validate([event])[0]
         persistence = self.upsert([event])
         if persistence["duplicates"]:
-            raise IngestCursorConflict("transaction identity belongs to another source event")
+            raise IngestCursorConflict(
+                "transaction identity belongs to another source event"
+            )
         with closing(self._connect()) as connection:
-            stored = connection.execute("SELECT * FROM cashback_events WHERE source_event_id = ?", (normalized["source_event_id"],)).fetchone()
+            stored = connection.execute(
+                "SELECT * FROM cashback_events WHERE source_event_id = ?",
+                (normalized["source_event_id"],),
+            ).fetchone()
+            if stored is None:
+                raise IngestCursorConflict("persisted transaction is missing")
             digest = self._stored_transaction_digest(stored)
         receipt = self.create_ingest_receipt(
-            fields, event_ids=[normalized["source_event_id"]],
-            event_digests=[digest], receipt_kind="TRANSACTION",
+            fields,
+            event_ids=[normalized["source_event_id"]],
+            event_digests=[digest],
+            receipt_kind="TRANSACTION",
         )
-        return {"persistence": persistence, "service_receipt": receipt,
-                "cursor_candidate": fields["cursor"], "cursor_committed": False}
+        return {
+            "persistence": persistence,
+            "service_receipt": receipt,
+            "cursor_candidate": fields["cursor"],
+            "cursor_committed": False,
+        }
 
     @staticmethod
     def _validate_transaction_window(source: dict[str, Any]) -> None:
         if not isinstance(source.get("source"), str) or not source["source"].strip():
             raise ValueError("source must be a non-empty string")
-        if datetime.fromisoformat(_iso_datetime(source.get("cursor"))) != datetime.fromisoformat(_iso_datetime(source.get("completed_at"))):
+        if datetime.fromisoformat(_iso_datetime(source.get("cursor"))) != (
+            datetime.fromisoformat(_iso_datetime(source.get("completed_at")))
+        ):
             raise ValueError("cursor must equal completed_at for a frozen scan")
 
     @staticmethod
     def _stored_transaction_digest(row: sqlite3.Row) -> str:
-        return _json_digest({key: row[key] for key in row.keys() if key not in {"created_at", "updated_at"}})
+        return _json_digest(
+            {
+                key: row[key]
+                for key in row.keys()
+                if key not in {"created_at", "updated_at"}
+            }
+        )
 
     def combine_transaction_receipts(self, source: dict[str, Any]) -> dict[str, Any]:
         """Seal a scan only from exact, persisted child transaction acknowledgements."""
-        if set(source) != {"source", "completed_at", "cursor", "scanned_count", "accepted_count", "ignored_count", "review_count", "receipts", "message_dispositions"}:
+        if set(source) != {
+            "source",
+            "completed_at",
+            "cursor",
+            "scanned_count",
+            "accepted_count",
+            "ignored_count",
+            "review_count",
+            "receipts",
+            "message_dispositions",
+        }:
             raise ValueError("Scan receipt payload has missing or unsupported fields")
         self._validate_transaction_window(source)
         name, completed, scanned, accepted, cursor = self._ingest_fields(source)
         ignored, review = source["ignored_count"], source["review_count"]
-        if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in (ignored, review)) or scanned != accepted + ignored + review:
+        if (
+            any(
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                for value in (ignored, review)
+            )
+            or scanned != accepted + ignored + review
+        ):
             raise IngestCursorConflict("scan disposition counts do not reconcile")
         dispositions = source["message_dispositions"]
         if not isinstance(dispositions, list) or len(dispositions) != scanned:
             raise IngestCursorConflict("every scanned message requires a disposition")
-        message_ids, accepted_ids, counts = set(), set(), {"ACCEPTED": 0, "IGNORED": 0, "REVIEW": 0}
+        message_ids: set[str] = set()
+        accepted_ids: set[str] = set()
+        counts = {"ACCEPTED": 0, "IGNORED": 0, "REVIEW": 0}
         for disposition in dispositions:
-            if not isinstance(disposition, dict) or set(disposition) - {"message_id", "status", "source_event_id", "reason"}:
+            if not isinstance(disposition, dict) or set(disposition) - {
+                "message_id",
+                "status",
+                "source_event_id",
+                "reason",
+            }:
                 raise IngestCursorConflict("invalid message disposition")
-            message_id, status = disposition.get("message_id"), disposition.get("status")
-            if not isinstance(message_id, str) or not message_id.strip() or message_id in message_ids or not isinstance(status, str) or status not in counts:
+            message_id = disposition.get("message_id")
+            status = disposition.get("status")
+            if (
+                not isinstance(message_id, str)
+                or not message_id.strip()
+                or message_id in message_ids
+                or not isinstance(status, str)
+                or status not in counts
+            ):
                 raise IngestCursorConflict("duplicate or invalid message disposition")
             message_ids.add(message_id)
             counts[status] += 1
             if status == "ACCEPTED":
                 event_id = disposition.get("source_event_id")
                 if event_id != message_id + ":0":
-                    raise IngestCursorConflict("accepted event identity must match its message")
+                    raise IngestCursorConflict(
+                        "accepted event identity must match its message"
+                    )
                 accepted_ids.add(event_id)
-            elif disposition.get("source_event_id") is not None or not isinstance(disposition.get("reason"), str) or not disposition["reason"].strip():
-                raise IngestCursorConflict("unaccepted messages require a reason and no event identity")
-        if counts != {"ACCEPTED": accepted, "IGNORED": ignored, "REVIEW": review}:
-            raise IngestCursorConflict("message dispositions do not match scan counts")
+            elif (
+                disposition.get("source_event_id") is not None
+                or not isinstance(disposition.get("reason"), str)
+                or not disposition["reason"].strip()
+            ):
+                raise IngestCursorConflict(
+                    "unaccepted messages require a reason and no event identity"
+                )
+        if counts != {
+            "ACCEPTED": accepted,
+            "IGNORED": ignored,
+            "REVIEW": review,
+        }:
+            raise IngestCursorConflict(
+                "message dispositions do not match scan counts"
+            )
         children = source["receipts"]
         if not isinstance(children, list) or len(children) != accepted:
-            raise IngestCursorConflict("one child receipt is required per accepted transaction")
-        ids, digests, seen = [], [], set()
+            raise IngestCursorConflict(
+                "one child receipt is required per accepted transaction"
+            )
+        ids: list[str] = []
+        digests: list[str] = []
+        seen: set[str] = set()
         with closing(self._connect()) as connection:
             for child in children:
-                if not isinstance(child, dict) or set(child) != {"receipt_id", "receipt_sha256"}:
-                    raise IngestCursorConflict("exact child receipt identity and digest are required")
+                if not isinstance(child, dict) or set(child) != {
+                    "receipt_id",
+                    "receipt_sha256",
+                }:
+                    raise IngestCursorConflict(
+                        "exact child receipt identity and digest are required"
+                    )
                 receipt_id = child["receipt_id"]
                 if not isinstance(receipt_id, str) or receipt_id in seen:
                     raise IngestCursorConflict("duplicate or invalid child receipt")
                 seen.add(receipt_id)
-                row = connection.execute("SELECT * FROM ingest_receipts WHERE receipt_id = ?", (receipt_id,)).fetchone()
+                row = connection.execute(
+                    "SELECT * FROM ingest_receipts WHERE receipt_id = ?",
+                    (receipt_id,),
+                ).fetchone()
                 if row is None or row["receipt_sha256"] != child["receipt_sha256"]:
                     raise IngestCursorConflict("child receipt is unknown or mismatched")
-                if (row["receipt_kind"], row["source"], row["completed_at"], row["cursor"], row["accepted_count"], row["scanned_count"]) != ("TRANSACTION", name, completed, cursor, 1, 1):
-                    raise IngestCursorConflict("child receipt is not bound to this scan")
+                if (
+                    row["receipt_kind"],
+                    row["source"],
+                    row["completed_at"],
+                    row["cursor"],
+                    row["accepted_count"],
+                    row["scanned_count"],
+                ) != ("TRANSACTION", name, completed, cursor, 1, 1):
+                    raise IngestCursorConflict(
+                        "child receipt is not bound to this scan"
+                    )
                 event_ids = json.loads(row["event_ids_json"])
                 event_digests = json.loads(row["event_digests_json"])
                 if len(event_ids) != 1 or len(event_digests) != 1:
-                    raise IngestCursorConflict("invalid transaction receipt cardinality")
-                event = connection.execute("SELECT * FROM cashback_events WHERE source_event_id = ?", (event_ids[0],)).fetchone()
-                if event is None or self._stored_transaction_digest(event) != event_digests[0]:
-                    raise IngestCursorConflict("child transaction is missing or changed")
+                    raise IngestCursorConflict(
+                        "invalid transaction receipt cardinality"
+                    )
+                event = connection.execute(
+                    "SELECT * FROM cashback_events WHERE source_event_id = ?",
+                    (event_ids[0],),
+                ).fetchone()
+                if (
+                    event is None
+                    or self._stored_transaction_digest(event) != event_digests[0]
+                ):
+                    raise IngestCursorConflict(
+                        "child transaction is missing or changed"
+                    )
                 ids.extend(event_ids)
                 digests.extend(event_digests)
         if len(set(ids)) != len(ids):
             raise IngestCursorConflict("duplicate transaction identity in scan")
         if set(ids) != accepted_ids:
-            raise IngestCursorConflict("accepted message identities do not match child receipts")
+            raise IngestCursorConflict(
+                "accepted message identities do not match child receipts"
+            )
         receipt = self.create_ingest_receipt(
-            source, event_ids=ids, event_digests=digests,
-            receipt_context={"ignored_count": ignored, "review_count": review,
-                             "message_dispositions": sorted(dispositions, key=lambda item: item["message_id"])},
+            source,
+            event_ids=ids,
+            event_digests=digests,
+            receipt_context={
+                "ignored_count": ignored,
+                "review_count": review,
+                "message_dispositions": sorted(
+                    dispositions, key=lambda item: item["message_id"]
+                ),
+            },
         )
-        return {"service_receipt": receipt, "cursor_candidate": cursor, "cursor_committed": False}
+        return {
+            "service_receipt": receipt,
+            "cursor_candidate": cursor,
+            "cursor_committed": False,
+        }
 
     def record_ingest_success(self, source: dict[str, Any]) -> dict[str, Any]:
         """Commit one registered service receipt and its cursor atomically."""
-        source_name, completed_at, scanned_count, accepted_count, cursor = self._ingest_fields(source)
+        source_name, completed_at, scanned_count, accepted_count, cursor = (
+            self._ingest_fields(source)
+        )
         service_receipt = source.get("service_receipt")
         if isinstance(service_receipt, dict):
             receipt_id = str(service_receipt.get("receipt_id") or "").strip()
@@ -1630,7 +1861,9 @@ class CashbackEventStore:
                 source.get("service_receipt_id") or source.get("receipt_id") or ""
             ).strip()
             receipt_sha256 = str(
-                source.get("service_receipt_sha256") or source.get("receipt_sha256") or ""
+                source.get("service_receipt_sha256")
+                or source.get("receipt_sha256")
+                or ""
             ).strip()
         if not receipt_id or not receipt_sha256:
             raise IngestCursorConflict("exact service receipt is required")
@@ -1643,9 +1876,13 @@ class CashbackEventStore:
                     (receipt_id,),
                 ).fetchone()
                 if receipt is None or receipt["receipt_sha256"] != receipt_sha256:
-                    raise IngestCursorConflict("service receipt is unknown or mismatched")
+                    raise IngestCursorConflict(
+                        "service receipt is unknown or mismatched"
+                    )
                 if receipt["receipt_kind"] != "BATCH":
-                    raise IngestCursorConflict("transaction receipts cannot commit a scan cursor")
+                    raise IngestCursorConflict(
+                        "transaction receipts cannot commit a scan cursor"
+                    )
                 payload = self._durable_receipt_payload(receipt)
                 expected = {
                     "source": receipt["source"],
@@ -1662,7 +1899,9 @@ class CashbackEventStore:
                     "accepted_count": accepted_count,
                 }
                 if observed != expected:
-                    raise IngestCursorConflict("service receipt is not bound to the commit payload")
+                    raise IngestCursorConflict(
+                        "service receipt is not bound to the commit payload"
+                    )
 
                 current = connection.execute(
                     "SELECT * FROM ingest_state WHERE source = ?",
@@ -1670,7 +1909,10 @@ class CashbackEventStore:
                 ).fetchone()
                 if current is not None:
                     current_receipt_id = str(current["receipt_id"] or "")
-                    if current_receipt_id == receipt_id and str(current["receipt_sha256"] or "") == receipt_sha256:
+                    if (
+                        current_receipt_id == receipt_id
+                        and str(current["receipt_sha256"] or "") == receipt_sha256
+                    ):
                         connection.commit()
                         return {
                             "source": source_name,
@@ -1685,26 +1927,41 @@ class CashbackEventStore:
                         }
                     current_completed = str(current["last_success_at"])
                     if _cursor_order(current_completed, completed_at) > 0:
-                        raise IngestCursorConflict("completed_at is stale or regressive")
+                        raise IngestCursorConflict(
+                            "completed_at is stale or regressive"
+                        )
                     current_cursor = str(current["cursor"] or "")
                     if _cursor_order(current_completed, completed_at) == 0:
-                        raise IngestCursorConflict("completed_at is already committed with another receipt")
+                        raise IngestCursorConflict(
+                            "completed_at is already committed with another receipt"
+                        )
                     if current_cursor and _cursor_order(current_cursor, cursor) >= 0:
                         raise IngestCursorConflict("cursor is stale or regressive")
                     next_version = int(current["cursor_version"]) + 1
                 else:
                     next_version = 1
-
-                # Recheck accepted persistence under the same write lock as cursor
-                # advancement. Corrections/deletions after aggregation must not
-                # turn a stale downstream acknowledgement into a successful scan.
-                # Older mailbox API receipts hash input events, not stored rows.
-                # The compact scan contract explicitly carries scan_dispositions.
+                # Recheck accepted persistence under the same write lock as
+                # cursor advancement. Older mailbox receipts hash input events,
+                # while the transaction contract carries scan dispositions.
                 if "scan_dispositions" in payload:
-                    for event_id, digest in zip(payload["event_ids"], payload["event_digests"], strict=True):
-                        event = connection.execute("SELECT * FROM cashback_events WHERE source_event_id=?", (event_id,)).fetchone()
-                        if event is None or self._stored_transaction_digest(event) != digest:
-                            raise IngestCursorConflict("receipt transaction is missing or changed before cursor commit")
+                    for event_id, digest in zip(
+                        payload["event_ids"],
+                        payload["event_digests"],
+                        strict=True,
+                    ):
+                        event = connection.execute(
+                            "SELECT * FROM cashback_events "
+                            "WHERE source_event_id = ?",
+                            (event_id,),
+                        ).fetchone()
+                        if (
+                            event is None
+                            or self._stored_transaction_digest(event) != digest
+                        ):
+                            raise IngestCursorConflict(
+                                "receipt transaction is missing or changed "
+                                "before cursor commit"
+                            )
 
                 connection.execute(
                     """
@@ -1783,302 +2040,10 @@ class CashbackEventStore:
                 "receipt_sha256": None,
             }
         return dict(row)
-    def _statement_receipt_view(
-        self,
-        connection: sqlite3.Connection,
-        row: sqlite3.Row,
+
+    def set_alert_acknowledgement(
+        self, alert_key: object, acknowledged: object
     ) -> dict[str, Any]:
-        result = dict(row)
-        if result.get("period_start") and result.get("period_end"):
-            period = connection.execute(
-                """
-                SELECT status
-                FROM card_periods
-                WHERE card_code=? AND period_start=? AND period_end=?
-                """,
-                (result["card_code"], result["period_start"], result["period_end"]),
-            ).fetchone()
-            result["settlement_state"] = (
-                "FINALIZED" if period is not None and period["status"] == "FINALIZED" else "UNFINALIZED"
-            )
-        else:
-            result["settlement_state"] = "UNFINALIZED"
-        return receipt_view(result)
-
-    def record_statement_receipt(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Durably close the bank cycle before any statement processing begins."""
-        normalized = normalize_statement_receipt(payload)
-        columns = (
-            "receipt_id",
-            "receipt_sha256",
-            "source",
-            "source_message_id",
-            "received_at",
-            "card_code",
-            "statement_reference",
-            "period_start",
-            "period_end",
-            "source_attachment_id",
-            "statement_sha256",
-            "evidence_reference",
-            "document_url",
-            "subject",
-            "state",
-            "processing_state",
-            "reconciliation_state",
-            "payload_json",
-        )
-        values = tuple(
-            normalized[column]
-            if column != "payload_json"
-            else json.dumps(
-                {
-                    key: normalized[key]
-                    for key in (
-                        "schema_version",
-                        "source",
-                        "source_message_id",
-                        "received_at",
-                        "card_code",
-                        "statement_reference",
-                        "period_start",
-                        "period_end",
-                        "source_attachment_id",
-                        "statement_sha256",
-                        "evidence_reference",
-                        "document_url",
-                        "subject",
-                    )
-                },
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-            for column in columns
-        )
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            try:
-                existing = connection.execute(
-                    """
-                    SELECT *
-                    FROM statement_receipts
-                    WHERE receipt_id = ? OR (source = ? AND source_message_id = ?)
-                    """,
-                    (
-                        normalized["receipt_id"],
-                        normalized["source"],
-                        normalized["source_message_id"],
-                    ),
-                ).fetchone()
-                if existing is not None:
-                    if (
-                        existing["receipt_id"] != normalized["receipt_id"]
-                        or existing["receipt_sha256"] != normalized["receipt_sha256"]
-                    ):
-                        raise IngestCursorConflict(
-                            "statement receipt identity or immutable source content changed"
-                        )
-                    connection.commit()
-                    view = self._statement_receipt_view(connection, existing)
-                    return {
-                        "statement_receipt": view,
-                        "receipt": view,
-                        "receipt_id": view["receipt_id"],
-                        "state": view["state"],
-                        "bank_state": view["bank_state"],
-                        "processing_state": view["processing_state"],
-                        "reconciliation_state": view["reconciliation_state"],
-                        "idempotent_replay": True,
-                    }
-                connection.execute(
-                    f"""
-                    INSERT INTO statement_receipts ({", ".join(columns)})
-                    VALUES ({", ".join("?" for _ in columns)})
-                    """,
-                    values,
-                )
-                connection.commit()
-                stored = connection.execute(
-                    "SELECT * FROM statement_receipts WHERE receipt_id=?",
-                    (normalized["receipt_id"],),
-                ).fetchone()
-                assert stored is not None
-                view = self._statement_receipt_view(connection, stored)
-                return {
-                    "statement_receipt": view,
-                    "receipt": view,
-                    "receipt_id": view["receipt_id"],
-                    "state": view["state"],
-                    "bank_state": view["bank_state"],
-                    "processing_state": view["processing_state"],
-                    "reconciliation_state": view["reconciliation_state"],
-                    "idempotent_replay": False,
-                }
-            except Exception:
-                connection.rollback()
-                raise
-    ingest_statement_receipt = record_statement_receipt
-
-    # The explicit alias makes the owner-local API readable to n8n producers.
-    upsert_statement_receipt = record_statement_receipt
-
-    def statement_receipt(
-        self,
-        receipt_id: str = "",
-        *,
-        source: str | None = None,
-        source_message_id: str | None = None,
-    ) -> dict[str, Any]:
-        key = str(receipt_id or "").strip()
-        with closing(self._connect()) as connection:
-            if key:
-                row = connection.execute(
-                    "SELECT * FROM statement_receipts WHERE receipt_id=?",
-                    (key,),
-                ).fetchone()
-            else:
-                source_name = str(source or "").strip()
-                message_id = str(source_message_id or "").strip()
-                if not source_name or not message_id:
-                    raise ValueError("receipt_id or source and source_message_id are required")
-                row = connection.execute(
-                    """
-                    SELECT *
-                    FROM statement_receipts
-                    WHERE source=? AND source_message_id=?
-                    """,
-                    (source_name, message_id),
-                ).fetchone()
-            if row is None:
-                raise IngestCursorConflict("statement receipt is unknown")
-            return self._statement_receipt_view(connection, row)
-
-    def statement_receipts(
-        self,
-        *,
-        card_code: str | None = None,
-        excluded_cards: Iterable[str] = (),
-        limit: int = 24,
-    ) -> list[dict[str, Any]]:
-        if limit < 1 or limit > 200:
-            raise ValueError("statement receipt limit must be between 1 and 200")
-        excluded = {
-            str(card).strip().upper()
-            for card in excluded_cards
-            if str(card).strip()
-        }
-        query = "SELECT * FROM statement_receipts"
-        parameters: list[object] = []
-        clauses: list[str] = []
-        if card_code:
-            clauses.append("card_code=?")
-            parameters.append(str(card_code).strip().upper())
-        if excluded:
-            placeholders = ", ".join("?" for _ in excluded)
-            clauses.append(f"card_code NOT IN ({placeholders})")
-            parameters.extend(sorted(excluded))
-        if clauses:
-            query += " WHERE " + " AND ".join(clauses)
-        query += " ORDER BY julianday(received_at) DESC, received_at DESC, receipt_id DESC LIMIT ?"
-        parameters.append(limit)
-        with closing(self._connect()) as connection:
-            rows = connection.execute(query, tuple(parameters)).fetchall()
-            return [self._statement_receipt_view(connection, row) for row in rows]
-
-    def update_statement_receipt(
-        self,
-        receipt_id: str,
-        *,
-        processing_state: str | None = None,
-        reconciliation_state: str | None = None,
-        period_start: str | None = None,
-        period_end: str | None = None,
-        statement_reference: str | None = None,
-    ) -> dict[str, Any]:
-        """Advance processing metadata; bank closure and source facts never change."""
-        key = str(receipt_id or "").strip()
-        if not key:
-            raise ValueError("receipt_id is required")
-        if processing_state is not None:
-            processing_state = str(processing_state).strip().upper()
-            if processing_state not in PROCESSING_STATES:
-                raise ValueError(f"Unsupported processing_state: {processing_state}")
-        if reconciliation_state is not None:
-            reconciliation_state = str(reconciliation_state).strip().upper()
-            if reconciliation_state not in RECONCILIATION_STATES:
-                raise ValueError(f"Unsupported reconciliation_state: {reconciliation_state}")
-        with closing(self._connect()) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            try:
-                current = connection.execute(
-                    "SELECT * FROM statement_receipts WHERE receipt_id=?",
-                    (key,),
-                ).fetchone()
-                if current is None:
-                    raise IngestCursorConflict("statement receipt is unknown")
-                current_start = current["period_start"]
-                current_end = current["period_end"]
-                if (period_start is None) != (period_end is None):
-                    raise ValueError("period_start and period_end must be supplied together")
-                if period_start is not None and period_end is not None:
-                    candidate = normalize_statement_receipt(
-                        {
-                            "source": current["source"],
-                            "source_message_id": current["source_message_id"],
-                            "received_at": current["received_at"],
-                            "card_code": current["card_code"],
-                            "period_start": period_start,
-                            "period_end": period_end,
-                        }
-                    )
-                    if current_start and current_end and (
-                        current_start != candidate["period_start"]
-                        or current_end != candidate["period_end"]
-                    ):
-                        raise IngestCursorConflict("statement period bounds are immutable once known")
-                    period_start = candidate["period_start"]
-                    period_end = candidate["period_end"]
-                if period_start is not None and current_start is not None:
-                    if (period_start, period_end) != (current_start, current_end):
-                        raise IngestCursorConflict("statement period bounds are immutable once known")
-                if statement_reference is not None:
-                    statement_reference = str(statement_reference).strip() or None
-                    if current["statement_reference"] and (
-                        current["statement_reference"] != statement_reference
-                    ):
-                        raise IngestCursorConflict("statement reference is immutable once known")
-                assignments: list[str] = []
-                values: list[object] = []
-                if processing_state is not None:
-                    assignments.append("processing_state=?")
-                    values.append(processing_state)
-                if reconciliation_state is not None:
-                    assignments.append("reconciliation_state=?")
-                    values.append(reconciliation_state)
-                if period_start is not None:
-                    assignments.extend(("period_start=?", "period_end=?"))
-                    values.extend((period_start, period_end))
-                if statement_reference is not None and not current["statement_reference"]:
-                    assignments.append("statement_reference=?")
-                    values.append(statement_reference)
-                if assignments:
-                    assignments.append("updated_at=CURRENT_TIMESTAMP")
-                    connection.execute(
-                        f"UPDATE statement_receipts SET {', '.join(assignments)} WHERE receipt_id=?",
-                        (*values, key),
-                    )
-                connection.commit()
-                stored = connection.execute(
-                    "SELECT * FROM statement_receipts WHERE receipt_id=?",
-                    (key,),
-                ).fetchone()
-                assert stored is not None
-                return self._statement_receipt_view(connection, stored)
-            except Exception:
-                connection.rollback()
-                raise
-
-    def set_alert_acknowledgement(self, alert_key: object, acknowledged: object) -> dict[str, Any]:
         key = str(alert_key or "").strip()
         if not key or len(key) > 160:
             raise ValueError("alert_key must be between 1 and 160 characters")
@@ -2109,6 +2074,1116 @@ class CashbackEventStore:
             ).fetchall()
         return [str(row["alert_key"]) for row in records]
 
+    def _bank_statement_receipt_view(
+        self,
+        connection: sqlite3.Connection,
+        row: sqlite3.Row,
+    ) -> dict[str, Any]:
+        result = dict(row)
+        if result.get("period_start") and result.get("period_end"):
+            finalized = connection.execute(
+                """
+                SELECT period_start, period_end FROM card_periods
+                WHERE card_code = ?
+                  AND status = 'FINALIZED'
+                """,
+                (result["card_code"],),
+            ).fetchall()
+            expected_start, expected_end = receipt_period_bounds(
+                result["period_start"],
+                result["period_end"],
+            )
+            result["settlement_state"] = (
+                "FINALIZED"
+                if any(
+                    _utc_datetime(period["period_start"]) == expected_start
+                    and _utc_datetime(period["period_end"]) == expected_end
+                    for period in finalized
+                )
+                else "UNFINALIZED"
+            )
+        return receipt_view(result)
+
+    @staticmethod
+    def _bank_statement_result(
+        view: dict[str, Any],
+        *,
+        idempotent_replay: bool,
+    ) -> dict[str, Any]:
+        return {
+            "statement_receipt": view,
+            "receipt": view,
+            "receipt_id": view["receipt_id"],
+            "state": view["state"],
+            "bank_state": view["bank_state"],
+            "processing_state": view["processing_state"],
+            "reconciliation_state": view["reconciliation_state"],
+            "idempotent_replay": idempotent_replay,
+        }
+
+    def record_bank_statement_receipt(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist authenticated email arrival before parsing or reconciliation.
+
+        This operation owns only the bank receipt state. It deliberately does
+        not update card periods, statement rows, or settlement state.
+        """
+        normalized = normalize_statement_receipt(payload)
+        columns = (
+            "receipt_id",
+            "receipt_sha256",
+            "source",
+            "source_message_id",
+            "received_at",
+            "card_code",
+            "statement_reference",
+            "period_start",
+            "period_end",
+            "source_attachment_id",
+            "statement_sha256",
+            "evidence_reference",
+            "document_url",
+            "subject",
+            "state",
+            "processing_state",
+            "reconciliation_state",
+            "payload_json",
+        )
+        values = tuple(
+            json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+            if column == "payload_json"
+            else normalized[column]
+            for column in columns
+        )
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                existing = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE receipt_id = ?
+                       OR (source = ? AND source_message_id = ?)
+                    """,
+                    (
+                        normalized["receipt_id"],
+                        normalized["source"],
+                        normalized["source_message_id"],
+                    ),
+                ).fetchone()
+                if existing is not None:
+                    if (
+                        existing["receipt_id"] != normalized["receipt_id"]
+                        or existing["receipt_sha256"] != normalized["receipt_sha256"]
+                    ):
+                        raise IngestCursorConflict(
+                            "statement receipt identity collision"
+                        )
+                    view = self._bank_statement_receipt_view(connection, existing)
+                    connection.commit()
+                    return self._bank_statement_result(
+                        view,
+                        idempotent_replay=True,
+                    )
+                connection.execute(
+                    f"""
+                    INSERT INTO bank_statement_receipts ({", ".join(columns)})
+                    VALUES ({", ".join("?" for _ in columns)})
+                    """,
+                    values,
+                )
+                stored = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE receipt_id = ?
+                    """,
+                    (normalized["receipt_id"],),
+                ).fetchone()
+                if stored is None:
+                    raise IngestCursorConflict(
+                        "statement receipt was not readable after insert"
+                    )
+                view = self._bank_statement_receipt_view(connection, stored)
+                connection.commit()
+                return self._bank_statement_result(
+                    view,
+                    idempotent_replay=False,
+                )
+            except Exception:
+                connection.rollback()
+                raise
+
+    def statement_receipt(
+        self,
+        receipt_id: str = "",
+        *,
+        source: str | None = None,
+        source_message_id: str | None = None,
+    ) -> dict[str, Any]:
+        key = str(receipt_id or "").strip()
+        source_name = str(source or "").strip()
+        message_id = str(source_message_id or "").strip()
+        if not key and not (source_name and message_id):
+            raise ValueError("receipt_id or source and source_message_id are required")
+        with closing(self._connect()) as connection:
+            if key:
+                row = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE receipt_id = ?
+                    """,
+                    (key,),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE source = ? AND source_message_id = ?
+                    """,
+                    (source_name, message_id),
+                ).fetchone()
+            if row is None:
+                raise IngestCursorConflict("statement receipt is unknown")
+            return self._bank_statement_receipt_view(connection, row)
+
+    def statement_receipts(
+        self,
+        *,
+        card_code: str | None = None,
+        included_cards: Iterable[str] | None = None,
+        excluded_cards: Iterable[str] = (),
+        limit: int = 24,
+    ) -> list[dict[str, Any]]:
+        if limit < 1 or limit > 200:
+            raise ValueError("statement receipt limit must be between 1 and 200")
+        included = (
+            None
+            if included_cards is None
+            else sorted(
+                {
+                    str(card).strip().upper()
+                    for card in included_cards
+                    if str(card).strip()
+                }
+            )
+        )
+        excluded = sorted(
+            {str(card).strip().upper() for card in excluded_cards if str(card).strip()}
+        )
+        clauses: list[str] = []
+        parameters: list[object] = []
+        if included is not None:
+            if not included:
+                return []
+            placeholders = ", ".join("?" for _ in included)
+            clauses.append(f"card_code IN ({placeholders})")
+            parameters.extend(included)
+        if card_code:
+            clauses.append("card_code = ?")
+            parameters.append(str(card_code).strip().upper())
+        if excluded:
+            placeholders = ", ".join("?" for _ in excluded)
+            clauses.append(f"card_code NOT IN ({placeholders})")
+            parameters.extend(excluded)
+        query = "SELECT * FROM bank_statement_receipts"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY received_at DESC, receipt_id DESC LIMIT ?"
+        parameters.append(limit)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(query, tuple(parameters)).fetchall()
+            return [self._bank_statement_receipt_view(connection, row) for row in rows]
+
+    def update_statement_receipt(
+        self,
+        receipt_id: str,
+        *,
+        processing_state: str | None = None,
+        reconciliation_state: str | None = None,
+        period_start: str | None = None,
+        period_end: str | None = None,
+        statement_reference: str | None = None,
+    ) -> dict[str, Any]:
+        key = str(receipt_id or "").strip()
+        if not key:
+            raise ValueError("receipt_id is required")
+        requested_processing = (
+            None if processing_state is None else str(processing_state).strip().upper()
+        )
+        requested_reconciliation = (
+            None
+            if reconciliation_state is None
+            else str(reconciliation_state).strip().upper()
+        )
+        if (
+            requested_processing is not None
+            and requested_processing not in PROCESSING_STATES
+        ):
+            raise ValueError(f"Unsupported processing_state: {requested_processing}")
+        if (
+            requested_reconciliation is not None
+            and requested_reconciliation not in RECONCILIATION_STATES
+        ):
+            raise ValueError(
+                f"Unsupported reconciliation_state: {requested_reconciliation}"
+            )
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                current = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE receipt_id = ?
+                    """,
+                    (key,),
+                ).fetchone()
+                if current is None:
+                    raise IngestCursorConflict("statement receipt is unknown")
+                current_start = current["period_start"]
+                current_end = current["period_end"]
+                if (period_start is None) != (period_end is None):
+                    raise ValueError(
+                        "period_start and period_end must be supplied together"
+                    )
+                if period_start is not None and period_end is not None:
+                    candidate = normalize_statement_receipt(
+                        {
+                            "source": current["source"],
+                            "source_message_id": current["source_message_id"],
+                            "received_at": current["received_at"],
+                            "card_code": current["card_code"],
+                            "period_start": period_start,
+                            "period_end": period_end,
+                        }
+                    )
+                    if current_start and (
+                        current_start != candidate["period_start"]
+                        or current_end != candidate["period_end"]
+                    ):
+                        raise IngestCursorConflict(
+                            "statement period bounds are immutable once known"
+                        )
+                    period_start = candidate["period_start"]
+                    period_end = candidate["period_end"]
+                elif current_start or current_end:
+                    period_start = current_start
+                    period_end = current_end
+                assignments: list[str] = []
+                values: list[object] = []
+                if requested_processing is not None:
+                    assignments.append("processing_state = ?")
+                    values.append(requested_processing)
+                if requested_reconciliation is not None:
+                    assignments.append("reconciliation_state = ?")
+                    values.append(requested_reconciliation)
+                if period_start is not None:
+                    assignments.extend(("period_start = ?", "period_end = ?"))
+                    values.extend((period_start, period_end))
+                if statement_reference is not None:
+                    assignments.append("statement_reference = ?")
+                    values.append(str(statement_reference).strip() or None)
+                if assignments:
+                    assignments.append("updated_at = CURRENT_TIMESTAMP")
+                    connection.execute(
+                        f"""
+                        UPDATE bank_statement_receipts
+                        SET {", ".join(assignments)}
+                        WHERE receipt_id = ?
+                        """,
+                        (*values, key),
+                    )
+                stored = connection.execute(
+                    """
+                    SELECT * FROM bank_statement_receipts
+                    WHERE receipt_id = ?
+                    """,
+                    (key,),
+                ).fetchone()
+                if stored is None:
+                    raise IngestCursorConflict(
+                        "statement receipt disappeared during update"
+                    )
+                view = self._bank_statement_receipt_view(connection, stored)
+                connection.commit()
+                return view
+            except Exception:
+                connection.rollback()
+                raise
+
+    @staticmethod
+    def _statement_receipt_envelope(
+        payload: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if not isinstance(payload, dict):
+            raise ValueError("statement receipt payload must be an object")
+        nested = payload.get("statement_receipt", payload.get("receipt"))
+        if nested is not None and not isinstance(nested, dict):
+            raise ValueError("statement_receipt must be an object")
+        receipt_source = dict(nested or {})
+        for field in (
+            "receipt_id",
+            "source_identity",
+            "card_code",
+            "original_received_at",
+            "period_id",
+        ):
+            if field not in receipt_source and field in payload:
+                receipt_source[field] = payload[field]
+        if not receipt_source.get("receipt_id"):
+            receipt_source["receipt_id"] = payload.get(
+                "statement_reference"
+            ) or payload.get("email_reference")
+        if not receipt_source.get("source_identity"):
+            receipt_source["source_identity"] = (
+                payload.get("statement_reference")
+                or payload.get("email_reference")
+                or receipt_source.get("receipt_id")
+            )
+        if "original_received_at" not in receipt_source:
+            for alias in ("received_at", "received_timestamp", "email_received_at"):
+                if payload.get(alias) not in (None, ""):
+                    receipt_source["original_received_at"] = payload[alias]
+                    break
+        if any(
+            key in payload or key in receipt_source
+            for key in ("transactions", "statement_transactions")
+        ):
+            raise ValueError("statement receipts cannot contain statement purchases")
+
+        period_source = payload.get("period")
+        if period_source is None and isinstance(nested, dict):
+            period_source = nested.get("period")
+        if period_source is not None and not isinstance(period_source, dict):
+            raise ValueError("period must be an object")
+        period = dict(period_source or {})
+        for field in ("period_id", "card_code", "period_start", "period_end"):
+            if field not in period and field in payload:
+                period[field] = payload[field]
+            if field not in period and field in receipt_source:
+                period[field] = receipt_source[field]
+        for field in ("period_start", "period_end"):
+            receipt_source.pop(field, None)
+        receipt_source.pop("period", None)
+        if (
+            period.get("period_id") not in (None, "")
+            and "period_id" not in receipt_source
+        ):
+            receipt_source["period_id"] = period["period_id"]
+        receipt = StatementReceipt(**receipt_source).to_dict()
+        if period.get("card_code") in (None, ""):
+            period["card_code"] = receipt["card_code"]
+        if period.get("period_id") in (None, "") and receipt.get("period_id"):
+            period["period_id"] = receipt["period_id"]
+        return receipt, period
+
+    @staticmethod
+    def _normalized_period(
+        period: dict[str, Any], receipt: dict[str, Any]
+    ) -> dict[str, str | None]:
+        card_code = str(period.get("card_code") or receipt["card_code"]).strip().upper()
+        if not card_code:
+            raise ValueError("card_code is required")
+        if card_code != receipt["card_code"]:
+            raise ValueError("period card_code must match statement receipt card_code")
+        period_id = str(period.get("period_id") or "").strip() or None
+        period_start = (
+            _period_iso_datetime(period["period_start"], "period_start")
+            if period.get("period_start") not in (None, "")
+            else None
+        )
+        period_end = (
+            _period_iso_datetime(period["period_end"], "period_end")
+            if period.get("period_end") not in (None, "")
+            else None
+        )
+        if (period_start is None) != (period_end is None):
+            raise ValueError("period_start and period_end must be supplied together")
+        if period_start is not None and period_end is not None:
+            if datetime.fromisoformat(period_end) <= datetime.fromisoformat(
+                period_start
+            ):
+                raise ValueError("period_end must be after period_start")
+            if period_id is None:
+                period_id = f"cashback-period:{card_code}:{period_start}:{period_end}"
+        return {
+            "period_id": period_id,
+            "card_code": card_code,
+            "period_start": period_start,
+            "period_end": period_end,
+        }
+
+    @staticmethod
+    def _statement_receipt_result(
+        receipt: dict[str, Any],
+        period: sqlite3.Row | None,
+        *,
+        idempotent_replay: bool,
+    ) -> dict[str, Any]:
+        period_id = receipt.get("period_id")
+        result: dict[str, Any] = {
+            "receipt_id": receipt["receipt_id"],
+            "source_identity": receipt["source_identity"],
+            "card_code": receipt["card_code"],
+            "original_received_at": receipt["original_received_at"],
+            "period_id": period_id,
+            "status": "WAITING_STATEMENT",
+            "idempotent_replay": idempotent_replay,
+        }
+        if period is not None:
+            result.update(
+                {
+                    "period_id": period["period_id"],
+                    "period_start": period["period_start"],
+                    "period_end": period["period_end"],
+                }
+            )
+            if str(period["closed_by_receipt_id"] or "") == receipt["receipt_id"]:
+                result["status"] = "CLOSED"
+                result["close_id"] = _close_identifier(
+                    str(period["card_code"]),
+                    str(period["period_start"]),
+                    str(period["period_end"]),
+                )
+        return result
+
+    def ensure_period(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Create one explicit open period without deriving bounds from a clock."""
+        period_source = payload.get("period") if isinstance(payload, dict) else None
+        period = dict(period_source or payload)
+        receipt = {
+            "card_code": str(period.get("card_code") or "").strip().upper(),
+        }
+        normalized = self._normalized_period(period, receipt)
+        if normalized["period_start"] is None:
+            raise ValueError("period_start and period_end are required")
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                if normalized["period_id"] is not None:
+                    existing_by_id = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE period_id = ?
+                        """,
+                        (normalized["period_id"],),
+                    ).fetchone()
+                    if existing_by_id is not None:
+                        if (
+                            str(existing_by_id["card_code"]).upper()
+                            != normalized["card_code"]
+                            or not _same_instant(
+                                existing_by_id["period_start"],
+                                normalized["period_start"],
+                            )
+                            or not _same_instant(
+                                existing_by_id["period_end"],
+                                normalized["period_end"],
+                            )
+                        ):
+                            raise ValueError(
+                                "period_id does not match supplied period bounds"
+                            )
+                        return dict(existing_by_id)
+
+                existing = connection.execute(
+                    """
+                    SELECT * FROM card_periods
+                    WHERE card_code = ? AND period_start = ? AND period_end = ?
+                    """,
+                    (
+                        normalized["card_code"],
+                        normalized["period_start"],
+                        normalized["period_end"],
+                    ),
+                ).fetchone()
+                if existing is not None:
+                    if (
+                        normalized["period_id"]
+                        and existing["period_id"] != normalized["period_id"]
+                    ):
+                        raise ValueError(
+                            "period bounds are already used by another period"
+                        )
+                    return dict(existing)
+                overlap = connection.execute(
+                    """
+                    SELECT 1 FROM card_periods
+                    WHERE card_code = ?
+                      AND period_start < ?
+                      AND period_end > ?
+                    LIMIT 1
+                    """,
+                    (
+                        normalized["card_code"],
+                        normalized["period_end"],
+                        normalized["period_start"],
+                    ),
+                ).fetchone()
+                if overlap is not None:
+                    raise ValueError(
+                        f"cashback periods overlap for card {normalized['card_code']}"
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO card_periods (
+                        card_code, period_start, period_end, period_id, status
+                    ) VALUES (?, ?, ?, ?, 'OPEN')
+                    """,
+                    (
+                        normalized["card_code"],
+                        normalized["period_start"],
+                        normalized["period_end"],
+                        normalized["period_id"],
+                    ),
+                )
+                row = connection.execute(
+                    """
+                    SELECT * FROM card_periods
+                    WHERE card_code = ? AND period_start = ? AND period_end = ?
+                    """,
+                    (
+                        normalized["card_code"],
+                        normalized["period_start"],
+                        normalized["period_end"],
+                    ),
+                ).fetchone()
+        return dict(row)
+
+    def record_statement_receipt(
+        self,
+        payload: dict[str, Any],
+        *,
+        period: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Atomically persist a statement-email receipt and close one card period.
+
+        The receipt's original source timestamp is the only transition time.
+        Processing time, current date, statement rows, and Actual state are not
+        consulted.  A source identity is deduplicated within its card only.
+        """
+        candidate = payload.get(
+            "statement_receipt",
+            payload.get("receipt", payload),
+        )
+        if (
+            period is None
+            and isinstance(candidate, dict)
+            and any(
+                field in candidate
+                for field in (
+                    "source",
+                    "source_message_id",
+                    "received_at",
+                    "receivedDateTime",
+                )
+            )
+        ):
+            return self.record_bank_statement_receipt(candidate)
+
+        envelope = dict(payload)
+        if period is not None:
+            envelope["period"] = period
+        receipt, period_source = self._statement_receipt_envelope(envelope)
+        period_id_supplied = str(period_source.get("period_id") or "").strip() or None
+        normalized_period = self._normalized_period(period_source, receipt)
+        if normalized_period["period_id"] is not None:
+            receipt["period_id"] = normalized_period["period_id"]
+        receipt_sha256 = _json_digest({"receipt": receipt, "period": normalized_period})
+        card_code = receipt["card_code"]
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                existing = connection.execute(
+                    """
+                    SELECT * FROM statement_receipts
+                    WHERE card_code = ? AND source_identity = ?
+                    """,
+                    (card_code, receipt["source_identity"]),
+                ).fetchone()
+                if existing is None:
+                    existing = connection.execute(
+                        """
+                        SELECT * FROM statement_receipts
+                        WHERE card_code = ? AND receipt_id = ?
+                        """,
+                        (card_code, receipt["receipt_id"]),
+                    ).fetchone()
+                if existing is not None:
+                    if (
+                        str(existing["receipt_id"]) != receipt["receipt_id"]
+                        or str(existing["source_identity"])
+                        != receipt["source_identity"]
+                        or str(existing["card_code"]).upper() != card_code
+                        or not _same_instant(
+                            existing["original_received_at"],
+                            receipt["original_received_at"],
+                        )
+                    ):
+                        raise ValueError(
+                            "statement receipt identity was already used for different content"
+                        )
+
+                    stored_period_id = str(existing["period_id"] or "").strip() or None
+                    period_row = None
+                    if stored_period_id is not None:
+                        period_row = connection.execute(
+                            """
+                            SELECT * FROM card_periods
+                            WHERE card_code = ? AND period_id = ?
+                            """,
+                            (card_code, stored_period_id),
+                        ).fetchone()
+                        if period_row is None:
+                            raise ValueError(
+                                f"Unknown cashback period: {stored_period_id}"
+                            )
+
+                    period_requested = (
+                        period_id_supplied is not None
+                        or normalized_period["period_start"] is not None
+                    )
+                    if stored_period_id is not None:
+                        if period_requested:
+                            candidate = None
+                            if period_id_supplied is not None:
+                                candidate = connection.execute(
+                                    """
+                                    SELECT * FROM card_periods
+                                    WHERE period_id = ?
+                                    """,
+                                    (period_id_supplied,),
+                                ).fetchone()
+                                if candidate is None:
+                                    raise ValueError(
+                                        f"Unknown cashback period: {period_id_supplied}"
+                                    )
+                            elif normalized_period["period_start"] is not None:
+                                candidate = connection.execute(
+                                    """
+                                    SELECT * FROM card_periods
+                                    WHERE card_code = ? AND period_start = ?
+                                      AND period_end = ?
+                                    """,
+                                    (
+                                        card_code,
+                                        normalized_period["period_start"],
+                                        normalized_period["period_end"],
+                                    ),
+                                ).fetchone()
+                                if candidate is None:
+                                    raise ValueError(
+                                        "period_id does not match supplied period bounds"
+                                    )
+                            if (
+                                candidate is None
+                                or str(candidate["period_id"]) != stored_period_id
+                            ):
+                                raise ValueError(
+                                    "statement receipt period was already bound differently"
+                                )
+                            if normalized_period["period_start"] is not None and (
+                                not _same_instant(
+                                    period_row["period_start"],
+                                    normalized_period["period_start"],
+                                )
+                                or not _same_instant(
+                                    period_row["period_end"],
+                                    normalized_period["period_end"],
+                                )
+                            ):
+                                raise ValueError(
+                                    "period_id does not match supplied period bounds"
+                                )
+                        receipt["period_id"] = stored_period_id
+                        return self._statement_receipt_result(
+                            receipt,
+                            period_row,
+                            idempotent_replay=True,
+                        )
+
+                    candidate = None
+                    if period_requested:
+                        if period_id_supplied is not None:
+                            candidate = connection.execute(
+                                """
+                                SELECT * FROM card_periods
+                                WHERE period_id = ?
+                                """,
+                                (period_id_supplied,),
+                            ).fetchone()
+                            if candidate is None:
+                                raise ValueError(
+                                    f"Unknown cashback period: {period_id_supplied}"
+                                )
+                        elif normalized_period["period_start"] is not None:
+                            candidate = connection.execute(
+                                """
+                                SELECT * FROM card_periods
+                                WHERE card_code = ? AND period_start = ?
+                                  AND period_end = ?
+                                """,
+                                (
+                                    card_code,
+                                    normalized_period["period_start"],
+                                    normalized_period["period_end"],
+                                ),
+                            ).fetchone()
+                    else:
+                        open_periods = connection.execute(
+                            """
+                            SELECT * FROM card_periods
+                            WHERE card_code = ? AND status = 'OPEN'
+                            ORDER BY period_start, period_id
+                            """,
+                            (card_code,),
+                        ).fetchall()
+                        candidates = [
+                            period
+                            for period in open_periods
+                            if _same_instant(
+                                period["period_end"],
+                                receipt["original_received_at"],
+                            )
+                        ]
+                        if len(candidates) > 1:
+                            raise ValueError(
+                                "multiple open cashback periods match statement receipt timestamp"
+                            )
+                        candidate = candidates[0] if candidates else None
+                    if candidate is None:
+                        stored_receipt = {
+                            "receipt_id": existing["receipt_id"],
+                            "source_identity": existing["source_identity"],
+                            "card_code": existing["card_code"],
+                            "original_received_at": existing["original_received_at"],
+                            "period_id": None,
+                        }
+                        return self._statement_receipt_result(
+                            stored_receipt,
+                            None,
+                            idempotent_replay=True,
+                        )
+                    if str(candidate["card_code"]).upper() != card_code:
+                        raise ValueError(
+                            "period_id does not match statement receipt card_code"
+                        )
+                    if str(candidate["status"]).upper() != "OPEN":
+                        raise ValueError(
+                            "cashback period is already closed by another receipt"
+                        )
+                    if normalized_period["period_start"] is not None and (
+                        not _same_instant(
+                            candidate["period_start"],
+                            normalized_period["period_start"],
+                        )
+                        or not _same_instant(
+                            candidate["period_end"],
+                            normalized_period["period_end"],
+                        )
+                    ):
+                        raise ValueError(
+                            "period_id does not match supplied period bounds"
+                        )
+                    if not _same_instant(
+                        candidate["period_end"], receipt["original_received_at"]
+                    ):
+                        raise ValueError(
+                            "statement receipt timestamp must equal period_end"
+                        )
+                    stored_period_id = str(candidate["period_id"])
+                    bound_receipt = {
+                        "receipt_id": receipt["receipt_id"],
+                        "source_identity": receipt["source_identity"],
+                        "card_code": card_code,
+                        "original_received_at": receipt["original_received_at"],
+                        "period_id": stored_period_id,
+                    }
+                    bound_period = {
+                        "period_id": stored_period_id,
+                        "card_code": card_code,
+                        "period_start": candidate["period_start"],
+                        "period_end": candidate["period_end"],
+                    }
+                    connection.execute(
+                        """
+                        UPDATE statement_receipts
+                        SET period_id = ?, receipt_sha256 = ?
+                        WHERE card_code = ? AND receipt_id = ? AND period_id IS NULL
+                        """,
+                        (
+                            stored_period_id,
+                            _json_digest(
+                                {"receipt": bound_receipt, "period": bound_period}
+                            ),
+                            card_code,
+                            receipt["receipt_id"],
+                        ),
+                    )
+                    connection.execute(
+                        """
+                        UPDATE card_periods
+                        SET status = 'CLOSED',
+                            closed_by_receipt_id = ?,
+                            original_received_at = ?,
+                            finalized_at = ?,
+                            reconciliation_status = 'RECEIPT_CLOSED',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE card_code = ? AND period_id = ? AND status = 'OPEN'
+                        """,
+                        (
+                            receipt["receipt_id"],
+                            receipt["original_received_at"],
+                            receipt["original_received_at"],
+                            card_code,
+                            stored_period_id,
+                        ),
+                    )
+                    period_row = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE card_code = ? AND period_id = ?
+                        """,
+                        (card_code, stored_period_id),
+                    ).fetchone()
+                    receipt["period_id"] = stored_period_id
+                    return self._statement_receipt_result(
+                        receipt,
+                        period_row,
+                        idempotent_replay=True,
+                    )
+                period_row = None
+                period_id = normalized_period["period_id"]
+                if period_id_supplied is not None:
+                    period_row = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE period_id = ?
+                        """,
+                        (period_id_supplied,),
+                    ).fetchone()
+                    if period_row is None and normalized_period["period_start"] is None:
+                        raise ValueError(
+                            f"Unknown cashback period: {period_id_supplied}"
+                        )
+                elif normalized_period["period_start"] is not None:
+                    period_row = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE card_code = ? AND period_start = ? AND period_end = ?
+                        """,
+                        (
+                            card_code,
+                            normalized_period["period_start"],
+                            normalized_period["period_end"],
+                        ),
+                    ).fetchone()
+
+                if period_row is not None:
+                    if str(period_row["card_code"]).upper() != card_code:
+                        raise ValueError(
+                            "period_id does not match statement receipt card_code"
+                        )
+                    if normalized_period["period_start"] is not None and (
+                        not _same_instant(
+                            period_row["period_start"],
+                            normalized_period["period_start"],
+                        )
+                        or not _same_instant(
+                            period_row["period_end"],
+                            normalized_period["period_end"],
+                        )
+                    ):
+                        raise ValueError(
+                            "period_id does not match supplied period bounds"
+                        )
+
+                if period_row is None and normalized_period["period_start"] is None:
+                    open_periods = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE card_code = ? AND status = 'OPEN'
+                        ORDER BY period_start, period_id
+                        """,
+                        (card_code,),
+                    ).fetchall()
+                    matching_periods = [
+                        candidate
+                        for candidate in open_periods
+                        if _same_instant(
+                            candidate["period_end"],
+                            receipt["original_received_at"],
+                        )
+                    ]
+                    if len(matching_periods) > 1:
+                        raise ValueError(
+                            "multiple open cashback periods match statement receipt timestamp"
+                        )
+                    period_row = matching_periods[0] if matching_periods else None
+
+                if period_row is None and normalized_period["period_start"] is not None:
+                    if not _same_instant(
+                        normalized_period["period_end"],
+                        receipt["original_received_at"],
+                    ):
+                        raise ValueError(
+                            "statement receipt timestamp must equal period_end"
+                        )
+                    overlap = connection.execute(
+                        """
+                        SELECT 1 FROM card_periods
+                        WHERE card_code = ?
+                          AND period_start < ?
+                          AND period_end > ?
+                        LIMIT 1
+                        """,
+                        (
+                            card_code,
+                            normalized_period["period_end"],
+                            normalized_period["period_start"],
+                        ),
+                    ).fetchone()
+                    if overlap is not None:
+                        raise ValueError(
+                            f"cashback periods overlap for card {card_code}"
+                        )
+                    connection.execute(
+                        """
+                        INSERT INTO card_periods (
+                            card_code, period_start, period_end, period_id, status
+                        ) VALUES (?, ?, ?, ?, 'OPEN')
+                        """,
+                        (
+                            card_code,
+                            normalized_period["period_start"],
+                            normalized_period["period_end"],
+                            period_id,
+                        ),
+                    )
+                    period_row = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE period_id = ?
+                        """,
+                        (period_id,),
+                    ).fetchone()
+
+                if period_row is not None:
+                    status = str(period_row["status"]).upper()
+                    if status != "OPEN":
+                        raise ValueError(
+                            "cashback period is already closed by another receipt"
+                        )
+                    if not _same_instant(
+                        period_row["period_end"],
+                        receipt["original_received_at"],
+                    ):
+                        raise ValueError(
+                            "statement receipt timestamp must equal period_end"
+                        )
+
+                stored_period_id = (
+                    str(period_row["period_id"])
+                    if period_row is not None
+                    else period_id
+                )
+                connection.execute(
+                    """
+                    INSERT INTO statement_receipts (
+                        receipt_id, source_identity, card_code,
+                        original_received_at, period_id, receipt_sha256
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        receipt["receipt_id"],
+                        receipt["source_identity"],
+                        card_code,
+                        receipt["original_received_at"],
+                        stored_period_id,
+                        receipt_sha256,
+                    ),
+                )
+                if (
+                    period_row is not None
+                    and str(period_row["status"]).upper() == "OPEN"
+                ):
+                    connection.execute(
+                        """
+                        UPDATE card_periods
+                        SET status = 'CLOSED',
+                            closed_by_receipt_id = ?,
+                            original_received_at = ?,
+                            finalized_at = ?,
+                            reconciliation_status = 'RECEIPT_CLOSED',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE card_code = ? AND period_id = ?
+                        """,
+                        (
+                            receipt["receipt_id"],
+                            receipt["original_received_at"],
+                            receipt["original_received_at"],
+                            card_code,
+                            stored_period_id,
+                        ),
+                    )
+                    period_row = connection.execute(
+                        """
+                        SELECT * FROM card_periods
+                        WHERE card_code = ? AND period_id = ?
+                        """,
+                        (card_code, stored_period_id),
+                    ).fetchone()
+                receipt["period_id"] = stored_period_id
+                return self._statement_receipt_result(
+                    receipt,
+                    period_row,
+                    idempotent_replay=False,
+                )
+
+    def receipt_rows(self, card_code: str | None = None) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            if card_code is None:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM statement_receipts
+                    ORDER BY original_received_at, card_code, receipt_id
+                    """
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM statement_receipts
+                    WHERE card_code = ?
+                    ORDER BY original_received_at, receipt_id
+                    """,
+                    (str(card_code).strip().upper(),),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
+    def ingest_statement_receipt(
+        self,
+        payload: dict[str, Any],
+        *,
+        period: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.record_statement_receipt(payload, period=period)
+
+    def apply_statement_receipt(
+        self,
+        payload: dict[str, Any],
+        *,
+        period: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.record_statement_receipt(payload, period=period)
+
+    def close_period(
+        self,
+        payload: dict[str, Any],
+        *,
+        period: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self.record_statement_receipt(payload, period=period)
+
     def reconcile_statement(self, payload: dict[str, Any]) -> dict[str, Any]:
         statement_reference = str(payload.get("statement_reference") or "").strip()
         card_code = str(payload.get("card_code") or "").strip().upper()
@@ -2132,6 +3207,7 @@ class CashbackEventStore:
             card_code=card_code,
             period_start=period_start,
             period_end=period_end,
+            validate_period=False,
         )
 
         statement_content_sha256 = _statement_content_digest(
@@ -2142,6 +3218,16 @@ class CashbackEventStore:
             period_start=period_start,
             period_end=period_end,
         )
+        legacy_statement_content_sha256 = _legacy_statement_content_digest_from_payload(
+            payload,
+            statement_events,
+            statement_transaction_ids,
+            statement_reference=statement_reference,
+            card_code=card_code,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        supplied_content_sha256 = None
         if any(
             field in payload and payload[field] not in (None, "")
             for field in _STATEMENT_CONTENT_DIGEST_FIELDS
@@ -2151,14 +3237,12 @@ class CashbackEventStore:
                 _STATEMENT_CONTENT_DIGEST_FIELDS,
                 "statement_content_sha256",
             )
-            if supplied_content_sha256 != statement_content_sha256:
-                raise ValueError("statement content digest does not match canonical content")
 
-        range_start, range_end = _date_range_bounds(period_start, period_end)
-        match_start = min([period_start, *(_statement_transaction_date(event) for event in statement_events)])
-        candidate_start, _ = _date_range_bounds(match_start, period_end)
         with closing(self._connect()) as connection:
             with connection:
+                # NOTE: Legacy blank digests must be bound exactly once; acquire
+                # the write lock before reading so a concurrent recovery cannot
+                # overwrite the first committed statement digest.
                 connection.execute("BEGIN IMMEDIATE")
                 prior = connection.execute(
                     "SELECT * FROM reconciliation_runs WHERE statement_reference = ?",
@@ -2170,7 +3254,9 @@ class CashbackEventStore:
                         or prior["period_start"] != period_start.isoformat()
                         or prior["period_end"] != period_end.isoformat()
                     ):
-                        raise ValueError("statement_reference was already used for a different card or period")
+                        raise ValueError(
+                            "statement_reference was already used for a different card or period"
+                        )
                     prior_statement_sha256 = str(prior["statement_sha256"] or "")
                     prior_content_sha256 = str(prior["statement_content_sha256"] or "")
                     if not prior_statement_sha256 and not prior_content_sha256:
@@ -2182,7 +3268,15 @@ class CashbackEventStore:
                         if _sha256_field(
                             recovery_digest, "legacy_recovery_digest"
                         ) != _legacy_recovery_digest(prior):
-                            raise ValueError("legacy reconciliation digest recovery proof is invalid")
+                            raise ValueError(
+                                "legacy reconciliation digest recovery proof is invalid"
+                            )
+                        _statement_period_is_valid(
+                            payload,
+                            period_start=period_start,
+                            period_end=period_end,
+                            legacy_local_date=False,
+                        )
                         persisted_content_sha256 = _legacy_statement_content_digest(
                             connection,
                             statement_reference=statement_reference,
@@ -2210,7 +3304,11 @@ class CashbackEventStore:
                             SET statement_sha256 = ?, statement_content_sha256 = ?
                             WHERE statement_reference = ?
                             """,
-                            (statement_sha256, statement_content_sha256, statement_reference),
+                            (
+                                statement_sha256,
+                                statement_content_sha256,
+                                statement_reference,
+                            ),
                         )
                         return {
                             "statement_reference": statement_reference,
@@ -2224,10 +3322,46 @@ class CashbackEventStore:
                             "legacy_digest_backfilled": True,
                         }
                     if not prior_statement_sha256 or not prior_content_sha256:
-                        raise ValueError("legacy reconciliation digest columns are incomplete")
+                        raise ValueError(
+                            "legacy reconciliation digest columns are incomplete"
+                        )
+                    if prior_statement_sha256 != statement_sha256:
+                        _statement_period_is_valid(
+                            payload,
+                            period_start=period_start,
+                            period_end=period_end,
+                            legacy_local_date=False,
+                        )
+                        raise ValueError(
+                            "statement_reference was already used for different statement content or digest"
+                        )
+                    if prior_content_sha256 == statement_content_sha256:
+                        _statement_period_is_valid(
+                            payload,
+                            period_start=period_start,
+                            period_end=period_end,
+                            legacy_local_date=False,
+                        )
+                    elif prior_content_sha256 == legacy_statement_content_sha256:
+                        _statement_period_is_valid(
+                            payload,
+                            period_start=period_start,
+                            period_end=period_end,
+                            legacy_local_date=True,
+                        )
+                    else:
+                        _statement_period_is_valid(
+                            payload,
+                            period_start=period_start,
+                            period_end=period_end,
+                            legacy_local_date=False,
+                        )
+                        raise ValueError(
+                            "statement_reference was already used for different statement content or digest"
+                        )
                     if (
-                        prior_statement_sha256 != statement_sha256
-                        or prior_content_sha256 != statement_content_sha256
+                        supplied_content_sha256 is not None
+                        and supplied_content_sha256 != prior_content_sha256
                     ):
                         raise ValueError(
                             "statement_reference was already used for different statement content or digest"
@@ -2243,13 +3377,47 @@ class CashbackEventStore:
                         "idempotent_replay": True,
                     }
 
+                _statement_period_is_valid(
+                    payload,
+                    period_start=period_start,
+                    period_end=period_end,
+                    legacy_local_date=False,
+                )
+                if (
+                    supplied_content_sha256 is not None
+                    and supplied_content_sha256 != statement_content_sha256
+                ):
+                    raise ValueError(
+                        "statement content digest does not match canonical content"
+                    )
+                match_start = min(
+                    [
+                        period_start,
+                        *(
+                            _statement_transaction_date(event)
+                            for event in statement_events
+                        ),
+                    ]
+                )
+                candidate_start = (
+                    f"{match_start.isoformat()}T00:00:00+00:00"
+                )
+                range_end = (
+                    f"{(period_end + timedelta(days=1)).isoformat()}T00:00:00+00:00"
+                )
                 candidates = [
                     dict(row)
                     for row in connection.execute(
                         """
                         SELECT * FROM cashback_events
                         WHERE card_code = ? AND source != 'statement'
-                          AND (status = 'ACTIVE' OR (status = 'IGNORED' AND reconciliation_status = 'VARIANCE'))
+                          AND (
+                            status = 'ACTIVE'
+                            OR (
+                              status = 'IGNORED'
+                              AND reconciliation_status = 'VARIANCE'
+                            )
+                          )
                           AND reconciliation_status != 'RECONCILED'
                           AND occurred_at >= ? AND occurred_at < ?
                         ORDER BY occurred_at, source_event_id
@@ -2262,56 +3430,98 @@ class CashbackEventStore:
                 statement_only = 0
                 for event in statement_events:
                     ranked = _rank_statement_candidates(event, remaining.values())
-                    unique_match = bool(
-                        len(ranked) == 1
-                        and ranked[0][0] > 0
-                    )
+                    unique_match = bool(len(ranked) == 1 and ranked[0][0] > 0)
                     if unique_match:
                         source_event_id = ranked[0][2]
                         connection.execute(
                             """
                             UPDATE cashback_events
-                            SET status='ACTIVE', reconciliation_status='RECONCILED',
+                            SET occurred_at=?, identity_key=?, decision_trace_json=?,
+                                status='ACTIVE', reconciliation_status='RECONCILED',
                                 statement_reference=?, updated_at=CURRENT_TIMESTAMP
                             WHERE source_event_id=?
                             """,
-                            (statement_reference, source_event_id),
+                            (
+                                event["occurred_at"],
+                                event["identity_key"],
+                                event["decision_trace_json"],
+                                statement_reference,
+                                source_event_id,
+                            ),
                         )
-                        # Keep immutable notification economics replayable. When the
-                        # issuer posts on another date, its canonical statement event
-                        # replaces the notification in active period totals.
-                        candidate = remaining.pop(source_event_id)
-                        if str(candidate["occurred_at"])[:10] != str(event["occurred_at"])[:10]:
-                            connection.execute("UPDATE cashback_events SET status='IGNORED' WHERE source_event_id=?", (source_event_id,))
-                            posted_event = {**event, "identity_key": _statement_collision_identity(event)}
-                            columns = tuple(posted_event)
-                            connection.execute(
-                                f"INSERT INTO cashback_events ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
-                                tuple(posted_event[column] for column in columns),
-                            )
+                        remaining.pop(source_event_id)
                         matched += 1
                     else:
                         existing = connection.execute(
-                            "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
-                            (event["identity_key"],),
+                            "SELECT * FROM cashback_events WHERE source_event_id = ?",
+                            (event["source_event_id"],),
                         ).fetchone()
-                        # A duplicate identity cannot override a compatible-candidate
-                        # collision.
-                        if existing and not ranked:
+                        if existing:
                             connection.execute(
-                                "UPDATE cashback_events SET status='ACTIVE', reconciliation_status='RECONCILED', statement_reference=?, updated_at=CURRENT_TIMESTAMP WHERE source_event_id=?",
-                                (statement_reference, existing["source_event_id"]),
+                                """
+                                UPDATE cashback_events
+                                SET status='ACTIVE', reconciliation_status='RECONCILED',
+                                    statement_reference=?, updated_at=CURRENT_TIMESTAMP
+                                WHERE source_event_id=?
+                                """,
+                                (statement_reference, event["source_event_id"]),
                             )
                             matched += 1
                             continue
-                        statement_event = (
-                            {
+                        existing = connection.execute(
+                            "SELECT * FROM cashback_events WHERE identity_key = ?",
+                            (event["identity_key"],),
+                        ).fetchone()
+                        if existing:
+                            existing_id = str(existing["source_event_id"])
+                            if existing_id == event["source_event_id"]:
+                                connection.execute(
+                                    """
+                                    UPDATE cashback_events
+                                    SET status='ACTIVE', reconciliation_status='RECONCILED',
+                                        statement_reference=?, updated_at=CURRENT_TIMESTAMP
+                                    WHERE source_event_id=?
+                                    """,
+                                    (statement_reference, existing_id),
+                                )
+                                matched += 1
+                                continue
+                            if (
+                                existing["source"] != "statement"
+                                and not ranked
+                                and existing_id in remaining
+                            ):
+                                connection.execute(
+                                    """
+                                    UPDATE cashback_events
+                                    SET status='ACTIVE', reconciliation_status='RECONCILED',
+                                        statement_reference=?, updated_at=CURRENT_TIMESTAMP
+                                    WHERE source_event_id=?
+                                    """,
+                                    (statement_reference, existing_id),
+                                )
+                                remaining.pop(existing_id)
+                                matched += 1
+                                continue
+
+                        statement_event = event
+                        if existing:
+                            collision_identity = _statement_collision_identity(event)
+                            collision_number = 0
+                            while connection.execute(
+                                "SELECT 1 FROM cashback_events WHERE identity_key = ?",
+                                (collision_identity,),
+                            ).fetchone():
+                                collision_number += 1
+                                collision_identity = hashlib.sha256(
+                                    f"{event['identity_key']}|statement:{event['source_event_id']}|collision:{collision_number}".encode(
+                                        "utf-8"
+                                    )
+                                ).hexdigest()
+                            statement_event = {
                                 **event,
-                                "identity_key": _statement_collision_identity(event),
+                                "identity_key": collision_identity,
                             }
-                            if existing
-                            else event
-                        )
                         columns = tuple(statement_event)
                         connection.execute(
                             f"INSERT INTO cashback_events ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
@@ -2319,8 +3529,14 @@ class CashbackEventStore:
                         )
                         statement_only += 1
 
-                remaining = {key: row for key, row in remaining.items() if range_start <= str(row["occurred_at"]) < range_end}
-                for source_event_id in remaining:
+                period_remaining = {
+                    source_event_id: candidate
+                    for source_event_id, candidate in remaining.items()
+                    if period_start
+                    <= _utc_datetime(candidate["occurred_at"]).date()
+                    <= period_end
+                }
+                for source_event_id in period_remaining:
                     connection.execute(
                         """
                         UPDATE cashback_events
@@ -2330,7 +3546,7 @@ class CashbackEventStore:
                         """,
                         (statement_reference, source_event_id),
                     )
-                notification_only = len(remaining)
+                notification_only = len(period_remaining)
                 connection.execute(
                     """
                     INSERT INTO reconciliation_runs (
@@ -2372,10 +3588,13 @@ class CashbackEventStore:
             raise ValueError("changes must be a non-empty object")
         invalid = set(changes) - CORRECTABLE_EVENT_FIELDS
         if invalid:
-            raise ValueError("unsupported correction fields: " + ", ".join(sorted(invalid)))
+            raise ValueError(
+                "unsupported correction fields: " + ", ".join(sorted(invalid))
+            )
         reason = str(payload.get("reason") or "").strip() or None
         correction_source = str(payload.get("source") or "manual").strip() or "manual"
-        if correction_source.casefold().startswith(("ai", "codex")):
+        is_ai = correction_source.casefold().startswith(("ai", "codex"))
+        if is_ai:
             protected = set(changes) - AI_CORRECTABLE_EVENT_FIELDS
             if protected:
                 raise ValueError(
@@ -2391,8 +3610,13 @@ class CashbackEventStore:
                     (correction_id,),
                 ).fetchone()
                 if prior:
-                    if prior["source_event_id"] != source_event_id or prior["changes_json"] != canonical_changes:
-                        raise ValueError("correction_id was already used for different changes")
+                    if (
+                        prior["source_event_id"] != source_event_id
+                        or prior["changes_json"] != canonical_changes
+                    ):
+                        raise ValueError(
+                            "correction_id was already used for different changes"
+                        )
                     return {
                         "correction_id": correction_id,
                         "source_event_id": source_event_id,
@@ -2412,9 +3636,34 @@ class CashbackEventStore:
                     and set(changes) & RECONCILIATION_FACT_FIELDS
                 ):
                     raise ValueError(
-                        "authoritative reconciliation facts cannot be corrected in place; "
-                        "submit a new statement reconciliation"
+                        "authoritative reconciliation facts cannot be corrected "
+                        "in place; submit a new statement reconciliation"
                     )
+                if is_ai:
+                    manual_locked: set[str] = set()
+                    for history in connection.execute(
+                        """
+                        SELECT changes_json, correction_source
+                        FROM event_corrections
+                        WHERE source_event_id = ?
+                        ORDER BY created_at, correction_id
+                        """,
+                        (source_event_id,),
+                    ):
+                        history_source = str(history["correction_source"] or "")
+                        if history_source.casefold().startswith(("ai", "codex")):
+                            continue
+                        history_changes = json.loads(
+                            str(history["changes_json"] or "{}")
+                        )
+                        if isinstance(history_changes, dict):
+                            manual_locked.update(history_changes)
+                    locked = set(changes) & manual_locked
+                    if locked:
+                        raise ValueError(
+                            "AI corrections cannot modify fields locked by a manual correction: "
+                            + ", ".join(sorted(locked))
+                        )
                 source = {
                     "source_event_id": source_event_id,
                     "occurred_at": row["occurred_at"],
@@ -2436,29 +3685,50 @@ class CashbackEventStore:
                     "email_reference": row["email_reference"],
                     "document_url": row["document_url"],
                     "reversal_of": row["reversal_of"],
-                    "decision_trace": json.loads(str(row["decision_trace_json"] or "[]")),
+                    "decision_trace": json.loads(
+                        str(row["decision_trace_json"] or "[]")
+                    ),
                     "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
                 }
                 normalized = _normalize_event({**source, **changes})
+                economic_changed = any(
+                    (
+                        not _same_instant(row[field], normalized[field])
+                        if field == "occurred_at"
+                        else row[field] != normalized[field]
+                    )
+                    for field in EVENT_CANONICAL_FIELDS
+                )
+                if not economic_changed:
+                    normalized["identity_key"] = row["identity_key"]
                 identity_owner = connection.execute(
                     "SELECT source_event_id FROM cashback_events WHERE identity_key = ?",
                     (normalized["identity_key"],),
                 ).fetchone()
-                if identity_owner and identity_owner["source_event_id"] != source_event_id:
+                if (
+                    identity_owner
+                    and identity_owner["source_event_id"] != source_event_id
+                ):
                     raise ValueError(
                         "correction would collide with an existing source_event_id"
                     )
+                column_by_field = {
+                    "amount_aed": "amount_aed_minor",
+                    "tags": "tags_json",
+                    "ai_trace": "ai_trace_json",
+                }
+                assignments_by_column = {}
+                for field in changes:
+                    column = column_by_field.get(field, field)
+                    assignments_by_column[column] = normalized[column]
+                if economic_changed:
+                    assignments_by_column["identity_key"] = normalized["identity_key"]
                 assignments = ", ".join(
-                    f"{column} = ?" for column in normalized if column != "source_event_id"
+                    f"{column} = ?" for column in assignments_by_column
                 )
                 connection.execute(
                     f"UPDATE cashback_events SET {assignments}, updated_at=CURRENT_TIMESTAMP WHERE source_event_id = ?",
-                    tuple(
-                        normalized[column]
-                        for column in normalized
-                        if column != "source_event_id"
-                    )
-                    + (source_event_id,),
+                    tuple(assignments_by_column.values()) + (source_event_id,),
                 )
                 connection.execute(
                     """
@@ -2466,7 +3736,13 @@ class CashbackEventStore:
                         correction_id, source_event_id, changes_json, reason, correction_source
                     ) VALUES (?, ?, ?, ?, ?)
                     """,
-                    (correction_id, source_event_id, canonical_changes, reason, correction_source),
+                    (
+                        correction_id,
+                        source_event_id,
+                        canonical_changes,
+                        reason,
+                        correction_source,
+                    ),
                 )
         return {
             "correction_id": correction_id,
@@ -2480,8 +3756,24 @@ class CashbackEventStore:
         *,
         program_config_path: Path | None = None,
     ) -> dict[str, Any]:
+        if any(
+            key in payload
+            for key in (
+                "statement_receipt",
+                "receipt",
+                "receipt_id",
+                "source_identity",
+                "original_received_at",
+                "received_at",
+                "received_timestamp",
+                "email_received_at",
+            )
+        ):
+            return self.record_statement_receipt(payload)
         statement_reference = str(payload.get("statement_reference") or "").strip()
-        evidence_reference = str(payload.get("statement_evidence_reference") or "").strip()
+        evidence_reference = str(
+            payload.get("statement_evidence_reference") or ""
+        ).strip()
         document_url = str(payload.get("statement_document_url") or "").strip()
         if not statement_reference or not evidence_reference or not document_url:
             raise ValueError(
@@ -2502,40 +3794,52 @@ class CashbackEventStore:
                 _STATEMENT_CONTENT_DIGEST_FIELDS,
                 "statement_content_sha256",
             )
-        actual_import_receipt, actual_import_receipt_sha256 = _trusted_actual_receipt(payload)
+        actual_import_receipt, actual_import_receipt_sha256 = _trusted_actual_receipt(
+            payload
+        )
         if "actual_import_verified" in payload and not _boolean(
             payload.get("actual_import_verified")
         ):
-            raise ValueError("actual_import_verified cannot replace an Actual import receipt digest")
-        acknowledge_variances = _boolean(payload.get("acknowledge_variances"), default=False)
+            raise ValueError(
+                "actual_import_verified cannot replace an Actual import receipt digest"
+            )
+        acknowledge_variances = _boolean(
+            payload.get("acknowledge_variances"), default=False
+        )
         now = datetime.now(UTC).isoformat()
         with closing(self._connect()) as connection:
             with connection:
-                connection.execute("BEGIN IMMEDIATE")
                 run = connection.execute(
                     "SELECT * FROM reconciliation_runs WHERE statement_reference = ?",
                     (statement_reference,),
                 ).fetchone()
                 if run is None:
-                    raise ValueError("A successful statement reconciliation is required before finalization")
+                    raise ValueError(
+                        "A successful statement reconciliation is required before finalization"
+                    )
                 if str(run["statement_sha256"] or "") != statement_sha256:
-                    raise ValueError("statement digest does not match the reconciliation receipt")
-                if (
-                    str(actual_import_receipt["period_start"]) != str(run["period_start"])
-                    or str(actual_import_receipt["period_end"]) != str(run["period_end"])
-                ):
+                    raise ValueError(
+                        "statement digest does not match the reconciliation receipt"
+                    )
+                if str(actual_import_receipt["period_start"]) != str(
+                    run["period_start"]
+                ) or str(actual_import_receipt["period_end"]) != str(run["period_end"]):
                     raise ValueError(
                         "actual_import_receipt period does not match the reconciliation receipt"
                     )
-                receipt_card = str(actual_import_receipt.get("card_code") or "").strip().upper()
+                receipt_card = (
+                    str(actual_import_receipt.get("card_code") or "").strip().upper()
+                )
                 if not receipt_card:
                     raise ValueError("actual_import_receipt.card_code is required")
                 if receipt_card != str(run["card_code"]).strip().upper():
                     raise ValueError(
                         "actual_import_receipt account identity/card does not match the reconciled card"
                     )
-                if supplied_content_sha256 is not None and supplied_content_sha256 != str(
-                    run["statement_content_sha256"] or ""
+                if (
+                    supplied_content_sha256 is not None
+                    and supplied_content_sha256
+                    != str(run["statement_content_sha256"] or "")
                 ):
                     raise ValueError(
                         "statement content digest does not match the reconciliation receipt"
@@ -2544,9 +3848,28 @@ class CashbackEventStore:
                     raise ValueError(
                         "Unresolved notification variances require explicit acknowledgement before finalization"
                     )
+                final_bounds = _legacy_date_period_bounds(
+                    run["period_start"], run["period_end"]
+                )
+                if final_bounds is None:
+                    raise ValueError("reconciliation period bounds must be ISO dates")
+                final_start, final_end = final_bounds
                 existing = connection.execute(
-                    "SELECT * FROM card_periods WHERE card_code=? AND period_start=? AND period_end=?",
-                    (run["card_code"], run["period_start"], run["period_end"]),
+                    """
+                    SELECT * FROM card_periods
+                    WHERE card_code = ?
+                      AND (
+                        (period_start = ? AND period_end = ?)
+                        OR (period_start = ? AND period_end = ?)
+                      )
+                    """,
+                    (
+                        run["card_code"],
+                        run["period_start"],
+                        run["period_end"],
+                        final_start,
+                        final_end,
+                    ),
                 ).fetchone()
                 if existing and existing["status"] == "FINALIZED":
                     if (
@@ -2554,7 +3877,8 @@ class CashbackEventStore:
                         or str(existing["statement_sha256"] or "") != statement_sha256
                         or str(existing["statement_content_sha256"] or "")
                         != str(run["statement_content_sha256"] or "")
-                        or existing["statement_evidence_reference"] != evidence_reference
+                        or existing["statement_evidence_reference"]
+                        != evidence_reference
                         or existing["statement_document_url"] != document_url
                         or str(existing["actual_import_receipt_sha256"] or "")
                         != actual_import_receipt_sha256
@@ -2566,21 +3890,29 @@ class CashbackEventStore:
                         )
                     return {
                         "close_id": _close_identifier(
-                            str(existing["card_code"]),
-                            str(existing["period_start"]),
-                            str(existing["period_end"]),
+                            str(run["card_code"]),
+                            str(run["period_start"]),
+                            str(run["period_end"]),
                         ),
                         "card_code": existing["card_code"],
-                        "period_start": existing["period_start"],
-                        "period_end": existing["period_end"],
+                        "period_start": run["period_start"],
+                        "period_end": run["period_end"],
                         "status": existing["status"],
                         "statement_reference": existing["statement_reference"],
                         "statement_sha256": existing["statement_sha256"],
-                        "statement_content_sha256": existing["statement_content_sha256"],
-                        "statement_evidence_reference": existing["statement_evidence_reference"],
+                        "statement_content_sha256": existing[
+                            "statement_content_sha256"
+                        ],
+                        "statement_evidence_reference": existing[
+                            "statement_evidence_reference"
+                        ],
                         "statement_document_url": existing["statement_document_url"],
-                        "actual_import_receipt_sha256": existing["actual_import_receipt_sha256"],
-                        "actual_verification_sha256": existing["actual_verification_sha256"],
+                        "actual_import_receipt_sha256": existing[
+                            "actual_import_receipt_sha256"
+                        ],
+                        "actual_verification_sha256": existing[
+                            "actual_verification_sha256"
+                        ],
                         "idempotent_replay": True,
                     }
                 reconciliation_status = (
@@ -2591,14 +3923,14 @@ class CashbackEventStore:
                 connection.execute(
                     """
                     INSERT INTO card_periods (
-                        card_code, period_start, period_end, statement_reference,
-                        statement_sha256, statement_content_sha256,
+                        card_code, period_start, period_end, period_id,
+                        statement_reference, statement_sha256, statement_content_sha256,
                         statement_evidence_reference, statement_document_url,
                         actual_import_receipt_sha256, actual_verification_sha256,
-                        actual_import_verified,
-                        reconciliation_status, status, finalized_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'FINALIZED', ?)
+                        actual_import_verified, reconciliation_status, status, finalized_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'FINALIZED', ?)
                     ON CONFLICT(card_code, period_start, period_end) DO UPDATE SET
+                        period_id=COALESCE(card_periods.period_id, excluded.period_id),
                         statement_reference=excluded.statement_reference,
                         statement_sha256=excluded.statement_sha256,
                         statement_content_sha256=excluded.statement_content_sha256,
@@ -2612,11 +3944,19 @@ class CashbackEventStore:
                         updated_at=CURRENT_TIMESTAMP
                     """,
                     (
-                        run["card_code"], run["period_start"], run["period_end"],
-                        statement_reference, statement_sha256, run["statement_content_sha256"],
-                        evidence_reference, document_url,
-                        actual_import_receipt_sha256, actual_import_receipt_sha256,
-                        reconciliation_status, now,
+                        run["card_code"],
+                        final_start,
+                        final_end,
+                        f"cashback-period:{run['card_code']}:{final_start}:{final_end}",
+                        statement_reference,
+                        statement_sha256,
+                        run["statement_content_sha256"],
+                        evidence_reference,
+                        document_url,
+                        actual_import_receipt_sha256,
+                        actual_import_receipt_sha256,
+                        reconciliation_status,
+                        now,
                     ),
                 )
                 next_start = date.fromisoformat(run["period_end"]) + timedelta(days=1)
@@ -2630,20 +3970,42 @@ class CashbackEventStore:
                     None,
                 )
                 if next_program is None:
-                    raise ValueError(f"No active cashback programme for {run['card_code']} on {next_start}")
+                    raise ValueError(
+                        f"No active cashback programme for {run['card_code']} on {next_start}"
+                    )
                 calculated_start, next_end = statement_period(
                     next_start,
                     next_program.statement_close_day,
                 )
                 if calculated_start != next_start:
-                    raise ValueError("Configured statement cycle does not continue from the reconciled period")
+                    raise ValueError(
+                        "Configured statement cycle does not continue from the reconciled period"
+                    )
+                next_start_bound = _period_iso_datetime(
+                    datetime.combine(next_start, datetime.min.time(), tzinfo=UTC),
+                    "period_start",
+                )
+                next_end_bound = _period_iso_datetime(
+                    datetime.combine(
+                        next_end + timedelta(days=1), datetime.min.time(), tzinfo=UTC
+                    ),
+                    "period_end",
+                )
+                next_period_id = f"cashback-period:{run['card_code']}:{next_start_bound}:{next_end_bound}"
                 connection.execute(
                     """
-                    INSERT OR IGNORE INTO card_periods (
-                        card_code, period_start, period_end, status
-                    ) VALUES (?, ?, ?, 'OPEN')
+                    INSERT INTO card_periods (
+                        card_code, period_start, period_end, period_id, status
+                    ) VALUES (?, ?, ?, ?, 'OPEN')
+                    ON CONFLICT(card_code, period_start, period_end) DO UPDATE SET
+                        period_id=COALESCE(card_periods.period_id, excluded.period_id)
                     """,
-                    (run["card_code"], next_start.isoformat(), next_end.isoformat()),
+                    (
+                        run["card_code"],
+                        next_start_bound,
+                        next_end_bound,
+                        next_period_id,
+                    ),
                 )
         return {
             "close_id": _close_identifier(
@@ -2673,17 +4035,111 @@ class CashbackEventStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def rows_for_period(
+        self,
+        period_id: str,
+        *,
+        card_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return active events in the half-open period interval ``[start, end)``."""
+        requested_period_id = str(period_id or "").strip()
+        if not requested_period_id:
+            raise ValueError("period_id is required")
+        with closing(self._connect()) as connection:
+            period = connection.execute(
+                """
+                SELECT * FROM card_periods
+                WHERE period_id = ?
+                """,
+                (requested_period_id,),
+            ).fetchone()
+            if period is None:
+                raise ValueError(f"Unknown cashback period: {requested_period_id}")
+            selected_card = str(card_code or period["card_code"]).strip().upper()
+            if selected_card != str(period["card_code"]).upper():
+                return []
+            records = connection.execute(
+                """
+                SELECT * FROM cashback_events
+                WHERE card_code = ? AND status = 'ACTIVE'
+                ORDER BY occurred_at, source_event_id
+                """,
+                (selected_card,),
+            ).fetchall()
+
+        start = _utc_datetime(period["period_start"])
+        end = _utc_datetime(period["period_end"])
+        return [
+            dict(row)
+            for row in records
+            if start <= _utc_datetime(row["occurred_at"]) < end
+        ]
+
+    def events_for_period(
+        self,
+        period_id: str,
+        *,
+        card_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.rows_for_period(period_id, card_code=card_code)
+
+    def fx_replay_for_source_event_ids(
+        self,
+        source_event_ids: Iterable[str],
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Read persisted FX conversion traces for source replay only."""
+        ids = tuple(
+            sorted(
+                {
+                    str(source_event_id).strip()
+                    for source_event_id in source_event_ids
+                    if str(source_event_id).strip()
+                }
+            )
+        )
+        if not ids:
+            return {}
+        placeholders = ", ".join("?" for _ in ids)
+        with closing(self._connect()) as connection:
+            records = connection.execute(
+                f"""
+                SELECT source_event_id, decision_trace_json
+                FROM cashback_events
+                WHERE source_event_id IN ({placeholders})
+                """,
+                ids,
+            ).fetchall()
+        replay: dict[str, list[dict[str, Any]]] = {}
+        for row in records:
+            try:
+                traces = json.loads(str(row["decision_trace_json"] or "[]"))
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"FX replay trace is invalid for {row['source_event_id']}"
+                ) from error
+            if not isinstance(traces, list) or any(
+                not isinstance(trace, dict) for trace in traces
+            ):
+                raise ValueError(
+                    f"FX replay trace must be a list for {row['source_event_id']}"
+                )
+            conversions = [
+                trace for trace in traces if trace.get("trace_type") == "FX_CONVERSION"
+            ]
+            if conversions:
+                replay[str(row["source_event_id"])] = conversions
+        return replay
+
     def rows(self, start: date, end: date) -> list[dict[str, Any]]:
-        range_start, range_end = _date_range_bounds(start, end)
         with closing(self._connect()) as connection:
             records = connection.execute(
                 """
                 SELECT * FROM cashback_events
-                WHERE occurred_at >= ? AND occurred_at < ?
+                WHERE substr(occurred_at, 1, 10) BETWEEN ? AND ?
                   AND status = 'ACTIVE'
                 ORDER BY occurred_at, source_event_id
                 """,
-                (range_start, range_end),
+                (start.isoformat(), end.isoformat()),
             ).fetchall()
         return [dict(row) for row in records]
 
@@ -2729,84 +4185,90 @@ class CashbackEventStore:
         self,
         source: str | None = None,
         *,
-        excluded_cards: Iterable[str] = (),
+        included_cards: Iterable[str] | None = None,
+        ingest_source: str | None = None,
     ) -> dict[str, Any]:
-        excluded = tuple(
-            sorted({str(card).strip().upper() for card in excluded_cards if str(card).strip()})
+        if source is not None:
+            if ingest_source is not None and ingest_source != source:
+                raise ValueError("source and ingest_source disagree")
+            ingest_source = source
+        eligible = (
+            None
+            if included_cards is None
+            else {
+                str(card).strip().upper()
+                for card in included_cards
+                if str(card).strip()
+            }
         )
-        card_clause = ""
-        card_parameters: tuple[object, ...] = ()
-        if excluded:
-            placeholders = ", ".join("?" for _ in excluded)
-            card_clause = f" WHERE card_code NOT IN ({placeholders})"
-            card_parameters = excluded
         with closing(self._connect()) as connection:
             row = connection.execute(
-                f"""
-                SELECT COUNT(*) AS event_count,
+                """
+                SELECT COUNT(*) AS event_count, MAX(occurred_at) AS last_event_at,
                        SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) AS live_event_count,
                        SUM(CASE WHEN reconciliation_status = 'VARIANCE' THEN 1 ELSE 0 END) AS variance_count
                 FROM cashback_events
-                {card_clause}
-                """,
-                card_parameters,
-            ).fetchone()
-            last_event = connection.execute(
-                f"""
-                SELECT occurred_at
-                FROM cashback_events
-                {card_clause}
-                ORDER BY julianday(occurred_at) DESC, occurred_at DESC
-                LIMIT 1
-                """,
-                card_parameters,
+                """
             ).fetchone()
             ingest_query = """
                 SELECT source, last_success_at, scanned_count, accepted_count, cursor
                 FROM ingest_state
             """
             ingest_parameters: tuple[object, ...] = ()
-            if source:
+            if ingest_source:
                 ingest_query += " WHERE source = ?"
-                ingest_parameters = (source,)
-            ingest_query += " ORDER BY julianday(last_success_at) DESC, last_success_at DESC LIMIT 1"
+                ingest_parameters = (ingest_source,)
+            ingest_query += " ORDER BY last_success_at DESC LIMIT 1"
             ingest = connection.execute(ingest_query, ingest_parameters).fetchone()
             correction_count = connection.execute(
-                f"""
-                SELECT COUNT(*) AS count
-                FROM event_corrections AS corrections
-                JOIN cashback_events AS events
-                  ON events.source_event_id = corrections.source_event_id
-                {card_clause.replace("card_code", "events.card_code")}
-                """,
-                card_parameters,
+                "SELECT COUNT(*) AS count FROM event_corrections"
             ).fetchone()["count"]
         result = dict(row)
-        result["last_event_at"] = last_event["occurred_at"] if last_event else None
         result["live_event_count"] = result["live_event_count"] or 0
         result["variance_count"] = result["variance_count"] or 0
-        result["last_successful_ingest_at"] = ingest["last_success_at"] if ingest else None
-        result["last_accepted_count"] = ingest["accepted_count"] if ingest else 0
+        last_successful_ingest_at = ingest["last_success_at"] if ingest else None
+        display_tz = None
+        if ingest and ingest["cursor"]:
+            try:
+                display_tz = datetime.fromisoformat(
+                    str(ingest["cursor"]).replace("Z", "+00:00")
+                ).tzinfo
+            except ValueError:
+                display_tz = None
+        if last_successful_ingest_at and display_tz is not None:
+            last_successful_ingest_at = (
+                _utc_datetime(last_successful_ingest_at)
+                .astimezone(display_tz)
+                .isoformat()
+            )
+        result["last_successful_ingest_at"] = last_successful_ingest_at
+        if result["last_event_at"] and display_tz is not None:
+            result["last_event_at"] = (
+                _utc_datetime(result["last_event_at"])
+                .astimezone(display_tz)
+                .isoformat()
+            )
         result["last_ingest_source"] = ingest["source"] if ingest else None
         result["last_scan_count"] = ingest["scanned_count"] if ingest else 0
-        result["acknowledged_alerts"] = [
-            key for key in self.alert_acknowledgements()
-            if not any(card in key for card in excluded)
-        ]
+        result["last_accepted_count"] = ingest["accepted_count"] if ingest else 0
         result["last_ingest_cursor"] = ingest["cursor"] if ingest else None
+        result["acknowledged_alerts"] = self.alert_acknowledgements()
         result["correction_count"] = correction_count
-        result["card_periods"] = [
-            period for period in self.period_rows()
-            if str(period["card_code"]).upper() not in excluded
-        ]
+        period_rows = self.period_rows()
+        if eligible is not None:
+            period_rows = [
+                row
+                for row in period_rows
+                if str(row.get("card_code") or "").strip().upper() in eligible
+            ]
+        result["card_periods"] = period_rows
         result["statement_receipts"] = self.statement_receipts(
-            excluded_cards=excluded,
+            included_cards=eligible,
             limit=200,
         )
         result["statement_receipt_count"] = len(result["statement_receipts"])
         result["bank_closed_count"] = sum(
-            receipt["state"] == BANK_CLOSED
-            for receipt in result["statement_receipts"]
+            receipt["state"] == BANK_CLOSED for receipt in result["statement_receipts"]
         )
         return result
 
@@ -2824,28 +4286,6 @@ def events_to_transactions(
         channel = str(row["channel"])
         currency = str(row["currency"])
         card = str(row["card_code"])
-        decision_trace = json.loads(str(row["decision_trace_json"] or "[]"))
-        fx_provenance = _latest_fx_trace(decision_trace)
-        original_amount = None
-        if fx_provenance and fx_provenance.get("original_amount") not in (None, ""):
-            try:
-                original_amount = Decimal(str(fx_provenance["original_amount"]))
-            except (InvalidOperation, TypeError, ValueError):
-                original_amount = None
-        metadata: dict[str, Any] = {
-            "cashback_status": row["status"],
-            "cashback_event_type": event_type,
-            "confidence": row["confidence"],
-            "reconciliation_status": row["reconciliation_status"],
-            "statement_reference": row["statement_reference"],
-            "email_reference": row["email_reference"],
-            "document_url": row["document_url"],
-            "reversal_of": row["reversal_of"],
-            "decision_trace": decision_trace,
-            "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
-        }
-        if fx_provenance is not None:
-            metadata["fx_provenance"] = fx_provenance
         transactions.append(
             Transaction(
                 transaction_id=str(row["source_event_id"]),
@@ -2855,7 +4295,6 @@ def events_to_transactions(
                 merchant_raw=str(row["merchant"]),
                 vendor=str(row["merchant"]),
                 amount_aed=Decimal(int(row["amount_aed_minor"])) / Decimal("100"),
-                amount_original=original_amount,
                 currency=currency,
                 channel=channel,
                 source_type=str(row["source"]),
@@ -2863,12 +4302,27 @@ def events_to_transactions(
                 transaction_type=transaction_type,
                 reward_bucket=(
                     row["bucket_code"]
-                    or configured_reward_bucket(programs, card, purchase_type, channel, currency)
+                    or configured_reward_bucket(
+                        programs, card, purchase_type, channel, currency
+                    )
                 ),
                 tags=set(json.loads(str(row["tags_json"]))),
                 review_required=bool(row["review_required"]),
                 is_refund=event_type in {"REFUND", "REVERSAL"},
-                metadata=metadata,
+                metadata={
+                    "cashback_status": row["status"],
+                    "cashback_event_type": event_type,
+                    "confidence": row["confidence"],
+                    "reconciliation_status": row["reconciliation_status"],
+                    "statement_reference": row["statement_reference"],
+                    "email_reference": row["email_reference"],
+                    "document_url": row["document_url"],
+                    "reversal_of": row["reversal_of"],
+                    "decision_trace": json.loads(
+                        str(row["decision_trace_json"] or "[]")
+                    ),
+                    "ai_trace": json.loads(str(row["ai_trace_json"] or "[]")),
+                },
             )
         )
     return transactions
@@ -2880,61 +4334,119 @@ def build_live_dashboard(
     *,
     stale_after_minutes: int = 90,
     program_config_path: Path | None = None,
+    memberships: Iterable[object] | dict[str, object] | None = None,
     ingest_source: str | None = None,
     check_schedule_config_path: Path | None = None,
     now: datetime | None = None,
-    excluded_cards: Iterable[str] = (),
-    periods_by_card: dict[str, tuple[date, date]] | None = None,
 ) -> dict[str, Any]:
-    if stale_after_minutes <= 0:
-        raise ValueError("stale_after_minutes must be positive")
-    excluded = {str(card).strip().upper() for card in excluded_cards if str(card).strip()}
     configuration = load_program_configuration(program_config_path, as_of=as_of)
+    configured_programs = programs_from_config(configuration, as_of, as_of=as_of)
+    as_of_start = datetime.combine(as_of, datetime.min.time(), tzinfo=UTC)
+    as_of_end = as_of_start + timedelta(days=1)
+
+    def period_window(period: dict[str, Any]) -> tuple[datetime, datetime]:
+        legacy = _legacy_date_period_bounds(
+            period.get("period_start"), period.get("period_end")
+        )
+        if legacy is not None:
+            return _utc_datetime(legacy[0]), _utc_datetime(legacy[1])
+        return (
+            _utc_datetime(period["period_start"]),
+            _utc_datetime(period["period_end"]),
+        )
+
+    stored_periods = store.period_rows()
+    evidence_cards = {
+        str(period["card_code"]).strip().upper()
+        for period in stored_periods
+        if str(period["status"]).upper() == "FINALIZED"
+        and period_window(period)[0] < as_of_end
+        and period_window(period)[1] > as_of_start
+    }
+    eligible_cards = (
+        frozenset(program.card.upper() for program in configured_programs)
+        if memberships is None
+        else eligible_card_codes(configured_programs, memberships)
+    ) | evidence_cards
     programs = tuple(
         program
-        for program in programs_from_config(configuration, as_of, as_of=as_of)
-        if program.card.upper() not in excluded
+        for program in configured_programs
+        if program.card.upper() in eligible_cards
     )
-    if not programs:
-        raise ValueError(f"Cashback configuration contains no visible programs for {as_of}")
     configured_periods = {
         program.card: statement_period(as_of, program.statement_close_day)
         for program in programs
     }
-    periods = {
-        card: periods_by_card.get(card, configured_period)
-        if periods_by_card is not None
-        else configured_period
-        for card, configured_period in configured_periods.items()
-    }
-    event_rows = []
-    for card, (period_start, period_end) in periods.items():
+    explicit_periods: dict[str, list[dict[str, Any]]] = {}
+    for period in stored_periods:
+        explicit_periods.setdefault(
+            str(period["card_code"]).upper(), []
+        ).append(period)
+
+    periods: dict[str, tuple[date, date]] = {}
+    event_rows: list[dict[str, Any]] = []
+    for program in programs:
+        card = program.card
+        candidates = explicit_periods.get(card, [])
+        if not candidates:
+            periods[card] = configured_periods[card]
+            period_start, period_end = periods[card]
+            event_rows.extend(
+                row
+                for row in store.rows(period_start, min(as_of, period_end))
+                if row["card_code"] == card
+            )
+            continue
+
+        current = next(
+            (
+                period
+                for period in sorted(
+                    candidates,
+                    key=lambda item: (
+                        str(item["status"]).upper() != "OPEN",
+                        period_window(item)[0],
+                    ),
+                )
+                if str(period["status"]).upper() in {"OPEN", "FINALIZED"}
+                and period_window(period)[0] < as_of_end
+                and period_window(period)[1] > as_of_start
+            ),
+            None,
+        )
+        if current is None:
+            continue
+        current_start, current_end = period_window(current)
+        reporting_end = (current_end - timedelta(microseconds=1)).date()
+        periods[card] = (current_start.date(), reporting_end)
+        period_id = str(current.get("period_id") or "").strip()
+        if period_id:
+            selected_rows = store.rows_for_period(period_id, card_code=card)
+        else:
+            selected_rows = store.rows(current_start.date(), reporting_end)
         event_rows.extend(
             row
-            for row in store.rows(period_start, min(as_of, period_end))
-            if row["card_code"] == card
+            for row in selected_rows
+            if str(row["card_code"]).upper() == card
+            and _utc_datetime(row["occurred_at"]) < as_of_end
         )
     transactions = events_to_transactions(event_rows, programs)
-    routing_profiles = []
-    for profile in configuration.get("routing_profiles") or ():
-        routes = [
-            route
-            for route in profile.get("routes") or ()
-            if str(route.get("card") or "").upper() not in excluded
-        ]
-        routing_profiles.append({**profile, "routes": routes})
     result = cashback_dashboard(
         programs,
         transactions,
         as_of,
         payment_intents_from_config(configuration),
+        memberships=memberships,
         periods_by_card=periods,
-        routing_profiles=routing_profiles,
+        routing_profiles=configuration.get("routing_profiles") or (),
         route_policies=configuration.get("route_policies") or None,
         base_currency=str(configuration.get("currency") or "AED"),
     )
     result["profile"] = configuration.get("profile") or {}
-    stats = store.stats(ingest_source, excluded_cards=excluded)
+    stats = store.stats(
+        included_cards=eligible_cards,
+        ingest_source=ingest_source,
+    )
     checked_at = now or datetime.now(UTC)
     health = scheduled_sync_health(
         stats.get("last_successful_ingest_at"),
@@ -2943,6 +4455,17 @@ def build_live_dashboard(
         ingest_source=ingest_source,
         config_path=check_schedule_config_path,
     )
+    if checked_at.tzinfo is not None:
+        for value, container in (
+            ("last_event_at", stats),
+            ("last_successful_check_at", health),
+        ):
+            if container.get(value):
+                container[value] = (
+                    _utc_datetime(container[value])
+                    .astimezone(checked_at.tzinfo)
+                    .isoformat()
+                )
     result["data_status"] = {
         "mode": "LIVE_TRANSACTION_EVENTS",
         "generated_at": checked_at.isoformat(),

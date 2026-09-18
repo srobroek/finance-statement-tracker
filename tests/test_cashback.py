@@ -64,7 +64,7 @@ class CashbackTests(TestCase):
         after = reward_total(program, Decimal("14500"), {"SC_ONLINE": Decimal("3500")})
         self.assertLess(after, before)
 
-    def test_reversal_reduces_reward_like_a_refund(self) -> None:
+    def test_reversal_does_not_restore_qualifying_spend_or_bucket_cap(self) -> None:
         rows = [
             Transaction(
                 "purchase",
@@ -87,8 +87,11 @@ class CashbackTests(TestCase):
             ),
         ]
 
-        self.assertEqual(total_spend(rows, "SC_PLATINUM_X"), Decimal("75"))
-        self.assertEqual(bucket_spend(rows, "SC_PLATINUM_X"), {"SC_ONLINE": Decimal("75")})
+        self.assertEqual(total_spend(rows, "SC_PLATINUM_X"), Decimal("100"))
+        self.assertEqual(
+            bucket_spend(rows, "SC_PLATINUM_X"),
+            {"SC_ONLINE": Decimal("100")},
+        )
 
     def test_rak_cashback_is_zero_below_monthly_minimum(self) -> None:
         program = next(program for program in configured_programs(date(2026, 8, 16)) if program.card == "RAK_WORLD")
