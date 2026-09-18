@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 BANK_CLOSED = "BANK_CLOSED"
@@ -55,7 +55,13 @@ STATEMENT_RECEIPT_CONTRACT = {
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
-def _text(value: object, field: str, *, required: bool = False, upper: bool = False) -> str | None:
+def _text(
+    value: object,
+    field: str,
+    *,
+    required: bool = False,
+    upper: bool = False,
+) -> str | None:
     result = str(value or "").strip()
     if not result:
         if required:
@@ -106,12 +112,13 @@ def _digest(value: object, field: str) -> str | None:
     return raw
 
 
-
 def receipt_id(source: str, source_message_id: str) -> str:
     """Return a stable server-owned key; caller idempotency keys are not identity."""
-    return "statement-receipt:" + hashlib.sha256(
-        f"{source}\x00{source_message_id}".encode("utf-8")
-    ).hexdigest()
+    return (
+        "statement-receipt:"
+        + hashlib.sha256(f"{source}\x00{source_message_id}".encode("utf-8")).hexdigest()
+    )
+
 
 def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
     """Normalize the narrow n8n email-arrival contract without deriving dates."""
@@ -120,8 +127,15 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
     schema_version = payload.get("schema_version", 1)
     if isinstance(schema_version, bool) or schema_version != 1:
         raise ValueError("Unsupported statement receipt schema version")
+    if any(field in payload for field in ("transactions", "statement_transactions")):
+        raise ValueError("statement receipts cannot contain statement purchases")
 
-    source = _text(_alias(payload, "source", "source_system", "mailbox"), "source", required=True)
+    source = _text(
+        _alias(payload, "source", "source_system", "mailbox"),
+        "source",
+        required=True,
+    )
+    assert source is not None
     source_message_id = _text(
         _alias(
             payload,
@@ -135,6 +149,7 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
         "source_message_id",
         required=True,
     )
+    assert source_message_id is not None
     received_at = _timestamp(
         _alias(
             payload,
@@ -151,19 +166,37 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
         required=True,
         upper=True,
     )
-    period_start = _iso_date(_alias(payload, "period_start", "statement_period_start"), "period_start")
-    period_end = _iso_date(_alias(payload, "period_end", "statement_period_end"), "period_end")
+    period_start = _iso_date(
+        _alias(payload, "period_start", "statement_period_start"),
+        "period_start",
+    )
+    period_end = _iso_date(
+        _alias(payload, "period_end", "statement_period_end"),
+        "period_end",
+    )
     if (period_start is None) != (period_end is None):
-        raise ValueError("period_start and period_end must be supplied together or both omitted")
-    if period_start is not None and period_end is not None and period_end < period_start:
+        raise ValueError(
+            "period_start and period_end must be supplied together or both omitted"
+        )
+    if (
+        period_start is not None
+        and period_end is not None
+        and period_end < period_start
+    ):
         raise ValueError("period_end cannot be before period_start")
 
-    processing_state = _text(payload.get("processing_state"), "processing_state", upper=True) or "PENDING"
-    reconciliation_state = _text(
-        _alias(payload, "reconciliation_state", "reconcile_state"),
-        "reconciliation_state",
-        upper=True,
-    ) or "PENDING"
+    processing_state = (
+        _text(payload.get("processing_state"), "processing_state", upper=True)
+        or "PENDING"
+    )
+    reconciliation_state = (
+        _text(
+            _alias(payload, "reconciliation_state", "reconcile_state"),
+            "reconciliation_state",
+            upper=True,
+        )
+        or "PENDING"
+    )
     if processing_state not in PROCESSING_STATES:
         raise ValueError(f"Unsupported processing_state: {processing_state}")
     if reconciliation_state not in RECONCILIATION_STATES:
@@ -176,7 +209,9 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
         "received_at": received_at,
         "card_code": card_code,
         "statement_reference": _text(
-            _alias(payload, "statement_reference", "statement_id", "document_reference"),
+            _alias(
+                payload, "statement_reference", "statement_id", "document_reference"
+            ),
             "statement_reference",
         ),
         "period_start": period_start,
@@ -200,7 +235,12 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
         "subject": _text(payload.get("subject"), "subject"),
     }
     canonical_digest = hashlib.sha256(
-        json.dumps(immutable, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        json.dumps(
+            immutable,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
     ).hexdigest()
     return {
         **immutable,
@@ -210,6 +250,30 @@ def normalize_statement_receipt(payload: dict[str, Any]) -> dict[str, Any]:
         "processing_state": processing_state,
         "reconciliation_state": reconciliation_state,
     }
+
+
+def receipt_period_bounds(
+    period_start: object,
+    period_end: object,
+) -> tuple[datetime, datetime]:
+    """Return an inclusive receipt's exact UTC half-open day interval."""
+    start = _iso_date(period_start, "period_start")
+    end = _iso_date(period_end, "period_end")
+    if start is None or end is None:
+        raise ValueError("period_start and period_end are required")
+    start_date = date.fromisoformat(start)
+    end_date = date.fromisoformat(end)
+    if end_date < start_date:
+        raise ValueError("period_end cannot be before period_start")
+    return (
+        datetime.combine(start_date, datetime.min.time(), tzinfo=UTC),
+        datetime.combine(
+            end_date + timedelta(days=1),
+            datetime.min.time(),
+            tzinfo=UTC,
+        ),
+    )
+
 
 def receipt_view(row: dict[str, Any]) -> dict[str, Any]:
     """Expose receipt state without exposing raw email or mutable source payload."""

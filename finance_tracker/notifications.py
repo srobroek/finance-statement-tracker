@@ -5,7 +5,9 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
 from html.parser import HTMLParser
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Callable, Iterable, Mapping, Protocol
+from .fx_rates import ConversionResult, QuoteProvider, convert_to_aed
+
 
 from .ai_rules import AIEnrichmentEngine
 from .history import HistoryDecision, apply_history_match
@@ -18,6 +20,30 @@ from .cashback import (
     programs_from_config,
     purchase_type_from_config,
 )
+
+
+def _replay_fx_trace(
+    value: object,
+    *,
+    message_id: str,
+) -> Mapping[str, Any] | None:
+    """Extract one persisted FX trace without consulting a provider."""
+    if value is None:
+        return None
+    candidates: Iterable[object]
+    if isinstance(value, Mapping):
+        candidates = (value,)
+    elif isinstance(value, list):
+        candidates = value
+    else:
+        raise ValueError(f"FX replay trace for {message_id} must be an object or list")
+    for candidate in candidates:
+        if (
+            isinstance(candidate, Mapping)
+            and candidate.get("trace_type") == "FX_CONVERSION"
+        ):
+            return candidate
+    raise ValueError(f"FX replay trace for {message_id} is missing FX_CONVERSION")
 
 
 _ADCB_OTP = re.compile(
@@ -164,7 +190,9 @@ class ADCBOTPNotificationAdapter:
     def parse(self, message: dict[str, Any]) -> NotificationFact:
         match = _ADCB_OTP.search(_message_text(message))
         if not match:
-            raise ValueError("ADCB authorization email does not expose merchant, amount, currency, and card suffix")
+            raise ValueError(
+                "ADCB authorization email does not expose merchant, amount, currency, and card suffix"
+            )
         occurred = _received_datetime(message)
         return NotificationFact(
             adapter=self.code,
@@ -191,7 +219,9 @@ def _resolve_notification_date(day: int, month: int, received: datetime) -> date
         raise ValueError("RAKBANK transaction date is invalid")
     occurred = min(candidates, key=lambda candidate: abs(candidate - received))
     if abs((occurred.date() - received.date()).days) > 7:
-        raise ValueError("RAKBANK transaction date is not close to the email receipt date")
+        raise ValueError(
+            "RAKBANK transaction date is not close to the email receipt date"
+        )
     return occurred
 
 
@@ -210,7 +240,9 @@ class RakbankCardTransactionNotificationAdapter:
 
     def parse(self, message: dict[str, Any]) -> NotificationFact:
         text = _message_text(message)
-        match = _RAKBANK_CARD_TRANSACTION.search(text) or _RAKBANK_CARD_CHARGED.search(text)
+        match = _RAKBANK_CARD_TRANSACTION.search(text) or _RAKBANK_CARD_CHARGED.search(
+            text
+        )
         if not match:
             raise ValueError(
                 "RAKBANK transaction email does not expose merchant, amount, currency, card suffix, and date"
@@ -251,14 +283,22 @@ def parse_outlook_notifications(
     ai_engine: AIEnrichmentEngine | None = None,
     ai_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     cashback_config: dict[str, Any] | None = None,
+    fx_providers: Iterable[QuoteProvider] | None = None,
+    fx_replay: Mapping[str, Any] | None = None,
 ) -> NotificationBatch:
-    """Convert evidence-backed Outlook notifications into minimal cashback events."""
+    """Convert evidence-backed Outlook notifications into minimal cashback events.
+
+    Foreign notifications are converted before the transaction/event identity is
+    allocated.  ``fx_replay`` accepts persisted decision-trace records, allowing
+    an exact replay without consulting a provider.
+    """
     if (ai_engine is None) != (ai_resolver is None):
         raise ValueError("ai_engine and ai_resolver must be supplied together")
     engine = RuleEngine(rules)
     cashback_source = cashback_config or load_program_configuration()
     base_currency = str(cashback_source.get("currency") or "AED").upper()
     adapter_list = tuple(adapters)
+    provider_list = None if fx_providers is None else tuple(fx_providers)
     events: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
     rows = list(messages)
@@ -271,11 +311,15 @@ def parse_outlook_notifications(
             skipped.append({"message_id": "", "reason": "MISSING_MESSAGE_ID"})
             continue
         if message_id in seen_message_ids:
-            raise ValueError(f"Duplicate Outlook message id in scan batch: {message_id}")
+            raise ValueError(
+                f"Duplicate Outlook message id in scan batch: {message_id}"
+            )
         seen_message_ids.add(message_id)
         adapter = next((item for item in adapter_list if item.detect(message)), None)
         if adapter is None:
-            skipped.append({"message_id": message_id, "reason": "UNSUPPORTED_NOTIFICATION"})
+            skipped.append(
+                {"message_id": message_id, "reason": "UNSUPPORTED_NOTIFICATION"}
+            )
             continue
         try:
             fact = adapter.parse(message)
@@ -286,12 +330,53 @@ def parse_outlook_notifications(
         if not card_code:
             skipped.append({"message_id": message_id, "reason": "UNMAPPED_CARD_SUFFIX"})
             continue
+        conversion: ConversionResult | None = None
         if fact.currency != base_currency:
-            skipped.append({
-                "message_id": message_id,
-                "reason": f"MISSING_{base_currency}_EQUIVALENT",
-            })
-            continue
+            if base_currency != "AED":
+                skipped.append(
+                    {
+                        "message_id": message_id,
+                        "reason": f"MISSING_{base_currency}_EQUIVALENT",
+                    }
+                )
+                continue
+            replay_trace = _replay_fx_trace(
+                None if fx_replay is None else fx_replay.get(message_id),
+                message_id=message_id,
+            )
+            if replay_trace is None:
+                if provider_list is None:
+                    skipped.append(
+                        {"message_id": message_id, "reason": "MISSING_AED_EQUIVALENT"}
+                    )
+                    continue
+                conversion = convert_to_aed(
+                    fact.amount,
+                    fact.currency,
+                    as_of=fact.occurred_at,
+                    providers=provider_list,
+                )
+            else:
+                quote = replay_trace.get("quote")
+                if not isinstance(quote, Mapping):
+                    raise ValueError(
+                        f"FX replay trace for {message_id} has no quote mapping"
+                    )
+                conversion = convert_to_aed(
+                    fact.amount,
+                    fact.currency,
+                    as_of=fact.occurred_at,
+                    quote=quote,
+                )
+                expected_amount = replay_trace.get("amount_aed")
+                if expected_amount not in (
+                    None,
+                    "",
+                ) and conversion.amount_aed != Decimal(str(expected_amount)):
+                    raise ValueError(
+                        f"FX replay trace for {message_id} changed the AED estimate"
+                    )
+        amount_aed = fact.amount if conversion is None else conversion.amount_aed
 
         transaction = Transaction(
             transaction_id=f"{message_id}:0",
@@ -300,7 +385,7 @@ def parse_outlook_notifications(
             account_last4=fact.card_last4,
             institution=fact.institution,
             merchant_raw=fact.merchant,
-            amount_aed=fact.amount,
+            amount_aed=amount_aed,
             amount_original=fact.amount,
             currency=fact.currency,
             channel=fact.channel,
@@ -345,7 +430,7 @@ def parse_outlook_notifications(
             "source_event_id": transaction.transaction_id,
             "occurred_at": fact.occurred_at.isoformat(),
             "card_code": transaction.card,
-            "amount_aed": str(fact.amount),
+            "amount_aed": str(amount_aed),
             "currency": fact.currency,
             "purchase_type": purchase_type,
             "channel": transaction.channel,
@@ -356,11 +441,16 @@ def parse_outlook_notifications(
             "status": "ACTIVE",
             "tags": sorted(transaction.tags),
             "confidence": fact.confidence,
-            "review_required": transaction.review_required or transaction.channel == "UNKNOWN",
+            "review_required": transaction.review_required
+            or transaction.channel == "UNKNOWN",
             "reconciliation_status": "UNMATCHED",
-            "email_reference": str(message.get("web_link") or message.get("display_url") or "") or None,
+            "email_reference": str(
+                message.get("web_link") or message.get("display_url") or ""
+            )
+            or None,
             "decision_trace": [asdict(item) for item in static_trace]
-            + ([] if history_trace is None else [asdict(history_trace)]),
+            + ([] if history_trace is None else [asdict(history_trace)])
+            + ([] if conversion is None else [conversion.to_trace()]),
             "ai_trace": [asdict(item) for item in ai_trace],
         }
         events.append(event)
