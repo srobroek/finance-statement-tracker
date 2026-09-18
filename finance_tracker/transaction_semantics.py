@@ -7,7 +7,24 @@ from .models import Transaction
 
 
 SOURCE_DIRECTIONS = frozenset({"CREDIT", "DEBIT"})
-REFUND_TOPICS = frozenset({"REFUND", "REVERSAL"})
+
+REFUND_TOPICS = frozenset({"REFUND", "REIMBURSEMENT", "REVERSAL"})
+PENDING_CATEGORY_VALUES = frozenset(
+    {
+        "",
+        "holding",
+        "needs review",
+        "uncategorized",
+        "uncategorised",
+        "unmapped",
+        "to categorise",
+        "unknown",
+        "unknown category",
+    }
+)
+UNKNOWN_PAYEE_VALUES = frozenset(
+    {"", "unknown", "unknown merchant", "unknown payee", "unidentified"}
+)
 EXPLICIT_CREDIT_TOPICS = frozenset(
     {"INCOME", "INVESTMENT", "PAYMENT", "REWARD_CREDIT", "TRANSFER", *REFUND_TOPICS}
 )
@@ -35,10 +52,15 @@ class TopicSemantics:
 TOPIC_SEMANTICS: dict[str, TopicSemantics] = {
     "PURCHASE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, True),
     "REFUND": TopicSemantics(frozenset({"CREDIT"}), 1, -1, True, "refund"),
+    "REIMBURSEMENT": TopicSemantics(
+        frozenset({"CREDIT"}), 1, -1, False, "reimbursement"
+    ),
     "REVERSAL": TopicSemantics(frozenset({"CREDIT"}), 1, -1, True, "reversal"),
     "REWARD_CREDIT": TopicSemantics(frozenset({"CREDIT"}), 1, 0, False, "reward"),
     "INCOME": TopicSemantics(frozenset({"CREDIT"}), 1, 0, False, "income"),
-    "TRANSFER": TopicSemantics(frozenset(SOURCE_DIRECTIONS), None, 0, False, "transfer"),
+    "TRANSFER": TopicSemantics(
+        frozenset(SOURCE_DIRECTIONS), None, 0, False, "transfer"
+    ),
     "FEE": TopicSemantics(frozenset({"DEBIT"}), -1, 1, False, "fee"),
     "INTEREST": TopicSemantics(frozenset({"DEBIT"}), -1, 1, False, "interest"),
     "INVESTMENT": TopicSemantics(
@@ -61,12 +83,41 @@ TOPIC_BY_TAG = {
 }
 
 
+def is_finalized_for_consumption(transaction: Transaction) -> bool:
+    """Return whether a row is safe for spend and reward aggregates."""
+    if str(transaction.source_type or "").strip().casefold() in {
+        "outlook",
+        "outlook_card_notification",
+    }:
+        return False
+
+    category = str(transaction.category or "").strip().casefold()
+    tags = {str(tag).strip().casefold() for tag in transaction.tags}
+    if (
+        category in PENDING_CATEGORY_VALUES
+        or transaction.review_required
+        or bool({"review", "needs-review"} & tags)
+    ):
+        return False
+    payee = str(transaction.vendor or "").strip().casefold()
+    merchant = str(transaction.merchant_raw or "").strip().casefold()
+    if payee in UNKNOWN_PAYEE_VALUES and payee:
+        return False
+    return not (
+        not payee
+        and merchant in UNKNOWN_PAYEE_VALUES
+        and transaction.source_type == "actual_snapshot"
+    )
+
+
 def topic_semantics(topic: str) -> TopicSemantics:
     normalized = str(topic or "").strip().upper()
     try:
         return TOPIC_SEMANTICS[normalized]
     except KeyError as error:
-        raise ValueError(f"Unsupported transaction topic: {normalized or '<empty>'}") from error
+        raise ValueError(
+            f"Unsupported transaction topic: {normalized or '<empty>'}"
+        ) from error
 
 
 def spend_amount(transaction: Transaction) -> Decimal:
@@ -95,14 +146,19 @@ def actual_amount_minor(transaction: Transaction) -> int:
         raise ValueError("Canonical amount_aed must be a non-negative magnitude")
     topic = (
         "REFUND"
-        if transaction.is_refund and str(transaction.transaction_type).upper() == "PURCHASE"
+        if transaction.is_refund
+        and str(transaction.transaction_type).upper() == "PURCHASE"
         else str(transaction.transaction_type or "PURCHASE").strip().upper()
     )
     semantics = topic_semantics(topic)
     direction = _source_direction(transaction)
     description = " ".join(transaction.merchant_raw.upper().split())
     tags = {str(tag).strip().casefold() for tag in transaction.tags}
-    convention = str(transaction.metadata.get("account_balance_convention") or "").strip().upper()
+    convention = (
+        str(transaction.metadata.get("account_balance_convention") or "")
+        .strip()
+        .upper()
+    )
     card_payment = "card-payment" in tags
     payment_description = any(
         token in description
@@ -139,21 +195,44 @@ def _source_direction(transaction: Transaction) -> str | None:
     if invalid:
         raise ValueError("Invalid source direction: " + ", ".join(sorted(invalid)))
     if len(candidates) > 1:
-        raise ValueError("Conflicting source directions: " + ", ".join(sorted(candidates)))
+        raise ValueError(
+            "Conflicting source directions: " + ", ".join(sorted(candidates))
+        )
     return next(iter(candidates), None)
 
 
-def finalize_transaction_topic(transaction: Transaction) -> str:
-    """Resolve and lock the canonical transaction topic.
+def _matched_reimbursement_id(transaction: Transaction) -> str | None:
+    """Return a durable original-expense link when one is present."""
 
-    Source direction is immutable economic evidence. Static normalization rules
-    may identify an explicit transfer or reward before this function runs, but
-    ordinary positive merchant credits default to refunds. Later static,
-    history, and AI stages cannot change the finalized topic or source amount.
-    """
+    metadata = transaction.metadata
+    for key in (
+        "original_transaction_id",
+        "reimbursement_original_transaction_id",
+        "matched_original_transaction_id",
+    ):
+        value = str(metadata.get(key) or "").strip()
+        if value:
+            return value
+    for key in ("reimbursement_match", "browser_refund_match", "refund_match"):
+        match = metadata.get(key)
+        if not isinstance(match, dict):
+            continue
+        for field in (
+            "original_transaction_id",
+            "purchase_transaction_id",
+            "matched_transaction_id",
+        ):
+            value = str(match.get(field) or "").strip()
+            if value:
+                return value
+    return None
+
+
+def finalize_transaction_topic(transaction: Transaction) -> str:
+    """Resolve and lock the canonical transaction topic."""
 
     if transaction.amount_aed < 0:
-        raise ValueError("Canonical amount_aed must be a non-negative magnitude")
+        raise ValueError("Canonical amount_aed must be non-negative magnitude")
     direction = _source_direction(transaction)
     transaction.source_direction = direction
     if direction:
@@ -161,55 +240,117 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
 
     description = " ".join(transaction.merchant_raw.upper().split())
     topic = str(transaction.transaction_type or "PURCHASE").strip().upper()
-    reason = "SOURCE_TOPIC"
+    locked = set(transaction.metadata.get("locked_fields", []))
+    topic_locked = "transaction_type" in locked
+    matched_id = _matched_reimbursement_id(transaction)
+    reimbursement_hint = topic == "REIMBURSEMENT" or "reimbursement" in {
+        str(tag).strip().casefold() for tag in transaction.tags
+    }
+    reason = (
+        str(transaction.metadata.get("transaction_topic_reason") or "LOCKED_TOPIC")
+        if topic_locked
+        else "SOURCE_TOPIC"
+    )
 
-    if direction == "CREDIT" and any(
-        token in description for token in ("REVERSED", "REVERSAL")
+    if (
+        not topic_locked
+        and direction == "CREDIT"
+        and any(token in description for token in ("REVERSED", "REVERSAL"))
     ):
         topic = "REVERSAL"
         reason = "EXPLICIT_REVERSAL"
-    elif topic == "PAYMENT" or (
-        topic == "PURCHASE"
-        and any(
-            token in description
-            for token in ("PAYMENT RECEIVED", "CARD PAYMENT", "CARD PMT", "AUTOPAY PAYMENT")
+    elif (
+        not topic_locked
+        and direction == "CREDIT"
+        and topic in {"CREDIT", "REFUND"}
+        and matched_id
+    ):
+        topic = "REIMBURSEMENT"
+        reason = "MATCHED_REIMBURSEMENT"
+    elif not topic_locked and (
+        topic == "PAYMENT"
+        or (
+            topic == "PURCHASE"
+            and any(
+                token in description
+                for token in (
+                    "PAYMENT RECEIVED",
+                    "CARD PAYMENT",
+                    "CARD PMT",
+                    "AUTOPAY PAYMENT",
+                )
+            )
         )
     ):
         topic = "TRANSFER"
         reason = "EXPLICIT_CARD_PAYMENT"
-        transaction.tags.update({"transfer", "card-payment"})
-    elif topic == "PURCHASE" and (
-        str(transaction.vendor or "").strip().casefold() == "stake"
-        or "GETSTAKE.COM" in description
-        or " INVESTMENT " in f" {description} "
+        if "tags" not in locked:
+            transaction.tags.update({"transfer", "card-payment"})
+    elif (
+        not topic_locked
+        and topic == "PURCHASE"
+        and (
+            str(transaction.vendor or "").strip().casefold() == "stake"
+            or "GETSTAKE.COM" in description
+            or " INVESTMENT " in f" {description} "
+        )
     ):
         topic = "INVESTMENT"
         reason = "EXPLICIT_INVESTMENT_EVIDENCE"
-    elif direction == "CREDIT" and topic not in EXPLICIT_CREDIT_TOPICS:
+    elif (
+        not topic_locked
+        and direction == "CREDIT"
+        and topic not in EXPLICIT_CREDIT_TOPICS
+    ):
         topic = "REFUND"
         reason = "CREDIT_DEFAULT_REFUND"
-    elif direction == "DEBIT" and topic in {
-        "CREDIT",
-        "INCOME",
-        "REFUND",
-        "REVERSAL",
-        "REWARD_CREDIT",
-    }:
+    elif (
+        not topic_locked
+        and direction == "DEBIT"
+        and topic
+        in {
+            "CREDIT",
+            "INCOME",
+            "REFUND",
+            "REIMBURSEMENT",
+            "REVERSAL",
+            "REWARD_CREDIT",
+        }
+    ):
         topic = "PURCHASE"
         reason = "DEBIT_DEFAULT_PURCHASE"
-    elif direction == "CREDIT" and topic in {"FEE", "INTEREST"}:
+    elif not topic_locked and direction == "CREDIT" and topic in {"FEE", "INTEREST"}:
         topic = "REFUND"
         reason = "CREDIT_DEFAULT_REFUND"
-    elif topic == "PURCHASE" and "INTEREST" in description:
+    elif not topic_locked and topic == "PURCHASE" and "INTEREST" in description:
         topic = "INTEREST"
         reason = "EXPLICIT_INTEREST"
-    elif topic == "PURCHASE" and (
-        "FOREIGN EXCHANGE FEE" in description
-        or description.startswith("VAT ON ")
-        or description.endswith((" FEE", " CHARGE", " CHARGES"))
+    elif (
+        not topic_locked
+        and topic == "PURCHASE"
+        and (
+            "FOREIGN EXCHANGE FEE" in description
+            or description.startswith("VAT ON ")
+            or description.endswith((" FEE", " CHARGE", " CHARGES"))
+        )
     ):
         topic = "FEE"
         reason = "EXPLICIT_FEE"
+
+    unmatched_reimbursement = (
+        direction == "CREDIT"
+        and reimbursement_hint
+        and not matched_id
+        and topic in {"REFUND", "REVERSAL"}
+    )
+    if topic == "REIMBURSEMENT" and not matched_id:
+        if topic_locked:
+            raise ValueError(
+                "REIMBURSEMENT requires a durable original transaction link"
+            )
+        topic = "REFUND"
+        reason = "UNMATCHED_REIMBURSEMENT"
+        unmatched_reimbursement = direction == "CREDIT"
 
     semantics = topic_semantics(topic)
     if direction and direction not in semantics.allowed_directions:
@@ -218,21 +359,37 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
         )
 
     transaction.transaction_type = topic
-    transaction.is_refund = topic in REFUND_TOPICS
-    if transaction.is_refund:
-        transaction.tags.add(semantics.topic_tag or "refund")
-        if topic == "REVERSAL":
-            # Keep legacy refund economics while persisting the canonical topic.
-            transaction.tags.add("refund")
-        transaction.tags.discard("reward")
-    elif topic == "REWARD_CREDIT":
-        transaction.tags.add("reward")
-        transaction.tags.discard("refund")
-    elif semantics.topic_tag:
-        transaction.tags.add(semantics.topic_tag)
-        transaction.tags.discard("refund")
+    if "is_refund" not in locked:
+        transaction.is_refund = topic in REFUND_TOPICS
+    if "tags" not in locked:
+        if topic == "REIMBURSEMENT":
+            transaction.tags.add("reimbursement")
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reversal")
+            transaction.tags.discard("reward")
+        elif transaction.is_refund:
+            transaction.tags.add(semantics.topic_tag or "refund")
+            if topic == "REVERSAL":
+                transaction.tags.add("refund")
+            if not unmatched_reimbursement:
+                transaction.tags.discard("reimbursement")
+            transaction.tags.discard("reward")
+        elif topic == "REWARD_CREDIT":
+            transaction.tags.add("reward")
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reimbursement")
+        elif semantics.topic_tag:
+            transaction.tags.add(semantics.topic_tag)
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reimbursement")
 
-    locked = set(transaction.metadata.get("locked_fields", []))
+    if unmatched_reimbursement:
+        if "reimbursement_match_status" not in locked:
+            transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
+        transaction.set_value("review_required", True)
+        if "tags" not in locked:
+            transaction.tags.update({"reimbursement", "needs-review"})
+
     locked.update(
         {
             "amount_aed",

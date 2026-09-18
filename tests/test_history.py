@@ -1,7 +1,11 @@
 from datetime import datetime
 from unittest import TestCase
 
-from finance_tracker.history import apply_history_match, build_history_index, merchant_fingerprint
+from finance_tracker.history import (
+    apply_history_match,
+    build_history_index,
+    merchant_fingerprint,
+)
 from finance_tracker.models import Transaction
 
 
@@ -31,7 +35,10 @@ class HistoryMatchingTests(TestCase):
         )
         target.metadata["locked_fields"] = ["category"]
 
-        trace = apply_history_match(target, build_history_index(history_rows),)
+        trace = apply_history_match(
+            target,
+            build_history_index(history_rows),
+        )
 
         self.assertEqual(merchant_fingerprint(target.merchant_raw), "CARREFOUR")
         self.assertEqual(target.vendor, "Carrefour")
@@ -43,19 +50,95 @@ class HistoryMatchingTests(TestCase):
 
     def test_ambiguous_history_does_not_select_a_category(self) -> None:
         rows = [
-            Transaction("1", datetime(2026, 7, 1), "CARD", "EXAMPLE 1", "10", category="Dining Out"),
-            Transaction("2", datetime(2026, 7, 2), "CARD", "EXAMPLE 2", "10", category="Groceries"),
+            Transaction(
+                "1",
+                datetime(2026, 7, 1),
+                "CARD",
+                "EXAMPLE 1",
+                "10",
+                category="Dining Out",
+            ),
+            Transaction(
+                "2",
+                datetime(2026, 7, 2),
+                "CARD",
+                "EXAMPLE 2",
+                "10",
+                category="Groceries",
+            ),
         ]
         self.assertNotIn("EXAMPLE", build_history_index(rows))
 
     def test_history_does_not_modify_manually_locked_tags(self) -> None:
         rows = [
-            Transaction(str(index), datetime(2026, 7, index), "CARD", "EXAMPLE", "10", tags={"auto"})
+            Transaction(
+                str(index),
+                datetime(2026, 7, index),
+                "CARD",
+                "EXAMPLE",
+                "10",
+                tags={"auto"},
+            )
             for index in (1, 2)
         ]
-        target = Transaction("new", datetime(2026, 8, 1), "CARD", "EXAMPLE", "10", tags={"manual"})
+        target = Transaction(
+            "new", datetime(2026, 8, 1), "CARD", "EXAMPLE", "10", tags={"manual"}
+        )
         target.metadata["locked_fields"] = ["tags"]
 
         apply_history_match(target, build_history_index(rows))
-
         self.assertEqual(target.tags, {"manual"})
+
+    def test_ownership_conflict_respects_locked_review_flag(self) -> None:
+        target = Transaction(
+            "conflict",
+            datetime(2026, 8, 1),
+            "CARD",
+            "EMPOWER",
+            "10",
+            owner="Personal",
+        )
+        target.metadata.update(
+            {
+                "property_ownership": "JOINT",
+                "locked_fields": ["owner", "property_ownership", "review_required"],
+            }
+        )
+
+        self.assertIsNone(apply_history_match(target, {}))
+
+        self.assertFalse(target.review_required)
+        self.assertIn(
+            "LOCKED_OWNERSHIP_CONFLICT",
+            target.metadata["property_review_reasons"],
+        )
+        self.assertNotIn("shared", target.tags)
+
+    def test_history_count_lock_preserves_manual_metadata(self) -> None:
+        rows = [
+            Transaction(
+                str(index),
+                datetime(2026, 7, index),
+                "CARD",
+                "EXAMPLE",
+                "10",
+                vendor="Example",
+                category="Groceries",
+            )
+            for index in (1, 2)
+        ]
+        target = Transaction(
+            "new",
+            datetime(2026, 8, 1),
+            "CARD",
+            "EXAMPLE",
+            "10",
+            vendor="Example",
+            category="Groceries",
+        )
+        target.metadata["history_count"] = 99
+        target.metadata["locked_fields"] = ["history_count"]
+
+        apply_history_match(target, build_history_index(rows))
+
+        self.assertEqual(target.metadata["history_count"], 99)

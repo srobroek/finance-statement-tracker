@@ -112,6 +112,47 @@ class AIRuleTests(TestCase):
         )
         self.assertEqual(self.transaction.category, "Groceries")
 
+    def test_vendor_resolution_preserves_unresolved_category_review(self) -> None:
+        transaction = Transaction(
+            "vendor-only",
+            datetime(2026, 8, 16),
+            "SC_PLATINUM_X",
+            "UNKNOWN MERCHANT",
+            "100",
+            vendor="unknown",
+            category="Needs Review",
+            tags={"category-review", "needs-review"},
+            review_required=True,
+        )
+        policy = AIPolicy(
+            policy_id="vendor-only",
+            name="Resolve vendor",
+            priority=1,
+            instruction="Resolve the vendor",
+            target_fields=("vendor",),
+        )
+
+        traces = AIEnrichmentEngine([policy]).enrich(
+            transaction,
+            lambda request: {
+                "proposals": [
+                    {
+                        "field": "vendor",
+                        "value": "Amazon",
+                        "confidence": 0.99,
+                        "rationale": "Known merchant",
+                    }
+                ]
+            },
+        )
+
+        self.assertTrue(traces[0].accepted)
+        self.assertEqual(transaction.vendor, "Amazon")
+        self.assertEqual(transaction.category, "Needs Review")
+        self.assertTrue(transaction.review_required)
+        self.assertIn("category-review", transaction.tags)
+        self.assertIn("needs-review", transaction.tags)
+
     def test_low_confidence_proposal_is_rejected_for_review(self) -> None:
         def resolver(request):
             if request["policy_id"] == "classify-unresolved":
