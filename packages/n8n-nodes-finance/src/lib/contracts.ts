@@ -11,16 +11,24 @@ export interface ActualCredential {
   encryptionPassword?: string;
   mutationEnabled?: boolean;
 }
+export interface ActualWriterLease {
+  resource_key: string;
+  lease_id: string;
+  fencing_token: number;
+  expires_at: string;
+}
+
 
 export interface PreparedActualOutbox {
   schema_version: 1;
   outbox_id: string;
   state: 'PREPARED';
+  actual_file_id?: string;
   account_id: string;
   /** Source/card identity is supplied by the trusted statement workflow. */
   card_code?: string;
   /**
-   * Historical imports are an explicit, source-bound exception.  The
+   * Historical imports are an explicit, source-bound exception. The
    * account id is repeated so the writer can reject an envelope whose
    * claimed historical target differs from its Actual target.
    */
@@ -33,12 +41,14 @@ export interface PreparedActualOutbox {
     mcp: false;
   };
   writer_lease: {
+    resource_key: string;
     lease_id: string;
     fencing_token: number;
     expires_at: string;
   };
   transactions: ActualImportTransaction[];
 }
+
 
 export interface ActualImportTransaction {
   imported_id: string;
@@ -70,7 +80,8 @@ export function assertActualImportTransactions(value: unknown, label = 'transact
       ...(row.notes === undefined ? {} : { notes: requiredString(row.notes, `${label}[${index}].notes`, 4000) }),
       ...(row.payee === undefined ? {} : { payee: requiredString(row.payee, `${label}[${index}].payee`, 128) }),
       ...(row.category === undefined ? {} : { category: requiredString(row.category, `${label}[${index}].category`, 128) }),
-      ...(row.cleared === undefined ? {} : { cleared: Boolean(row.cleared) }),
+      ...(row.cleared === undefined ? {} : { cleared: row.cleared }),
+
     };
   });
 }
@@ -87,6 +98,19 @@ export function requiredString(value: unknown, label: string, max = 512): string
   }
   return value;
 }
+export function assertActualWriterLease(value: unknown, label = 'writer lease'): ActualWriterLease {
+  assertObject(value, label);
+  const resourceKey = requiredString(value.resource_key, `${label}.resource_key`, 256);
+  if (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error(`${label}.resource_key is invalid`);
+  const leaseId = requiredString(value.lease_id, `${label}.lease_id`, 128);
+  const fencingToken = value.fencing_token;
+  if (!Number.isSafeInteger(fencingToken) || Number(fencingToken) <= 0) throw new Error(`${label}.fencing_token must be a positive integer`);
+  const expiresAt = requiredString(value.expires_at, `${label}.expires_at`, 64);
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry) || expiry <= Date.now()) throw new Error(`${label}.expires_at is expired or invalid`);
+  return { resource_key: resourceKey, lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt };
+}
+
 
 export function assertIsoDate(value: unknown, label: string): string {
   const result = requiredString(value, label, 10);
@@ -107,6 +131,7 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   assertObject(value, 'outbox');
   if (value.schema_version !== 1 || value.state !== 'PREPARED') throw new Error('outbox must be schema v1 in PREPARED state');
   const outboxId = requiredString(value.outbox_id, 'outbox.outbox_id', 128);
+  const actualFileId = value.actual_file_id === undefined ? undefined : requiredString(value.actual_file_id, 'outbox.actual_file_id', 256);
   const accountId = requiredString(value.account_id, 'outbox.account_id', 128);
   const cardCode = value.card_code === undefined ? undefined : requiredString(value.card_code, 'outbox.card_code', 128);
   if (value.historical_import !== undefined && typeof value.historical_import !== 'boolean') throw new Error('outbox.historical_import must be boolean');
@@ -124,6 +149,8 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
   }
   assertObject(value.writer_lease, 'outbox.writer_lease');
   const leaseId = requiredString(value.writer_lease.lease_id, 'outbox.writer_lease.lease_id', 128);
+  const resourceKey = requiredString(value.writer_lease.resource_key, 'outbox.writer_lease.resource_key', 256);
+  if (!/^actual:[A-Za-z0-9_-]{1,128}$/.test(resourceKey)) throw new Error('writer lease resource key is invalid');
   const fencingToken = value.writer_lease.fencing_token;
   const expiresAt = requiredString(value.writer_lease.expires_at, 'outbox.writer_lease.expires_at', 64);
   if (!Number.isSafeInteger(fencingToken) || Number(fencingToken) <= 0) throw new Error('writer lease fencing token must be a positive integer');
@@ -134,13 +161,14 @@ export function assertPreparedOutbox(value: unknown): PreparedActualOutbox {
     schema_version: 1,
     outbox_id: outboxId,
     state: 'PREPARED',
+    ...(actualFileId === undefined ? {} : { actual_file_id: actualFileId }),
     account_id: accountId,
     ...(cardCode === undefined ? {} : { card_code: cardCode }),
     ...(historicalImport === undefined ? {} : { historical_import: historicalImport }),
     ...(historicalSource === undefined ? {} : { historical_source: historicalSource }),
     ...(historicalAccountId === undefined ? {} : { historical_account_id: historicalAccountId }),
     execution_context: context as PreparedActualOutbox['execution_context'],
-    writer_lease: { lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
+    writer_lease: { resource_key: resourceKey, lease_id: leaseId, fencing_token: Number(fencingToken), expires_at: expiresAt },
     transactions,
   };
 }

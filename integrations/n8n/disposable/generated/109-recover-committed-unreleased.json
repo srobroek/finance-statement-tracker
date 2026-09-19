@@ -1,6 +1,6 @@
 {
-  "id": "90000000-0000-4000-8000-000000000919",
-  "name": "DISPOSABLE ONLY · Recover from ACTUAL_OBSERVED",
+  "id": "90000000-0000-4000-8000-000000000923",
+  "name": "DISPOSABLE ONLY · Recover from COMMITTED",
   "active": false,
   "nodes": [
     {
@@ -15,8 +15,8 @@
       "parameters": {}
     },
     {
-      "id": "seed-actual-observed-terminal-effect",
-      "name": "Seed ACTUAL_OBSERVED Durable Writer Evidence",
+      "id": "seed-committed-unreleased-effect",
+      "name": "Seed COMMITTED Unreleased Writer Evidence",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
@@ -26,9 +26,9 @@
       "alwaysOutputData": true,
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, issued_at, updated_at) VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, NULL, $7::date, $8::date, 'ISSUED', 1, $9::uuid, $10::text, 1, clock_timestamp(), clock_timestamp()) ON CONFLICT (resource_key, outbox_id) DO NOTHING RETURNING resource_key, outbox_id, payload_sha256, verified_payload_sha256, state;",
+        "query": "WITH seeded_lease AS (INSERT INTO finance_ops.writer_leases AS current (resource_key, lease_id, lease_owner, fencing_token, expires_at, released_at, updated_at) VALUES ($1::text, $2::uuid, $3::text, 1, clock_timestamp() + interval '10 minutes', NULL, clock_timestamp()) ON CONFLICT (resource_key) DO UPDATE SET lease_id = EXCLUDED.lease_id, lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, expires_at = EXCLUDED.expires_at, released_at = NULL, updated_at = clock_timestamp() WHERE current.released_at IS NOT NULL AND NOT EXISTS (SELECT 1 FROM finance_ops.actual_writer_releases WHERE resource_key = $1::text AND lease_id = $2::uuid AND fencing_token = 1) RETURNING resource_key, lease_id, lease_owner, fencing_token) INSERT INTO finance_ops.actual_writer_effects (resource_key, outbox_id, account_id, budget_id, payload_sha256, verified_payload_sha256, period_start, period_end, state, attempt_count, lease_id, lease_owner, fencing_token, updated_at) SELECT resource_key, $4::text, $5::text, $6::text, $7::text, $8::text, $9::date, $10::date, 'COMMITTED', 1, lease_id, lease_owner, fencing_token, clock_timestamp() FROM seeded_lease ON CONFLICT (resource_key, outbox_id) DO NOTHING RETURNING resource_key, outbox_id, payload_sha256, verified_payload_sha256, state, lease_id::text AS lease_id, lease_owner, fencing_token;",
         "options": {
-          "queryReplacement": "={{ ['actual:fixture_actual', 'fixture-recovery-actual-observed', 'fixture-account', 'fixture_actual', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd', '2026-08-01', '2026-08-31', '00000000-0000-4000-8000-000000000019', 'n8n:fixture:predecessor:actual-observed'] }}"
+          "queryReplacement": "={{ ['actual:fixture_actual', '00000000-0000-4000-8000-000000000023', 'n8n:fixture:predecessor:committed', 'fixture-recovery-committed', 'fixture-account', 'fixture_actual', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', '9999999999999999999999999999999999999999999999999999999999999999', '2026-08-01', '2026-08-31'] }}"
         }
       },
       "credentials": {
@@ -39,8 +39,8 @@
       }
     },
     {
-      "id": "seed-actual-observed",
-      "name": "Seed ACTUAL_OBSERVED Outbox Crash Boundary",
+      "id": "seed-committed",
+      "name": "Seed COMMITTED Outbox Crash Boundary",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
@@ -61,28 +61,43 @@
             {
               "keyName": "batch_id",
               "condition": "eq",
-              "keyValue": "fixture-recovery-actual-observed"
+              "keyValue": "fixture-recovery-committed"
             }
           ]
         },
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "batch_id": "fixture-recovery-actual-observed",
-            "run_id": "fixture-recovery-actual-observed",
-            "idempotency_key": "fixture:recovery:actual-observed",
+            "batch_id": "fixture-recovery-committed",
+            "run_id": "fixture-recovery-committed",
+            "idempotency_key": "fixture:recovery:committed",
             "actual_file_id": "fixture_actual",
             "account_id": "fixture-account",
             "card_code": "FIXTURE_CARD",
-            "delta_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-            "delta_artifact_item_id": "fixture-artifact-actual-observed",
+            "delta_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "delta_artifact_item_id": "fixture-artifact-committed",
             "delta_artifact_etag": "fixture-etag",
             "delta_schema_version": "statement-delta-v1",
             "config_version": "fixture-v1",
             "parser_version": "fixture-v1",
-            "state": "ACTUAL_OBSERVED",
+            "state": "COMMITTED",
             "attempt_count": 0,
-            "updated_at": "={{ $now.toISO() }}"
+            "updated_at": "={{ $now.toISO() }}",
+            "verification_version": 1,
+            "period_start": "2026-08-01",
+            "period_end": "2026-08-31",
+            "expected_payload_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+            "observed_payload_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+            "expected_count": 1,
+            "observed_count": 1,
+            "expected_amount_sum_minor": -100,
+            "observed_amount_sum_minor": -100,
+            "expected_account_balance": -100,
+            "observed_account_balance": -100,
+            "invariants_passed": true,
+            "verified_at": "={{ $now.toISO() }}",
+            "lease_owner": "n8n:fixture:predecessor:committed",
+            "lease_fence": 1
           },
           "matchingColumns": [],
           "schema": [],
@@ -117,25 +132,25 @@
       "main": [
         [
           {
-            "node": "Seed ACTUAL_OBSERVED Durable Writer Evidence",
+            "node": "Seed COMMITTED Unreleased Writer Evidence",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Seed ACTUAL_OBSERVED Durable Writer Evidence": {
+    "Seed COMMITTED Unreleased Writer Evidence": {
       "main": [
         [
           {
-            "node": "Seed ACTUAL_OBSERVED Outbox Crash Boundary",
+            "node": "Seed COMMITTED Outbox Crash Boundary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Seed ACTUAL_OBSERVED Outbox Crash Boundary": {
+    "Seed COMMITTED Outbox Crash Boundary": {
       "main": [
         [
           {

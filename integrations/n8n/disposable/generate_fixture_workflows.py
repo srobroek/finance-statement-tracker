@@ -42,10 +42,13 @@ ALLOWED_INLINE_EDGES = {
     "90000000-0000-4000-8000-000000000918": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000919": frozenset({RECOVERY_FIXTURE_ID}),
     "90000000-0000-4000-8000-000000000920": frozenset({RECOVERY_FIXTURE_ID}),
-    SWEEP_FIXTURE_ID: frozenset({
-        "10000000-0000-4000-8000-000000000001",
-        "10000000-0000-4000-8000-000000000021",
-    }),
+    "90000000-0000-4000-8000-000000000923": frozenset({RECOVERY_FIXTURE_ID}),
+    SWEEP_FIXTURE_ID: frozenset(
+        {
+            "10000000-0000-4000-8000-000000000001",
+            "10000000-0000-4000-8000-000000000021",
+        }
+    ),
     AI_ID: frozenset({"10000000-0000-4000-8000-000000000021"}),
     RECOVERY_FIXTURE_ID: frozenset({"10000000-0000-4000-8000-000000000020"}),
     "10000000-0000-4000-8000-000000000020": frozenset({LEASE_ID}),
@@ -87,7 +90,9 @@ def code_node(node_id: str, name: str, js_code: str, position: list[int]) -> dic
     }
 
 
-def execute_node(node_id: str, name: str, workflow_id: str, position: list[int]) -> dict:
+def execute_node(
+    node_id: str, name: str, workflow_id: str, position: list[int]
+) -> dict:
     return {
         "id": node_id,
         "name": name,
@@ -120,8 +125,12 @@ def wrapper(workflow_id: str, name: str, input_js: str, target_id: str) -> dict:
         "active": False,
         "nodes": [trigger, emit, call],
         "connections": {
-            trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]},
-            emit["name"]: {"main": [[{"node": call["name"], "type": "main", "index": 0}]]},
+            trigger["name"]: {
+                "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
+            },
+            emit["name"]: {
+                "main": [[{"node": call["name"], "type": "main", "index": 0}]]
+            },
         },
         "settings": fixture_settings(),
         "pinData": {},
@@ -150,10 +159,18 @@ def build_archive_fixture() -> dict:
         "name": "DISPOSABLE ONLY · Synthetic Outlook archive boundary",
         "active": False,
         "nodes": [trigger, emit],
-        "connections": {trigger["name"]: {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}},
+        "connections": {
+            trigger["name"]: {
+                "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
+            }
+        },
         "settings": fixture_settings(),
         "pinData": {},
-        "meta": {"disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacement": "Synthetic archive barrier"},
+        "meta": {
+            "disposableOnly": True,
+            "productionImportForbidden": True,
+            "externalNodeReplacement": "Synthetic archive barrier",
+        },
     }
 
 
@@ -164,18 +181,27 @@ def build_ai_fixture_source() -> dict:
             node.pop("alwaysOutputData", None)
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
-            node["parameters"] = {"jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"}
+            node["parameters"] = {
+                "jsCode": "return [{json:{onedrive_parent_id:'fixture-ai-proposal-archive'}}];"
+            }
         elif node["name"] == "Archive Proposal Artifact in OneDrive":
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
-            node["parameters"] = {"jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"}
+            node["parameters"] = {
+                "jsCode": "return [{json:{id:'fixture-ai-proposal',eTag:'fixture-ai-etag'},binary:$binary}];"
+            }
             node.pop("credentials", None)
         elif node["name"] == "Read Back Proposal Artifact":
             node["type"] = "n8n-nodes-base.code"
             node["typeVersion"] = 2
             node["parameters"] = {"jsCode": "return [{json:{},binary:$binary}];"}
             node.pop("credentials", None)
-    workflow["meta"] = {**workflow.get("meta", {}), "disposableOnly": True, "productionImportForbidden": True, "externalNodeReplacements": ["OneDrive archive", "source contract resolver"]}
+    workflow["meta"] = {
+        **workflow.get("meta", {}),
+        "disposableOnly": True,
+        "productionImportForbidden": True,
+        "externalNodeReplacements": ["OneDrive archive", "source contract resolver"],
+    }
     return workflow
 
 
@@ -243,11 +269,13 @@ def sweep_input(case: str) -> str:
 def build_ai_wrapper(workflow_id: str, case: str) -> dict:
     base = {
         "policy_id": "classify-unresolved",
-        "unresolved": [{
-            "transaction_id": f"fixture:{case}",
-            "allowed_fields": ["category"],
-            "redacted_context": {"vendor": "Fixture Vendor"},
-        }],
+        "unresolved": [
+            {
+                "transaction_id": f"fixture:{case}",
+                "allowed_fields": ["category"],
+                "redacted_context": {"vendor": "Fixture Vendor"},
+            }
+        ],
     }
     if case == "caller-model-rejected":
         base["model"] = "caller-selected-model"
@@ -269,31 +297,35 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
     if profile == "luna":
         request = {
             "policy_id": "classify-unresolved",
-            "unresolved": [{
-                "transaction_id": "fixture:positive:luna:carrefour",
-                "allowed_fields": ["category", "tags"],
-                "redacted_context": {
-                    "merchant_description": "CARREFOUR MARKET UAE",
-                    "normalized_vendor": "Carrefour",
-                    "transaction_type": "PURCHASE",
-                    "deterministic_result": "category unresolved",
-                },
-            }],
+            "unresolved": [
+                {
+                    "transaction_id": "fixture:positive:luna:carrefour",
+                    "allowed_fields": ["category", "tags"],
+                    "redacted_context": {
+                        "merchant_description": "CARREFOUR MARKET UAE",
+                        "normalized_vendor": "Carrefour",
+                        "transaction_type": "PURCHASE",
+                        "deterministic_result": "category unresolved",
+                    },
+                }
+            ],
         }
         name = "DISPOSABLE ONLY · Positive Luna proposal"
     elif profile == "sol":
         request = {
             "policy_id": "recommend-category",
-            "unresolved": [{
-                "transaction_id": "fixture:positive:sol:category-recommendation",
-                "allowed_fields": ["category_recommendation"],
-                "redacted_context": {
-                    "merchant_description": "SPECIALIST FIXTURE MERCHANT",
-                    "normalized_vendor": "Specialist Fixture Merchant",
-                    "transaction_type": "PURCHASE",
-                    "deterministic_result": "no configured category fits",
-                },
-            }],
+            "unresolved": [
+                {
+                    "transaction_id": "fixture:positive:sol:category-recommendation",
+                    "allowed_fields": ["category_recommendation"],
+                    "redacted_context": {
+                        "merchant_description": "SPECIALIST FIXTURE MERCHANT",
+                        "normalized_vendor": "Specialist Fixture Merchant",
+                        "transaction_type": "PURCHASE",
+                        "deterministic_result": "no configured category fits",
+                    },
+                }
+            ],
         }
         name = "DISPOSABLE ONLY · GATED Positive Sol proposal"
     else:
@@ -314,13 +346,29 @@ def build_positive_ai_wrapper(workflow_id: str, profile: str) -> dict:
     return workflow
 
 
-def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
-    request = {
+def lease_fixture_request(owner: str, resource_key: str, outbox_id: str) -> dict:
+    return {
         "operation": "ACQUIRE",
-        "resource_key": "actual:fixture_concurrency",
+        "lease_class": "ACTUAL_OUTBOX",
+        "resource_key": resource_key,
         "lease_owner": owner,
         "ttl_seconds": 120,
+        "outbox_id": outbox_id,
+        "outbox_state": "PREPARED",
+        "attempt_count": 0,
+        "admission": "INITIAL",
+        "account_id": "fixture-account",
+        "payload_sha256": "1" * 64,
+        "budget_id": resource_key.removeprefix("actual:"),
+        "period_start": "2026-08-01",
+        "period_end": "2026-08-31",
     }
+
+
+def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
+    request = lease_fixture_request(
+        owner, "actual:fixture_concurrency", "fixture-lease-concurrency"
+    )
     return wrapper(
         workflow_id,
         f"DISPOSABLE ONLY · Lease acquire {owner}",
@@ -331,24 +379,37 @@ def build_lease_wrapper(workflow_id: str, owner: str) -> dict:
 
 def build_stale_lease_wrapper() -> dict:
     trigger = manual_node()
+    stale_request = canonical(
+        lease_fixture_request(
+            "n8n:fixture:stale",
+            "actual:fixture_stale",
+            "fixture-lease-stale",
+        )
+    )
     acquire_input = code_node(
         "lease-stale-input",
         "Build Stale Fixture Acquire",
-        "return [{json:{operation:'ACQUIRE',resource_key:'actual:fixture_stale',lease_owner:'n8n:fixture:stale',ttl_seconds:120}}];",
+        f"return [{{json:{stale_request}}}];",
         [-250, 0],
     )
-    acquire = execute_node("lease-stale-acquire", "Acquire Fixture Lease", LEASE_ID, [0, 0])
+    acquire = execute_node(
+        "lease-stale-acquire", "Acquire Fixture Lease", LEASE_ID, [0, 0]
+    )
     corrupt = code_node(
         "lease-stale-corrupt",
         "Build Stale Fence Assertion",
-        "return [{json:{operation:'ASSERT',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];",
+        "return [{json:{operation:'ASSERT',lease_class:'ACTUAL_OUTBOX',resource_key:$json.resource_key,lease_id:$json.lease_id,fencing_token:Number($json.fencing_token)+1}}];",
         [250, 0],
     )
-    assertion = execute_node("lease-stale-assert", "Assert Stale Fixture Fence", LEASE_ID, [500, 0])
+    assertion = execute_node(
+        "lease-stale-assert", "Assert Stale Fixture Fence", LEASE_ID, [500, 0]
+    )
     nodes = [trigger, acquire_input, acquire, corrupt, assertion]
     connections = {}
     for left, right in zip(nodes, nodes[1:]):
-        connections[left["name"]] = {"main": [[{"node": right["name"], "type": "main", "index": 0}]]}
+        connections[left["name"]] = {
+            "main": [[{"node": right["name"], "type": "main", "index": 0}]]
+        }
     return {
         "id": "90000000-0000-4000-8000-000000000907",
         "name": "DISPOSABLE ONLY · Stale writer fence rejected",
@@ -382,12 +443,38 @@ def build_error_redaction_fixture() -> dict:
         [-600, 0],
     )
     workflow["nodes"].insert(1, emit)
-    schema = next(table for table in read_json(PRODUCTION.parent / "data-tables.json")["tables"] if table["name"] == "finance_execution_failures")
-    create = {"id": "fixture-failure-table", "name": "Create Disposable Failure Table", "type": "n8n-nodes-base.dataTable", "typeVersion": 1.1, "position": [-900, 0], "parameters": {"resource": "table", "operation": "create", "tableName": "finance_execution_failures", "columns": {"column": [{"name": key, "type": value} for key, value in schema["columns"].items()]}, "options": {"createIfNotExists": True}}}
+    schema = next(
+        table
+        for table in read_json(PRODUCTION.parent / "data-tables.json")["tables"]
+        if table["name"] == "finance_execution_failures"
+    )
+    create = {
+        "id": "fixture-failure-table",
+        "name": "Create Disposable Failure Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [-900, 0],
+        "parameters": {
+            "resource": "table",
+            "operation": "create",
+            "tableName": "finance_execution_failures",
+            "columns": {
+                "column": [
+                    {"name": key, "type": value}
+                    for key, value in schema["columns"].items()
+                ]
+            },
+            "options": {"createIfNotExists": True},
+        },
+    }
     workflow["nodes"].insert(1, create)
     workflow["connections"].pop(old_name, None)
-    workflow["connections"][trigger["name"]] = {"main": [[{"node": create["name"], "type": "main", "index": 0}]]}
-    workflow["connections"][create["name"]] = {"main": [[{"node": emit["name"], "type": "main", "index": 0}]]}
+    workflow["connections"][trigger["name"]] = {
+        "main": [[{"node": create["name"], "type": "main", "index": 0}]]
+    }
+    workflow["connections"][create["name"]] = {
+        "main": [[{"node": emit["name"], "type": "main", "index": 0}]]
+    }
     workflow["connections"][emit["name"]] = {
         "main": [[{"node": "Redact and Classify Failure", "type": "main", "index": 0}]]
     }
@@ -396,11 +483,43 @@ def build_error_redaction_fixture() -> dict:
 
 def build_failure_persistence_readback() -> dict:
     production = read_json(PRODUCTION / "16-operations-error-handler.json")
-    read = copy.deepcopy(next(node for node in production["nodes"] if node["name"] == "Read Back Verified Failure Receipt"))
-    read["parameters"]["filters"]["conditions"][0]["keyValue"] = "fixture-error-redaction"
+    read = copy.deepcopy(
+        next(
+            node
+            for node in production["nodes"]
+            if node["name"] == "Read Back Verified Failure Receipt"
+        )
+    )
+    read["parameters"]["filters"]["conditions"][0]["keyValue"] = (
+        "fixture-error-redaction"
+    )
     trigger = manual_node("failure-readback-trigger")
-    terminal = code_node("failure-readback-terminal", "Verify Durable Failure Receipt", "const rows=$input.all().map(item=>item.json); if(rows.length!==1 || rows[0].execution_id!=='fixture-error-redaction' || rows[0].readback_verified!==true) throw new Error('PERSISTED_FAILURE_RECEIPT_MISSING'); return [{json:{...rows[0],terminal_receipt_sink:'finance_execution_failures'}}];", [600,0])
-    return {"id":"90000000-0000-4000-8000-000000000921", "name":"DISPOSABLE ONLY · Read Persisted Failure Receipt", "active":False, "nodes":[trigger,read,terminal], "connections":{trigger["name"]:{"main":[[{"node":read["name"],"type":"main","index":0}]]},read["name"]:{"main":[[{"node":terminal["name"],"type":"main","index":0}]]}}, "settings":fixture_settings(), "meta":{"disposableOnly":True,"productionImportForbidden":True,"derivedFrom":"16-operations-error-handler.json"}}
+    terminal = code_node(
+        "failure-readback-terminal",
+        "Verify Durable Failure Receipt",
+        "const rows=$input.all().map(item=>item.json); if(rows.length!==1 || rows[0].execution_id!=='fixture-error-redaction' || rows[0].readback_verified!==true) throw new Error('PERSISTED_FAILURE_RECEIPT_MISSING'); return [{json:{...rows[0],terminal_receipt_sink:'finance_execution_failures'}}];",
+        [600, 0],
+    )
+    return {
+        "id": "90000000-0000-4000-8000-000000000921",
+        "name": "DISPOSABLE ONLY · Read Persisted Failure Receipt",
+        "active": False,
+        "nodes": [trigger, read, terminal],
+        "connections": {
+            trigger["name"]: {
+                "main": [[{"node": read["name"], "type": "main", "index": 0}]]
+            },
+            read["name"]: {
+                "main": [[{"node": terminal["name"], "type": "main", "index": 0}]]
+            },
+        },
+        "settings": fixture_settings(),
+        "meta": {
+            "disposableOnly": True,
+            "productionImportForbidden": True,
+            "derivedFrom": "16-operations-error-handler.json",
+        },
+    }
 
 
 def build_recovery_core() -> dict:
@@ -413,35 +532,55 @@ def build_recovery_core() -> dict:
         "productionImportForbidden": True,
         "derivedFrom": "17-actual-outbox-recovery.json",
         "externalNodeReplacements": [
-            "Schedule Trigger", "OneDrive artifact download", "Actual preflight/import/verify"
+            "Schedule Trigger",
+            "OneDrive artifact download",
+            "Actual preflight/import/verify",
         ],
         "financeWritesImpossible": True,
     }
     replacements = {
         "Every 10 Minutes": (
-            "n8n-nodes-base.executeWorkflowTrigger", 1.1, {"inputSource": "passthrough"}
+            "n8n-nodes-base.executeWorkflowTrigger",
+            1.1,
+            {"inputSource": "passthrough"},
         ),
         "Download Immutable Delta Artifact": (
-            "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
+            "n8n-nodes-base.code",
+            2,
+            {"jsCode": "return $input.all();"},
         ),
         "SHA-256 Recovered Delta": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.delta_sha256}}));"},
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": "return $input.all().map(i=>({json:{...i.json,recovered_sha256:i.json.delta_sha256}}));"
+            },
         ),
         "Extract Recovered Delta JSON": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"},
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": "return $input.all().map(i=>({json:{schema_version:i.json.delta_schema_version,actual_file_id:i.json.actual_file_id,config_version:i.json.config_version,account_id:'fixture-account',card_code:'FIXTURE_CARD',period_start:'2026-08-01',period_end:'2026-08-31',transactions:[{imported_id:i.json.idempotency_key,date:'2026-08-15',amount:-100,imported_payee:'Fixture',cleared:true}],expected_statement_balance_minor:-100}}));"
+            },
         ),
         "Recovery Actual Preflight": (
-            "n8n-nodes-base.code", 2, {"jsCode": "return $input.all();"}
+            "n8n-nodes-base.code",
+            2,
+            {"jsCode": "return $input.all();"},
         ),
         "Recovery Import PREPARED": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return [{json:{actual_transaction_ids:['fixture-actual-transaction']}}];"},
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": "return [{json:{actual_transaction_ids:['fixture-actual-transaction']}}];"
+            },
         ),
         "Recovery Verify Actual": (
-            "n8n-nodes-base.code", 2,
-            {"jsCode": "return [{json:{invariants_passed:true,expected_payload_sha256:'fixture',observed_payload_sha256:'fixture'}}];"},
+            "n8n-nodes-base.code",
+            2,
+            {
+                "jsCode": "return [{json:{invariants_passed:true,expected_payload_sha256:'fixture',observed_payload_sha256:'fixture'}}];"
+            },
         ),
     }
     for node in workflow["nodes"]:
@@ -461,7 +600,15 @@ def outbox_upsert_node(state: str) -> dict:
         "run_id": f"fixture-recovery-{suffix}",
         "idempotency_key": f"fixture:recovery:{suffix}",
         "actual_file_id": "fixture_actual",
-        "delta_sha256": ("a" if state == "PREPARED" else "b" if state == "ACTUAL_OBSERVED" else "c") * 64,
+        "account_id": "fixture-account",
+        "card_code": "FIXTURE_CARD",
+        "delta_sha256": {
+            "PREPARED": "a",
+            "ACTUAL_OBSERVED": "b",
+            "VERIFIED": "c",
+            "COMMITTED": "f",
+        }[state]
+        * 64,
         "delta_artifact_item_id": f"fixture-artifact-{suffix}",
         "delta_artifact_etag": "fixture-etag",
         "delta_schema_version": "statement-delta-v1",
@@ -471,6 +618,32 @@ def outbox_upsert_node(state: str) -> dict:
         "attempt_count": 0,
         "updated_at": "={{ $now.toISO() }}",
     }
+    if state in {"VERIFIED", "COMMITTED"}:
+        economic_digest = ("e" if state == "VERIFIED" else "9") * 64
+        value.update(
+            {
+                "verification_version": 1,
+                "period_start": "2026-08-01",
+                "period_end": "2026-08-31",
+                "expected_payload_sha256": economic_digest,
+                "observed_payload_sha256": economic_digest,
+                "expected_count": 1,
+                "observed_count": 1,
+                "expected_amount_sum_minor": -100,
+                "observed_amount_sum_minor": -100,
+                "expected_account_balance": -100,
+                "observed_account_balance": -100,
+                "invariants_passed": True,
+                "verified_at": "={{ $now.toISO() }}",
+            }
+        )
+    if state == "COMMITTED":
+        value.update(
+            {
+                "lease_owner": "n8n:fixture:predecessor:committed",
+                "lease_fence": 1,
+            }
+        )
     return {
         "id": f"seed-{suffix}",
         "name": f"Seed {state} Outbox Crash Boundary",
@@ -480,11 +653,21 @@ def outbox_upsert_node(state: str) -> dict:
         "parameters": {
             "resource": "row",
             "operation": "upsert",
-            "dataTableId": {"__rl": True, "value": "finance_actual_batches", "mode": "name"},
+            "dataTableId": {
+                "__rl": True,
+                "value": "finance_actual_batches",
+                "mode": "name",
+            },
             "matchType": "allConditions",
-            "filters": {"conditions": [{
-                "keyName": "batch_id", "condition": "eq", "keyValue": value["batch_id"]
-            }]},
+            "filters": {
+                "conditions": [
+                    {
+                        "keyName": "batch_id",
+                        "condition": "eq",
+                        "keyValue": value["batch_id"],
+                    }
+                ]
+            },
             "columns": {
                 "mappingMode": "defineBelow",
                 "value": value,
@@ -498,19 +681,141 @@ def outbox_upsert_node(state: str) -> dict:
     }
 
 
+def terminal_effect_upsert_node(state: str) -> dict:
+    suffix = state.lower().replace("_", "-")
+    payload_sha256 = ("b" if state == "ACTUAL_OBSERVED" else "c") * 64
+    verified_payload_sha256 = ("d" if state == "ACTUAL_OBSERVED" else "e") * 64
+    effect_state = "ISSUED" if state == "ACTUAL_OBSERVED" else "VERIFIED"
+    verified_value = "NULL" if state == "ACTUAL_OBSERVED" else "$6::text"
+    return {
+        "id": f"seed-{suffix}-terminal-effect",
+        "name": f"Seed {state} Durable Writer Evidence",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [-300, 0],
+        "alwaysOutputData": True,
+        "parameters": {
+            "operation": "executeQuery",
+            "query": (
+                "INSERT INTO finance_ops.actual_writer_effects "
+                "(resource_key, outbox_id, account_id, budget_id, payload_sha256, "
+                "verified_payload_sha256, period_start, period_end, state, attempt_count, "
+                "lease_id, lease_owner, fencing_token, issued_at, updated_at) "
+                "VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, "
+                f"{verified_value}, $7::date, $8::date, '{effect_state}', 1, "
+                "$9::uuid, $10::text, 1, clock_timestamp(), clock_timestamp()) "
+                "ON CONFLICT (resource_key, outbox_id) DO NOTHING "
+                "RETURNING resource_key, outbox_id, payload_sha256, "
+                "verified_payload_sha256, state;"
+            ),
+            "options": {
+                "queryReplacement": "={{ ["
+                + f"'actual:fixture_actual', 'fixture-recovery-{suffix}', "
+                + f"'fixture-account', 'fixture_actual', '{payload_sha256}', "
+                + f"'{verified_payload_sha256}', '2026-08-01', '2026-08-31', "
+                + f"'00000000-0000-4000-8000-0000000000{19 if state == 'ACTUAL_OBSERVED' else 20}', "
+                + f"'n8n:fixture:predecessor:{suffix}'"
+                + "] }}"
+            },
+        },
+        "credentials": {
+            "postgres": {
+                "id": "BIND_FINANCE_OPS_DB",
+                "name": "Finance Operations Postgres",
+            }
+        },
+    }
+
+
+def committed_unreleased_seed_node() -> dict:
+    lease_id = "00000000-0000-4000-8000-000000000023"
+    return {
+        "id": "seed-committed-unreleased-effect",
+        "name": "Seed COMMITTED Unreleased Writer Evidence",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [-300, 0],
+        "alwaysOutputData": True,
+        "parameters": {
+            "operation": "executeQuery",
+            "query": (
+                "WITH seeded_lease AS ("
+                "INSERT INTO finance_ops.writer_leases AS current "
+                "(resource_key, lease_id, lease_owner, fencing_token, expires_at, released_at, updated_at) "
+                "VALUES ($1::text, $2::uuid, $3::text, 1, "
+                "clock_timestamp() + interval '10 minutes', NULL, clock_timestamp()) "
+                "ON CONFLICT (resource_key) DO UPDATE SET lease_id = EXCLUDED.lease_id, "
+                "lease_owner = EXCLUDED.lease_owner, fencing_token = EXCLUDED.fencing_token, "
+                "expires_at = EXCLUDED.expires_at, released_at = NULL, updated_at = clock_timestamp() "
+                "WHERE current.released_at IS NOT NULL AND NOT EXISTS ("
+                "SELECT 1 FROM finance_ops.actual_writer_releases "
+                "WHERE resource_key = $1::text AND lease_id = $2::uuid AND fencing_token = 1"
+                ") RETURNING resource_key, lease_id, lease_owner, fencing_token"
+                ") INSERT INTO finance_ops.actual_writer_effects "
+                "(resource_key, outbox_id, account_id, budget_id, payload_sha256, "
+                "verified_payload_sha256, period_start, period_end, state, attempt_count, "
+                "lease_id, lease_owner, fencing_token, updated_at) "
+                "SELECT resource_key, $4::text, $5::text, $6::text, $7::text, $8::text, "
+                "$9::date, $10::date, 'COMMITTED', 1, lease_id, lease_owner, fencing_token, "
+                "clock_timestamp() FROM seeded_lease "
+                "ON CONFLICT (resource_key, outbox_id) DO NOTHING "
+                "RETURNING resource_key, outbox_id, payload_sha256, "
+                "verified_payload_sha256, state, lease_id::text AS lease_id, "
+                "lease_owner, fencing_token;"
+            ),
+            "options": {
+                "queryReplacement": (
+                    "={{ ['actual:fixture_actual', "
+                    f"'{lease_id}', 'n8n:fixture:predecessor:committed', "
+                    "'fixture-recovery-committed', 'fixture-account', "
+                    "'fixture_actual', "
+                    f"'{'f' * 64}', '{'9' * 64}', "
+                    "'2026-08-01', '2026-08-31'] }}"
+                )
+            },
+        },
+        "credentials": {
+            "postgres": {
+                "id": "BIND_FINANCE_OPS_DB",
+                "name": "Finance Operations Postgres",
+            }
+        },
+    }
+
+
 def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
     trigger = manual_node()
     seed = outbox_upsert_node(state)
-    call = execute_node("run-recovery", "Run Derived Recovery Core", RECOVERY_FIXTURE_ID, [100, 0])
+    call = execute_node(
+        "run-recovery", "Run Derived Recovery Core", RECOVERY_FIXTURE_ID, [100, 0]
+    )
+    nodes = [trigger]
+    connections = {}
+    previous = trigger
+    if state in {"ACTUAL_OBSERVED", "VERIFIED", "COMMITTED"}:
+        terminal_seed = (
+            committed_unreleased_seed_node()
+            if state == "COMMITTED"
+            else terminal_effect_upsert_node(state)
+        )
+        nodes.append(terminal_seed)
+        connections[previous["name"]] = {
+            "main": [[{"node": terminal_seed["name"], "type": "main", "index": 0}]]
+        }
+        previous = terminal_seed
+    nodes.extend((seed, call))
+    connections[previous["name"]] = {
+        "main": [[{"node": seed["name"], "type": "main", "index": 0}]]
+    }
+    connections[seed["name"]] = {
+        "main": [[{"node": call["name"], "type": "main", "index": 0}]]
+    }
     return {
         "id": workflow_id,
         "name": f"DISPOSABLE ONLY · Recover from {state}",
         "active": False,
-        "nodes": [trigger, seed, call],
-        "connections": {
-            trigger["name"]: {"main": [[{"node": seed["name"], "type": "main", "index": 0}]]},
-            seed["name"]: {"main": [[{"node": call["name"], "type": "main", "index": 0}]]},
-        },
+        "nodes": nodes,
+        "connections": connections,
         "settings": fixture_settings(),
         "pinData": {},
         "meta": {"disposableOnly": True, "productionImportForbidden": True},
@@ -520,24 +825,67 @@ def build_recovery_wrapper(workflow_id: str, state: str) -> dict:
 def build_all() -> dict[str, dict]:
     workflows = {
         "90-derived-outlook-sweep-core.json": build_sweep_core(),
-        "91-sweep-zero.json": wrapper("90000000-0000-4000-8000-000000000901", "DISPOSABLE ONLY · Sweep zero messages", sweep_input("zero"), SWEEP_FIXTURE_ID),
-        "92-sweep-101.json": wrapper("90000000-0000-4000-8000-000000000902", "DISPOSABLE ONLY · Sweep 101 messages", sweep_input("one-hundred-one"), SWEEP_FIXTURE_ID),
-        "93-sweep-late-order.json": wrapper("90000000-0000-4000-8000-000000000903", "DISPOSABLE ONLY · Sweep late out of order", sweep_input("late-out-of-order"), SWEEP_FIXTURE_ID),
-        "94-sweep-pagination-failure.json": wrapper("90000000-0000-4000-8000-000000000904", "DISPOSABLE ONLY · Sweep pagination failure", sweep_input("pagination-failure"), SWEEP_FIXTURE_ID),
-        "95-lease-acquire-a.json": build_lease_wrapper("90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"),
-        "96-lease-acquire-b.json": build_lease_wrapper("90000000-0000-4000-8000-000000000906", "n8n:fixture:concurrent:b"),
+        "91-sweep-zero.json": wrapper(
+            "90000000-0000-4000-8000-000000000901",
+            "DISPOSABLE ONLY · Sweep zero messages",
+            sweep_input("zero"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "92-sweep-101.json": wrapper(
+            "90000000-0000-4000-8000-000000000902",
+            "DISPOSABLE ONLY · Sweep 101 messages",
+            sweep_input("one-hundred-one"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "93-sweep-late-order.json": wrapper(
+            "90000000-0000-4000-8000-000000000903",
+            "DISPOSABLE ONLY · Sweep late out of order",
+            sweep_input("late-out-of-order"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "94-sweep-pagination-failure.json": wrapper(
+            "90000000-0000-4000-8000-000000000904",
+            "DISPOSABLE ONLY · Sweep pagination failure",
+            sweep_input("pagination-failure"),
+            SWEEP_FIXTURE_ID,
+        ),
+        "95-lease-acquire-a.json": build_lease_wrapper(
+            "90000000-0000-4000-8000-000000000905", "n8n:fixture:concurrent:a"
+        ),
+        "96-lease-acquire-b.json": build_lease_wrapper(
+            "90000000-0000-4000-8000-000000000906", "n8n:fixture:concurrent:b"
+        ),
         "97-lease-stale-assert.json": build_stale_lease_wrapper(),
-        "98-ai-caller-model-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000908", "caller-model-rejected"),
-        "99-ai-locked-field-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000909", "locked-field-rejected"),
-        "100-ai-missing-policy-rejected.json": build_ai_wrapper("90000000-0000-4000-8000-000000000910", "missing-active-policy"),
-        "106-ai-positive-luna.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000911", "luna"),
-        "107-ai-positive-sol-gated.json": build_positive_ai_wrapper("90000000-0000-4000-8000-000000000912", "sol"),
+        "98-ai-caller-model-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000908", "caller-model-rejected"
+        ),
+        "99-ai-locked-field-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000909", "locked-field-rejected"
+        ),
+        "100-ai-missing-policy-rejected.json": build_ai_wrapper(
+            "90000000-0000-4000-8000-000000000910", "missing-active-policy"
+        ),
+        "106-ai-positive-luna.json": build_positive_ai_wrapper(
+            "90000000-0000-4000-8000-000000000911", "luna"
+        ),
+        "107-ai-positive-sol-gated.json": build_positive_ai_wrapper(
+            "90000000-0000-4000-8000-000000000912", "sol"
+        ),
         "101-error-redaction.json": build_error_redaction_fixture(),
         "108-error-persistence-readback.json": build_failure_persistence_readback(),
         "102-derived-recovery-core.json": build_recovery_core(),
-        "103-recover-prepared.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000918", "PREPARED"),
-        "104-recover-actual-observed.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"),
-        "105-recover-verified.json": build_recovery_wrapper("90000000-0000-4000-8000-000000000920", "VERIFIED"),
+        "103-recover-prepared.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000918", "PREPARED"
+        ),
+        "104-recover-actual-observed.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000919", "ACTUAL_OBSERVED"
+        ),
+        "105-recover-verified.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000920", "VERIFIED"
+        ),
+        "109-recover-committed-unreleased.json": build_recovery_wrapper(
+            "90000000-0000-4000-8000-000000000923", "COMMITTED"
+        ),
     }
     catalog = {workflow["id"]: workflow for workflow in workflows.values()}
     catalog["10000000-0000-4000-8000-000000000001"] = build_archive_fixture()
@@ -559,14 +907,23 @@ def build_all() -> dict[str, dict]:
 
 def database_target_id(node: dict) -> str:
     parameters = node.get("parameters")
-    if not isinstance(parameters, dict) or parameters.get("source", "database") != "database":
-        raise ValueError(f"ExecuteWorkflow node {node.get('name')} is not a database-ID call")
+    if (
+        not isinstance(parameters, dict)
+        or parameters.get("source", "database") != "database"
+    ):
+        raise ValueError(
+            f"ExecuteWorkflow node {node.get('name')} is not a database-ID call"
+        )
     selector = parameters.get("workflowId")
     if not isinstance(selector, dict) or not isinstance(selector.get("value"), str):
-        raise TypeError(f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID")
+        raise TypeError(
+            f"ExecuteWorkflow node {node.get('name')} has an invalid workflow ID"
+        )
     target_id = selector["value"]
     if not target_id:
-        raise ValueError(f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID")
+        raise ValueError(
+            f"ExecuteWorkflow node {node.get('name')} has an empty workflow ID"
+        )
     return target_id
 
 
@@ -580,7 +937,9 @@ def inline_execute_workflows(
         raise TypeError("inline workflow must be an object with a string ID")
     workflow_id = workflow["id"]
     if workflow_id in ancestors:
-        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+        raise ValueError(
+            "inline workflow cycle: " + " -> ".join((*ancestors, workflow_id))
+        )
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
         raise TypeError(f"inline workflow {workflow_id} is malformed")
@@ -597,7 +956,9 @@ def inline_execute_workflows(
             continue
         target_id = database_target_id(node)
         if target_id not in allowed_edges.get(workflow_id, frozenset()):
-            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+            raise ValueError(
+                f"inline edge {workflow_id} -> {target_id} is not allowlisted"
+            )
         target = catalog.get(target_id)
         if target is None:
             raise ValueError(f"inline target {target_id} is unknown")
@@ -620,7 +981,9 @@ def validate_inline_workflow(
         raise TypeError("inline workflow must be an object with a string ID")
     workflow_id = workflow["id"]
     if workflow_id in ancestors:
-        raise ValueError("inline workflow cycle: " + " -> ".join((*ancestors, workflow_id)))
+        raise ValueError(
+            "inline workflow cycle: " + " -> ".join((*ancestors, workflow_id))
+        )
     nodes = workflow.get("nodes")
     if not isinstance(nodes, list) or not isinstance(workflow.get("connections"), dict):
         raise TypeError(f"inline workflow {workflow_id} is malformed")
@@ -645,12 +1008,16 @@ def validate_inline_workflow(
         try:
             child = json.loads(workflow_json)
         except json.JSONDecodeError as error:
-            raise ValueError(f"inline workflow JSON in {workflow_id} is malformed") from error
+            raise ValueError(
+                f"inline workflow JSON in {workflow_id} is malformed"
+            ) from error
         if not isinstance(child, dict) or not isinstance(child.get("id"), str):
             raise TypeError(f"inline workflow JSON in {workflow_id} is malformed")
         target_id = child["id"]
         if target_id not in allowed_edges.get(workflow_id, frozenset()):
-            raise ValueError(f"inline edge {workflow_id} -> {target_id} is not allowlisted")
+            raise ValueError(
+                f"inline edge {workflow_id} -> {target_id} is not allowlisted"
+            )
         if workflow_json != canonical(child):
             raise ValueError(f"inline workflow JSON in {workflow_id} is not canonical")
         validate_inline_workflow(child, allowed_edges, path)
@@ -668,20 +1035,115 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
         )
     }
     scenario_contract = {
-            "sweep_zero": {"workflow_id": "90000000-0000-4000-8000-000000000901", "expected_exit": 0, "expected": {"scanned_count": 0, "heartbeat": True}},
-            "sweep_one_no_attachments": {"workflow_id": "90000000-0000-4000-8000-000000000012", "expected_exit": 0, "expected": {"scanned_count": 1, "matched_count": 1, "attachment_identity_keys": []}},
-            "sweep_101": {"workflow_id": "90000000-0000-4000-8000-000000000902", "expected_exit": 0, "expected": {"scanned_count": 101, "matched_count": 101, "attachment_identity_keys": []}},
-            "sweep_late_order": {"workflow_id": "90000000-0000-4000-8000-000000000903", "expected_exit": 0, "expected_ids": ["m1", "m2", "m3"]},
-            "sweep_pagination_failure": {"workflow_id": "90000000-0000-4000-8000-000000000904", "expected_exit": "nonzero"},
-            "lease_concurrency": {"workflow_ids": ["90000000-0000-4000-8000-000000000905", "90000000-0000-4000-8000-000000000906"], "run_concurrently": True, "expected_successes": 1},
-            "lease_stale": {"workflow_id": "90000000-0000-4000-8000-000000000907", "expected_exit": "nonzero", "expected_error": "WRITER_LEASE_STALE"},
-            "ai_negative": {"workflow_ids": ["90000000-0000-4000-8000-000000000908", "90000000-0000-4000-8000-000000000909", "90000000-0000-4000-8000-000000000910"], "expected_exit": "nonzero", "runner_calls": 0},
-            "ai_positive_luna": {"workflow_id": "90000000-0000-4000-8000-000000000911", "expected_exit": 0, "policy_id": "classify-unresolved", "expected_model": "gpt-5.6-luna", "expected_reasoning_effort": "max", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0},
-            "ai_positive_sol_gated": {"workflow_id": "90000000-0000-4000-8000-000000000912", "expected_exit": 0, "policy_id": "recommend-category", "expected_model": "gpt-5.6-sol", "expected_reasoning_effort": "medium", "expected_auth_mode": "CHATGPT_SUBSCRIPTION", "finance_writes": 0, "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM", "default_execution_forbidden": True},
-            "error_redaction": {"workflow_id": "90000000-0000-4000-8000-000000000916", "expected_exit": 0, "receipt_sink": "finance_execution_failures", "forbidden_readback": ["DontLeak", "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890", "4111111111111111"]},
-            "error_persistence_readback": {"workflow_id": "90000000-0000-4000-8000-000000000921", "expected_exit": 0, "read_only": True},
-            "outbox_recovery": {"workflow_ids": ["90000000-0000-4000-8000-000000000918", "90000000-0000-4000-8000-000000000919", "90000000-0000-4000-8000-000000000920"], "expected_exit": 0, "expected_state": "COMMITTED", "finance_writes": 0},
-        }
+        "sweep_zero": {
+            "workflow_id": "90000000-0000-4000-8000-000000000901",
+            "expected_exit": 0,
+            "expected": {"scanned_count": 0, "heartbeat": True},
+        },
+        "sweep_one_no_attachments": {
+            "workflow_id": "90000000-0000-4000-8000-000000000012",
+            "expected_exit": 0,
+            "expected": {
+                "scanned_count": 1,
+                "matched_count": 1,
+                "attachment_identity_keys": [],
+            },
+        },
+        "sweep_101": {
+            "workflow_id": "90000000-0000-4000-8000-000000000902",
+            "expected_exit": 0,
+            "expected": {
+                "scanned_count": 101,
+                "matched_count": 101,
+                "attachment_identity_keys": [],
+            },
+        },
+        "sweep_late_order": {
+            "workflow_id": "90000000-0000-4000-8000-000000000903",
+            "expected_exit": 0,
+            "expected_ids": ["m1", "m2", "m3"],
+        },
+        "sweep_pagination_failure": {
+            "workflow_id": "90000000-0000-4000-8000-000000000904",
+            "expected_exit": "nonzero",
+        },
+        "lease_concurrency": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000905",
+                "90000000-0000-4000-8000-000000000906",
+            ],
+            "run_concurrently": True,
+            "expected_successes": 1,
+        },
+        "lease_stale": {
+            "workflow_id": "90000000-0000-4000-8000-000000000907",
+            "expected_exit": "nonzero",
+            "expected_error": "WRITER_LEASE_STALE",
+        },
+        "ai_negative": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000908",
+                "90000000-0000-4000-8000-000000000909",
+                "90000000-0000-4000-8000-000000000910",
+            ],
+            "expected_exit": "nonzero",
+            "runner_calls": 0,
+        },
+        "ai_positive_luna": {
+            "workflow_id": "90000000-0000-4000-8000-000000000911",
+            "expected_exit": 0,
+            "policy_id": "classify-unresolved",
+            "expected_model": "gpt-5.6-luna",
+            "expected_reasoning_effort": "max",
+            "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+            "finance_writes": 0,
+        },
+        "ai_positive_sol_gated": {
+            "workflow_id": "90000000-0000-4000-8000-000000000912",
+            "expected_exit": 0,
+            "policy_id": "recommend-category",
+            "expected_model": "gpt-5.6-sol",
+            "expected_reasoning_effort": "medium",
+            "expected_auth_mode": "CHATGPT_SUBSCRIPTION",
+            "finance_writes": 0,
+            "execution_gate": "DISPOSABLE_ALLOW_SOL_MEDIUM",
+            "default_execution_forbidden": True,
+        },
+        "error_redaction": {
+            "workflow_id": "90000000-0000-4000-8000-000000000916",
+            "expected_exit": 0,
+            "receipt_sink": "finance_execution_failures",
+            "forbidden_readback": [
+                "DontLeak",
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890",
+                "4111111111111111",
+            ],
+        },
+        "error_persistence_readback": {
+            "workflow_id": "90000000-0000-4000-8000-000000000921",
+            "expected_exit": 0,
+            "read_only": True,
+        },
+        "outbox_recovery": {
+            "workflow_ids": [
+                "90000000-0000-4000-8000-000000000918",
+                "90000000-0000-4000-8000-000000000919",
+                "90000000-0000-4000-8000-000000000920",
+            ],
+            "expected_exit": 0,
+            "expected_state": "COMMITTED",
+            "finance_writes": 0,
+        },
+        "committed_unreleased_recovery": {
+            "workflow_id": "90000000-0000-4000-8000-000000000923",
+            "expected_exit": 0,
+            "expected_state": "COMMITTED",
+            "expected_durable_outbox_state": "RELEASED",
+            "writer_release_verified": True,
+            "committed_release_recovered": True,
+            "finance_writes": 0,
+        },
+    }
     fixture_workflow_ids = {workflow["id"] for workflow in workflows.values()}
     scenario_workflow_ids: set[str] = set()
     for scenario in scenario_contract.values():
@@ -691,7 +1153,9 @@ def build_manifest(workflows: dict[str, dict], rendered: dict[str, str]) -> dict
         workflow_ids = scenario.get("workflow_ids")
         if isinstance(workflow_ids, list):
             scenario_workflow_ids.update(
-                workflow_id for workflow_id in workflow_ids if isinstance(workflow_id, str)
+                workflow_id
+                for workflow_id in workflow_ids
+                if isinstance(workflow_id, str)
             )
     missing_workflow_ids = sorted(scenario_workflow_ids - fixture_workflow_ids)
     if missing_workflow_ids:

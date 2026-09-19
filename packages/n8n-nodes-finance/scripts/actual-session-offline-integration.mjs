@@ -47,6 +47,7 @@ function outbox(accountId, transactions, extra = {}) {
     account_id: accountId,
     execution_context: { trigger: 'SCHEDULE', manual: false, mcp: false },
     writer_lease: {
+      resource_key: `actual:${credential.syncId}`,
       lease_id: 'offline-session-test',
       fencing_token: 1,
       expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
