@@ -1,0 +1,224 @@
+{
+  "bead": "orc-n2q.396.10",
+  "source": "closed-implementation-proof-20260922.json",
+  "recordCount": 27,
+  "finding": "All 27 owned records remain unverified: closed proof provides no independently accessible exact source, PR, or artifact carrier. Historical records were not reopened.",
+  "records": [
+    {
+      "id": "orc-n2q.376.105.1",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims integrated property/manual precedence at commit c921bf2 with 25 tests and exact paths, but source/PR carrier is inaccessible.",
+      "reason": "Implementation claim remains commit-only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.115.1",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims reconciled properties/rules/history semantics and smoke proof, but exact source/commit is inaccessible.",
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.115.4",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims focused classification recovery tests, with no accessible source/commit/PR/artifact carrier.",
+      "reason": "Test delivery proof missing.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.115.5",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims approved merchant aliases in an in-memory commit/worktree, but no accessible exact source/PR/artifact was inspected.",
+      "reason": "Implementation claim is ledger-only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.1",
+      "verdict": "unverified",
+      "evidence": "Ledger show reports heads 1c12320/a51d42 and focused tests, but no accessible exact source/PR artifact; comments also record an earlier end-to-end gap.",
+      "reason": "Implementation claim has self-reported evidence only and a recorded prior production-flow contradiction.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.15",
+      "verdict": "unverified",
+      "evidence": "FinanceLedgerRead records exact TS paths/head ccb507a and 26/26 tests; no accessible exact PR/commit carrier was found, so current similarly named source is not sufficient.",
+      "reason": "Implementation proof remains ledger-only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.17",
+      "verdict": "unverified",
+      "evidence": "Local artifact/ledger claims membership/reimbursement fixes with focused regressions but no accessible exact source/PR/artifact.",
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.18",
+      "verdict": "unverified",
+      "evidence": "Local artifact/ledger names a rule transport/ownership correction with no accessible exact source/PR/artifact carrier.",
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.4",
+      "verdict": "unverified",
+      "evidence": "Ledger show names package source paths and heads ccb507a/fca9762, with reported 26/26 tests; exact delivered commit/artifact is inaccessible.",
+      "reason": "Current similarly named source is not proof of this exact delivery; no inspectable PR/commit carrier.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.5",
+      "verdict": "unverified",
+      "evidence": "Ledger show names head 1615d2be and generated rule paths with focused checks, but the exact source/commit is not accessible here.",
+      "reason": "Source implementation claim remains ledger-only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.6",
+      "verdict": "unverified",
+      "evidence": "Ledger show claims commit ffa8d59 and focused cross-runtime tests but exposes no accessible commit/source artifact.",
+      "reason": "Test implementation claim is not independently inspectable.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.122.4.8",
+      "verdict": "unverified",
+      "evidence": "Ledger show names nested source paths, head c3e5faba, and /tmp/orc-n2q.376.122.4.8-rule-ownership.patch; the patch/source carrier was inaccessible.",
+      "reason": "Exact implementation is self-reported through ledger only; patch proof missing.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.56",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims account-aware duplicate suppression and full940 test evidence, but no exact source/commit/PR carrier was accessible.",
+      "reason": "Bug implementation claim is self-report only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.62.1",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims a full940 test run for a rules bug, but no exact source/commit/PR was accessible.",
+      "reason": "Test result alone and self-reported scope do not prove source delivery.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims completed RuleAnalysisWorkbench at exact head 42ee59b with 14 closed children, but no accessible source/PR/artifact for that head.",
+      "reason": "Umbrella implementation claim cannot be independently proven.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.1",
+      "verdict": "unverified",
+      "evidence": "Ledger/local artifact claims schema/effect implementation at commit 862b63c, but no accessible source/PR/artifact was inspected.",
+      "reason": "Commit-only proof inaccessible.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.10",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims replacement implementation at commit 1de5e76, but no accessible source/PR/artifact.",
+      "reason": "Commit-only proof inaccessible.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.11",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims lint/replay fixes at c2dde9f with focused checks, but no accessible source/PR/artifact.",
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.14",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims EvaluationResult fix at commit 42ee59b and 13/13 tests, but GitHub commit URL returned 404 and no source artifact was accessible.",
+      "reason": "Exact delivery carrier is inaccessible.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.2",
+      "verdict": "unverified",
+      "evidence": "Ledger show describes new finance_tracker/rule_analysis_reasons.py but records no commit, PR, or accessible artifact.",
+      "reason": "Implementation claim lacks delivery carrier.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.3",
+      "verdict": "unverified",
+      "evidence": "Local artifact has an implementation-titled task with no close reason; later replacement .8.8 records supersession, but this row itself has no explicit retirement proof.",
+      "reason": "No independently accessible delivery or explicit closure disposition.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.4",
+      "verdict": "unverified",
+      "evidence": "Local artifact has an implementation-titled task with no close reason or accessible source/commit/artifact.",
+      "reason": "Proof missing.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.5",
+      "verdict": "unverified",
+      "evidence": "Local artifact has an implementation-titled task with no close reason or accessible source/commit/artifact.",
+      "reason": "Proof missing.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.6",
+      "verdict": "unverified",
+      "evidence": "Ledger show claims tests/test_rule_analysis_workbench.py commit d9acac2 and 13 tests, but exact source/commit is inaccessible.",
+      "reason": "Test delivery is ledger-only.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.7",
+      "verdict": "unverified",
+      "evidence": "Ledger show claims facade commit 4a4c81b and focused in-process smoke, but finance_tracker/rule_analysis.py is not accessible in the inspected checkout and no PR/artifact is available.",
+      "reason": "Exact source delivery is inaccessible.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.8",
+      "verdict": "unverified",
+      "evidence": "Ledger show names matcher source and commits b6ae7ec/673dedee with focused smoke, but exact source/commit is inaccessible.",
+      "reason": "Ledger self-report is not independently inspectable.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    },
+    {
+      "id": "orc-n2q.376.63.8.9",
+      "verdict": "unverified",
+      "evidence": "Ledger show names lifecycle source and commits be38cbd/d765d320 with smoke evidence, but exact source/commit is inaccessible.",
+      "reason": "Ledger self-report is not independently inspectable.",
+      "nextAction": "Retrieve independently accessible exact source, PR, or artifact carrier for this unresolved record; preserve historical closure and update evidence when found.",
+      "actionBead": "orc-n2q.396.10.2"
+    }
+  ]
+}

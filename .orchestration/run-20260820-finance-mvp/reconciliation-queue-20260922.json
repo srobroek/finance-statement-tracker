@@ -1,0 +1,1788 @@
+{
+  "epic": "orc-n2q.396",
+  "sourceAudit": "orc-n2q.395.1",
+  "sourceCommit": "14877c4e",
+  "execution": "Not started",
+  "coverage": {
+    "unverified": 337,
+    "landingUnestablished": 43,
+    "total": 380
+  },
+  "batches": [
+    {
+      "id": "orc-n2q.396.1",
+      "title": "Reconcile legacy runtime evidence 1/2 (41 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-1.json",
+      "records": [
+        {
+          "id": "orc-4cs",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-4w8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-a26k.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-a26k.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-ar2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-artifact-redaction-r4-fix",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-dcx0",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-drk",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-four-table-production-cutover-fix",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-four-table-production-cutover-rebase-r1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-msauth-runtime-conversion-fix",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-msauth-runtime-conversion-fix-r2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q-169-fix",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-173",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.110",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.158",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.159",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.167",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.182",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.21",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.25",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.247",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.250",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.28",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.29",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.298",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.310",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.311",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.318",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.323.14",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.323.19",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.323.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.323.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.326.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.326.4",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.326.5",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.326.6",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.326.7",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.326.8",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.326.9",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.336.1",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.2",
+      "title": "Reconcile legacy runtime evidence 2/2 (41 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-2.json",
+      "records": [
+        {
+          "id": "orc-n2q.336.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.338",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.12",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.19",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.374",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.59",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.61.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.78",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.79",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.82.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.5.7.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.5.8.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.40",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.41",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.42",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.46",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.1.5.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.1.5.3.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.1.5.3.3.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.1.5.3.3.3.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47.5",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.49",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.63",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.71",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.79.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.82",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.86",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.87",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-pide",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-prodex-n8n-workdir-fix-r1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-u8hi",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-w7gj",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.3",
+      "title": "Reconcile cashback evidence 1/2 (39 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-3.json",
+      "records": [
+        {
+          "id": "orc-4ti",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-atqy",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-jxs",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-172-1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.104",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.105",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.166",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.187.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.24",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.25",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.27",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.30",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.309",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.319",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.12",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.15",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.22",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.25",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.26",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.28",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.29",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.104.1.3",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.108.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.6.9",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.4",
+      "title": "Reconcile cashback evidence 2/2 (39 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-4.json",
+      "records": [
+        {
+          "id": "orc-n2q.376.114.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.12",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.114.8.9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.34",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.35",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.52",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.54",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.82.2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.82.2.1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.86.3.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.1.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.3.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.89.3.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.50",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.52",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.53",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.55",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.64",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.69",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.70",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.72",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.73",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.77",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.83",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.84",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.85",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.89",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-u9h6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-xuwi",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.5",
+      "title": "Reconcile tooling and remaining receipts evidence (16 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-5.json",
+      "records": [
+        {
+          "id": "orc-9390",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-c7ns",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-cymb",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.164",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.350.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.13",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.14",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.111.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.41.1.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.41.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.42.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.380",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.47",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.48",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.65",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-z8l",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.6",
+      "title": "Reconcile actual evidence 1/2 (41 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-6.json",
+      "records": [
+        {
+          "id": "orc-actual-credential-repair-r13",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-c9ni.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-c9ni.3.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-124-10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-124-9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-169",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-170.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-172-2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-172-3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q-172-4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.101",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.13",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.17",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.26",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.28",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.29",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.114.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.119.4.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.120",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.122",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.123",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.124",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.124.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.125",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.169",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.179",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.12",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.16",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.16.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.16.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.16.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.18",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.235.29",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.242.3.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.244",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.261",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.266",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.7",
+      "title": "Reconcile actual evidence 2/2 (41 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-7.json",
+      "records": [
+        {
+          "id": "orc-n2q.346",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.369",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.371",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.105.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.3",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.4",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.5",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.3",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.30",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.42.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.60",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.60.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.61",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.62",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.75",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.82.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.82.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.314",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.320",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.51",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.54",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.58",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.59",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.60",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.61",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.74",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.75",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.81",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.98",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.98.5.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.99",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-reset-process-cleanup-exec-r1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-ybev",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.8",
+      "title": "Reconcile microsoft evidence (14 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-8.json",
+      "records": [
+        {
+          "id": "orc-ebp",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-msauth-bind-r1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.192",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.322.1.4",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.322.4",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.367.15",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.10",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.3",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.4",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.5",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.116.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-publish-msauth-runtime-r1",
+          "priorVerdict": "implemented_landing_unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.9",
+      "title": "Reconcile delivery evidence (32 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-9.json",
+      "records": [
+        {
+          "id": "orc-i2nv",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.248.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.367.16",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.373",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.9",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.117.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.118.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.119.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.1",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.10",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.14",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.2",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.3",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.9",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-n2q.376.58",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.14",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.38",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.39",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.68",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-ojfb",
+          "priorVerdict": "implemented_landing_unverified"
+        },
+        {
+          "id": "orc-s5ku",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.10",
+      "title": "Reconcile classification and rules evidence (27 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-10.json",
+      "records": [
+        {
+          "id": "orc-n2q.376.105.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.115.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.15",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.17",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.18",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.122.4.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.56",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.62.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.10",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.11",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.14",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.2",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.3",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.5",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.6",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.7",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.8",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.376.63.8.9",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    },
+    {
+      "id": "orc-n2q.396.11",
+      "title": "Reconcile journeys and evidence documents evidence (49 records)",
+      "output": ".orchestration/run-20260820-finance-mvp/reconciliation/batch-11.json",
+      "records": [
+        {
+          "id": "orc-n2q.379.1",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.13",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.18",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.263",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.27",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.270",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.271",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.274",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.275",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.276",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.277",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.278",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.28",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.280",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.284",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.288",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.289",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.290",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.291",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.292",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.293",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.294",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.296",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.297",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.301",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.302",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.304",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.305",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.308",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.309",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.31",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.312",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.315",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.317",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.318",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.319",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.32",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.33",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.335",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.34",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.35",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.37",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.4",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.41",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.45",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.46",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.47",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.48",
+          "priorVerdict": "unverified"
+        },
+        {
+          "id": "orc-n2q.379.51",
+          "priorVerdict": "unverified"
+        }
+      ],
+      "routing": "agent:orc-researcher"
+    }
+  ],
+  "review": "orc-n2q.396.12",
+  "verification": {
+    "epic": "orc-n2q.396",
+    "review": "orc-n2q.396.12",
+    "tasks": [
+      {
+        "id": "orc-n2q.396.1",
+        "records": 41,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.2",
+        "records": 41,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.3",
+        "records": 39,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.4",
+        "records": 39,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.5",
+        "records": 16,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.6",
+        "records": 41,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.7",
+        "records": 41,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.8",
+        "records": 14,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.9",
+        "records": 32,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.10",
+        "records": 27,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      },
+      {
+        "id": "orc-n2q.396.11",
+        "records": 49,
+        "openUnassigned": true,
+        "inlineEvidence": true,
+        "correctTracks": true,
+        "noSiblingBlockers": true,
+        "route": true,
+        "criteriaPresent": true
+      }
+    ],
+    "assigned": 380,
+    "unique": 380,
+    "exactCoverage": true,
+    "originalsStillClosed": 380,
+    "reviewBlocksAll": true,
+    "readyIds": [
+      "orc-n2q.396.1",
+      "orc-n2q.396.10",
+      "orc-n2q.396.11",
+      "orc-n2q.396.2",
+      "orc-n2q.396.3",
+      "orc-n2q.396.4",
+      "orc-n2q.396.5",
+      "orc-n2q.396.6",
+      "orc-n2q.396.7",
+      "orc-n2q.396.8",
+      "orc-n2q.396.9"
+    ],
+    "reviewNotReady": true,
+    "gates": [
+      {
+        "id": "orc-mol-6ok",
+        "status": "open"
+      },
+      {
+        "id": "orc-mol-91d",
+        "status": "open"
+      },
+      {
+        "id": "orc-mol-iba",
+        "status": "open"
+      },
+      {
+        "id": "orc-mol-il9",
+        "status": "open"
+      },
+      {
+        "id": "orc-mol-xzu",
+        "status": "open"
+      },
+      {
+        "id": "orc-mol-zvv",
+        "status": "open"
+      }
+    ],
+    "cycles": {
+      "exit": 0,
+      "out": "[]\n",
+      "err": ""
+    }
+  }
+}

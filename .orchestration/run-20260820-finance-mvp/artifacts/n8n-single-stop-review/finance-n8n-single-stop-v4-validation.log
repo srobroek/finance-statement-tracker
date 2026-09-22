@@ -1,0 +1,3 @@
+bash_n=PASS
+shellcheck=PASS
+state_selftest=PASS log=/tmp/finance-n8n-single-stop-v4-state-selftest.log

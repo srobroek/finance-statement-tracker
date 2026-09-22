@@ -1,0 +1,7 @@
+# Project-specific Worktrunk provisioning for the orchestration ledger wrapper.
+# This repository contains only .beads and .orchestration; nested product
+# repositories are intentionally not copied into linked worktrees.
+
+[[post-create]]
+# Keep provisioning native and require this repository's include manifest.
+copy-ignored = "wt -y step copy-ignored --require-include"
