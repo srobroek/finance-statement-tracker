@@ -10,343 +10,441 @@
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact claims Finance journey package scaffold creation and verification, but no accessible exact source/PR/artifact carrier.",
-      "reason": "Scaffold implementation claim lacks independent proof."
+      "reason": "Scaffold implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.13",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J12 authoring at its owned journey path and commit scope, but no accessible source/PR proof.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.18",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J17 journey authoring; later .336/.149 correct the path, but this original row has no independent source/PR proof.",
-      "reason": "Original authoring claim lacks accessible delivery evidence."
+      "reason": "Original authoring claim lacks accessible delivery evidence.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.263",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Ledger/local artifact claims a four-file journey package scaffold in an isolated checkout, but no exact source/PR/artifact carrier was accessible.",
-      "reason": "Scaffold implementation claim lacks independently inspected delivery."
+      "reason": "Scaffold implementation claim lacks independently inspected delivery.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.27",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J26 journey authoring and structural checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.270",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J26 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.271",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J27 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.274",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J30 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.275",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J31 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.276",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J32 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.277",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J33 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.278",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J34 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.28",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger close reason is only 'Closed'; child .337 later changes the same J27 path, but this row has no independently accessible source/PR proof.",
-      "reason": "Original authoring claim is not proven and has a later correction lineage."
+      "reason": "Original authoring claim is not proven and has a later correction lineage.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.280",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J36 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.284",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J40 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.288",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J44 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.289",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J45 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.290",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J46 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.291",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J47 source was authored at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.292",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J48 source was authored at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.293",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J49 source was recovered at docs/journeys/.../journey.md, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.294",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact says J50 source was created at its journey.md path, but no accessible exact recovery source/commit/PR.",
-      "reason": "Recovery implementation claim lacks independent proof."
+      "reason": "Recovery implementation claim lacks independent proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.296",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names J03 journey path/commit and structural/slopvac checks, but no accessible PR/source artifact for this row.",
-      "reason": "Self-report only; later PR150 scope is not assumed to prove this exact fix."
+      "reason": "Self-report only; later PR150 scope is not assumed to prove this exact fix.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.297",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names J26 journey path/commit and scoped gates, but no accessible PR/source artifact.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.301",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names J30 journey fix and one-file commit, but no accessible PR/source artifact for the exact delivery.",
-      "reason": "Self-reported documentation delivery lacks independent source proof."
+      "reason": "Self-reported documentation delivery lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.302",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names J45 journey path/commit and lint/slopvac, but no accessible PR/source artifact for the exact fix.",
-      "reason": "Self-reported documentation delivery lacks independent source proof."
+      "reason": "Self-reported documentation delivery lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.304",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J46 journey path/commit and targeted gates but no accessible PR/source artifact.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.305",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J50 journey path/commit and scoped verification but no accessible PR/source artifact.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.308",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J49 journey path/commit and close proof but no accessible PR/source artifact.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.309",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J40 journey path/commit and scoped gates but no accessible PR/source artifact.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.31",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J30 journey authoring and acceptance criteria, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.312",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J33 journey fix and scoped lint but no accessible PR/source artifact for this commit.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.315",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J36 journey path/commit and scoped gates but no accessible PR/source artifact.",
-      "reason": "Self-reported documentation delivery lacks independent source proof."
+      "reason": "Self-reported documentation delivery lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.317",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact/ledger names exact J34 journey path and one commit but no accessible PR/source artifact.",
-      "reason": "Self-reported documentation delivery lacks independent source proof."
+      "reason": "Self-reported documentation delivery lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.318",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Inspected financeLedgerRead: exact J14 path/head e2c1042 and structural/slopvac evidence are recorded; no accessible PR/source carrier for that head.",
-      "reason": "Implementation claim is self-reported; journey remains a documented contract rather than runtime delivery."
+      "reason": "Implementation claim is self-reported; journey remains a documented contract rather than runtime delivery.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.319",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Inspected financeLedgerRead: exact J08 path/head 019891f and tests.test_reports evidence are recorded, but no accessible PR/source carrier for that head.",
-      "reason": "Implementation claim is self-reported and exact source is inaccessible."
+      "reason": "Implementation claim is self-reported and exact source is inaccessible.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.32",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J31 journey authoring and integrity checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.33",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J32 journey authoring with normative structure, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.335",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Ledger show names docs/journeys/J49.../journey.md at commit 69983e9 and structural/slopvac evidence, but no accessible PR or exact source carrier was inspected.",
-      "reason": "Self-reported docs delivery lacks independent source/PR proof."
+      "reason": "Self-reported docs delivery lacks independent source/PR proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.34",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J33 journey authoring and structural lint, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.35",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J34 journey authoring and document checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.37",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J36 journey authoring and scoped gates, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.4",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J03 authoring at its owned journey path, but no accessible source/PR proof for this row.",
-      "reason": "Self-report only."
+      "reason": "Self-report only.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.41",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J40 journey authoring and non-live checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.45",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J44 journey authoring with normative sections, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.46",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J45 journey authoring and structural validation, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.47",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J46 journey authoring and deferred live validation, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.48",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J47 journey authoring and scoped checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     },
     {
       "id": "orc-n2q.379.51",
       "priorVerdict": "unverified",
       "verdict": "unverified",
       "evidence": "Local artifact describes J50 journey authoring at an owned path with structural checks, but exact source/PR artifact is inaccessible.",
-      "reason": "Documentation implementation claim lacks independent source proof."
+      "reason": "Documentation implementation claim lacks independent source proof.",
+      "nextAction": "Retrieve independently inspectable source/PR/artifact evidence for this exact record and attach the carrier before reassessment.",
+      "actionBead": "orc-ag8p"
     }
   ]
 }
