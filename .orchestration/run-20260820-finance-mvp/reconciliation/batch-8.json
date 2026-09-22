@@ -9,7 +9,9 @@
       "evidence": ".orchestration/run-20260820-finance-mvp/artifacts/orc-ebp-reported-5.md; exact pushed source head 2da419f32fabc9ffe36969c7d8c854f9ad8c5216; .ebp.8 retargets equivalent content to current release.",
       "reason": "Synthetic fail-closed source implementation and acceptance gates were inspected, but this source node's own scope is the pushed implementation; landing/ancestry belongs to the retarget/integration row, so classify implemented-unlanded here.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-msauth-bind-r1",
@@ -17,7 +19,9 @@
       "evidence": ".orchestration/run-20260820-finance-mvp/artifacts/fix_msauth_binding_contract_r1-reported-1.md; commit 1d5df062608c9a7791e90e4c2b33362792e3aab2; exact generated source paths and 68 focused tests inspected; downstream PR59 landing is not proven.",
       "reason": "Source binding/manifest implementation and acceptance are independently inspected on its branch, but no landed ancestry is established for this row.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.192",
@@ -25,7 +29,9 @@
       "evidence": ".orchestration/run-20260820-finance-mvp/artifacts/generic_email_final_fix-reported-2.md; exact pushed head 46811d2314622bbd841b16cea5375ce5e1ee6360; landing remains owned by .185.",
       "reason": "Source implementation and executable policy-rotation regression were inspected on the pushed branch, but this record explicitly leaves landing to .185; implemented, not landed.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.322.1.4",
@@ -33,7 +39,9 @@
       "evidence": ".orchestration/run-20260820-finance-mvp/artifacts/n8n-single-stop-review/finance-n8n-controlled-swap-single-stop-v3.staged.sh; v3 self-test log; script SHA 007172030037967a40e33d195e444ea3a63dc2aff55a5a6fb235dd05dbc036d9; financeLedgerRead record says evidence-only files were not committed.",
       "reason": "Exact v3 staged controller and bounded startability self-test were inspected, but no repository landing or production execution occurred.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.322.4",
@@ -41,7 +49,9 @@
       "evidence": ".orchestration/run-20260820-finance-mvp/artifacts/n8n-single-stop-review/finance-n8n-controlled-swap-single-stop-v4.staged.sh; v4 self-test/validation logs; script SHA 6473bdeca2838d2120753d64397c6536bbee883236e41c8e0558381f77f00d31; ledger record says no production execution.",
       "reason": "Exact v4 staged controller and disposable failure-injection acceptance were inspected. It is a host artifact with no repository landing and no production/provider execution; current .322.1 remains BLOCKED.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.367.15",
@@ -49,7 +59,9 @@
       "evidence": "financeLedgerRead show/comments orc-n2q.367.15 only; attempted reported artifact was absent; no commit or PR accessible.",
       "reason": "Closure claims a committed/pushed OneDrive finalizer fix, but no independent source, PR, commit, or receipt was accessible; self-report alone is insufficient.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.115.10",
@@ -57,7 +69,9 @@
       "evidence": "https://github.com/srobroek/finance-statement-tracker/commit/7a88f4934ad09bc0b1d2bff85b1df5dd4f51a089; financeLedgerRead show includes source predicate and 1/1 plus 82/82 regression evidence.",
       "reason": "Exact classification regression source and acceptance behavior were independently inspected, but no merge/landing ancestry is recorded for this bead; implementation is unlanded.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.1",
@@ -65,7 +79,9 @@
       "evidence": "feature worktree source paths integrations/n8n/refactor_workflow_ui.py, workflows/01/12/22 and monthly_archive_contract.py were inspected; financeLedgerRead records focused identity/CAS proofs and explicitly no commit/push, with renderer --check blocked by missing TypeScript.",
       "reason": "Renderer/workflow implementation is present with focused behavior evidence but remains an uncommitted feature-worktree change; no landed delivery.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.2",
@@ -73,7 +89,9 @@
       "evidence": "financeLedgerRead record orc-n2q.376.116.2; generator and five disposable Outlook outputs plus manifest changed in the feature worktree, hashes passed, explicitly no commit/push.",
       "reason": "Fixture/generator implementation is inspected with focused acceptance, but it is not landed.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.3",
@@ -81,7 +99,9 @@
       "evidence": "financeLedgerRead record orc-n2q.376.116.3; five contracted test files and 26 focused tests are recorded in the feature worktree, explicitly with no commit/push.",
       "reason": "Test implementation exists and focused acceptance is recorded, but no durable landing occurred; classify implemented-unlanded.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.4",
@@ -89,7 +109,9 @@
       "evidence": "financeLedgerRead record orc-n2q.376.116.4; exact commit 1d71a8a7856847ad05b65f26b5b416121fa8e848 and 14 changed paths/30 focused checks are recorded; independent Sol review is pending.",
       "reason": "Integration implementation and focused behavior evidence are inspected, but this row says ready for review rather than landed.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.5",
@@ -97,7 +119,9 @@
       "evidence": "financeLedgerRead record orc-n2q.376.116.5; exact source head bcb91513917a9204cd725e7363bf0669fe869ff7 and changed Outlook renderer/workflow/generator/test paths are recorded; independent review is explicitly pending.",
       "reason": "Inspected implementation scope and focused behavior claims exist on the feature branch, but no landing or completed independent review is proven.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-n2q.376.116.6",
@@ -105,7 +129,9 @@
       "evidence": "financeLedgerRead record orc-n2q.376.116.6 claims commit 04409853e1410642e7ab47584882f9bde9e10018 and independent review, but GitHub commit URL returned 404 and no source/report receipt was accessible.",
       "reason": "Implementation may exist, but exact source and independent acceptance proof are inaccessible; classify unverified rather than infer delivery.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     },
     {
       "id": "orc-publish-msauth-runtime-r1",
@@ -113,7 +139,9 @@
       "evidence": "PR59 https://github.com/srobroek/finance-statement-tracker/pull/59; .orchestration/run-20260820-finance-mvp/artifacts/orc-publish-msauth-runtime-r1-reported-2.md records exact head 1e97114, local gate passed, PR draft, no review evidence, and hosted run 32903672457 zero steps.",
       "reason": "Exact runtime-conversion source and local acceptance are inspected, but the publication receipt proves PR_DRAFT rather than landed delivery; classify implemented-unlanded, not verified.",
       "shard": "MicrosoftProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve durable source/landing receipt or repair implementation/landing gap; record exact head and acceptance evidence.",
+      "actionBead": "orc-xj9j"
     }
   ],
   "historicalRecordsReopened": 0
