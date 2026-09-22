@@ -67,3 +67,5 @@
 
 # sync.remote: "git+https://github.com/srobroek/finance-statement-tracker.git"
 dolt.shared-server: false
+sync:
+    remote: "git+https://github.com/srobroek/finance-statement-tracker.git"
