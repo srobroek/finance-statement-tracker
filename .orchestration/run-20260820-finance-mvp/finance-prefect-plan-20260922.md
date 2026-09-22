@@ -100,7 +100,29 @@ Closed-proof audit `orc-n2q.395.1` is complete. The scan excluded 1,427 events a
 | Non-implementation | 869 |
 | Substantiated contradictions | 0 |
 
-The scan found no closed implementation tasks in `orc-n2q.391`; its three closed records are decision/planner/review records `.49`, `.78`, and `.79`. Missing proof is not proof of missing code. The 43 implementation-evidenced rows do not all require merging. No provider or runtime retest occurred, and no closed bead was reopened. The next planner should recover or reuse proof and reconcile missing receipts before new work, rather than bulk reopen or reimplement.
+The scan found no closed implementation tasks in `orc-n2q.391`; its three closed records are decision/planner/review records `.49`, `.78`, and `.79`. Missing proof is not proof of missing code. The 43 implementation-evidenced rows do not all require merging. No provider or runtime retest occurred, and no closed bead was reopened.
+
+## Reconciliation queue
+
+The reconciliation queue belongs to epic `orc-n2q.396` and source audit `orc-n2q.395.1`. Its 11 ready, open, unassigned batches cover 337 unverified records plus 43 records whose landing is unestablished.
+
+| Batch | Domain | Count |
+|---|---|---:|
+| `orc-n2q.396.1` | Legacy runtime evidence 1/2 | 41 |
+| `orc-n2q.396.2` | Legacy runtime evidence 2/2 | 41 |
+| `orc-n2q.396.3` | Cashback evidence 1/2 | 39 |
+| `orc-n2q.396.4` | Cashback evidence 2/2 | 39 |
+| `orc-n2q.396.5` | Tooling and remaining receipts | 16 |
+| `orc-n2q.396.6` | Actual evidence 1/2 | 41 |
+| `orc-n2q.396.7` | Actual evidence 2/2 | 41 |
+| `orc-n2q.396.8` | Microsoft evidence | 14 |
+| `orc-n2q.396.9` | Delivery evidence | 32 |
+| `orc-n2q.396.10` | Classification and rules evidence | 27 |
+| `orc-n2q.396.11` | Journeys and evidence documents | 49 |
+
+Each batch must inline its decisive proof gap, own its result JSON, and track original records without reopening them. Retained obligations must map to a scoped prerequisite or repair, not repeat an unverified claim. Independent review `orc-n2q.396.12` is blocked until all 11 batches complete. Execution has not started. The queue artifact is `reconciliation-queue-20260922.json`.
+
+The queue is independent of unrelated Prefect implementation work and adds no blanket gate. Coverage is 380 unique records, all 380 originals remain closed, six gates remain open, and the verification reports zero cycles.
 
 ## Proposed deployment boundary
 
