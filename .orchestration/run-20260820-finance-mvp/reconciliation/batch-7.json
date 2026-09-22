@@ -1,0 +1,335 @@
+{
+  "schema_version": 1,
+  "bead": "orc-n2q.396.7",
+  "source": "closed-implementation-proof-20260922.json",
+  "records": [
+    {
+      "id": "orc-n2q.346",
+      "verdict": "unverified",
+      "evidence": "Current ledger record inspected; its 9/17 comment claims auth/API/UI/restart/replay/backup gates, but the protected receipt and live Actual were not independently accessible or accessed.",
+      "reason": "Self-reported runtime acceptance is not sufficient proof for this read-only scan; the comment itself leaves independent downstream review pending.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.369",
+      "verdict": "unverified",
+      "evidence": "Only local closure claim of repaired monitor plus seven runtime passes; no exact source/PR or receipt independently inspected.",
+      "reason": "The claimed runtime behavior lacks accessible delivery proof.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.371",
+      "verdict": "unverified",
+      "evidence": "Only local ledger closure claim of supervised/scheduled monitor passes; no accessible source commit or retained-host receipt inspected, and live Actual was not accessed.",
+      "reason": "Runtime stabilization proof is inaccessible/self-reported for this scan.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.1",
+      "verdict": "unverified",
+      "evidence": "Local record claims recovery-envelope fixes and workflow run84 tests, but no exact source/commit independently inspected.",
+      "reason": "Recovery implementation proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.105.2",
+      "verdict": "unverified",
+      "evidence": "Local record claims shared source implementation and 46 focused tests, but no exact source commit/PR was independently inspected.",
+      "reason": "Implementation acceptance is self-reported.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.115.2",
+      "verdict": "unverified",
+      "evidence": "Local close reason says source modules were implemented and py_compile/AST passed, but focused pytest collection was blocked by missing jsonschema; no source commit/receipt independently inspected.",
+      "reason": "Acceptance proof is incomplete and dependency-blocked.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.117.1",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "Current ledger record names contracts.ts, actual-session.ts and tests with focused npm 73/73; actual-session.ts and contracts.ts were inspected in the feature worktree. No merged PR was found.",
+      "reason": "Package recovery implementation and acceptance are inspectable but unlanded.",
+      "shard": "ActualProof",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.376.117.10",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims generated matrix provenance refresh and independent approval, without accessible exact source/commit/artifact.",
+      "reason": "Self-report only.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.117.2",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims SQL/README contract work in a feature branch, but no accessible exact source/commit/PR was inspected.",
+      "reason": "Implementation claim lacks inspectable delivery.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.117.3",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "Current ledger record names refactor_workflow_ui.py and W17/W18/W20 workflow JSON, renderer --check 19 current and stable hashes; W20 source was inspected. No merged PR was found.",
+      "reason": "Writer/recovery graph implementation is inspected with focused proof but not proven landed.",
+      "shard": "ActualProof",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.376.117.4",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "Current ledger record claims tests/test_actual_recovery_workflow.py only, 3 focused unittest passes; the test source was inspected in the Actual writer feature worktree. No merged PR was found.",
+      "reason": "Test delivery is inspectable but remains an unlanded feature-branch change.",
+      "shard": "ActualProof",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.376.117.5",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "Current ledger record inspected: commit 33b1568 regenerates W17/W18/W20 fixtures/manifests and reports owning generators/runtime/corpus checks; Actual writer workflow source was inspected in integrations/n8n/workflows/20-actual-outbox-apply.json. No merged PR was found.",
+      "reason": "Implementation and scoped acceptance are evidenced, but the generated-artifact delivery is not proven landed.",
+      "shard": "ActualProof",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.376.117.7",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims five writer recovery defects fixed at commit 6a2b8b, but no accessible source/PR/artifact.",
+      "reason": "Commit-only proof inaccessible.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.117.9",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims six writer findings fixed and scoped suites green, but gives no accessible exact source/PR/artifact.",
+      "reason": "Self-report only.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.122.3",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "PR #136, https://github.com/srobroek/finance-statement-tracker/pull/136, inspected: exact-head classification/taxonomy source and 136/162/12/1 test receipts; PR is OPEN, DRAFT, DIRTY and not merged.",
+      "reason": "The implementation and acceptance evidence are inspectable, but delivery is not landed; it must not be called verified_delivery.",
+      "shard": "ActualProof",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.376.2",
+      "verdict": "unverified",
+      "evidence": "Local record claims boolean coercion fix and compiled-node tests, but no exact source/commit independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.30",
+      "verdict": "unverified",
+      "evidence": "Local record names commit cbd9982 and source modules with focused/full verification, but exact source/commit was not independently inspected.",
+      "reason": "Classification delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.42.1",
+      "verdict": "unverified",
+      "evidence": "Only local claim for WUD dispatcher/helper rollback and old-image health verification; no source/receipt independently inspected.",
+      "reason": "Rollback implementation proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.60",
+      "verdict": "unverified",
+      "evidence": "Only local claim of Actual tests/offline bootstrap/replay and idempotency; no exact source/artifact independently inspected.",
+      "reason": "Native bootstrap proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.60.1",
+      "verdict": "unverified",
+      "evidence": "Only local claim of native bootstrap/replay passing artifact1521; no exact source/receipt independently inspected.",
+      "reason": "Bootstrap/idempotency proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.61",
+      "verdict": "unverified",
+      "evidence": "Only local claim of full 940-test replay/count/sum proof after 61.1; no exact source/artifact independently inspected.",
+      "reason": "Replay proof is self-reported.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.62",
+      "verdict": "unverified",
+      "evidence": "Local record claims existing Python compiler/JS materializer implementation and scoped tests, but no exact source/commit independently inspected.",
+      "reason": "Rule-scope implementation proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.75",
+      "verdict": "unverified",
+      "evidence": "Local closure claims one live New Car Savings category was created; no live Actual access or protected runtime receipt was permitted/inspected.",
+      "reason": "Live metadata behavior is self-reported and inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.82.1",
+      "verdict": "unverified",
+      "evidence": "Only local claim of snapshot/AI boundary commit ad168fd and pyright/compile checks; no exact source/commit independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.82.5",
+      "verdict": "unverified",
+      "evidence": "Only local claim of bootstrap SHA/assertion updates and 12 tests; no exact source/commit independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.379.314",
+      "verdict": "unverified",
+      "evidence": "Local closure claims a one-file J37 writer-lease correction, but no exact source commit/PR was independently inspected.",
+      "reason": "Writer-lease implementation proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.379.320",
+      "verdict": "unverified",
+      "evidence": "Local closure claims a J01 health-boundary correction and preserved receipt, but no exact source commit/PR or receipt was independently inspected.",
+      "reason": "Implementation/receipt proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.51",
+      "verdict": "unverified",
+      "evidence": "Local record claims merge in published finance execution plan 5f6b6d9 for Cashback/Actual digest binding, but no exact source/merge was independently inspected.",
+      "reason": "Cross-workflow delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.54",
+      "verdict": "unverified",
+      "evidence": "Local record claims approved disposable Cashback restore source/runtime receipt, but no exact source/receipt independently inspected.",
+      "reason": "Restore delivery evidence is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.58",
+      "verdict": "unverified",
+      "evidence": "Local record claims merge in published finance execution plan 5f6b6d9 for Actual account/taxonomy manifest, but no exact source/merge was independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.59",
+      "verdict": "unverified",
+      "evidence": "Local record claims merge in published finance execution plan 5f6b6d9 for Actual economic semantics, but no exact source/merge was independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.60",
+      "verdict": "unverified",
+      "evidence": "Local record has no accessible source/receipt beyond the idempotency/manual-state title; no implementation proof was independently inspected.",
+      "reason": "Writer idempotency proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.61",
+      "verdict": "unverified",
+      "evidence": "Local record has no acceptance receipt/source path beyond the Actual lease/cursor/crash-recovery title; no implementation proof was independently inspected.",
+      "reason": "Recovery implementation evidence is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.74",
+      "verdict": "unverified",
+      "evidence": "Local record claims merge in published finance execution plan 5f6b6d9 for Actual taxonomy/semantics, but no exact source/merge was independently inspected.",
+      "reason": "Source delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.75",
+      "verdict": "unverified",
+      "evidence": "Local record claims merge in published finance execution plan 5f6b6d9, but no exact source/merge was independently inspected for this row.",
+      "reason": "Integration delivery proof is only a ledger claim.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.81",
+      "verdict": "unverified",
+      "evidence": "Local record claims approved Cashback restore integration in finance plan e9b4d492, but no exact source/merge independently inspected.",
+      "reason": "Cross-workflow delivery proof is missing.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.98",
+      "verdict": "unverified",
+      "evidence": "Local record has external production preflight scope but no close reason/receipt; metadata state remains working.",
+      "reason": "Production preflight proof is absent/inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.98.5.3",
+      "verdict": "unverified",
+      "evidence": "Only local external live-service recovery/readback claim; referenced artifacts and live Actual were not accessed.",
+      "reason": "Runtime acceptance proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.99",
+      "verdict": "unverified",
+      "evidence": "Local record has external production scope but no close reason/receipt; metadata state remains pending.",
+      "reason": "Production ingestion proof is absent/inaccessible, not evidence of implementation absence.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-reset-process-cleanup-exec-r1",
+      "verdict": "unverified",
+      "evidence": "Only local external cleanup metadata/closure; referenced retained-host receipt was not accessible or inspected.",
+      "reason": "Runtime cleanup proof is unavailable and live host access is out of scope.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-ybev",
+      "verdict": "unverified",
+      "evidence": "Local record claims Actual container identity documentation correction and deployment-contract passes, but no exact source/PR independently inspected.",
+      "reason": "Documentation/source delivery proof is inaccessible.",
+      "shard": "ActualProof",
+      "agent_verdict": "unverified"
+    }
+  ]
+}
