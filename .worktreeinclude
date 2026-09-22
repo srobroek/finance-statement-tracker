@@ -1,0 +1,2 @@
+# This orchestration-only ledger wrapper has no dependency directories.
+# Do not copy .beads stores, nested repositories, or legacy .worktrees.
