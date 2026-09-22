@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "bead": "orc-n2q.396.1",
+  "title": "Reconcile legacy runtime evidence 1/2 (41 records)",
+  "source": {
+    "queue": ".orchestration/run-20260820-finance-mvp/reconciliation-queue-20260922.json",
+    "proof": ".orchestration/run-20260820-finance-mvp/closed-implementation-proof-20260922.json"
+  },
+  "method": "Exact-ID reconciliation; historical records were not reopened.",
+  "records": [
+    {
+      "id": "orc-4cs",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; code branch/worktree metadata inspected, with dismissed state and no delivery reason",
+      "reason": "A code branch is referenced, but dismissal provides no merged source or acceptance proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-4cs"
+    },
+    {
+      "id": "orc-4w8",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; bug close reason says WF23 boundary correction landed, but no exact source/PR acceptance was accessible",
+      "reason": "Code fix is asserted without independently inspectable delivered source and acceptance proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-4w8"
+    },
+    {
+      "id": "orc-a26k.5",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: W12 auth-failure regression code task and exact branch; no source/acceptance receipt independently inspected",
+      "reason": "Implementation claim lacks independent source/behavior proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-a26k.5"
+    },
+    {
+      "id": "orc-a26k.6",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; generated-contract refresh claim has no exact commit/PR linkage in this row",
+      "reason": "A push and validation are asserted, but this row lacks independently inspectable delivered source and acceptance linkage.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-a26k.6"
+    },
+    {
+      "id": "orc-ar2",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; bug close reason says orphan ancestry pin removal landed, but no exact source/PR acceptance was accessible",
+      "reason": "Code fix is asserted without independently inspectable delivered source and acceptance proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-ar2"
+    },
+    {
+      "id": "orc-artifact-redaction-r4-fix",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected .orchestration/run-20260820-finance-mvp/artifacts/orc-artifact-redaction-report-fix-r4-scanner.py and .../orc-artifact-redaction-report-fix-r4-scan.json; scanner v4 fixtures/inventory/hash contract passes; no landing identity",
+      "reason": "Inspected implementation and acceptance scan, but no landed delivery identity.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-artifact-redaction-r4-fix"
+    },
+    {
+      "id": "orc-dcx0",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: PR80 landed on codex/finance-execution-plan; no exact source/acceptance receipt independently inspected",
+      "reason": "Merge claim alone does not prove behavior.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-dcx0"
+    },
+    {
+      "id": "orc-drk",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofB.json; claimed pushed commit be8fc784 and source paths, but no accessible exact PR/landing receipt; current source path does not expose historical organizer file",
+      "reason": "Implementation claim lacks independently inspectable exact landing/acceptance proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-drk"
+    },
+    {
+      "id": "orc-four-table-production-cutover-fix",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: code task fix/four-table-production-cutover-r1; no exact source report/commit acceptance independently inspected",
+      "reason": "Implementation claim without independently inspected source/receipt.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-four-table-production-cutover-fix"
+    },
+    {
+      "id": "orc-four-table-production-cutover-rebase-r1",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: current-target rebuild code task; no exact source/commit/acceptance report independently inspected",
+      "reason": "Historical worktree/source unavailable for independent proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-four-table-production-cutover-rebase-r1"
+    },
+    {
+      "id": "orc-msauth-runtime-conversion-fix",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: exact code task at base 1d5df062/babe4001; no implementation source or acceptance receipt independently inspected here",
+      "reason": "Historical worktree/source unavailable for independent behavior proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-msauth-runtime-conversion-fix"
+    },
+    {
+      "id": "orc-msauth-runtime-conversion-fix-r2",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected fix_msauth_runtime_conversion_r2-reported-1.md, exact commit 4f4f04d, and msauth-runtime-conversion-r2-local-gate-receipt.json; no independent merge/landing receipt on this row",
+      "reason": "Inspected implementation and exact-head acceptance; classify unlanded because this implementation row's landed delivery was not independently proven.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-msauth-runtime-conversion-fix-r2"
+    },
+    {
+      "id": "orc-n2q-169-fix",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofB.json; claimed provenance-fix branch/source scope and approval, but no exact final merge/PR or accessible report inspected",
+      "reason": "Code-delivery claim is present, but exact landed source and acceptance receipt are missing.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q-169-fix"
+    },
+    {
+      "id": "orc-n2q-173",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; finance integration remote approved head and generated-manifest scope are ledger metadata only",
+      "reason": "Code integration is asserted, but no independently inspectable PR/source acceptance proof was accessible.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q-173"
+    },
+    {
+      "id": "orc-n2q.110",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; workflow-native simplification scope and regenerated-fixture claim inspected, but no exact source/PR acceptance was accessible",
+      "reason": "Potential code/data delivery is asserted only by ledger closure; implementation proof is missing.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.110"
+    },
+    {
+      "id": "orc-n2q.158",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofB.json; no close reason, exact source/PR, or accessible implementation receipt for parent organization restoration",
+      "reason": "Only ledger/shard claim is available; actual delivered artifact and acceptance proof are missing.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.158"
+    },
+    {
+      "id": "orc-n2q.159",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "financeLedgerRead show; latest lifecycle ends at r7 BLOCKED runner-binding gate (runner-hardcoded-e6-vs-approved-r2-03f4, lock-not-acquired, mutation-none), with current ledger SUPERSEDED BY orc-n2q.376.89.5.7; no completion receipt proving the cutover was applied",
+      "reason": "Latest evidence shows repeated preflight/runner blockers and no final acceptance proof. Keep unverified rather than contradicted because the record was later superseded and old failures alone do not establish a final contradictory disposition.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.159"
+    },
+    {
+      "id": "orc-n2q.167",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; implementation branch and pushed metadata inspected, but no independently accessible source/PR acceptance proof was found",
+      "reason": "Code delivery is claimed on a branch, but implementation proof is incomplete.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.167"
+    },
+    {
+      "id": "orc-n2q.182",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofB.json; metadata has only branch/worktree and pushed origin, no exact commit/PR or accessible delivery receipt; current chezmoi tree is not the historical proof",
+      "reason": "Code-repair closure claim exists, but exact delivered source/PR and acceptance receipt were not independently accessible.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.182"
+    },
+    {
+      "id": "orc-n2q.235.21",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: PR80 merged and root/Sol verification passed; source scope named but no independent source/receipt inspection",
+      "reason": "Bug source delivery is not proven by close claim alone.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.235.21"
+    },
+    {
+      "id": "orc-n2q.235.25",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: PR81 merged after redundant receipt self-copy removal; source scope named but no source/acceptance receipt independently inspected",
+      "reason": "Bug/cleanup source claim lacks independent behavior proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.235.25"
+    },
+    {
+      "id": "orc-n2q.247",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: Podman systemd ordering fix merged; no exact source/PR acceptance receipt independently inspected",
+      "reason": "Merge claim alone does not prove behavior.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.247"
+    },
+    {
+      "id": "orc-n2q.250",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger output_ref orc-n2q.250-reported-3.md and receipt SHA 91974d19... are named, but the protected receipt was not independently inspected here",
+      "reason": "Runtime deployment claim is not accepted from ledger self-report alone.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.250"
+    },
+    {
+      "id": "orc-n2q.28",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n application-interface code scope and merge metadata inspected",
+      "reason": "Code delivery is claimed as merged, but no independently inspected source plus acceptance evidence was accessible.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.28"
+    },
+    {
+      "id": "orc-n2q.29",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n recovery-code scope and merge metadata inspected",
+      "reason": "Code delivery is claimed as merged, but no independently inspected source plus acceptance evidence was accessible.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.29"
+    },
+    {
+      "id": "orc-n2q.298",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger metadata names source scope integrations/n8n/setup-workflows/runner/** and exact push cb365f997.../PR69 merge 5883c805; implementation report/acceptance behavior not independently inspected here",
+      "reason": "Exact source/PR identity is available in the ledger, but a source path or behavior receipt alone was not independently verified.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.298"
+    },
+    {
+      "id": "orc-n2q.310",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "https://github.com/srobroek/finance-statement-tracker/pull/76; inspected merged source files, but PR explicitly says tests not run",
+      "reason": "Exact PR delivery is visible, but the required independent acceptance evidence is absent; source/merge alone does not prove behavior.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.310"
+    },
+    {
+      "id": "orc-n2q.311",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: PR77 atomic credential binding landed; no exact local gate/source acceptance receipt independently inspected",
+      "reason": "Merge claim alone does not prove behavior.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.311"
+    },
+    {
+      "id": "orc-n2q.318",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: retained Dockge n8n stack state and /opt/stacks/n8n/compose.yaml were inspected; no source commit or protected acceptance receipt independently inspected",
+      "reason": "Operational stack repair claim is not independently inspectable delivery proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.318"
+    },
+    {
+      "id": "orc-n2q.323.14",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: ProDex-only source/generated/runtime cutover; no exact source commit or protected acceptance receipt independently inspected",
+      "reason": "Implementation title and source claim are insufficient without independently inspected source/acceptance.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.323.14"
+    },
+    {
+      "id": "orc-n2q.323.19",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger close_reason explicitly says acceptance unproven and row preserved; receipt not independently inspected",
+      "reason": "A completed attempt with acceptance explicitly unproven is not implementation proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.323.19"
+    },
+    {
+      "id": "orc-n2q.323.3",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: xhigh contract source/generator/fixture cutover; no exact source commit/receipt independently inspected",
+      "reason": "Implementation claim lacks independently inspected source and acceptance evidence.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.323.3"
+    },
+    {
+      "id": "orc-n2q.323.7",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: UUIDv5 node-group normalization and regenerated artifacts; no exact source commit/receipt independently inspected",
+      "reason": "Source-change claim lacks independently inspected delivery and acceptance evidence.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.323.7"
+    },
+    {
+      "id": "orc-n2q.326.11",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "ledger claim only: protected stdin/file entrypoint source exercised; no exact source path/commit or independent receipt beyond close record",
+      "reason": "Existing-source exercise claim is not independently inspectable delivery proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.11"
+    },
+    {
+      "id": "orc-n2q.326.4",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected archived candidate .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.4-prodex-client-candidate*.js and close's zero-network preflight/schema/cleanup checks; no landing identity",
+      "reason": "Historical source repair is evidenced but landed delivery is not independently proven.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.4"
+    },
+    {
+      "id": "orc-n2q.326.5",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected archived candidate family .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.5-live-delivery-candidate*.py and close's dry-check contract; no landing identity",
+      "reason": "Historical source repair is evidenced but landed delivery is not independently proven.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.5"
+    },
+    {
+      "id": "orc-n2q.326.6",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.6-live-delivery-w21-candidate-20260827T151445Z.py; fixed-argv protected transfer/cleanup and dry checks; no landing identity",
+      "reason": "Implementation is evidenced on the historical candidate, not a proven landed delivery.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.6"
+    },
+    {
+      "id": "orc-n2q.326.7",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.7-diagnostic-delivery-candidate-20260827T161707Z.py; fixed failure stages/classes and dry-check harness; no landing identity",
+      "reason": "Implementation is evidenced on the historical candidate, not a proven landed delivery.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.7"
+    },
+    {
+      "id": "orc-n2q.326.8",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected archived candidate source family .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.8-client-output-candidate*.py and bounded JSON/dry-check contract; no landing identity",
+      "reason": "Inspected implementation and local acceptance, but no landed delivery identity.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.8"
+    },
+    {
+      "id": "orc-n2q.326.9",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "inspected archived candidate source family .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.326.9-live-mode-candidate*.py and close record's zero-network dry-check contract; no landing PR/merge identity",
+      "reason": "Inspected source and acceptance behavior prove implementation, but no landed delivery identity was independently inspected.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.326.9"
+    },
+    {
+      "id": "orc-n2q.336.1",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "Independent attempts: read current ledger show/comments; read local orc-n2q.336-canonical-chain-runtime-r1.md (blocked runtime proof); searched artifacts for final lifecycle source/receipt; PR138 diff/files inspected at https://patch-diff.githubusercontent.com/raw/srobroek/finance-statement-tracker/pull/138.diff and https://api.github.com/repos/srobroek/finance-statement-tracker/pulls/138/files. n8n PR26 was queried at pr://srobroek/n8n-orchestrator/26 and returned body/file list, but GitHub/API/patch/raw endpoints for n8n PR26 returned 404; no final protected acceptance artifact independently accessible.",
+      "reason": "Finance PR138 source diff is independently inspected, but final n8n PR26 source/diff and an independent final acceptance artifact are inaccessible; ledger comments cannot substitute for missing proof.",
+      "sourcePointer": "closed-implementation-proof-20260922.json#/rows/orc-n2q.336.1"
+    }
+  ],
+  "findings": {
+    "records": 41,
+    "exactIds": true,
+    "originalsUnchanged": true,
+    "landingEstablished": 0,
+    "behaviorAcceptanceEstablished": 0
+  }
+}
