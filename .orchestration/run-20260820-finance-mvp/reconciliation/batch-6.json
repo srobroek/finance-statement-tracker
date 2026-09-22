@@ -7,247 +7,329 @@
       "id": "orc-actual-credential-repair-r13",
       "verdict": "unverified",
       "evidence": "Local metadata explicitly reports BLOCKED and external_mutation indeterminate; referenced protected artifact was not accessible/inspected.",
-      "reason": "The record does not provide independently inspectable successful repair proof."
+      "reason": "The record does not provide independently inspectable successful repair proof.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-actual-credential-repair-r13; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-c9ni.3",
       "verdict": "unverified",
       "evidence": "Only local external retained-host TERM-cleanup receipt claim; no receipt independently accessible and live host not accessed.",
-      "reason": "Operational cleanup proof is unavailable."
+      "reason": "Operational cleanup proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-c9ni.3; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-c9ni.3.4",
       "verdict": "unverified",
       "evidence": "Only local retained-host rootful topology/readback claim; no external receipt independently accessible and live host not accessed.",
-      "reason": "Operational readback is self-reported for this scan."
+      "reason": "Operational readback is self-reported for this scan.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-c9ni.3.4; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-124-10",
       "verdict": "unverified",
       "evidence": "Only local external disposable/API/UI/restart proof claim; referenced artifact and live Actual were not accessed.",
-      "reason": "Runtime acceptance receipt is inaccessible."
+      "reason": "Runtime acceptance receipt is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-124-10; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-124-9",
       "verdict": "unverified",
       "evidence": "Local record claims ordering source bcddb9b and approval, but no exact source/PR was independently inspected for this row.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-124-9; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-169",
       "verdict": "unverified",
       "evidence": "Local record claims consolidated source integration 01e935c8 and approval, but the exact source/merge was not independently inspected here.",
-      "reason": "Source delivery claim lacks accessible independent proof."
+      "reason": "Source delivery claim lacks accessible independent proof.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-169; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-170.8",
       "verdict": "unverified",
       "evidence": "Local record points to a separate srobroek/n8n PR #5 and exact content proof, but that cross-repository source/PR was not independently accessible in this scan.",
-      "reason": "Cross-repository recovery-gate delivery is not independently inspectable here."
+      "reason": "Cross-repository recovery-gate delivery is not independently inspectable here.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-170.8; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-172-2",
       "verdict": "unverified",
       "evidence": "Local record claims exact 58afccd economic readback implementation and approval ready for final integration, but no source/PR was independently inspected.",
-      "reason": "Unlanded-source proof is missing."
+      "reason": "Unlanded-source proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-172-2; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-172-3",
       "verdict": "unverified",
       "evidence": "Local record claims exact 7b4bb745 bootstrap ownership implementation and approval ready for final integration, but no source/PR was independently inspected.",
-      "reason": "Unlanded-source proof is missing."
+      "reason": "Unlanded-source proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-172-3; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q-172-4",
       "verdict": "unverified",
       "evidence": "Local record claims exact cdadbb0 backup-mode implementation and approval ready for final integration, but no source/PR was independently inspected.",
-      "reason": "Unlanded-source proof is missing."
+      "reason": "Unlanded-source proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q-172-4; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.10",
       "verdict": "unverified",
       "evidence": "Local record claims merged commit cfd5259d for Actual doctor redaction, but no PR/source diff was independently inspected.",
-      "reason": "Source delivery proof is only a ledger claim."
+      "reason": "Source delivery proof is only a ledger claim.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.10; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.101",
       "verdict": "unverified",
       "evidence": "Local record claims Cashback finalization source head d0611b4 is integrated, but no source/PR was independently inspected for this row.",
-      "reason": "Cross-workflow delivery proof is missing."
+      "reason": "Cross-workflow delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.101; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.10",
       "verdict": "unverified",
       "evidence": "Only local external Cashback image deployment/rollback claim; no deployment receipt independently accessible.",
-      "reason": "Runtime deployment proof is unavailable."
+      "reason": "Runtime deployment proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.10; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.13",
       "verdict": "unverified",
       "evidence": "Local record claims exact approved commit a1b4e994 for rootful network-absent handling, but no source/PR was independently inspected.",
-      "reason": "Source delivery proof is inaccessible."
+      "reason": "Source delivery proof is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.13; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.17",
       "verdict": "unverified",
       "evidence": "Local record claims exact approved commit d24bd375 and live/old-base ancestry, but no source/PR was independently inspected.",
-      "reason": "Source delivery proof is inaccessible."
+      "reason": "Source delivery proof is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.17; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.2",
       "verdict": "unverified",
       "evidence": "Local record claims commit 6cf7a0e is an ancestor of the live plan; no source/PR was independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.2; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.26",
       "verdict": "unverified",
       "evidence": "Only local external production-auth synchronization claim and redacted receipt reference; no live access or receipt inspection.",
-      "reason": "Runtime authentication proof is inaccessible."
+      "reason": "Runtime authentication proof is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.26; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.28",
       "verdict": "unverified",
       "evidence": "Only local claim of pinned Playwright/Chromium runtime and authenticated UI preflight; no source/PR or disposable receipt independently inspected.",
-      "reason": "Probe-runtime acceptance is self-reported."
+      "reason": "Probe-runtime acceptance is self-reported.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.28; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.29",
       "verdict": "unverified",
       "evidence": "Only local external post-auth backup/no-mutation acceptance claim; referenced receipt and live environment were not independently accessible.",
-      "reason": "Runtime backup acceptance proof is unavailable."
+      "reason": "Runtime backup acceptance proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.29; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.3",
       "verdict": "unverified",
       "evidence": "Local record claims exact approved rootful Docker-absent handling at 1f73c929; no source/PR was independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.3; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.114.6",
       "verdict": "unverified",
       "evidence": "Local record claims exact approved backup/health-diagnostics commit ce10845; no source/PR was independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.114.6; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.119.4.1",
       "verdict": "unverified",
       "evidence": "Local record claims an offline real-mail E2E contract at release 71250f9 and focused gates, but the release/source artifact was not independently inspected.",
-      "reason": "Contract delivery evidence is self-reported for this scan."
+      "reason": "Contract delivery evidence is self-reported for this scan.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.119.4.1; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.120",
       "verdict": "unverified",
       "evidence": "Local record claims source candidate a1b4e994 and intended-branch landing, but no exact source/merge was independently inspected.",
-      "reason": "Integration delivery proof is missing."
+      "reason": "Integration delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.120; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.122",
       "verdict": "unverified",
       "evidence": "Local record claims integration through .125 at 1f9531f, but no exact source/merge independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.122; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.123",
       "verdict": "unverified",
       "evidence": "Local record claims integration through .125 at 1f9531f, but no exact source/merge independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.123; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.124",
       "verdict": "unverified",
       "evidence": "Local record claims source changes implemented/reviewed while final runtime acceptance continues on .124-10; no exact source/merge independently inspected for this row.",
-      "reason": "Source delivery is asserted but not independently proven here."
+      "reason": "Source delivery is asserted but not independently proven here.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.124; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.124.7",
       "verdict": "unverified",
       "evidence": "Local record claims a headed browser-context fix and retained failure checkpoint, but no exact source/PR was independently inspected.",
-      "reason": "Source delivery proof is missing."
+      "reason": "Source delivery proof is missing.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.124.7; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.125",
       "verdict": "unverified",
       "evidence": "Local record claims exact integrated finance head/live readback and ancestry, but no exact source/merge was independently inspected for this row.",
-      "reason": "Integration delivery proof is only a ledger claim."
+      "reason": "Integration delivery proof is only a ledger claim.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.125; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.169",
       "verdict": "unverified",
       "evidence": "Local record claims PR24/25 publication and anchored approved heads, but no exact landing/source proof was independently inspected for this publication task.",
-      "reason": "PR-publication delivery proof is incomplete."
+      "reason": "PR-publication delivery proof is incomplete.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.169; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.179",
       "verdict": "unverified",
       "evidence": "Local record claims exact source commit and approval for Outlook/OneDrive enrichment, but no corresponding source/PR was independently inspected here.",
-      "reason": "The source delivery claim lacks accessible independent proof in this scan."
+      "reason": "The source delivery claim lacks accessible independent proof in this scan.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.179; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.12",
       "verdict": "unverified",
       "evidence": "Only local external semantic replay/restart acceptance metadata; referenced artifact was not independently accessible.",
-      "reason": "Runtime acceptance proof is inaccessible."
+      "reason": "Runtime acceptance proof is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.12; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.16",
       "verdict": "unverified",
       "evidence": "Local metadata says runtime-blocked-no-commit for raw PTY recovery; no implementation commit or successful receipt inspected.",
-      "reason": "The record exposes a blocked runtime attempt, not independently proven delivery."
+      "reason": "The record exposes a blocked runtime attempt, not independently proven delivery.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.16; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.16.2",
       "verdict": "unverified",
       "evidence": "Only local external R4 acceptance metadata; referenced artifact/runtime receipt was not independently accessible.",
-      "reason": "Runtime acceptance proof is unavailable."
+      "reason": "Runtime acceptance proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.16.2; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.16.5",
       "verdict": "unverified",
       "evidence": "Only local external R5 recovery metadata; referenced runtime receipt was not independently accessible and live Actual was not accessed.",
-      "reason": "Runtime recovery acceptance is missing accessible proof."
+      "reason": "Runtime recovery acceptance is missing accessible proof.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.16.5; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.16.7",
       "verdict": "unverified",
       "evidence": "Only local external R7 reset/acceptance metadata; referenced runtime receipt was not independently accessible and live Actual was not accessed.",
-      "reason": "Runtime acceptance proof is unavailable."
+      "reason": "Runtime acceptance proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.16.7; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.18",
       "verdict": "unverified",
       "evidence": "Only local external safe-stop receipt claim; no retained-host receipt or source delivery independently inspected.",
-      "reason": "Runtime acceptance evidence is inaccessible."
+      "reason": "Runtime acceptance evidence is inaccessible.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.18; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.235.29",
       "verdict": "unverified",
       "evidence": "Only local external-completion claim for successful live Actual auth/readback; no protected receipt or live system access permitted/inspected.",
-      "reason": "Runtime auth acceptance is self-reported for this scan."
+      "reason": "Runtime auth acceptance is self-reported for this scan.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.235.29; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.242.3.1",
       "verdict": "unverified",
       "evidence": "Only local retained-host PDF recovery execution claim; no source/receipt independently accessible and live host not accessed.",
-      "reason": "Runtime repair proof is unavailable."
+      "reason": "Runtime repair proof is unavailable.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.242.3.1; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.244",
       "verdict": "unverified",
       "evidence": "Only local read-only go-live reconciliation claim; it explicitly leaves release blocked on authenticated access and runtime/source gates.",
-      "reason": "This is a runtime gate reconciliation, not independently proven implementation delivery."
+      "reason": "This is a runtime gate reconciliation, not independently proven implementation delivery.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.244; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.261",
       "verdict": "unverified",
       "evidence": "Local metadata points to blocked-reported external artifact orc-n2q.261-blocked-reported-r1; no accessible source or successful runtime receipt.",
-      "reason": "Credential sync evidence is missing, not proof of an implementation absence."
+      "reason": "Credential sync evidence is missing, not proof of an implementation absence.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.261; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     },
     {
       "id": "orc-n2q.266",
       "verdict": "unverified",
       "evidence": "Only local protected-runtime mutation claim (mapping, auth, hashes, cleanup); no external receipt or live Actual access inspected.",
-      "reason": "Runtime credential-repair proof is inaccessible in this scan."
+      "reason": "Runtime credential-repair proof is inaccessible in this scan.",
+      "nextAction": "Independently inspect retained source, PR/merge, or runtime receipt for orc-n2q.266; record exact evidence or durable blocker on orc-mqew.",
+      "actionBead": "orc-mqew"
     }
   ]
 }
