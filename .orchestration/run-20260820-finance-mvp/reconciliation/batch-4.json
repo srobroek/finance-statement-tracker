@@ -9,7 +9,9 @@
       "evidence": "Artifact names commit 96e52a3feb0d1bb3827ea51e914c598bbac74cef but no PR or independently inspectable acceptance evidence.",
       "reason": "Implementation claim lacks exact delivered source proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8",
@@ -17,7 +19,9 @@
       "evidence": "Artifact claims integrated ten corrections at 8baa80fab8169cad4f6178073c9c86b1e9298070 and 266 tests, but no PR/source URL or independently inspectable acceptance record is attached.",
       "reason": "Integration self-report lacks durable delivery proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.1",
@@ -25,7 +29,9 @@
       "evidence": "Artifact names commit 453e7fe0b9bc7ea0558a828167fda7f998226f24 and period/receipt/FX boundaries, but no PR or independent acceptance evidence is attached.",
       "reason": "Source claim lacks delivered behavior proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.11",
@@ -33,7 +39,9 @@
       "evidence": "Ledger show names cashback_events.py commit 8dcee3f and focused repro, but exact commit/source carrier is inaccessible.",
       "reason": "Self-reported source delivery lacks accessible proof.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.12",
@@ -41,7 +49,9 @@
       "evidence": "Ledger show names test commit 39a1baa and artifact://13264, but artifact 13264 is unavailable and commit/source inaccessible.",
       "reason": "Regression delivery cannot be independently inspected.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.2",
@@ -49,7 +59,9 @@
       "evidence": "Artifact claims ordered refund reward state in a branch but has no exact source/PR or independently inspectable acceptance receipt.",
       "reason": "Implementation claim is self-report-only.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.3",
@@ -57,7 +69,9 @@
       "evidence": "Artifact names commit ee0b30ce254cc8c1df8062c9846e5f1871e8d400 and FX/freshness behavior, but no merged PR or independently inspectable acceptance is attached.",
       "reason": "Unlanded/unsupported source claim.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.4",
@@ -65,7 +79,9 @@
       "evidence": "Artifact says focused regression coverage was committed but provides no exact commit/PR or independently inspectable acceptance artifact.",
       "reason": "Test implementation claim lacks durable delivery proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.6",
@@ -73,7 +89,9 @@
       "evidence": "Local artifact claims verified mixed-bucket refund deductions with no exact source/PR/artifact carrier.",
       "reason": "Self-report only.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.7",
@@ -81,7 +99,9 @@
       "evidence": "Local artifact claims commit e4b272b and exact persisted intervals, but no accessible source/PR/artifact was inspected.",
       "reason": "Commit-only claim is not independently verifiable.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.8",
@@ -89,7 +109,9 @@
       "evidence": "Artifact names commit 64e673354e7d78082d2c7a883ed7225b7f9dceee and period/FX behavior, but no PR or independently inspected acceptance evidence is attached.",
       "reason": "Source claim alone does not prove delivered behavior.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.114.8.9",
@@ -97,7 +119,9 @@
       "evidence": "Artifact says focused test-only coverage was committed on a branch, but gives no exact commit/PR or independently inspectable acceptance receipt.",
       "reason": "Test implementation claim lacks durable delivery proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.34",
@@ -105,7 +129,9 @@
       "evidence": "Ledger record/source independently inspected: finance_tracker/actual_snapshot.py, finance_tracker/cashback_events.py and apps/cashback-control/server.py implement EI exclusion; focused tests prove cards/routes/totals/history exclusion while retaining stored EI rows; notes explicitly say source-only/production blocked.",
       "reason": "Inspected code and acceptance prove an unlanded source implementation; no authoritative deployed/merged delivery.",
       "shard": "CashbackProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.35",
@@ -113,7 +139,9 @@
       "evidence": "Ledger record independently inspected: commit 3e054b2 updates apps/cashback-control/web/app.js and schedule semantics, focused current/overdue UI smoke plus py_compile/node check pass; notes explicitly say source-only and production not deployed.",
       "reason": "Implementation and acceptance are proven on source branch, but landing/deployment is not proven.",
       "shard": "CashbackProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.52",
@@ -121,7 +149,9 @@
       "evidence": "Inspected unmerged statements.py/tests/test_statements.py source: generic CREDIT remains distinct from REFUND/PAYMENT/REWARD_CREDIT, preserving direction/amount; ledger records direct salary/transfer/refund smoke and says integrated package verification remains 82.",
       "reason": "Parser behavior is inspectable with focused acceptance, but package integration/landing remains incomplete.",
       "shard": "CashbackProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.54",
@@ -129,7 +159,9 @@
       "evidence": "Artifact claims exact TypeScript paths and 18/18 Bun tests, but no merged PR or independently inspectable source/acceptance receipt is attached.",
       "reason": "Unlanded parser cutover claim.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.82.2",
@@ -137,7 +169,9 @@
       "evidence": "Ledger/source evidence independently inspected for finance_tracker/statements.py: typing/date contract repair reconciled with child .2.1/.2.2 and 11/11 focused parser tests; source remains in the assigned unmerged integration checkout.",
       "reason": "Implementation and focused acceptance are proven in an unmerged checkout.",
       "shard": "CashbackProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.82.2.1",
@@ -145,7 +179,9 @@
       "evidence": "Inspected unmerged worktree source /home/sjors/tmp/worktrees/finance-statement-tracker/review-finance-resume-20260907/finance_tracker/statements.py and tests/test_statements.py: typed staged rows, Literal transaction types, bounded date inference, CREDIT preservation, and cross-year/missing-bounds regressions are present; ledger records 11/11 focused tests and scoped diff check.",
       "reason": "Parser repair and acceptance are inspectable on the integration checkout, but no landed commit/PR is recorded.",
       "shard": "CashbackProof",
-      "agent_verdict": "implemented_unlanded"
+      "agent_verdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.86.3.1",
@@ -153,7 +189,9 @@
       "evidence": "Artifact claims issuer-specific credential routing and targeted 5-case tests, but no exact source/PR or independently inspectable delivery evidence is attached.",
       "reason": "Credential-routing claim lacks durable source proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.89.1.1",
@@ -161,7 +199,9 @@
       "evidence": "Ledger comment describes source paths and 71 focused tests/API smoke, but says no mixed commit was created and the decisive patch is only local://bank-receipt-closure.patch.",
       "reason": "Local artifact is not durable delivery proof; no committed source/PR exists.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.89.2",
@@ -169,7 +209,9 @@
       "evidence": "Artifact claims prior-cycle snapshot implementation and live browser/scoped tests, but no exact source/PR or independently inspectable delivery head is attached.",
       "reason": "Source behavior claim lacks durable delivery proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.89.3.1",
@@ -177,7 +219,9 @@
       "evidence": "Local artifact claims FX core implementation and 36/36 integration verification on an isolated checkout; exact source/commit is inaccessible.",
       "reason": "Source delivery carrier unavailable; live provider proof explicitly remains downstream.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.376.89.3.2",
@@ -185,7 +229,9 @@
       "evidence": "Local artifact claims consumer FX integration and 36/36 focused checks, but no accessible exact source/commit/PR was inspected.",
       "reason": "Implementation claim is self-report only.",
       "shard": "OtherProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.50",
@@ -193,7 +239,9 @@
       "evidence": "Artifact names cursor/replay source branch and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no exact PR or independently inspected acceptance evidence is available.",
       "reason": "Cursor-atomicity claim lacks proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.52",
@@ -201,7 +249,9 @@
       "evidence": "Artifact names Cashback matching branch and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no exact PR or independently inspected behavior acceptance is available.",
       "reason": "Matching behavior claim lacks proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.53",
@@ -209,7 +259,9 @@
       "evidence": "Artifact names Cashback provenance branch and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no exact PR or independently inspected behavior acceptance is attached.",
       "reason": "Source/integration claim lacks durable proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.55",
@@ -217,7 +269,9 @@
       "evidence": "Artifact names Cashback operational-read/push metadata branch and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no source/PR acceptance evidence is independently inspectable.",
       "reason": "Source claim is metadata-only.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.64",
@@ -225,7 +279,9 @@
       "evidence": "Artifact names interface fixture/test paths and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no independently inspected behavior receipt or PR is attached.",
       "reason": "Integration claim lacks direct acceptance proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.69",
@@ -233,7 +289,9 @@
       "evidence": "Artifact names integration heads and merge 8ad0ada3 but no PR or independently inspected behavior acceptance evidence.",
       "reason": "Integration claim lacks proof beyond ledger metadata.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.70",
@@ -241,7 +299,9 @@
       "evidence": "Artifact names integration source head 33c789e and merge context but no exact PR or independently inspected acceptance evidence.",
       "reason": "Integration closure is self-report-only for behavior.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.72",
@@ -249,7 +309,9 @@
       "evidence": "Artifact names source head and merge 4ece326aad06464e5f9bd0ec074f225f6cfc9115, but no PR or independently inspected acceptance evidence is attached.",
       "reason": "Integration claim lacks behavior proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.73",
@@ -257,7 +319,9 @@
       "evidence": "Artifact names source heads and merge 5f6b6d94593debb7a17967494f1ec48c2e5cedc0, but no PR or behavior-level acceptance evidence is independently available.",
       "reason": "Integration claim is not independently proven.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.77",
@@ -265,7 +329,9 @@
       "evidence": "Artifact names launcher source/test paths and pushed branch but no merge/PR or independent acceptance evidence.",
       "reason": "Unlanded source claim lacks proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.83",
@@ -273,7 +339,9 @@
       "evidence": "Artifact names W15 workflow/manifest/config/test source and pushed branch, while explicitly leaves runtime proof outside scope; no exact merged PR or independently inspected acceptance receipt.",
       "reason": "Source-contract claim is incomplete and unlanded in the record.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.84",
@@ -281,7 +349,9 @@
       "evidence": "Artifact names combined integration commit e9b4d492 and Cashback/MCP source areas, but no PR or independently inspectable behavior acceptance is attached.",
       "reason": "Integration self-report lacks exact acceptance proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.85",
@@ -289,7 +359,9 @@
       "evidence": "Artifact names commit e9b4d492 and statement-password test/config paths, but no PR or independently inspectable acceptance artifact is available.",
       "reason": "Source claim is not enough to prove the secret-removal behavior.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-n2q.89",
@@ -297,7 +369,9 @@
       "evidence": "Artifact names merge 5d3ed3c7c4c31072d28bc28a7a889acc92c485c1 and source paths, but provides no independently inspected behavior-level acceptance receipt or PR.",
       "reason": "Code integration claim lacks independently inspectable acceptance proof.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-u9h6",
@@ -305,7 +379,9 @@
       "evidence": "Artifact only says the tests/test_cashback.py fixture issue was resolved by integrated CB13; no exact source/PR or acceptance evidence is attached.",
       "reason": "Fixture-fix claim is self-report-only.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     },
     {
       "id": "orc-xuwi",
@@ -313,7 +389,9 @@
       "evidence": "Artifact has only a stale-source-contract bug title/metadata and no close reason, source commit, PR, or acceptance evidence.",
       "reason": "No implementation proof is accessible.",
       "shard": "CashbackProof",
-      "agent_verdict": "unverified"
+      "agent_verdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source, PR, and acceptance evidence or repair the missing delivery carrier; preserve this row ID and evidence.",
+      "actionBead": "orc-n2q.396.4.1"
     }
   ]
 }
