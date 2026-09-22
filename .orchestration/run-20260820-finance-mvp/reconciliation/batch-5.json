@@ -1,1 +1,120 @@
-{"schema_version":1,"bead":"orc-n2q.396.5","source":"closed-implementation-proof-20260922.json","verdict":"unverified","records":[{"id":"orc-9390","verdict":"unverified","evidence":"proof lines 529-532: generated artifacts claimed but no exact commit/PR/carrier accessible"},{"id":"orc-c7ns","verdict":"unverified","evidence":"proof lines 801-804: dependency restoration claimed but no exact diff/acceptance carrier"},{"id":"orc-cymb","verdict":"unverified","evidence":"proof lines 1025-1028: external repository claims not inspectable"},{"id":"orc-n2q.164","verdict":"unverified","evidence":"proof lines 3881-3884: external settings receipt inaccessible"},{"id":"orc-n2q.350.1","verdict":"unverified","evidence":"proof lines 7217-7220: credential artifact inaccessible"},{"id":"orc-n2q.367.13","verdict":"unverified","evidence":"proof lines 7337-7340: no source/artifact"},{"id":"orc-n2q.367.14","verdict":"unverified","evidence":"proof lines 7345-7348: no source/PR/artifact"},{"id":"orc-n2q.376.111.1","verdict":"unverified","evidence":"proof lines 7825-7828: runtime receipt inaccessible"},{"id":"orc-n2q.376.41.1.1","verdict":"unverified","evidence":"proof lines 8793-8796: source/PR/artifact inaccessible"},{"id":"orc-n2q.376.41.2","verdict":"unverified","evidence":"proof lines 8801-8804: publication receipt inaccessible"},{"id":"orc-n2q.376.42.2","verdict":"unverified","evidence":"proof lines 8817-8820: source/PR inaccessible"},{"id":"orc-n2q.380","verdict":"unverified","evidence":"proof lines 10921-10924: authoritative source/PR inaccessible"},{"id":"orc-n2q.47","verdict":"unverified","evidence":"proof lines 11257-11260: no close reason/source/acceptance artifact"},{"id":"orc-n2q.48","verdict":"unverified","evidence":"proof lines 11353-11356: exact source/commit/PR inaccessible"},{"id":"orc-n2q.65","verdict":"unverified","evidence":"proof lines 11529-11532: no exact source/PR/acceptance artifact"},{"id":"orc-z8l","verdict":"unverified","evidence":"proof lines 12737-12740: runtime implementation receipt inaccessible"}]}
+{
+  "schema_version": 1,
+  "bead": "orc-n2q.396.5",
+  "source": "closed-implementation-proof-20260922.json",
+  "verdict": "unverified",
+  "records": [
+    {
+      "id": "orc-9390",
+      "verdict": "unverified",
+      "evidence": "proof lines 529-532: generated artifacts claimed but no exact commit/PR/carrier accessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-c7ns",
+      "verdict": "unverified",
+      "evidence": "proof lines 801-804: dependency restoration claimed but no exact diff/acceptance carrier",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-cymb",
+      "verdict": "unverified",
+      "evidence": "proof lines 1025-1028: external repository claims not inspectable",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.164",
+      "verdict": "unverified",
+      "evidence": "proof lines 3881-3884: external settings receipt inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.350.1",
+      "verdict": "unverified",
+      "evidence": "proof lines 7217-7220: credential artifact inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.367.13",
+      "verdict": "unverified",
+      "evidence": "proof lines 7337-7340: no source/artifact",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.367.14",
+      "verdict": "unverified",
+      "evidence": "proof lines 7345-7348: no source/PR/artifact",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.376.111.1",
+      "verdict": "unverified",
+      "evidence": "proof lines 7825-7828: runtime receipt inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.376.41.1.1",
+      "verdict": "unverified",
+      "evidence": "proof lines 8793-8796: source/PR/artifact inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.376.41.2",
+      "verdict": "unverified",
+      "evidence": "proof lines 8801-8804: publication receipt inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.376.42.2",
+      "verdict": "unverified",
+      "evidence": "proof lines 8817-8820: source/PR inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.380",
+      "verdict": "unverified",
+      "evidence": "proof lines 10921-10924: authoritative source/PR inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.47",
+      "verdict": "unverified",
+      "evidence": "proof lines 11257-11260: no close reason/source/acceptance artifact",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.48",
+      "verdict": "unverified",
+      "evidence": "proof lines 11353-11356: exact source/commit/PR inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-n2q.65",
+      "verdict": "unverified",
+      "evidence": "proof lines 11529-11532: no exact source/PR/acceptance artifact",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    },
+    {
+      "id": "orc-z8l",
+      "verdict": "unverified",
+      "evidence": "proof lines 12737-12740: runtime implementation receipt inaccessible",
+      "nextAction": "Retrieve authoritative implementation/landing evidence for this unresolved ID and update its evidence field",
+      "actionBead": "orc-hd6e"
+    }
+  ]
+}
