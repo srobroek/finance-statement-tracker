@@ -146,3 +146,15 @@ Untracked legacy drafts are distinct from delivered artifacts. This snapshot doe
 Gates remain open. Runtime reads do not approve live actions.
 
 Production, deployment, cutover, and release remain blocked on the named gates and platform and Finance acceptance.
+
+## Resume point (2026-09-22)
+
+This is a planning handover only. The user accepted the reconciliation queue. Epic `orc-n2q.396` has 11 ready, open, unassigned batches covering 380 records. Review `orc-n2q.396.12` waits for all 11. Execution has not started.
+
+The next planner reads current bead and lease state and uses the existing queue and artifacts. Do not repeat the 3,018-record scan or recreate tasks. Delegate cheap lookup and mechanical work to configured Luna agents. Independent review remains required.
+
+The prior handover and queue are committed at `e8f9d70f`. The proof audit is `14877c4e`. Redis removal is `3e0c55096be7033b373619a7ec651d28f91025c3`. This work is local only. Do not push or merge.
+
+Preserve open branch and worktree `/home/sjors/tmp/worktrees/finance/omp-agent-orc-n2q.395` and Redis worktree `/home/sjors/tmp/worktrees/finance/omp-agent-orc-n2q.391.10.1`. The canonical POC is untouched and unborn. Adopt the recorded snapshot deliberately; do not reset canonical. The embedded store is `/home/sjors/dev/finance/.beads/embeddeddolt`.
+
+Successful checks used direct child-process environment overrides: `BEADS_DOLT_SHARED_SERVER=false`, `BEADS_DOLT_SERVER_MODE=0`, `BEADS_DOLT_AUTO_START=0`, and `BEADS_DOLT_SERVER_USER=beads`, while preserving the session `BEADS_DIR` pin. Bun `$` wrappers retained stale routing in this session, so restarting alone is not a proven fix. Never restart SQL. The separate Compose design remains proposed only. No deployment, provider action, live financial action, or closed-bead reopening is authorized.
