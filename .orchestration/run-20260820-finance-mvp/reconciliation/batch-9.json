@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "bead": "orc-n2q.396.9",
+  "title": "Reconcile delivery evidence (32 records)",
+  "source": ".orchestration/run-20260820-finance-mvp/closed-implementation-proof-20260922.json",
+  "records": [
+    {
+      "id": "orc-i2nv",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json claims a PR137 offline integration repair, but current https://github.com/srobroek/finance-statement-tracker/pull/137 is OPEN/DRAFT with later Codex P1 findings and no independently matching exact head for this bead.",
+      "reason": "Branch/PR exists, but exact delivered head and acceptance for this specific fix are not independently established.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.248.1",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json names external systemd scope and a reported receipt, but no independently accessible host artifact/source or PR was inspected.",
+      "reason": "External remediation claim lacks independently inspectable implementation proof.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.367.16",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible evidence; close reason claims a smell fix was committed/pushed but gives no source path, commit, or PR.",
+      "reason": "Implementation claim is self-report only.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.373",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible evidence: it claims remote tip 654e47a77c77343d0d686c6c3adeb62ca476115f, but names no source paths or accessible PR/artifact.",
+      "reason": "Implementation-like push claim lacks independently inspected source or exact PR acceptance evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.10",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json claims ten focused matrix-invariant tests and an 84-test run but names no exact source/commit/PR.",
+      "reason": "Repair claim lacks independently inspected delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.11",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims per-field AI cleanup locks and passing regressions but exposes no exact source/PR evidence.",
+      "reason": "Implementation claim is ledger-only.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.3",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json calls this planning/reporting recovery complete but exposes no exact source paths, commit, or PR.",
+      "reason": "Mixed recovery/implementation claim lacks independently inspected delivery proof.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.6",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims classification regressions fixed in 3f0b978 without independently inspected source/PR evidence.",
+      "reason": "Implementation claim lacks independently inspected delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.7",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims ownership-conflict lock changes at b15ce8b without independently inspected source/PR evidence.",
+      "reason": "Implementation claim is ledger-only.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.8",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims source-review preservation at commit ce7688d... without source/PR acceptance evidence.",
+      "reason": "Implementation claim is ledger-only.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.115.9",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it names commit c9bbf029... and focused checks but no independently inspected source/PR.",
+      "reason": "Implementation claim lacks exact accessible delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.117.6",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims three writer-recovery defects fixed in a53848c without source/PR inspection.",
+      "reason": "Implementation claim lacks independently inspected delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.117.8",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims durable committed-ordering recovery at commit a... without source paths or PR metadata.",
+      "reason": "Implementation claim lacks independently inspected source/PR acceptance evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.118.5",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims acceptance in commit 113912b... without accessible source/PR inspection.",
+      "reason": "Implementation claim lacks independently inspected delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.118.6",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims three four-table corrections and regressions but gives no exact source/PR head.",
+      "reason": "Implementation claim lacks independently inspected delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.119.1",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims lease parser fixes at commit 635d2dd... but no source/PR was independently inspected.",
+      "reason": "Implementation claim lacks exact accessible delivery evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.1",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; body documents current-main replay and 136/162 regression suites, while this bead's reviewed semantic head is d385c14ffa0a7815c0bccdd67f563af1b6401d74.",
+      "reason": "Exact branch source/review evidence exists, but OPEN/DRAFT status means the implementation is not landed.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.2",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; body includes unmatched-reimbursement row-level regression and 136/162 focused suites.",
+      "reason": "Exact branch source and acceptance are independently inspected, but no merge is claimed because PR136 remains OPEN/DRAFT.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.10",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; PR body lists actual_pipeline.py, actual_snapshot.py, CLI/Compose membership wiring and focused tests matching this bead.",
+      "reason": "Implementation and acceptance are independently proven on the branch, but OPEN/DRAFT status means it is not landed delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.14",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json names handed-off patch /home/sjors/.local/share/omp/wt/tb176b0ba9/m/pr136-statement-security.patch, but that path was not accessible and no exact PR/source head for this specific patch was independently inspected.",
+      "reason": "The close reason hands off a patch after the delivery gate blocked commit; implementation may exist, but accessible independent proof is missing.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.2",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; body lists actual_snapshot.py, classification_audit.py, history.py and regression tests.",
+      "reason": "Implementation and acceptance are independently proven on the branch, but OPEN/DRAFT status means it is not landed delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.3",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; body covers reimbursement/category semantics in actual_pipeline.py, transaction_semantics.py and focused suites.",
+      "reason": "Implementation and acceptance are independently proven on the branch, but OPEN/DRAFT status means it is not landed delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.7",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the accessible evidence: it claims a corrected audit patch was committed/exported from base 164402562e28df8f55a2812e1658353aed84ed83, without source path or PR proof.",
+      "reason": "Implementation patch claim lacks independently inspected source/PR acceptance evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.122.4.9",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; PR body lists packages/n8n-nodes-finance actual-session/contracts and focused tests.",
+      "reason": "Implementation and acceptance are independently proven on the branch, but OPEN/DRAFT status means it is not landed delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.376.58",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json claims AI review metadata behavior passed but gives no exact commit/PR; current PR136 source overlap is not enough to prove this bead's exact delivery.",
+      "reason": "Implementation claim lacks independently inspected exact-head evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.379.14",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json names the J13 owned path but provides no exact commit/PR; current PR150 shows a later corrected J13 file, not this author bead's exact head.",
+      "reason": "Initial author delivery lacks independently inspectable exact-head evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.379.8",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json claims commit 6515c2546e6921449f46aea5e89441f91de7c0bc and an integrated range, but no matching PR/current exact-head source was independently accessible; metadata also records phantom-worker cancellation.",
+      "reason": "Specific J07 correction is not independently proven as delivered to a merged PR.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.38",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it lists policy commits and ancestry metadata but no independently inspected source/PR acceptance evidence.",
+      "reason": "Configuration implementation claim lacks accessible independent proof.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.39",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims CI head 05985bc2 is an ancestor of 8ad0ada3 but gives no inspected source paths or PR.",
+      "reason": "Implementation delivery claim is ledger-only.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-n2q.68",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json is the only accessible proof: it claims integrated head 48b7e793 and remote ancestry but names no inspected source paths or PR.",
+      "reason": "Implementation integration claim lacks independently inspected source/PR acceptance evidence.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-ojfb",
+      "priorVerdict": "implemented_landing_unverified",
+      "reconciledVerdict": "implemented_landing_unverified",
+      "evidence": "PR136 https://github.com/srobroek/finance-statement-tracker/pull/136 inspected: OPEN/DRAFT/DIRTY at exact head 164402562e28df8f55a2812e1658353aed84ed83; body lists finance_tracker/history.py and tests/test_history.py, matching the locked review-field fix.",
+      "reason": "Specific source scope is independently visible on the exact branch head, but OPEN/DRAFT status means it is not landed delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "implemented_unlanded",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    },
+    {
+      "id": "orc-s5ku",
+      "priorVerdict": "unverified",
+      "reconciledVerdict": "unverified",
+      "evidence": "local://closed-proof-DeliveryProof.json names finance_tracker/classification_audit.py and tests plus commit db8fe72, but no independently accessible source/PR head was inspected.",
+      "reason": "Implementation claim has paths and self-reported tests but not independently verified delivery.",
+      "shard": "DeliveryProof",
+      "agentVerdict": "unverified",
+      "nextAction": "Retrieve independently inspectable source/PR exact-head evidence for this row and repair or document the unresolved delivery claim.",
+      "actionBead": "orc-n2q.396.9.1"
+    }
+  ],
+  "counts": [
+    {
+      "verdict": "implemented_landing_unverified",
+      "count": 7
+    },
+    {
+      "verdict": "unverified",
+      "count": 25
+    }
+  ]
+}

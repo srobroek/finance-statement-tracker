@@ -1,0 +1,279 @@
+{
+  "governing": "orc-n2q.395",
+  "date": "2026-09-22",
+  "sourceDecision": "orc-n2q.391.49",
+  "addedEdges": [
+    [
+      "orc-n2q.391.2",
+      "orc-n2q.391.55"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.1"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.6"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.10"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.11"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.12"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.13"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.14"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.16"
+    ],
+    [
+      "orc-n2q.391.8",
+      "orc-n2q.391.18"
+    ],
+    [
+      "orc-n2q.391.9",
+      "orc-n2q.391.51"
+    ],
+    [
+      "orc-n2q.391.9",
+      "orc-n2q.391.26"
+    ],
+    [
+      "orc-n2q.391.47",
+      "orc-n2q.390"
+    ]
+  ],
+  "fields": [
+    {
+      "id": "orc-n2q.391",
+      "field": "description",
+      "before": "Deliver the private srobroek/prefect-platform POC through gated production release. Adopt SpecKit molecules orc-mol-2mq and orc-mol-xxp and their human gates without duplication or resolution. Local POC work may proceed; production, deployment, cutover, and release remain blocked on specification analyze/verify gates plus platform and Finance acceptance. Each phase fan-in must persist a milestone handover comment or artifact containing changed paths, exact checks and receipts, open blockers and ambiguities, current authority and gates, the next ready wave, rollback point, and branch/commit/image identity.",
+      "after": "Deliver the private srobroek/prefect-platform runtime and srobroek/prefect-finance application through gated production release, following repository-boundary decision orc-n2q.391.49. Preserve finance-statement-tracker as migration and rollback source until separately approved retirement. Adopt SpecKit molecules orc-mol-2mq and orc-mol-xxp and their human gates without duplication or resolution. Local POC work may proceed; production, deployment, cutover, and release remain blocked on specification analyze/verify gates plus platform and Finance acceptance. Each phase fan-in must persist a milestone handover comment or artifact containing changed paths, exact checks and receipts, open blockers and ambiguities, current authority and gates, the next ready wave, rollback point, and branch/commit/image identity."
+    },
+    {
+      "id": "orc-n2q.391.9",
+      "field": "acceptance_criteria",
+      "before": "1. Both specs reflect final verified contracts and boundaries. 2. Analyze/verify findings are addressed or explicitly blocked. 3. Existing molecule steps and gates are linked, not copied. 4. Validation receipts identify exact molecule and gate state.",
+      "after": "1. Both specs reflect the reviewed platform/Finance ownership and immutable interfaces in orc-n2q.391.49, .391.51 and .391.55. 2. Label structural traceability separately from implementation and runtime acceptance; link exact evidence from .391.26 and record unproven requirements without claiming verification. 3. Reconcile earlier draft findings against delivered contracts: GitHub release-client credential ownership, per-source writer stop versus shared n8n shutdown, recovery before/after credential revocation, whole-statement failure recovery and replay after interrupted writes. Use existing flow/recovery work and Prefect-native state where sufficient; do not introduce a new journal or service by assumption. 4. Analyze/verify findings are resolved or explicitly blocked. Existing molecules orc-mol-2mq and orc-mol-xxp remain the workflow authority; no duplicate spec tasks or human-gate resolutions. 5. Validation receipts identify exact repositories, revisions, molecule/gate state and valid, superseded or blocked findings."
+    },
+    {
+      "id": "orc-n2q.391.3",
+      "field": "acceptance_criteria",
+      "before": "1. All shared models validate invariants. 2. Every canonical model has a deterministic full schema export. 3. Aggregate contracts schema references the same model identities. 4. Contract tests cover round-trip and invalid boundaries.",
+      "after": "1. All shared models validate invariants. 2. Every canonical model has a deterministic full schema export. 3. Aggregate contracts schema references the same model identities. 4. Contract tests cover round-trip and invalid boundaries.\n\nDependency audit: declare Pydantic directly in each owning package that imports its APIs after the repository split. Choose constraints from the used Pydantic v2 API and published Prefect requirements; resolve and record the resulting lock. Do not rely only on Prefect or FastAPI to supply this direct dependency."
+    },
+    {
+      "id": "orc-n2q.391.6",
+      "field": "acceptance_criteria",
+      "before": "1. Repository installs reproducibly. 2. Local Prefect server/API smoke runs. 3. Exact Prefect/FastAPI compatibility pins and receipt are recorded. 4. Changed paths and smoke receipt are available for review.",
+      "after": "1. Repository installs reproducibly. 2. Local Prefect server/API smoke runs. 3. Exact Prefect/FastAPI compatibility pins and receipt are recorded. 4. Changed paths and smoke receipt are available for review.\n\nDependency audit: record and constrain the Hatchling build backend used for reproducible isolated builds. Verify Python 3.12 manifest/interpreter/lock agreement and report build-backend provenance separately from application lock resolution. Do not describe manifest ranges as installed versions."
+    },
+    {
+      "id": "orc-n2q.391.10",
+      "field": "acceptance_criteria",
+      "before": "1. Compose config resolves. 2. Worker registers and executes a synthetic deployment. 3. Health/restart behavior and rollback commands are recorded. 4. No registry or production side effect.",
+      "after": "1. Compose config resolves. 2. Worker registers and executes a synthetic deployment. 3. Health/restart behavior and rollback commands are recorded. 4. No registry or production side effect.\n\nDependency audit: install the worker production dependencies from uv.lock or an equivalently enforced locked export; unlocked pip install of the source alone does not prove CI parity. Construct the database connection URL with correctly escaped credentials and prove reserved-character credentials reach the intended database. User decision2026-09-22: Redis is deferred. The current Compose topology must omit the Redis service and any Redis startup dependency. Any later introduction requires a demonstrated consumer and a separate approved planning change. Keep process-pool auto-creation through the existing --type process behavior; no separate pool service is required."
+    },
+    {
+      "id": "orc-n2q.391.13",
+      "field": "acceptance_criteria",
+      "before": "1. Receipt names exact versions and lock digest. 2. Runtime smoke supports the combination. 3. Known constraints and upgrade trigger are explicit. 4. Receipt is referenced by docs and milestone handover.",
+      "after": "1. Receipt names exact versions and lock digest. 2. Runtime smoke supports the combination. 3. Known constraints and upgrade trigger are explicit. 4. Receipt is referenced by docs and milestone handover.\n\nDependency audit: distinguish published requirement compatibility from installed runtime compatibility. Record Python, Prefect, FastAPI, Pydantic, Pydantic-core and Starlette identities for both the locked environment and candidate image; exercise the existing API/worker smoke. Observed source lock is Prefect3.4.24, FastAPI0.115.14, Pydantic2.13.5, Pydantic-core2.46.5 and Starlette0.46.2 on Python3.12; their inspected published constraints intersect, but this is not proof of a working container."
+    },
+    {
+      "id": "orc-n2q.391.43",
+      "field": "acceptance_criteria",
+      "before": "1. Image digest maps to exact source head and lock. 2. Build is reproducible enough to explain inputs. 3. SBOM and scan receipts are retained. 4. No registry mutation.",
+      "after": "1. Image digest maps to exact source head and lock. 2. Build is reproducible enough to explain inputs. 3. SBOM and scan receipts are retained. 4. No registry mutation.\n\nDependency audit: record immutable manifest/platform digests for PostgreSQL, the Prefect server and worker base, and the built worker candidate. Compare installed production packages against the reviewed lock, then verify the server and worker compatibility receipt. Image-tag existence alone is not byte identity, vulnerability clearance or runtime acceptance. Preserve the existing no-publication boundary."
+    }
+  ],
+  "commentTargets": [
+    "orc-n2q.322",
+    "orc-n2q.394.2"
+  ],
+  "verification": {
+    "netAddedEdges": 13,
+    "removedOriginalEdges": 0,
+    "statusOrAssigneeChanges": 0,
+    "humanGatesOpen": 6,
+    "dependencyCycles": 0,
+    "proseGate": {
+      "score": 83.8,
+      "exit": 0,
+      "errors": 0,
+      "warnings": 12,
+      "unchecked": []
+    }
+  },
+  "notChanged": [
+    "statuses",
+    "assignees",
+    "human gates",
+    "closed decisions",
+    "catalog counts",
+    "retention policy",
+    "six-source scope",
+    "product code"
+  ],
+  "dependencyAudit": {
+    "scope": "Read-only adoption POC; no source, package, lock or production change",
+    "inventoryDeclarations": 97,
+    "locked": {
+      "python": "3.12",
+      "prefect": "3.4.24",
+      "fastapi": "0.115.14",
+      "pydantic": "2.13.5",
+      "pydanticCore": "2.46.5",
+      "starlette": "0.46.2"
+    },
+    "publishedConstraintChecks": 5,
+    "publishedConstraintChecksPassed": 5,
+    "imageTagsVerified": [
+      "postgres:18.6",
+      "redis:8.2.9",
+      "prefecthq/prefect:3.4.24-python3.12"
+    ],
+    "registryChecks": [
+      {
+        "name": "prefect",
+        "version": "3.4.24",
+        "url": "https://pypi.org/pypi/prefect/3.4.24/json",
+        "status": 200,
+        "requiresPython": "<3.14,>=3.9",
+        "relevantRequirements": [
+          "asyncpg<1.0.0,>=0.23",
+          "fastapi<1.0.0,>=0.111.0",
+          "pydantic!=2.11.0,!=2.11.1,!=2.11.2,!=2.11.3,!=2.11.4,<3.0.0,>=2.10.1",
+          "pydantic-core<3.0.0,>=2.12.0",
+          "pydantic-extra-types<3.0.0,>=2.8.2",
+          "pydantic-settings!=2.9.0,<3.0.0,>2.2.1",
+          "uvicorn!=0.29.0,>=0.14.0",
+          "prefect-aws>=0.5.8; extra == \"aws\"",
+          "prefect-azure>=0.4.0; extra == \"azure\"",
+          "prefect-bitbucket>=0.3.0; extra == \"bitbucket\"",
+          "prefect-dask>=0.3.0; extra == \"dask\"",
+          "prefect-databricks>=0.3.0; extra == \"databricks\"",
+          "prefect-dbt>=0.6.0; extra == \"dbt\"",
+          "prefect-docker>=0.6.0; extra == \"docker\"",
+          "prefect-email>=0.4.0; extra == \"email\"",
+          "prefect-gcp>=0.6.0; extra == \"gcp\"",
+          "prefect-github>=0.3.0; extra == \"github\"",
+          "prefect-gitlab>=0.3.0; extra == \"gitlab\"",
+          "prefect-kubernetes>=0.4.0; extra == \"kubernetes\"",
+          "prefect-ray>=0.4.0; extra == \"ray\"",
+          "prefect-redis>=0.2.0; extra == \"redis\"",
+          "prefect-shell>=0.3.0; extra == \"shell\"",
+          "prefect-slack>=0.3.0; extra == \"slack\"",
+          "prefect-snowflake>=0.28.0; extra == \"snowflake\"",
+          "prefect-sqlalchemy>=0.5.0; extra == \"sqlalchemy\""
+        ],
+        "yanked": false
+      },
+      {
+        "name": "fastapi",
+        "version": "0.115.14",
+        "url": "https://pypi.org/pypi/fastapi/0.115.14/json",
+        "status": 200,
+        "requiresPython": ">=3.8",
+        "relevantRequirements": [
+          "starlette<0.47.0,>=0.40.0",
+          "pydantic!=1.8,!=1.8.1,!=2.0.0,!=2.0.1,!=2.1.0,<3.0.0,>=1.7.4",
+          "fastapi-cli[standard]>=0.0.5; extra == \"standard\"",
+          "uvicorn[standard]>=0.12.0; extra == \"standard\"",
+          "fastapi-cli[standard]>=0.0.5; extra == \"all\"",
+          "uvicorn[standard]>=0.12.0; extra == \"all\"",
+          "pydantic-settings>=2.0.0; extra == \"all\"",
+          "pydantic-extra-types>=2.0.0; extra == \"all\""
+        ],
+        "yanked": false
+      },
+      {
+        "name": "pydantic",
+        "version": "2.13.5",
+        "url": "https://pypi.org/pypi/pydantic/2.13.5/json",
+        "status": 200,
+        "requiresPython": ">=3.9",
+        "relevantRequirements": [
+          "pydantic-core==2.46.5"
+        ],
+        "yanked": false
+      }
+    ],
+    "sourceFindings": [
+      "Direct Pydantic imports not declared",
+      "Worker image does not consume uv.lock",
+      "Unpinned Hatchling build dependency",
+      "Mutable runtime image and CI action references",
+      "Unescaped database-URL interpolation"
+    ],
+    "uncertain": [
+      "Local Finance package directory empty; remote existence not inferred"
+    ],
+    "rejected": [
+      "Separate work-pool bootstrap task: --type process auto-creates pool"
+    ],
+    "coverageLimits": [
+      "No container startup",
+      "No installation or lock regeneration",
+      "No CVE scanner",
+      "No full dependency resolver check"
+    ],
+    "syntheticUrlCheck": {
+      "unescapedHost": "b",
+      "escapedHost": "postgres"
+    }
+  },
+  "redisDecision": {
+    "userDirection": "Do not use Redis yet; drop it from Compose",
+    "task": "orc-n2q.391.10.1",
+    "commit": "3e0c55096be7033b373619a7ec651d28f91025c3",
+    "worktree": "/home/sjors/tmp/worktrees/finance/omp-agent-orc-n2q.391.10.1",
+    "composeValidation": {
+      "quietExit": 0,
+      "servicesExit": 0,
+      "services": [
+        "postgres",
+        "prefect",
+        "finance-worker-a",
+        "finance-worker-b"
+      ],
+      "containersStarted": false
+    },
+    "sourceCanonicalModified": false,
+    "deploymentSplit": "Recommended for planning; not implemented"
+  },
+  "closedProofSummary": {
+    "governing": "orc-n2q.395.1",
+    "snapshot": {
+      "closedRecords": 3018,
+      "eventRecordsExcluded": 1427,
+      "assignedNonEventRecords": 1591,
+      "covered": 1591,
+      "missing": [],
+      "date": "2026-09-22",
+      "scope": "Closed-record census captured before the proof-audit task was created"
+    },
+    "counts": {
+      "verified_delivery": 192,
+      "implemented_landing_unverified": 43,
+      "unverified": 337,
+      "superseded_or_retired": 150,
+      "non_implementation": 869,
+      "contradicted": 0
+    },
+    "artifact": "closed-implementation-proof-20260922.json"
+  }
+}
