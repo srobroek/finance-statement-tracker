@@ -1,0 +1,336 @@
+{
+  "schema_version": 1,
+  "bead": "orc-n2q.396.2",
+  "title": "Reconcile legacy runtime evidence 2/2 (41 records)",
+  "source": "closed-implementation-proof-20260922.json",
+  "records": [
+    {
+      "id": "orc-n2q.336.3",
+      "verdict": "unverified",
+      "evidence": "Independent attempts: PR138 body/files/diff inspect generated fixture source, manifest hashes, and focused test changes; pr://srobroek/n8n-orchestrator/26 confirms merged PR26, five changed files, exact cleanup summary and test plan, but n8n PR26 API/files/patch/raw endpoints all returned 404. Current ledger comments claim PR26 merge da0dd206... and PR138 merge 2e51f8..., but no independently inspectable final n8n diff or protected acceptance receipt was found.",
+      "reason": "Exact Finance diff is corroborated, but the two-repository integration cannot be verified_delivery without independently inspectable n8n source/diff and final acceptance evidence; retain unverified.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.338",
+      "verdict": "unverified",
+      "evidence": "ledger claim only; output_ref .orchestration/run-20260820-finance-mvp/artifacts/orc-n2q.338-w10-live-apply-r1.md was not independently inspected",
+      "reason": "Runtime operation claim and receipt identity alone are insufficient here.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.367.12",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: runtime lifecycle smell fix committed/pushed; no exact commit/path/acceptance receipt independently inspected",
+      "reason": "Push and focused-verification claim alone does not prove delivered behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.367.19",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: shared bounded sentinel resolver and migrated tests; no exact source commit/PR/acceptance receipt independently inspected",
+      "reason": "Bug-fix closure names filesystem checks but not independently inspected source delivery.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.374",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: three n8n commits pushed; no exact commit/path/acceptance receipt independently accessible in current tree",
+      "reason": "Push claim alone does not prove delivered behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.11",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; workflow-proof-guard test claim inspected, but no exact source commit/PR/acceptance artifact was accessible",
+      "reason": "Code/test repair is asserted only by ledger closure; implementation proof is missing.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.1",
+      "verdict": "unverified",
+      "evidence": "/home/sjors/tmp/worktrees/finance-statement-tracker/feature-four-table-cutover/integrations/n8n/setup-workflows/runner/four_table_cutover.py; source inspected",
+      "reason": "Python source is accessible and inspected, but branch-only metadata has no merged delivery or independent acceptance proof.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.10",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims terminal trust-boundary follow-up and exact commit 4c085795, but source/PR is inaccessible.",
+      "reason": "Commit-only claim is not independently verifiable.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.11",
+      "verdict": "unverified",
+      "evidence": "Local artifact claims fix through commit 4c085795 and focused review, but no accessible source/PR/artifact was inspected.",
+      "reason": "Commit-only implementation proof is inaccessible.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.2",
+      "verdict": "unverified",
+      "evidence": "/home/sjors/tmp/worktrees/finance-statement-tracker/feature-four-table-cutover/integrations/n8n/setup-workflows/runner/n8n-cli-four-table-cutover.cjs; source inspected",
+      "reason": "CJS source is accessible and inspected, but branch-only metadata has no merged delivery or independent acceptance proof.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.3",
+      "verdict": "unverified",
+      "evidence": "/home/sjors/tmp/worktrees/finance-statement-tracker/feature-four-table-cutover/integrations/n8n/setup-workflows/runner/run-four-table-cutover.sh; source inspected",
+      "reason": "Shell source is accessible and inspected, but branch-only metadata has no merged delivery or independent acceptance proof.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.4",
+      "verdict": "unverified",
+      "evidence": "/home/sjors/tmp/worktrees/finance-statement-tracker/feature-four-table-cutover/tests/test_four_table_cutover_runner.py and runner/finance-four-table-legacy-reference-inventory-v1.json; source inspected",
+      "reason": "Source/tests are present in the referenced worktree, but no merged PR or independently inspectable delivery acceptance was found.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.118.9",
+      "verdict": "unverified",
+      "evidence": "Ledger show provides commit ccc107a, changed runner/schema/test paths and 42-test report; the exact commit/source carrier is inaccessible.",
+      "reason": "Self-reported migration delivery cannot be independently inspected.",
+      "shard": "OtherProof",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.59",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; packages/n8n-nodes-finance/src/lib/rules.ts scope and test claim inspected, but the referenced package path was unavailable in checkout",
+      "reason": "Bug fix is asserted without independently inspectable delivered source and acceptance evidence.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.61.1",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; refactor/artifact scope and test claim inspected, but referenced refactor_workflow_ui.py was unavailable in checkout",
+      "reason": "Bug fix is asserted with scoped tests, but no independently inspectable delivered source/PR acceptance was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.78",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; typed-four-table-state feature scope and close claim inspected, but no exact source/PR was accessible",
+      "reason": "Feature delivery is asserted without independently inspectable delivered source and acceptance evidence.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.79",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; trusted-deployment-bindings feature scope and test claim inspected, but no exact source/PR was accessible",
+      "reason": "Feature delivery is asserted without independently inspectable delivered source and acceptance evidence.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.82.6",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; generated-artifact scope inspected; current referenced source path was not available in the checkout",
+      "reason": "Artifact regeneration is asserted without accessible exact source, commit/PR, or acceptance evidence.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.89.5.7.3",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; code-like title/close reason inspected, but no exact source commit/PR/acceptance was accessible",
+      "reason": "Potential source repair is asserted only by ledger closure; implementation proof is missing.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.376.89.5.8.3",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; applicability/reference close reason inspected, but no exact source commit/PR/acceptance was accessible",
+      "reason": "Potential workflow metadata/source change is asserted only by ledger closure; implementation proof is missing.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.40",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; finance code branch and ancestor metadata inspected",
+      "reason": "Code delivery is asserted as included in a published plan, but no independently inspected acceptance proof was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.41",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n code branch and published-plan merge metadata inspected",
+      "reason": "Code delivery is asserted as merged, but no independently inspected source/acceptance proof was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.42",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n code branch and published-plan merge metadata inspected",
+      "reason": "Code delivery is asserted as merged, but no independently inspected source/acceptance proof was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.46",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; workflow-blocker code scope/branch metadata inspected, but no exact PR or acceptance artifact was accessible",
+      "reason": "Code implementation is asserted without independently inspectable delivered source plus acceptance proof.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.1.5.3",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: input-binding/source-backup code task; no exact source/acceptance artifact independently inspected",
+      "reason": "Implementation claim lacks independent source/behavior proof.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.1.5.3.3",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: exact-0600 non-symlink input code task; no exact source/acceptance artifact independently inspected",
+      "reason": "Implementation claim lacks independent source/behavior proof.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.1.5.3.3.3",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: non-regular four-table input regression predicate code task; no exact source/acceptance artifact independently inspected",
+      "reason": "Implementation claim lacks independent source/behavior proof.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.1.5.3.3.3.3",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: publication branch/PR58/local gate; no exact source/landing receipt independently inspected",
+      "reason": "Publication claim alone does not prove delivered behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.4",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: canonical four-table digest/readback adapter code task; no exact implementation source/acceptance receipt independently inspected",
+      "reason": "Historical worktree/source unavailable for independent behavior proof.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.47.5",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "inspected four-table-cutover-runner-r1-reported-1.md and -reported-2.md; exact commits e63441e8/8650833b, runner/schema paths, forward/rollback receipt binding, focused tests and fail-closed gates; no landed PR identity",
+      "reason": "Exact implementation and acceptance are inspected, but source branch is not independently proven landed.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-n2q.49",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; workflow-folder hierarchy title/close claim inspected, but no exact delivered source/PR acceptance was accessible",
+      "reason": "Migration/implementation is asserted without independently inspectable delivery proof.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.63",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n branch/head/merge metadata inspected",
+      "reason": "Code integration is claimed, but no independently inspected source plus acceptance evidence was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.71",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n source heads and merge commit dc7171c4 are ledger metadata only",
+      "reason": "Code integration is asserted, but no independently inspected acceptance evidence was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.79.10",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n scope/branch and integration commit e2579f63 are ledger metadata only",
+      "reason": "Code delivery is asserted as integrated, but no independently inspected source plus acceptance evidence was accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.82",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n code scope and published-plan commit are ledger metadata only",
+      "reason": "Code delivery is claimed as included in an integration, but source and acceptance were not independently accessible.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.86",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; n8n scope and merge commit 33c0a6c3 are ledger metadata only",
+      "reason": "Integration code is claimed, but no independently inspected source/acceptance proof beyond the ledger claim.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-n2q.87",
+      "verdict": "unverified",
+      "evidence": "local://closed-proof-LegacyProofC.json; finance scope and merge/publish commit 5eef8143 are ledger metadata only",
+      "reason": "Integration code is claimed, but no independently inspected source/acceptance proof beyond the ledger claim.",
+      "shard": "LegacyProofC",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-pide",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: PR79 exact approved head landed; no independent source/acceptance receipt inspected",
+      "reason": "Merge/source claim alone does not prove behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-prodex-n8n-workdir-fix-r1",
+      "verdict": "implemented_landing_unverified",
+      "evidence": "inspected fix_prodex_n8n_workdir_r1-reported-1.md (commit d29b1af, exact Dockerfile/schema/test paths, focused tests); separate merge row exists but this implementation row has no landing identity",
+      "reason": "Implementation is proven on the source branch; use separate merge row for landed delivery.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "implemented_unlanded"
+    },
+    {
+      "id": "orc-u8hi",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: PR81 landed with exact proof; no accessible PR81 source/acceptance receipt independently inspected",
+      "reason": "Merge claim alone does not prove behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    },
+    {
+      "id": "orc-w7gj",
+      "verdict": "unverified",
+      "evidence": "ledger claim only: PR62 merged with exact target ancestry; no PR62 source/acceptance receipt independently inspected",
+      "reason": "Merge/ancestry claim alone does not prove behavior.",
+      "shard": "LegacyProofA",
+      "agent_verdict": "unverified"
+    }
+  ]
+}
