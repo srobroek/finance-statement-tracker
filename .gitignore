@@ -40,3 +40,4 @@ services/*/dist/
 .DS_Store
 Thumbs.db
 ~$*
+specs/**/spec-status.md
