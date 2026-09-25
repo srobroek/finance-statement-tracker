@@ -179,7 +179,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Global Maintenance Lease Request. Keep this deterministic and fail closed.\nconst b = $('Validate Reviewed Bindings').first().json;\nreturn [{json:{operation:'ACQUIRE', resource_key:'actual:'+b.actual_file_id, lease_owner:'n8n:maintenance:'+String($execution.id), ttl_seconds:600}}];\n"
+        "jsCode": "// Purpose: Build Global Maintenance Lease Request. Keep this deterministic and fail closed.\nconst b = $('Validate Reviewed Bindings').first().json;\nreturn [{json:{operation:'ACQUIRE',lease_class:'MAINTENANCE',resource_key:'actual:'+b.actual_file_id,lease_owner:'n8n:maintenance:'+String($execution.id),ttl_seconds:600}}];\n"
       }
     },
     {
@@ -213,7 +213,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+        "jsCode": "// Purpose: Build Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.lease_class !== 'MAINTENANCE' || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',lease_class:'MAINTENANCE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
       }
     },
     {
@@ -280,7 +280,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Post-Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+        "jsCode": "// Purpose: Build Post-Maintenance Fence Assert. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nconst b = $('Validate Reviewed Bindings').first().json;\nconst expiresAt = Date.parse(l.expires_at);\nif (!Number.isFinite(expiresAt) || l.lease_class !== 'MAINTENANCE' || l.resource_key !== 'actual:'+b.actual_file_id || !l.lease_id || !Number.isSafeInteger(l.fencing_token) || l.fencing_token <= 0 || expiresAt <= Date.now()+60000) throw new Error('MAINTENANCE_WRITER_FENCE_INVALID');\nreturn [{json:{operation:'ASSERT',lease_class:'MAINTENANCE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
       }
     },
     {
@@ -438,7 +438,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "// Purpose: Build Exact Maintenance Lease Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nif ($json.receipt_archive_verified !== true) throw new Error('MAINTENANCE_RECEIPT_REQUIRED_BEFORE_RELEASE');\nreturn [{json:{operation:'RELEASE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
+        "jsCode": "// Purpose: Build Exact Maintenance Lease Release. Keep this deterministic and fail closed.\nconst l = $('Acquire Global Actual Writer Fence').first().json;\nif ($json.receipt_archive_verified !== true) throw new Error('MAINTENANCE_RECEIPT_REQUIRED_BEFORE_RELEASE');\nreturn [{json:{operation:'RELEASE',lease_class:'MAINTENANCE',resource_key:l.resource_key,lease_id:l.lease_id,fencing_token:l.fencing_token}}];\n"
       }
     },
     {

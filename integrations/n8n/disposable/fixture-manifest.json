@@ -7,8 +7,8 @@
     "09-ai-proposal.json": "899a2115c96195f911c06c3269348e67aec10768bbb2d5aec9de0efe09777df8",
     "12-outlook-message-sweep.json": "13b9a9dbb0af2b16b1aa527c08c827b24c1972c620336d17199691b172f8a2ba",
     "16-operations-error-handler.json": "41a0b48c97d7cc658c59714f73da5916a28863389aef48ca732023e79c507672",
-    "17-actual-outbox-recovery.json": "7fd919f1ce8075f3e163150847ec7f3082656417e0b18d519af28b702419b1a4",
-    "18-finance-writer-lease.json": "012d0586b16bd61c2617392fb13500e4808a1f769ac1afcefbc219f2e83244b7"
+    "17-actual-outbox-recovery.json": "488f1fa38d3fe9a494a8a0cb2a0e39d93b45fca8e1dd9f414b21515da98e9648",
+    "18-finance-writer-lease.json": "db88ae6891f504806814864ae0fdce88533c814abbf5a9d2669a3b7745e01685"
   },
   "workflows": [
     {
@@ -39,17 +39,17 @@
     {
       "file": "95-lease-acquire-a.json",
       "id": "90000000-0000-4000-8000-000000000905",
-      "sha256": "9d335da26056c667538f3d108f933182e3c59edaf1162047500172f1ac4fe116"
+      "sha256": "2b7594e96c51910e6b32069d968878d799da6c0f05e3a9a18c3ffae0dd32b3b0"
     },
     {
       "file": "96-lease-acquire-b.json",
       "id": "90000000-0000-4000-8000-000000000906",
-      "sha256": "f0338a34e776072525a0f58a7fce840278b56bd0c9f82f6bbd0b18012c87a15d"
+      "sha256": "b81ac2c42179d058fb553f813c532f0c9064a881e46f3a35eeee13c45d7eada1"
     },
     {
       "file": "97-lease-stale-assert.json",
       "id": "90000000-0000-4000-8000-000000000907",
-      "sha256": "faf87b6a025ada10b0831b7f804493e3b0c24b29de88236a5e4ab48ea9aa2f70"
+      "sha256": "6a28c09b9aa68112267f4398ae492600fc85063e9805daf6172a101eea9bb90d"
     },
     {
       "file": "98-ai-caller-model-rejected.json",
@@ -89,22 +89,27 @@
     {
       "file": "102-derived-recovery-core.json",
       "id": "90000000-0000-4000-8000-000000000017",
-      "sha256": "2342328ddaac2fbf08f343a6ef9f4f8a0964a4b11d66c61deb749a7933bc0d92"
+      "sha256": "fe05bdacdab01aa6a0046aa00e21665a20e0a237badd3c8d61a942d3d4a1aa32"
     },
     {
       "file": "103-recover-prepared.json",
       "id": "90000000-0000-4000-8000-000000000918",
-      "sha256": "15fbb5e1ac092bac8b3c5657659f2310a233156b0c7522440696d1d7df55816e"
+      "sha256": "63794aaeedada48f80fe265ab3bcdb666f86f47da5ef629554736987ec1af6db"
     },
     {
       "file": "104-recover-actual-observed.json",
       "id": "90000000-0000-4000-8000-000000000919",
-      "sha256": "f64d496e5ec1f9ecbc227a0b19882f1074aff13769aa04799610f2a9d22884d0"
+      "sha256": "68c4873294a24f61ebd6d9557b9f3351c277cc8c226a0f77910e81b4df061766"
     },
     {
       "file": "105-recover-verified.json",
       "id": "90000000-0000-4000-8000-000000000920",
-      "sha256": "d92a901238e59978bc8eb832467363dc36f8af3faa8cde64053a1d4aaa696377"
+      "sha256": "e88dc864d39db7efa818f2ad2f71cbf9c0388191446827e324fea2c8de7ae551"
+    },
+    {
+      "file": "109-recover-committed-unreleased.json",
+      "id": "90000000-0000-4000-8000-000000000923",
+      "sha256": "616c53060fcd2ff59dc8e3025a7adf61f8d5921d212ac46ca5ced9c1ce1e9bfa"
     }
   ],
   "scenario_contract": {
@@ -212,6 +217,15 @@
       ],
       "expected_exit": 0,
       "expected_state": "COMMITTED",
+      "finance_writes": 0
+    },
+    "committed_unreleased_recovery": {
+      "workflow_id": "90000000-0000-4000-8000-000000000923",
+      "expected_exit": 0,
+      "expected_state": "COMMITTED",
+      "expected_durable_outbox_state": "RELEASED",
+      "writer_release_verified": true,
+      "committed_release_recovered": true,
       "finance_writes": 0
     }
   },
