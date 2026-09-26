@@ -237,6 +237,9 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     locked = set(transaction.metadata.get("locked_fields", []))
     topic_locked = "transaction_type" in locked
     matched_id = _matched_reimbursement_id(transaction)
+    reimbursement_hint = topic == "REIMBURSEMENT" or "reimbursement" in {
+        str(tag).strip().casefold() for tag in transaction.tags
+    }
     reason = (
         str(transaction.metadata.get("transaction_topic_reason") or "LOCKED_TOPIC")
         if topic_locked
@@ -275,7 +278,8 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     ):
         topic = "TRANSFER"
         reason = "EXPLICIT_CARD_PAYMENT"
-        transaction.tags.update({"transfer", "card-payment"})
+        if "tags" not in locked:
+            transaction.tags.update({"transfer", "card-payment"})
     elif (
         not topic_locked
         and topic == "PURCHASE"
@@ -327,6 +331,12 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
         topic = "FEE"
         reason = "EXPLICIT_FEE"
 
+    unmatched_reimbursement = (
+        direction == "CREDIT"
+        and reimbursement_hint
+        and not matched_id
+        and topic in {"REFUND", "REVERSAL"}
+    )
     if topic == "REIMBURSEMENT" and not matched_id:
         if topic_locked:
             raise ValueError(
@@ -334,6 +344,7 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
             )
         topic = "REFUND"
         reason = "UNMATCHED_REIMBURSEMENT"
+        unmatched_reimbursement = direction == "CREDIT"
 
     semantics = topic_semantics(topic)
     if direction and direction not in semantics.allowed_directions:
@@ -344,26 +355,34 @@ def finalize_transaction_topic(transaction: Transaction) -> str:
     transaction.transaction_type = topic
     if "is_refund" not in locked:
         transaction.is_refund = topic in REFUND_TOPICS
-    if topic == "REIMBURSEMENT":
-        transaction.tags.add("reimbursement")
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reversal")
-        transaction.tags.discard("reward")
-    elif transaction.is_refund:
-        transaction.tags.add(semantics.topic_tag or "refund")
-        if topic == "REVERSAL":
-            transaction.tags.add("refund")
-        transaction.tags.discard("reimbursement")
-        transaction.tags.discard("reward")
-    elif topic == "REWARD_CREDIT":
-        transaction.tags.add("reward")
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reimbursement")
-    elif semantics.topic_tag:
-        transaction.tags.add(semantics.topic_tag)
-        transaction.tags.discard("refund")
-        transaction.tags.discard("reimbursement")
+    if "tags" not in locked:
+        if topic == "REIMBURSEMENT":
+            transaction.tags.add("reimbursement")
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reversal")
+            transaction.tags.discard("reward")
+        elif transaction.is_refund:
+            transaction.tags.add(semantics.topic_tag or "refund")
+            if topic == "REVERSAL":
+                transaction.tags.add("refund")
+            if not unmatched_reimbursement:
+                transaction.tags.discard("reimbursement")
+            transaction.tags.discard("reward")
+        elif topic == "REWARD_CREDIT":
+            transaction.tags.add("reward")
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reimbursement")
+        elif semantics.topic_tag:
+            transaction.tags.add(semantics.topic_tag)
+            transaction.tags.discard("refund")
+            transaction.tags.discard("reimbursement")
 
+    if unmatched_reimbursement:
+        if "reimbursement_match_status" not in locked:
+            transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
+        transaction.set_value("review_required", True)
+        if "tags" not in locked:
+            transaction.tags.update({"reimbursement", "needs-review"})
     locked.update(
         {
             "amount_aed",

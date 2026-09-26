@@ -588,7 +588,7 @@
             {
               "field": "merchant_raw",
               "operator": "regex",
-              "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?!\\.[A-Z])(?:[^A-Z0-9]|$)"
+              "value": "(?:^|[^A-Z0-9])AMAZON(?:\\.AE|\\.COM| MKTPLACE| PRIME)?(?:[^A-Z0-9.]|$|\\.(?:[^A-Z]|$))"
             }
           ]
         }
