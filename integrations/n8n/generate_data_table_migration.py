@@ -1116,12 +1116,14 @@ class MigrationRunner:
         self,
         source_tables: Mapping[str, Sequence[Mapping[str, Any]]],
         *,
+        alias_resolver: AliasResolver | None = None,
         verification_resolver: VerificationResolver | None = None,
     ) -> None:
         self.source_tables = {name: [dict(row) for row in rows] for name, rows in source_tables.items()}
         self.source_schemas = {
             name: _source_schema(name) for name in sorted(self.source_tables)
         }
+        self.alias_resolver = alias_resolver
         self.verification_resolver = verification_resolver
         self.target_tables: dict[str, list[dict[str, Any]]] = {target: [] for target in TARGETS}
         self.receipt: dict[str, Any] | None = None
@@ -1183,8 +1185,9 @@ class MigrationRunner:
                 {key: value for key, value in row.items() if key in self.source_schemas["finance_execution_failures"]["columns"]}
                 for row in self.source_tables.get("finance_execution_failures", [])
             ],
-            "finance_ingestion_state": _map_ingestion(self.source_tables),
-            "finance_documents": _map_documents(self.source_tables, alias_resolver),
+            "finance_documents": _map_documents(
+                self.source_tables, alias_resolver or self.alias_resolver
+            ),
             "finance_actual_batches": [
                 _actual_batch_projection(row)
                 for row in sorted(actual, key=lambda row: str(row.get("idempotency_key")))

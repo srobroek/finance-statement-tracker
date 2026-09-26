@@ -133,6 +133,76 @@ class DataTableMigrationTests(unittest.TestCase):
         with self.assertRaises(self.migration.AliasResolutionError):
             resolver.lookup("legacy_document_id", "old-1", replay_document_id="different")
 
+    def test_runner_retains_supplied_legacy_document_alias_for_replay(self) -> None:
+        identity = self.migration.document_identity(
+            "PROCESSING_ONLY", ["a" * 64, "statement", "v1"]
+        )
+        bundle = self.migration.build_alias_bundle(
+            [
+                {
+                    "alias_kind": "document_id",
+                    "alias_value": "legacy-doc",
+                    "canonical_document_id": identity["document_id"],
+                    "canonical_identity_sha256": identity["identity_sha256"],
+                    "identity_kind": "PROCESSING_ONLY",
+                }
+            ],
+            source_commit="source",
+        )
+        source = {
+            "finance_document_operations": [
+                {
+                    "document_id": "legacy-doc",
+                    "source_sha256": "a" * 64,
+                    "document_profile": "statement",
+                    "requested_schema_version": "v1",
+                    "state": "EXTRACTED",
+                }
+            ]
+        }
+        with self.assertRaisesRegex(
+            self.migration.AliasResolutionError, "DOCUMENT_IDENTITY_ALIAS_UNAVAILABLE"
+        ):
+            self.migration.MigrationRunner(source).run()
+        runner = self.migration.MigrationRunner(
+            source,
+            alias_resolver=self.migration.AliasResolver(
+                bundle, expected_source_commit="source"
+            ),
+        )
+        backup = runner.backup_snapshot()
+        runner.run()
+        self.assertEqual(
+            runner.target_tables["finance_documents"][0]["document_id"],
+            identity["document_id"],
+        )
+        self.assertEqual(
+            runner.target_tables["finance_documents"][0]["state"], "EXTRACTED"
+        )
+        self.assertTrue(runner.run()["second_run_noop"])
+        self.assertEqual(runner.backup_snapshot(), backup)
+        other_identity = self.migration.document_identity(
+            "PROCESSING_ONLY", ["b" * 64, "statement", "v1"]
+        )
+        wrong_bundle = self.migration.build_alias_bundle(
+            [
+                {
+                    **bundle["entries"][0],
+                    "canonical_document_id": other_identity["document_id"],
+                    "canonical_identity_sha256": other_identity["identity_sha256"],
+                }
+            ],
+            source_commit="source",
+        )
+        with self.assertRaisesRegex(
+            self.migration.AliasResolutionError,
+            "DOCUMENT_IDENTITY_ALIAS_REPLAY_MISMATCH",
+        ):
+            self.migration.MigrationRunner(
+                source,
+                alias_resolver=self.migration.AliasResolver(wrong_bundle),
+            ).run()
+
     def test_inventory_restart_readback_and_replay_are_idempotent(self) -> None:
         migration = self.migration
         resolver = migration.InventoryResolver()
