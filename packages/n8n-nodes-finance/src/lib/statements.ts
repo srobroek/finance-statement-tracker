@@ -107,6 +107,19 @@ function resolveStatementDate(day: string, month: string, periodStart: string | 
   return candidates[0];
 }
 
+function resolveTransactionDate(day: string, month: string, postDate: string): string {
+  const postYear = Number(postDate.slice(0, 4));
+  for (let year = postYear; year >= postYear - 1; year -= 1) {
+    try {
+      const candidate = isoWord(day, month, year);
+      if (candidate <= postDate) return candidate;
+    } catch {
+      // An invalid calendar date cannot resolve in this year.
+    }
+  }
+  throw new Error(`Transaction date ${day} ${month} cannot resolve from posting date ${postDate}`);
+}
+
 function transactionType(description: string, direction: 'DEBIT' | 'CREDIT'): StatementTransaction['transaction_type'] {
   const value = description.toUpperCase();
   if (['PAYMENT RECEIVED', 'CREDIT REPAYMENT', 'CARD REPAYMENT'].some(token => value.includes(token))) return 'PAYMENT';
@@ -167,9 +180,10 @@ function parseEmiratesIslamic(text: string, sourceFile: string): NormalizedState
   text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach((line, index) => {
     const match = row.exec(line);
     if (!match) return;
+    const postDate = resolveStatementDate(match[1], match[2], periodStart, periodEnd);
     drafts.push({
-      transaction_date: resolveStatementDate(match[3], match[4], periodStart, periodEnd),
-      post_date: resolveStatementDate(match[1], match[2], periodStart, periodEnd),
+      transaction_date: resolveTransactionDate(match[3], match[4], postDate),
+      post_date: postDate,
       card_last4: last4,
       description: match[5].trim(),
       amount_aed: moneyValue(match[6])!,
