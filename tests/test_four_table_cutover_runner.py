@@ -640,7 +640,6 @@ class FourTableCutoverRunnerTests(unittest.TestCase):
             '"bound":true,"sha256":"' + "a" * 64 + '"',
             1,
         )
-        raw = raw.replace('"scope":', '"phase":"FORWARD_POST","scope":', 1)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "readback.raw"
             path.write_text(raw, encoding="utf-8")
@@ -1582,7 +1581,7 @@ if (receiptMatchesCommittedState(receipt, readback, state, {{ ...canonicalSource
             '"bound":true,"sha256":"' + "a" * 64 + '"',
             1,
         )
-        raw = raw.replace('"scope":', '"phase":"FORWARD_PRE","scope":', 1)
+        raw = raw.replace('"phase":"FORWARD_POST"', '"phase":"FORWARD_PRE"', 1)
         raw = raw.replace('"status":"VERIFIED"', '"status":"FORWARD_PRE_READBACK"', 1)
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "pre.raw"
