@@ -1165,6 +1165,7 @@ class MigrationRunner:
         verification_resolver: VerificationResolver | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         resolver = verification_resolver or self.verification_resolver
+        ingestion_state = _map_ingestion(self.source_tables)
         actual = reconcile_actual_batches(
             self.source_tables.get("finance_actual_outbox", []),
             self.source_tables.get("finance_actual_verifications", []),
@@ -1185,6 +1186,7 @@ class MigrationRunner:
                 {key: value for key, value in row.items() if key in self.source_schemas["finance_execution_failures"]["columns"]}
                 for row in self.source_tables.get("finance_execution_failures", [])
             ],
+            "finance_ingestion_state": ingestion_state,
             "finance_documents": _map_documents(
                 self.source_tables, alias_resolver or self.alias_resolver
             ),

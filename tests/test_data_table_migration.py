@@ -405,6 +405,16 @@ class DataTableMigrationTests(unittest.TestCase):
         })
         with self.assertRaises(self.migration.MigrationError):
             duplicate_cursor_runner.build_targets()
+        nonduplicate_cursor_runner = self.migration.MigrationRunner({
+            "finance_source_cursors": [
+                {"source_code": "MAIL"},
+                {"source_code": "BANK"},
+            ]
+        })
+        self.assertEqual(
+            [row["source_code"] for row in nonduplicate_cursor_runner.build_targets()["finance_ingestion_state"]],
+            ["BANK", "MAIL"],
+        )
 
     def test_dual_read_prefers_target_and_falls_back_without_cutover(self) -> None:
         dual = self.migration.DualReadWrite()
