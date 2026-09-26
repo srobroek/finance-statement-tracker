@@ -397,6 +397,7 @@ elif exec_env.get("FINANCE_DATA_TABLE_DIGEST_ACK") == "READ_ONLY_IN_MEMORY":
     print("finance data table digest verified:" + json.dumps({
         "schema_version": 1, "status": "VERIFIED",
         "receipt_contract": "finance-data-table-readback-receipt-v1",
+        "phase": "FORWARD_POST",
         "scope": "READ_ONLY_IN_MEMORY_FINANCE_DATA_TABLE_DIGEST",
         "finance_tables": 4, "tables": tables, "total_rows": 0,
         "digest_sha256": canonical_sha256(tables),
