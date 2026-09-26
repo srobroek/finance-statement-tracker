@@ -51,6 +51,112 @@ class TransactionTopicTests(TestCase):
         self.assertIn("refund", transaction.tags)
         self.assertIn("transaction_type", transaction.metadata["locked_fields"])
 
+    def test_unmatched_reimbursement_hint_remains_explicit_and_queued(self) -> None:
+        transaction = self.transaction(
+            "INWARD IPP PAYMENT--UTILITY BILL PAYMENTS",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.tags.update({"refund", "reimbursement"})
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REFUND")
+        self.assertEqual(
+            transaction.metadata["reimbursement_match_status"], "UNMATCHED"
+        )
+        self.assertTrue(transaction.review_required)
+        self.assertIn("reimbursement", transaction.tags)
+        self.assertIn("needs-review", transaction.tags)
+
+    def test_matched_reimbursement_preserves_locked_tags(self) -> None:
+        transaction = self.transaction(
+            "MATCHED MERCHANT CREDIT",
+            direction="CREDIT",
+            transaction_type="REFUND",
+        )
+        transaction.tags = {"manual", "refund"}
+        transaction.metadata.update(
+            {
+                "original_transaction_id": "purchase-1",
+                "locked_fields": ["tags"],
+            }
+        )
+
+        finalize_transaction_topic(transaction)
+
+        self.assertEqual(transaction.transaction_type, "REIMBURSEMENT")
+        self.assertEqual(transaction.tags, {"manual", "refund"})
+
+    def test_unidentified_credit_uses_to_categorise_and_manual_category_wins(
+        self,
+    ) -> None:
+        from finance_tracker.actual_pipeline import _apply_credit_category_fallback
+
+        unidentified = self.transaction("MYSTERY CREDIT", direction="CREDIT")
+        finalize_transaction_topic(unidentified)
+        _apply_credit_category_fallback(unidentified)
+
+        self.assertEqual(unidentified.category, "To categorise")
+        self.assertTrue(unidentified.review_required)
+        self.assertIn("needs-review", unidentified.tags)
+
+        manual = self.transaction("MANUAL CREDIT", direction="CREDIT")
+        manual.category = "Online Shopping"
+        manual.metadata["locked_fields"] = ["category"]
+        finalize_transaction_topic(manual)
+        _apply_credit_category_fallback(manual)
+
+        self.assertEqual(manual.category, "Online Shopping")
+
+    def test_actual_import_preserves_identity_sign_category_payee_notes_and_channel(
+        self,
+    ) -> None:
+        transaction = self.transaction("RAW ONLINE MERCHANT", direction="DEBIT")
+        transaction.account = "Card"
+        transaction.vendor = "Manual Payee"
+        transaction.category = "Online Shopping"
+        transaction.channel = "ONLINE"
+        transaction.tags.update({"manual", "receipt"})
+
+        finalize_transaction_topic(transaction)
+        record = ActualBudgetAdapter().serialize_import([transaction])[0].records[0]
+
+        self.assertEqual(record["imported_id"], "topic-test")
+        self.assertEqual(record["amount"], -355)
+        self.assertEqual(record["imported_payee"], "RAW ONLINE MERCHANT")
+        self.assertEqual(record["payee_name"], "Manual Payee")
+        self.assertEqual(record["category_name"], "Online Shopping")
+        self.assertIn("#channel-online", record["notes"])
+        self.assertIn("#manual", record["notes"])
+        self.assertIn("#receipt", record["notes"])
+
+    def test_category_fallbacks_remain_distinct(self) -> None:
+        rules = load_compiled_rules(ROOT / "config" / "static-rules.seed.json")
+
+        def classify(description: str) -> Transaction:
+            transaction = self.transaction(description, direction="DEBIT")
+            engine = RuleEngine(rules)
+            engine.apply_stages(transaction, ("TRANSACTION_NORMALIZATION",))
+            finalize_transaction_topic(transaction)
+            engine.apply_stages(transaction, ("VENDOR_NORMALIZATION", "CLASSIFICATION"))
+            return transaction
+
+        self.assertEqual(
+            classify("AMAZON.AE DUBAI ARE").category, "Online Shopping"
+        )
+        self.assertEqual(
+            classify("TALABAT ORDER").category, "Food Delivery"
+        )
+        self.assertEqual(
+            classify("AL YASAT CAT N REST").category, "Dining Out"
+        )
+        self.assertEqual(
+            classify("FOREIGN TRANSACTION FEE").category, "Foreign Fees"
+        )
+        self.assertEqual(classify("ANNUAL FEE").category, "Bank Fees")
+
+
     def test_matched_reimbursement_requires_link_and_round_trips_as_credit(
         self,
     ) -> None:
@@ -76,7 +182,11 @@ class TransactionTopicTests(TestCase):
         finalize_transaction_topic(transaction)
 
         self.assertEqual(transaction.transaction_type, "REFUND")
-        self.assertNotIn("reimbursement", transaction.tags)
+        self.assertEqual(
+            transaction.metadata["reimbursement_match_status"], "UNMATCHED"
+        )
+        self.assertTrue(transaction.review_required)
+        self.assertIn("reimbursement", transaction.tags)
 
     def test_consumption_predicate_rejects_unknown_payee_and_pending_category(
         self,

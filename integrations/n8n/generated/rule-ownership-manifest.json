@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_status": "SPEC_ONLY",
   "authoring_source": "config/static-rules.seed.json",
-  "authoring_source_sha256": "d88d96f7097f1aaf13ab29cacced7aa52f841376ae923d15fb3123727b85893f",
+  "authoring_source_sha256": "0b03f0a1846cb51273fd114f165607bfe56de59e0967431c550b3728d75bdd4c",
   "capability_version": "actual-rule-capability-v1",
   "ownership": [
     {

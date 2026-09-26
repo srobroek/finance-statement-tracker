@@ -8,7 +8,7 @@
     "ai_policy_seed": "integrations/n8n/generated/ai-policy-contracts.seed.json",
     "ai_policy_seed_sha256": "e27d0adef785b02a7239f704172e001eea55da414ce279f6aca9e536210115e5",
     "config_version_seed": "integrations/n8n/generated/config-versions.seed.json",
-    "config_version_seed_sha256": "416364510a81bc73a6ee769c38544cf320aa37c961f49831bf0c067da705a889",
+    "config_version_seed_sha256": "8d42fdb2b63886ac206f36f0e2dedb9f9fee8c992e8d0ce8b973bd435c77018c",
     "application_contract_bundle": "integrations/n8n/generated/application-contract-bundle.json",
     "application_contract_bundle_sha256": "49397a77e1e7840edaa8f857086895d3d518272884b18c45cbd5f1d2e7aeb9a7",
     "application_contract_bundle_schema": "integrations/n8n/generated/application-contract-bundle.schema.json",

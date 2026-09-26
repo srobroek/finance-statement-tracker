@@ -238,9 +238,12 @@ def _apply_credit_category_fallback(transaction: Any) -> None:
     locked = set(transaction.metadata.get("locked_fields", []))
     category_missing = not str(transaction.category or "").strip()
     category_writable = "category" not in locked
-    has_reimbursement_hint = "reimbursement" in {
-        str(tag).strip().casefold() for tag in transaction.tags
-    }
+    has_reimbursement_hint = (
+        transaction.metadata.get("reimbursement_match_status") == "UNMATCHED"
+        or "reimbursement" in {
+            str(tag).strip().casefold() for tag in transaction.tags
+        }
+    )
 
     if topic == "REIMBURSEMENT":
         if category_missing and category_writable:
@@ -251,18 +254,23 @@ def _apply_credit_category_fallback(transaction: Any) -> None:
     if has_reimbursement_hint:
         if category_missing and category_writable:
             transaction.category = _REIMBURSEMENT_CATEGORY
-        transaction.review_required = True
-        transaction.tags.add("needs-review")
-        transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
+        transaction.set_value("review_required", True)
+        if "tags" not in locked:
+            transaction.tags.add("needs-review")
+        if "reimbursement_match_status" not in locked:
+            transaction.metadata["reimbursement_match_status"] = "UNMATCHED"
         return
     if not category_missing or not category_writable:
         return
     if transaction.metadata.get("transaction_topic_reason") != "CREDIT_DEFAULT_REFUND":
         return
     transaction.category = _UNIDENTIFIED_CREDIT_CATEGORY
-    transaction.review_required = True
-    transaction.tags.add("needs-review")
-    transaction.metadata["category_resolution"] = "UNRESOLVED"
+    if "review_required" not in locked:
+        transaction.review_required = True
+    if "tags" not in locked:
+        transaction.tags.add("needs-review")
+    if "category_resolution" not in locked:
+        transaction.metadata["category_resolution"] = "UNRESOLVED"
 
 
 def build_actual_statement_run(
@@ -367,6 +375,7 @@ def build_actual_statement_run(
             {
                 "statement_transaction_id": transaction.transaction_id,
                 "occurred_at": transaction.transaction_at.isoformat(),
+                "post_date": transaction.metadata.get("statement_post_date"),
                 "amount_aed": str(abs(transaction.amount_aed)),
                 "currency": transaction.currency,
                 "purchase_type": purchase_type,
